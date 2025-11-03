@@ -1,10 +1,28 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
+import "@ant-design/v5-patch-for-react-19"; // Dòng 1
+import { ConfigProvider, App as AntApp } from "antd";
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom"; // Import Router
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+import App from "./App.tsx";
+import "antd/dist/reset.css";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    {/* Bọc toàn bộ bằng Router */}
+    <BrowserRouter>
+      <ConfigProvider
+        theme={{
+          token: {
+            colorPrimary: "#00b96b",
+            borderRadius: 4,
+          },
+        }}
+      >
+        <AntApp>
+          <App />
+        </AntApp>
+      </ConfigProvider>
+    </BrowserRouter>
+  </React.StrictMode>
+);
