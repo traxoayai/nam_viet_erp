@@ -1,7 +1,5 @@
 // src/types/product.ts
 
-// (Không cần Category và Manufacturer riêng lẻ nữa)
-
 export interface Warehouse {
   id: number;
   key: string;

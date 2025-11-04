@@ -4,7 +4,7 @@ import { create } from "zustand";
 import * as productService from "@/services/productService"; // Import tất cả
 import * as supplierService from "@/services/supplierService";
 import * as warehouseService from "@/services/warehouseService";
-import { ProductStoreState, Product, ProductFilters } from "@/types/product";
+import { ProductStoreState, ProductFilters } from "@/types/product";
 
 export const useProductStore = create<ProductStoreState>((set, get) => ({
   // Dữ liệu

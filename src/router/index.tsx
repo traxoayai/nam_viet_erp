@@ -9,6 +9,8 @@ import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
+import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
+import SupplierListPage from "@/pages/partners/SupplierListPage";
 
 const routes: RouteObject[] = [
   // === Layout Chính (ĐƯỢC BẢO VỆ) ===
@@ -48,8 +50,20 @@ const routes: RouteObject[] = [
             element: <ProductFormPage />,
           },
           {
-            path: "partners", // /partners
-            element: <div>Chức năng Đối tác đang được phát triển</div>,
+            path: "partners",
+            element: <SupplierListPage />,
+          },
+          {
+            path: "partners/new", // Trang Thêm mới
+            element: <SupplierDetailPage />,
+          },
+          {
+            path: "partners/edit/:id", // Trang Sửa
+            element: <SupplierDetailPage />,
+          },
+          {
+            path: "partners/detail/:id", // Trang Xem
+            element: <SupplierDetailPage />,
           },
           {
             path: "crm", // /crm
