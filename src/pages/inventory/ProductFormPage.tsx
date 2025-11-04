@@ -22,7 +22,6 @@ import {
   Space,
   InputNumber,
   Upload,
-  AutoComplete,
   Divider,
   Affix,
   Form,
@@ -147,7 +146,6 @@ const ProductFormPage: React.FC = () => {
 
   // Logic Tải ảnh (customRequest) - GIỜ LÀ THẬT
   const handleUpload: UploadProps["customRequest"] = async ({
-    file,
     onSuccess,
     onError,
   }) => {
@@ -221,10 +219,10 @@ const ProductFormPage: React.FC = () => {
           spinning={loading || loadingDetails}
           tip={loading ? "Đang xử lý..." : "Đang tải dữ liệu..."}
         >
-          <Content style={{ padding: "24px" }}>
-            <Title level={3} style={{ marginBottom: "24px" }}>
+          <Content style={{ padding: "12px" }}>
+            <Title level={4} style={{ marginBottom: "12px" }}>
               {isEditing
-                ? `Chỉnh sửa Sản phẩm (ID: ${id})`
+                ? `Chỉnh sửa: ${currentProduct?.productName || `Sản phẩm (ID: ${id})`}`
                 : "Thêm Sản phẩm mới"}
             </Title>
             <Form

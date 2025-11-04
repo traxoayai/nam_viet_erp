@@ -12,7 +12,6 @@ import {
   PrinterOutlined,
   DeleteOutlined,
   SafetyOutlined,
-  EyeInvisibleOutlined,
 } from "@ant-design/icons";
 import {
   Input,
@@ -41,8 +40,9 @@ import * as XLSX from "xlsx";
 import type { TableProps, UploadProps } from "antd";
 
 import { useDebounce } from "@/hooks/useDebounce";
+import * as productService from "@/services/productService";
 import { useProductStore } from "@/stores/productStore";
-import { Product, ProductFilters } from "@/types/product";
+import { Product } from "@/types/product";
 
 // Thư viện để xuất Excel
 
@@ -63,7 +63,6 @@ const ProductListPage = () => {
   const {
     products,
     loading,
-    filters,
     page,
     pageSize,
     totalCount,
@@ -271,7 +270,7 @@ const ProductListPage = () => {
       title: `${wh.name} (${wh.unit})`,
       dataIndex: wh.key,
       key: wh.key,
-      align: "center",
+      align: "center" as const,
       width: 120,
       render: (stock: number) => (
         <Text
@@ -286,7 +285,7 @@ const ProductListPage = () => {
       dataIndex: "status",
       key: "status",
       width: 120,
-      align: "center",
+      align: "center" as const,
       render: (status: string) => (
         <Tag color={status === "active" ? "green" : "red"}>
           {status === "active" ? "Đang kinh doanh" : "Ngừng kinh doanh"}
@@ -446,7 +445,7 @@ const ProductListPage = () => {
                   size="small"
                   icon={<TagOutlined />}
                   onClick={() =>
-                    message.info("Chức năng Gắn nhãn đang được phát triển")
+                    antMessage.info("Chức năng Gắn nhãn đang được phát triển")
                   }
                 >
                   Gắn nhãn
@@ -455,7 +454,7 @@ const ProductListPage = () => {
                   size="small"
                   icon={<PrinterOutlined />}
                   onClick={() =>
-                    message.info("Chức năng In nhãn đang được phát triển")
+                    antMessage.info("Chức năng In nhãn đang được phát triển")
                   }
                 >
                   In nhãn mã vạch

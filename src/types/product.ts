@@ -7,9 +7,9 @@ export interface Warehouse {
   key: string;
   name: string;
   unit: string;
-  warehouse_type: "b2b" | "retail";
-  address: string | null;
-  location_gps: string | null;
+  warehouse_type?: "b2b" | "retail";
+  address?: string | null;
+  location_gps?: string | null;
 }
 
 export interface Supplier {
@@ -41,17 +41,38 @@ export interface ProductFilters {
 }
 
 export interface ProductStoreState {
+  // Dữ liệu
   products: Product[];
   warehouses: Warehouse[];
   suppliers: Supplier[]; // Thêm Nhà Cung Cấp
+
+  // Trạng thái
   loading: boolean;
+  loadingDetails: boolean;
+  currentProduct: any | null;
+
+  // Lọc & Phân trang
   filters: ProductFilters;
   page: number;
   pageSize: number;
   totalCount: number;
 
+  //Hàm đọc
   fetchProducts: () => Promise<void>;
-  fetchCommonData: () => Promise<void>; // Đổi tên hàm
+  fetchCommonData: () => Promise<void>;
+  getProductDetails: (id: number) => Promise<void>;
+
+  // Hàm ghi
+  addProduct: (data: any) => Promise<void>;
+  updateProduct: (id: number, data: any) => Promise<void>;
+  updateStatus: (
+    ids: React.Key[],
+    status: "active" | "inactive"
+  ) => Promise<void>;
+  deleteProducts: (ids: React.Key[]) => Promise<void>;
+  exportToExcel: () => Promise<any[]>;
+
+  // Hàm nội bộ
   setFilters: (filters: Partial<ProductFilters>) => void;
   setPage: (page: number, pageSize: number) => void;
 }
