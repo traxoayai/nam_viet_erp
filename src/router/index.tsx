@@ -2,8 +2,10 @@
 import { Navigate, type RouteObject } from "react-router-dom";
 
 // Import 2 loại layout của chúng ta
-import BlankLayout from "@/components/layouts/BlankLayout";
-import MainLayout from "@/components/layouts/MainLayout";
+import BlankLayout from "@/components/layouts/BlankLayout"; //Khi cần mở 1 giao diện không cần có MenuBar và HeaderBar
+import MainLayout from "@/components/layouts/MainLayout"; //Giao diện có MenuBar và HeaderBar
+import LoginPage from "@/pages/auth/LoginPage";
+import RegisterPage from "@/pages/auth/RegisterPage";
 
 // Import các trang (chúng ta sẽ tạo sau)
 // import DashboardPage from "@/pages/DashboardPage";
@@ -44,15 +46,18 @@ const routes: RouteObject[] = [
     ],
   },
 
-  // === Layout Xác thực (Ví dụ: Trang Login) ===
+  // === Layout Xác thực (Login/Register) ===
   {
     path: "/auth",
-    element: <BlankLayout />, // Cũng dùng layout trống
+    element: <BlankLayout />, // Dùng layout trống
     children: [
       {
         path: "login",
-        // element: <LoginPage />,
-        element: <div>TRANG LOGIN</div>, // Tạm thời
+        element: <LoginPage />, // Trang thật
+      },
+      {
+        path: "register",
+        element: <RegisterPage />, // Trang thật
       },
     ],
   },
@@ -60,7 +65,7 @@ const routes: RouteObject[] = [
   // Chuyển hướng khi gõ sai đường dẫn
   {
     path: "*",
-    element: <Navigate to="/" replace />,
+    element: <Navigate to="/auth/login" replace />, //Mặc định vào trang Login
   },
 ];
 

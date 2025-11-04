@@ -1,0 +1,49 @@
+/* src/styles/globals.css */
+
+/* --- Cấu hình Header (theo yêu cầu của Sếp) --- */
+
+/* 1. Làm cho Header "mỏng" lại */
+.app-header {
+  padding: 0 16px !important;
+  height: 40px !important; /* Mỏng hơn (mặc định là 64px) */
+  line-height: 40px !important;
+  background: #fff;
+  border-bottom: 1.5px solid #c5c5c5; /* Ranh giới rõ ràng (Github-style) */
+  display: flex;
+  align-items: center;
+}
+
+/* 2. Tiêu đề trang bên trái (theo yêu cầu) */
+.app-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-left: 16px;
+}
+
+/* 3. Nút gập menu (dễ bấm, hiện đại) */
+.menu-trigger-btn {
+  font-size: 18px; /* Icon to, dễ bấm */
+  width: 48px;
+  height: 48px;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+.menu-trigger-btn:hover {
+  color: #00b96b; /* Màu thương hiệu của Sếp */
+}
+
+/* --- Tối ưu không gian (theo yêu cầu 6-8px) --- */
+/* Ghi đè padding của Content Layout */
+.app-content-layout {
+  /* Sếp yêu cầu 6-8px, Em đề xuất 16px để dễ thở. 
+     Sếp có thể đổi thành 8px nếu muốn nén hơn nữa. */
+  margin: 12px;
+  padding: 12px;
+  background: #f5f5f5;
+  min-height: auto;
+}
+
+/* Tăng kích thước icon chung cho dễ nhìn */
+.anticon {
+  font-size: 16px;
+}
