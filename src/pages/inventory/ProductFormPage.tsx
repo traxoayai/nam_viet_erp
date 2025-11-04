@@ -22,11 +22,10 @@ import {
   Space,
   InputNumber,
   Upload,
+  Form,
   AutoComplete,
   Divider,
   Affix,
-  message,
-  Form,
   Image,
   App as AntApp,
   Spin,
@@ -42,7 +41,7 @@ import { uploadFile } from "@/services/storageService"; // "Cỗ máy" tải ả
 import { useProductStore } from "@/stores/productStore";
 
 const { Content } = Layout;
-const { Title, Text, Paragraph } = Typography;
+const { Title, Paragraph } = Typography;
 const { Option } = Select;
 
 const ProductFormPage: React.FC = () => {
@@ -52,8 +51,7 @@ const ProductFormPage: React.FC = () => {
   const isEditing = !!id;
 
   // Lấy data thật từ "bộ não"
-  const { categories, manufacturers, warehouses, fetchFiltersData } =
-    useProductStore();
+  const { warehouses, suppliers, fetchCommonData } = useProductStore(); // Đã đổi
   const { message: antMessage } = AntApp.useApp(); // Dùng hook 'message'
 
   // State của Component
@@ -62,25 +60,19 @@ const ProductFormPage: React.FC = () => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [productNameForSearch, setProductNameForSearch] = useState("");
 
-  // (SENKO: Sẽ dùng logic này khi làm chức năng "Sửa")
-  // useEffect(() => {
-  //   if (isEditing) {
-  //     // TODO: Tải dữ liệu sản phẩm (ID) và form.setFieldsValue(data)
-  //   }
-  //   // Tải data cho các bộ lọc
-  //   fetchFiltersData();
-  // }, [id, isEditing, fetchFiltersData, form]);
-
-  // Chỉ tải data bộ lọc
   useEffect(() => {
-    if (
-      categories.length === 0 ||
-      manufacturers.length === 0 ||
-      warehouses.length === 0
-    ) {
-      fetchFiltersData();
+    const { warehouses, suppliers } = useProductStore.getState();
+    if (warehouses.length === 0 || suppliers.length === 0) {
+      fetchCommonData(); // <-- Tên hàm mới
     }
-  }, [fetchFiltersData, categories, manufacturers, warehouses]);
+
+    if (isEditing) {
+      console.log("Đang ở chế độ Sửa, ID:", id);
+      // TODO: Tải dữ liệu SP và setForm
+    }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, id, form]);
 
   // --- TASK 2: Logic Nút HỦY ---
   const handleCancel = () => {
@@ -189,7 +181,7 @@ const ProductFormPage: React.FC = () => {
     <ConfigProvider locale={viVN}>
       <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
         <Spin spinning={loading} tip="Đang xử lý...">
-          <Content style={{ padding: "24px" }}>
+          <Content style={{ padding: "12px" }}>
             <Title level={3} style={{ marginBottom: "24px" }}>
               {isEditing
                 ? `Chỉnh sửa Sản phẩm (ID: ${id})`
@@ -296,40 +288,32 @@ const ProductFormPage: React.FC = () => {
 
                       <Col xs={24} sm={12} lg={8}>
                         <Form.Item name="category" label="Phân loại SP">
-                          <AutoComplete
-                            options={categories.map((cat) => ({
-                              label: cat.name,
-                              value: cat.name,
-                            }))}
-                            filterOption={(inputValue, option) =>
-                              option!.label
-                                .toUpperCase()
-                                .indexOf(inputValue.toUpperCase()) !== -1
-                            }
-                          />
+                          <Input placeholder="vd: Kháng sinh" />
                         </Form.Item>
                       </Col>
+
                       <Col xs={24} sm={12} lg={8}>
                         <Form.Item name="manufacturer" label="Công ty Sản xuất">
-                          <AutoComplete
-                            options={manufacturers.map((m) => ({
-                              label: m.name,
-                              value: m.name,
-                            }))}
-                            filterOption={(inputValue, option) =>
-                              option!.label
-                                .toUpperCase()
-                                .indexOf(inputValue.toUpperCase()) !== -1
-                            }
-                          />
+                          <Input placeholder="vd: Dược Hậu Giang" />
                         </Form.Item>
                       </Col>
                       <Col xs={24} sm={12} lg={8}>
-                        <Form.Item name="distributor" label="Công ty Phân phối">
-                          <AutoComplete
-                            options={[]}
-                            placeholder="(Sẽ kết nối API)"
-                            disabled
+                        <Form.Item
+                          name="distributor"
+                          label="Công ty Phân phối (NCC)"
+                        >
+                          <Select
+                            showSearch
+                            placeholder="Chọn nhà cung cấp"
+                            options={suppliers.map((s) => ({
+                              label: s.name,
+                              value: s.id,
+                            }))}
+                            filterOption={(input, option) =>
+                              (option?.label ?? "")
+                                .toLowerCase()
+                                .includes(input.toLowerCase())
+                            }
                           />
                         </Form.Item>
                       </Col>

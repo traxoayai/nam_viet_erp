@@ -1,33 +1,30 @@
 // src/types/product.ts
 
-// Định nghĩa các kiểu dữ liệu dùng chung
-export interface Category {
-  id: number;
-  name: string;
-}
-
-export interface Manufacturer {
-  id: number;
-  name: string;
-}
+// (Không cần Category và Manufacturer riêng lẻ nữa)
 
 export interface Warehouse {
   id: number;
   key: string;
   name: string;
   unit: string;
+  warehouse_type: "b2b" | "retail";
+  address: string | null;
+  location_gps: string | null;
 }
 
-// Định nghĩa kiểu dữ liệu cho sản phẩm,
-// khớp với "cỗ máy" API Sếp đã tạo trong SQL
+export interface Supplier {
+  id: number;
+  name: string;
+}
+
 export interface Product {
   key: string;
   id: number;
   name: string;
   sku: string;
   image_url: string;
-  category: Category;
-  manufacturer: Manufacturer;
+  category_name: string; // Đã đổi
+  manufacturer_name: string; // Đã đổi
   status: "active" | "inactive";
   inventory_b2b: number;
   inventory_pkdh: number;
@@ -36,29 +33,25 @@ export interface Product {
   inventory_potec: number;
 }
 
-// Định nghĩa kiểu cho các bộ lọc
 export interface ProductFilters {
   search_query?: string;
-  category_filter?: number;
-  manufacturer_filter?: number;
+  category_filter?: string; // Đã đổi
+  manufacturer_filter?: string; // Đã đổi
   status_filter?: "active" | "inactive";
 }
 
-// Định nghĩa kiểu cho "kho" Zustand
 export interface ProductStoreState {
   products: Product[];
-  categories: Category[];
-  manufacturers: Manufacturer[];
   warehouses: Warehouse[];
+  suppliers: Supplier[]; // Thêm Nhà Cung Cấp
   loading: boolean;
   filters: ProductFilters;
   page: number;
   pageSize: number;
   totalCount: number;
 
-  // Hành động
   fetchProducts: () => Promise<void>;
-  fetchFiltersData: () => Promise<void>;
+  fetchCommonData: () => Promise<void>; // Đổi tên hàm
   setFilters: (filters: Partial<ProductFilters>) => void;
   setPage: (page: number, pageSize: number) => void;
 }

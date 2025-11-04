@@ -35,7 +35,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useDebounce } from "@/hooks/useDebounce";
 import { useProductStore } from "@/stores/productStore"; // Import "Bộ não"
-import { Product } from "@/types/product";
+import { Product, type ProductFilters } from "@/types/product";
 
 const { Title, Text } = Typography;
 
@@ -52,14 +52,12 @@ const ProductListPage = () => {
   // Lấy trạng thái và hành động từ "Bộ não" Zustand
   const {
     products,
-    categories,
-    manufacturers,
     loading,
     page,
     pageSize,
     totalCount,
     fetchProducts,
-    fetchFiltersData,
+    fetchCommonData,
     setFilters,
     setPage,
   } = useProductStore();
@@ -76,8 +74,8 @@ const ProductListPage = () => {
 
   // Tải dữ liệu lọc (Categories, Manufacturers) một lần khi trang mở
   useEffect(() => {
-    fetchFiltersData();
-  }, [fetchFiltersData]);
+    fetchCommonData();
+  }, [fetchCommonData]);
 
   // Tải sản phẩm (gọi API) khi trang mở hoặc khi bộ lọc/trang thay đổi
   // (Logic này đã được chuyển vào trong store)
@@ -144,6 +142,10 @@ const ProductListPage = () => {
           </Text>
           <br />
           <Text type="secondary">SKU: {record.sku}</Text>
+          <br />
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {record.category_name} | {record.manufacturer_name}
+          </Text>
         </div>
       ),
     },
@@ -262,21 +264,19 @@ const ProductListPage = () => {
           />
         </Col>
         <Col>
-          <Select
+          <Input
             placeholder="Phân loại"
             style={{ width: 150 }}
-            allowClear
-            options={categories.map((c) => ({ label: c.name, value: c.id }))}
-            onChange={(value) => setFilters({ category_filter: value })}
+            onChange={(e) => setFilters({ category_filter: e.target.value })}
           />
         </Col>
         <Col>
-          <Select
+          <Input
             placeholder="Nhà sản xuất"
             style={{ width: 180 }}
-            allowClear
-            options={manufacturers.map((m) => ({ label: m.name, value: m.id }))}
-            onChange={(value) => setFilters({ manufacturer_filter: value })}
+            onChange={(e) =>
+              setFilters({ manufacturer_filter: e.target.value })
+            }
           />
         </Col>
         <Col>
