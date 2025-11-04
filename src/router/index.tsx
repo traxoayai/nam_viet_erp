@@ -7,6 +7,7 @@ import BlankLayout from "@/components/layouts/BlankLayout";
 import MainLayout from "@/components/layouts/MainLayout";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
+import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
 
 const routes: RouteObject[] = [
@@ -37,6 +38,14 @@ const routes: RouteObject[] = [
           {
             path: "inventory", // /inventory
             element: <ProductListPage />,
+          },
+          {
+            path: "inventory/new", // Trang "Thêm"
+            element: <ProductFormPage />,
+          },
+          {
+            path: "inventory/edit/:id", // Trang "Sửa"
+            element: <ProductFormPage />,
           },
           {
             path: "partners", // /partners

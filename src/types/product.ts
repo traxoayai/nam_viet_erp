@@ -11,6 +11,13 @@ export interface Manufacturer {
   name: string;
 }
 
+export interface Warehouse {
+  id: number;
+  key: string;
+  name: string;
+  unit: string;
+}
+
 // Định nghĩa kiểu dữ liệu cho sản phẩm,
 // khớp với "cỗ máy" API Sếp đã tạo trong SQL
 export interface Product {
@@ -42,6 +49,7 @@ export interface ProductStoreState {
   products: Product[];
   categories: Category[];
   manufacturers: Manufacturer[];
+  warehouses: Warehouse[];
   loading: boolean;
   filters: ProductFilters;
   page: number;

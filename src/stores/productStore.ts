@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { getCategories } from "@/services/categoryService";
 import { getManufacturers } from "@/services/manufacturerService";
 import { getProducts } from "@/services/productService";
+import { getWarehouses } from "@/services/warehouseService";
 import { ProductStoreState, type ProductFilters } from "@/types/product";
 
 export const useProductStore = create<ProductStoreState>((set, get) => ({
@@ -11,6 +12,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
   products: [],
   categories: [],
   manufacturers: [],
+  warehouses: [],
   loading: false,
 
   // Lọc & Phân trang
@@ -43,13 +45,19 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
   },
 
   fetchFiltersData: async () => {
-    // Tải song song 2 API
+    // Tải song song 3 API
     try {
-      const [categoriesData, manufacturersData] = await Promise.all([
-        getCategories(),
-        getManufacturers(),
-      ]);
-      set({ categories: categoriesData, manufacturers: manufacturersData });
+      const [categoriesData, manufacturersData, warehousesData] =
+        await Promise.all([
+          getCategories(),
+          getManufacturers(),
+          getWarehouses(), // <-- THÊM HÀNH ĐỘNG NÀY
+        ]);
+      set({
+        categories: categoriesData,
+        manufacturers: manufacturersData,
+        warehouses: warehousesData, // <-- LƯU VÀO KHO
+      });
     } catch (error) {
       console.error("Lỗi khi tải dữ liệu lọc:", error);
     }

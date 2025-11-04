@@ -25,13 +25,13 @@ import {
   Image,
   Tag,
   Tooltip,
-  Modal,
   App as AntApp,
   Menu,
   Alert,
   Dropdown,
 } from "antd";
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useDebounce } from "@/hooks/useDebounce";
 import { useProductStore } from "@/stores/productStore"; // Import "Bộ não"
@@ -55,7 +55,6 @@ const ProductListPage = () => {
     categories,
     manufacturers,
     loading,
-    filters,
     page,
     pageSize,
     totalCount,
@@ -66,10 +65,11 @@ const ProductListPage = () => {
   } = useProductStore();
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  //   const [isModalVisible, setIsModalVisible] = useState(false);
+  //   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const { message } = AntApp.useApp();
+  const navigate = useNavigate();
 
   // Sử dụng "useDebounce" để tránh gọi API liên tục khi gõ
   const debouncedSearch = useDebounce(searchQuery, 500);
@@ -94,20 +94,20 @@ const ProductListPage = () => {
     setSelectedRowKeys(keys);
   };
 
-  const showAddModal = () => {
-    setEditingProduct(null);
-    setIsModalVisible(true);
-  };
+  //   const showAddModal = () => {
+  //     setEditingProduct(null);
+  //     setIsModalVisible(true);
+  //   };
 
-  const showEditModal = (product: Product) => {
-    setEditingProduct(product);
-    setIsModalVisible(true);
-  };
+  //   const showEditModal = (product: Product) => {
+  //     setEditingProduct(product);
+  //     setIsModalVisible(true);
+  //   };
 
-  const handleModalClose = () => {
-    setIsModalVisible(false);
-    setEditingProduct(null);
-  };
+  //   const handleModalClose = () => {
+  //     setIsModalVisible(false);
+  //     setEditingProduct(null);
+  //   };
 
   const rowSelection = {
     selectedRowKeys,
@@ -185,7 +185,7 @@ const ProductListPage = () => {
             <Button
               type="text"
               icon={<EditOutlined />}
-              onClick={() => showEditModal(record)}
+              onClick={() => navigate(`/inventory/edit/${record.id}`)}
             />
           </Tooltip>
           <Tooltip title="Xóa">
@@ -213,7 +213,7 @@ const ProductListPage = () => {
   );
 
   return (
-    <Card bodyStyle={{ padding: 12 }}>
+    <Card styles={{ body: { padding: 12 } }}>
       {/* Phần 1: Header */}
       <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
         <Col>
@@ -223,12 +223,26 @@ const ProductListPage = () => {
         </Col>
         <Col>
           <Space>
-            <Button icon={<UploadOutlined />}>Nhập Excel</Button>
-            <Button icon={<DownloadOutlined />}>Xuất Excel</Button>
+            <Button
+              icon={<UploadOutlined />}
+              onClick={() =>
+                message.info("Chức năng Nhập Excel đang được phát triển")
+              }
+            >
+              Nhập Excel
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() =>
+                message.info("Chức năng Xuất Excel đang được phát triển")
+              }
+            >
+              Xuất Excel
+            </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              onClick={showAddModal}
+              onClick={() => navigate("/inventory/new")}
             >
               Thêm sản phẩm
             </Button>
@@ -334,36 +348,6 @@ const ProductListPage = () => {
             `${range[0]}-${range[1]} của ${total} sản phẩm`,
         }}
       />
-
-      {/* Modal Thêm/Sửa (Giữ nguyên như canvas) */}
-      <Modal
-        title={
-          editingProduct
-            ? `Sửa sản phẩm: ${editingProduct.name}`
-            : "Thêm sản phẩm mới"
-        }
-        open={isModalVisible}
-        onCancel={handleModalClose}
-        footer={null}
-        width={1000}
-        destroyOnHidden
-      >
-        <Text>Nội dung form chi tiết sản phẩm...</Text>
-        <div style={{ textAlign: "right", marginTop: 24 }}>
-          <Space>
-            <Button onClick={handleModalClose}>Hủy</Button>
-            <Button
-              type="primary"
-              onClick={() => {
-                message.success("Đã lưu!");
-                handleModalClose();
-              }}
-            >
-              Lưu thay đổi
-            </Button>
-          </Space>
-        </div>
-      </Modal>
     </Card>
   );
 };

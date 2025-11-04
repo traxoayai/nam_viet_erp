@@ -13,11 +13,14 @@
     "@ant-design/icons": "^6.1.0",
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@supabase/supabase-js": "^2.78.0",
+    "@types/uuid": "^10.0.0",
     "antd": "^5.28.0",
+    "dayjs": "^1.11.19",
     "firebase": "^12.5.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.5",
+    "uuid": "^13.0.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
