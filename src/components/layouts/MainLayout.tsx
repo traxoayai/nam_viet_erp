@@ -119,6 +119,11 @@ const MainLayout: React.FC = () => {
               label: <Link to="/medical">Nghiệp vụ Y Tế</Link>,
             },
             {
+              key: "crm",
+              icon: <UserOutlined />,
+              label: <Link to="/crm">Quản lý Khách hàng</Link>,
+            },
+            {
               key: "b2b",
               icon: <ShoppingCartOutlined />,
               label: <Link to="/b2b">Bán buôn</Link>,
@@ -133,11 +138,7 @@ const MainLayout: React.FC = () => {
               icon: <ContactsOutlined />,
               label: <Link to="/partners">Đối tác</Link>,
             },
-            {
-              key: "crm",
-              icon: <UserOutlined />,
-              label: <Link to="/crm">Quản lý Khách hàng</Link>,
-            },
+
             {
               key: "marketing",
               icon: <BulbOutlined />,
@@ -175,9 +176,6 @@ const MainLayout: React.FC = () => {
               onClick={() => setCollapsed(!collapsed)}
               className="menu-trigger-btn"
             />
-            <Title level={4} style={{ marginBottom: 0, marginLeft: 16 }}>
-              Dashboard
-            </Title>
           </div>
 
           <div style={{ display: "flex", alignItems: "center" }}>

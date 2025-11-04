@@ -7,6 +7,7 @@ import BlankLayout from "@/components/layouts/BlankLayout";
 import MainLayout from "@/components/layouts/MainLayout";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
+import ProductListPage from "@/pages/inventory/ProductListPage";
 
 const routes: RouteObject[] = [
   // === Layout Chính (ĐƯỢC BẢO VỆ) ===
@@ -35,7 +36,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "inventory", // /inventory
-            element: <div>Chức năng Kho - Sản phẩm đang được phát triển</div>,
+            element: <ProductListPage />,
           },
           {
             path: "partners", // /partners
