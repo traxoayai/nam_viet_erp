@@ -2,9 +2,10 @@
 import { useEffect } from "react";
 import { useRoutes } from "react-router-dom";
 
-import { supabase } from "./lib/supabaseClient";
 import routes from "./router";
 import { useAuthStore } from "./stores/authStore";
+
+import { supabase } from "@/lib/supabaseClient";
 
 function App() {
   const element = useRoutes(routes);

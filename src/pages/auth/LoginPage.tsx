@@ -1,6 +1,14 @@
 // src/pages/auth/LoginPage.tsx
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, Typography, message, Spin } from "antd";
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  Typography,
+  Spin,
+  App as AntApp,
+} from "antd";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -13,6 +21,7 @@ const { Title } = Typography;
 const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { message } = AntApp.useApp();
   const { setSession, setUser } = useAuthStore(); // Lấy hàm để set session
 
   const onFinish = async (values: any) => {
