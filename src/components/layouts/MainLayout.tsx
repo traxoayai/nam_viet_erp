@@ -4,25 +4,61 @@ import {
   MenuUnfoldOutlined,
   DashboardOutlined,
   UserOutlined,
-} from "@ant-design/icons"; // Import icons
-import { Layout, Button, Typography, Menu } from "antd"; // Import thêm
+  LogoutOutlined,
+} from "@ant-design/icons";
+import {
+  Layout,
+  Button,
+  Typography,
+  Menu,
+  Avatar,
+  Dropdown,
+  message,
+} from "antd";
 import React, { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
+
+import Logo from "@/assets/logo.png";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuthStore } from "@/stores/authStore";
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
 
 const MainLayout: React.FC = () => {
-  // Bộ não điều khiển việc gập/mở menu
   const [collapsed, setCollapsed] = useState(false);
+  const navigate = useNavigate();
+
+  const { user, setSession, setUser } = useAuthStore();
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      message.error("Đăng xuất thất bại: " + error.message);
+    } else {
+      setSession(null);
+      setUser(null);
+      message.success("Đã đăng xuất!");
+      // ProtectedRoute sẽ tự động xử lý việc chuyển hướng
+    }
+  };
+
+  const menuItems = [
+    {
+      key: "logout",
+      icon: <LogoutOutlined />,
+      label: "Đăng xuất",
+      onClick: handleLogout,
+    },
+  ];
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
       <Sider
-        trigger={null} // Tắt trigger mặc định
+        trigger={null}
         collapsible
         collapsed={collapsed}
-        collapsedWidth={70} // "Rất mỏng" khi gập (theo yêu cầu)
+        collapsedWidth={65}
         width={250}
         style={{ background: "#001529" }}
       >
@@ -34,13 +70,21 @@ const MainLayout: React.FC = () => {
             justifyContent: "center",
             color: "white",
             fontWeight: 600,
-            fontSize: 16,
+            fontSize: 25,
+            overflow: "hidden",
           }}
         >
-          {collapsed ? "NVE" : "NAM VIỆT EMS"}
+          {collapsed ? (
+            <img
+              src={Logo}
+              alt="Logo"
+              style={{ width: 40, height: 40, objectFit: "contain" }}
+            />
+          ) : (
+            "Dược Nam Việt"
+          )}
         </div>
 
-        {/* Menu điều hướng chính (Em sẽ thêm các mục menu ở đây sau) */}
         <Menu
           theme="dark"
           mode="inline"
@@ -61,26 +105,34 @@ const MainLayout: React.FC = () => {
       </Sider>
       <Layout>
         <Header className="app-header">
-          {" "}
-          {/* Dùng class CSS tùy chỉnh */}
-          <div style={{ display: "flex", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", flexGrow: 1 }}>
             <Button
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed(!collapsed)}
               className="menu-trigger-btn"
             />
-            {/* Tiêu đề trang bên trái (theo yêu cầu) */}
             <Title level={4} style={{ marginBottom: 0, marginLeft: 16 }}>
               Dashboard
             </Title>
-            {/* (SENKO: Sau này em sẽ làm tiêu đề này tự động thay đổi) */}
           </div>
-          {/* Em sẽ thêm Avatar và Thông báo ở đây sau */}
+
+          <div style={{ display: "flex", alignItems: "center" }}>
+            {/* === ĐÂY LÀ DÒNG SỬA LỖI B === */}
+            {/* Thay thế <a> bằng <Button> để chuẩn jsx-a11y */}
+            <Dropdown menu={{ items: menuItems }} trigger={["click"]}>
+              <Button type="text" style={{ height: "auto", padding: "0 8px" }}>
+                <Avatar icon={<UserOutlined />} />
+                <span style={{ marginLeft: 8, fontWeight: 500, color: "#333" }}>
+                  {user?.email || "User"}
+                </span>
+              </Button>
+            </Dropdown>
+            {/* ------------------------------------------- */}
+          </div>
         </Header>
         <Content className="app-content-layout">
-          <Outlet />{" "}
-          {/* Nơi các trang con (Dashboard, Products...) được render */}
+          <Outlet />
         </Content>
       </Layout>
     </Layout>

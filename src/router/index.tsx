@@ -1,47 +1,48 @@
 // src/router/index.tsx
 import { Navigate, type RouteObject } from "react-router-dom";
 
-// Import 2 loại layout của chúng ta
-import BlankLayout from "@/components/layouts/BlankLayout"; //Khi cần mở 1 giao diện không cần có MenuBar và HeaderBar
-import MainLayout from "@/components/layouts/MainLayout"; //Giao diện có MenuBar và HeaderBar
+import ProtectedRoute from "./ProtectedRoute"; // <-- MỚI: Import "Bảo vệ"
+
+import BlankLayout from "@/components/layouts/BlankLayout";
+import MainLayout from "@/components/layouts/MainLayout";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
 
-// Import các trang (chúng ta sẽ tạo sau)
-// import DashboardPage from "@/pages/DashboardPage";
-// import PosPage from "@/pages/PosPage";
-// import LoginPage from "@/pages/LoginPage";
-
 const routes: RouteObject[] = [
-  // === Layout Chính (Có Sidebar/Header) ===
-  // Tất cả các trang con bên trong sẽ được "bọc" bởi MainLayout
+  // === Layout Chính (ĐƯỢC BẢO VỆ) ===
   {
     path: "/",
-    element: <MainLayout />,
+    element: <ProtectedRoute />, // <-- MỚI: Bọc bằng "Bảo vệ"
     children: [
       {
-        index: true,
-        // element: <DashboardPage />,
-        element: <div>TRANG DASHBOARD CHÍNH</div>, // Tạm thời
+        element: <MainLayout />, // Layout lồng bên trong
+        children: [
+          {
+            index: true,
+            element: <div>TRANG DASHBOARD CHÍNH (ĐÃ ĐƯỢC BẢO VỆ)</div>,
+          },
+          {
+            path: "products",
+            element: <div>TRANG QUẢN LÝ SẢN PHẨM (ĐÃ ĐƯỢC BẢO VỆ)</div>,
+          },
+        ],
       },
-      {
-        path: "products",
-        element: <div>TRANG QUẢN LÝ SẢN PHẨM</div>, // Tạm thời
-      },
-      // Thêm các trang dùng layout chính khác ở đây
     ],
   },
 
-  // === Layout Tràn Màn hình (Không Sidebar/Header) ===
-  // Dùng cho các trang cần sự tập trung tuyệt đối
+  // === Layout Tràn Màn hình (POS - CŨNG PHẢI ĐƯỢC BẢO VỆ) ===
   {
-    path: "/blank", // Sếp có thể đổi tên (ví dụ: /fullscreen)
-    element: <BlankLayout />,
+    path: "/blank",
+    element: <ProtectedRoute />, // <-- MỚI: Bọc bằng "Bảo vệ"
     children: [
       {
-        path: "pos",
-        // element: <PosPage />,
-        element: <div>TRANG BÁN HÀNG POS (TRÀN MÀN HÌNH)</div>, // Tạm thời
+        element: <BlankLayout />, // Layout lồng bên trong
+        children: [
+          {
+            path: "pos",
+            element: <div>TRANG BÁN HÀNG POS (ĐÃ ĐƯỢC BẢO VỆ)</div>,
+          },
+        ],
       },
     ],
   },
@@ -49,23 +50,23 @@ const routes: RouteObject[] = [
   // === Layout Xác thực (Login/Register) ===
   {
     path: "/auth",
-    element: <BlankLayout />, // Dùng layout trống
+    element: <BlankLayout />,
     children: [
       {
         path: "login",
-        element: <LoginPage />, // Trang thật
+        element: <LoginPage />,
       },
       {
         path: "register",
-        element: <RegisterPage />, // Trang thật
+        element: <RegisterPage />,
       },
     ],
   },
 
-  // Chuyển hướng khi gõ sai đường dẫn
+  // Chuyển hướng khi gõ sai
   {
     path: "*",
-    element: <Navigate to="/auth/login" replace />, //Mặc định vào trang Login
+    element: <Navigate to="/" replace />, // Mặc định vào trang Dashboard (sẽ bị "Bảo vệ" chặn nếu chưa login)
   },
 ];
 

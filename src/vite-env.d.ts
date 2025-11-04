@@ -1,5 +1,4 @@
 /// <reference types="vite/client" />
-
 // Khai báo kiểu dữ liệu cho các biến môi trường của chúng ta
 // Điều này giúp TypeScript tự động gợi ý và báo lỗi nếu Sếp gõ sai tên biến
 interface ImportMetaEnv {
@@ -16,4 +15,8 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv;
+}
+declare module "*.png" {
+  const value: string;
+  export default value;
 }
