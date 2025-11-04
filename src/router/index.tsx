@@ -18,12 +18,64 @@ const routes: RouteObject[] = [
         element: <MainLayout />, // Layout lồng bên trong
         children: [
           {
-            index: true,
-            element: <div>TRANG DASHBOARD CHÍNH (ĐÃ ĐƯỢC BẢO VỆ)</div>,
+            index: true, // Đây là /
+            element: <div>TRANG DASHBOARD CHÍNH (Trang chủ)</div>,
           },
           {
-            path: "products",
-            element: <div>TRANG QUẢN LÝ SẢN PHẨM (ĐÃ ĐƯỢC BẢO VỆ)</div>,
+            path: "store", // /store
+            element: <div>Chức năng Cửa Hàng đang được phát triển</div>,
+          },
+          {
+            path: "medical", // /medical
+            element: <div>Chức năng Nghiệp vụ Y Tế đang được phát triển</div>,
+          },
+          {
+            path: "b2b", // /b2b
+            element: <div>Chức năng Bán buôn đang được phát triển</div>,
+          },
+          {
+            path: "inventory", // /inventory
+            element: <div>Chức năng Kho - Sản phẩm đang được phát triển</div>,
+          },
+          {
+            path: "partners", // /partners
+            element: <div>Chức năng Đối tác đang được phát triển</div>,
+          },
+          {
+            path: "crm", // /crm
+            element: (
+              <div>Chức năng Quản lý Khách hàng đang được phát triển</div>
+            ),
+          },
+          {
+            path: "marketing", // /marketing
+            element: (
+              <div>Chức năng Quản lý Marketing đang được phát triển</div>
+            ),
+          },
+          {
+            path: "hr", // /hr
+            element: <div>Chức năng Quản lý Nhân sự đang được phát triển</div>,
+          },
+          {
+            path: "finance", // /finance
+            element: (
+              <div>Chức năng Tài Chính & Kế Toán đang được phát triển</div>
+            ),
+          },
+          {
+            path: "reports", // /reports
+            element: <div>Chức năng Báo Cáo đang được phát triển</div>,
+          },
+          {
+            path: "settings", // /settings
+            element: (
+              <div>Chức năng Cấu hình hệ thống đang được phát triển</div>
+            ),
+          },
+          {
+            path: "products", // (Vẫn giữ link /products cũ Sếp đã tạo)
+            element: <div>TRANG QUẢN LÝ SẢN PHẨM</div>,
           },
         ],
       },

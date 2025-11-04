@@ -1,10 +1,21 @@
 // src/components/layouts/MainLayout.tsx
 import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  DashboardOutlined,
-  UserOutlined,
+  HomeOutlined,
+  ShopOutlined,
+  HeartOutlined,
+  ShoppingCartOutlined,
+  DropboxOutlined,
+  ContactsOutlined,
+  BulbOutlined,
+  AuditOutlined,
+  AccountBookOutlined,
+  LineChartOutlined,
+  SettingOutlined,
+  BellOutlined,
   LogoutOutlined,
+  UserOutlined,
+  MenuUnfoldOutlined,
+  MenuFoldOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -12,10 +23,12 @@ import {
   Typography,
   Menu,
   Avatar,
+  Badge,
   Dropdown,
   message,
 } from "antd";
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { Outlet, useNavigate } from "react-router-dom";
 
 import Logo from "@/assets/logo.png";
@@ -91,14 +104,64 @@ const MainLayout: React.FC = () => {
           defaultSelectedKeys={["1"]}
           items={[
             {
-              key: "1",
-              icon: <DashboardOutlined />,
-              label: "Dashboard",
+              key: "dashboard",
+              icon: <HomeOutlined />,
+              label: <Link to="/">Trang chủ</Link>,
             },
             {
-              key: "2",
+              key: "store",
+              icon: <ShopOutlined />,
+              label: <Link to="/store">Cửa Hàng</Link>,
+            },
+            {
+              key: "medical",
+              icon: <HeartOutlined />,
+              label: <Link to="/medical">Nghiệp vụ Y Tế</Link>,
+            },
+            {
+              key: "b2b",
+              icon: <ShoppingCartOutlined />,
+              label: <Link to="/b2b">Bán buôn</Link>,
+            },
+            {
+              key: "inventory",
+              icon: <DropboxOutlined />,
+              label: <Link to="/inventory">Kho - Sản phẩm</Link>,
+            },
+            {
+              key: "partners",
+              icon: <ContactsOutlined />,
+              label: <Link to="/partners">Đối tác</Link>,
+            },
+            {
+              key: "crm",
               icon: <UserOutlined />,
-              label: "Khách hàng",
+              label: <Link to="/crm">Quản lý Khách hàng</Link>,
+            },
+            {
+              key: "marketing",
+              icon: <BulbOutlined />,
+              label: <Link to="/marketing">Quản lý Marketing</Link>,
+            },
+            {
+              key: "hr",
+              icon: <AuditOutlined />,
+              label: <Link to="/hr">Quản lý Nhân sự</Link>,
+            },
+            {
+              key: "finance",
+              icon: <AccountBookOutlined />,
+              label: <Link to="/finance">Tài Chính & Kế Toán</Link>,
+            },
+            {
+              key: "reports",
+              icon: <LineChartOutlined />,
+              label: <Link to="/reports">Báo Cáo</Link>,
+            },
+            {
+              key: "settings",
+              icon: <SettingOutlined />,
+              label: <Link to="/settings">Cấu hình hệ thống</Link>,
             },
           ]}
         />
@@ -118,8 +181,18 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div style={{ display: "flex", alignItems: "center" }}>
-            {/* === ĐÂY LÀ DÒNG SỬA LỖI B === */}
-            {/* Thay thế <a> bằng <Button> để chuẩn jsx-a11y */}
+            {/* --- MỚI: Nút Thông báo --- */}
+            <Button
+              type="text"
+              shape="circle"
+              icon={
+                <Badge dot>
+                  <BellOutlined />
+                </Badge>
+              }
+              style={{ marginRight: 8 }}
+            />
+            {/* --- MỚI: Nút Avatar và Đăng Xuất --- */}
             <Dropdown menu={{ items: menuItems }} trigger={["click"]}>
               <Button type="text" style={{ height: "auto", padding: "0 8px" }}>
                 <Avatar icon={<UserOutlined />} />
