@@ -67,6 +67,7 @@ const ProductFormPage: React.FC = () => {
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [selectedSupplierName, setSelectedSupplierName] = useState("");
 
   // Tải data chung (kho, ncc)
   useEffect(() => {
@@ -84,6 +85,13 @@ const ProductFormPage: React.FC = () => {
   useEffect(() => {
     if (isEditing && currentProduct) {
       form.setFieldsValue(currentProduct);
+      if (currentProduct.distributor) {
+        // Tải tên NCC từ "bộ não" để hiển thị
+        const supplier = useProductStore
+          .getState()
+          .suppliers.find((s) => s.id === currentProduct.distributor);
+        if (supplier) setSelectedSupplierName(supplier.name);
+      }
       if (currentProduct.imageUrl) {
         setImageUrl(currentProduct.imageUrl);
         setFileList([
@@ -121,11 +129,15 @@ const ProductFormPage: React.FC = () => {
       if (isEditing) {
         // CHẾ ĐỘ SỬA
         await updateProduct(Number(id), finalValues);
-        antMessage.success(`Cập nhật sản phẩm (ID: ${id}) thành công!`);
+        antMessage.success(
+          `Cập nhật sản phẩm "${finalValues.productName}" thành công!`
+        );
       } else {
         // CHẾ ĐỘ THÊM
-        const newProductId = await addProduct(finalValues);
-        antMessage.success(`Tạo sản phẩm (ID: ${newProductId}) thành công!`);
+        await addProduct(finalValues);
+        antMessage.success(
+          `Tạo sản phẩm "${finalValues.productName}" thành công!`
+        );
       }
 
       navigate("/inventory"); // Quay về trang danh sách
@@ -330,22 +342,21 @@ const ProductFormPage: React.FC = () => {
                         </Form.Item>
                       </Col>
                       <Col xs={24} sm={12} lg={8}>
-                        <Form.Item
-                          name="distributor"
-                          label="Công ty Phân phối (NCC)"
-                        >
-                          {/* Dùng Select.Search để hiển thị tên NCC đã chọn */}
-                          <Select
-                            showSearch
+                        {/* 1. Form Item GIẢ (chỉ để hiển thị) */}
+                        <Form.Item label="Công ty Phân phối (NCC)">
+                          <Input
                             placeholder="Nhấn để chọn nhà cung cấp"
-                            onClick={() => setIsSupplierModalOpen(true)} // Mở Modal khi nhấn
-                            options={suppliers.map((s) => ({
-                              label: s.name,
-                              value: s.id,
-                            }))}
-                            filterOption={false} // Tắt lọc của Select
-                            onSearch={(value) => console.log(value)} // Có thể dùng để tìm kiếm
+                            value={selectedSupplierName} // value này sẽ KHÔNG bị ghi đè
+                            onClick={() => setIsSupplierModalOpen(true)}
+                            readOnly
+                            addonAfter={<SearchOutlined />}
+                            style={{ cursor: "pointer" }}
                           />
+                        </Form.Item>
+
+                        {/* 2. Form Item THẬT (dùng để lưu ID, không hiển thị) */}
+                        <Form.Item name="distributor" hidden>
+                          <Input />
                         </Form.Item>
                       </Col>
 
@@ -387,7 +398,6 @@ const ProductFormPage: React.FC = () => {
                 bordered={false}
                 style={{ marginBottom: 24 }}
               >
-                {/* ... Toàn bộ nội dung Card này giữ nguyên như Sếp đã có ... */}
                 <Row gutter={24}>
                   <Col xs={24} sm={12} md={8} lg={4}>
                     <Form.Item
@@ -627,8 +637,9 @@ const ProductFormPage: React.FC = () => {
               open={isSupplierModalOpen}
               onClose={() => setIsSupplierModalOpen(false)}
               onSelect={(supplier) => {
-                // Tự động điền Form khi chọn
+                // Cập nhật cả ID (vào Form) và Tên (vào State)
                 form.setFieldsValue({ distributor: supplier.id });
+                setSelectedSupplierName(supplier.name);
                 setIsSupplierModalOpen(false);
               }}
             />
