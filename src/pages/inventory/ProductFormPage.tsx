@@ -35,6 +35,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import type { UploadFile, UploadProps } from "antd/es/upload/interface";
 
+import SupplierSelectModal from "@/components/common/SupplierSelectModal";
 import {
   addProduct,
   updateProduct,
@@ -63,6 +64,7 @@ const ProductFormPage: React.FC = () => {
   const { message: antMessage } = AntApp.useApp();
 
   const [loading, setLoading] = useState(false);
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [fileList, setFileList] = useState<UploadFile[]>([]);
 
@@ -332,18 +334,17 @@ const ProductFormPage: React.FC = () => {
                           name="distributor"
                           label="Công ty Phân phối (NCC)"
                         >
+                          {/* Dùng Select.Search để hiển thị tên NCC đã chọn */}
                           <Select
                             showSearch
-                            placeholder="Chọn nhà cung cấp"
+                            placeholder="Nhấn để chọn nhà cung cấp"
+                            onClick={() => setIsSupplierModalOpen(true)} // Mở Modal khi nhấn
                             options={suppliers.map((s) => ({
                               label: s.name,
                               value: s.id,
                             }))}
-                            filterOption={(input, option) =>
-                              (option?.label ?? "")
-                                .toLowerCase()
-                                .includes(input.toLowerCase())
-                            }
+                            filterOption={false} // Tắt lọc của Select
+                            onSearch={(value) => console.log(value)} // Có thể dùng để tìm kiếm
                           />
                         </Form.Item>
                       </Col>
@@ -621,6 +622,16 @@ const ProductFormPage: React.FC = () => {
                 </Card>
               </Affix>
             </Form>
+            {/* --- THÊM MODAL CHỌN NCC --- */}
+            <SupplierSelectModal
+              open={isSupplierModalOpen}
+              onClose={() => setIsSupplierModalOpen(false)}
+              onSelect={(supplier) => {
+                // Tự động điền Form khi chọn
+                form.setFieldsValue({ distributor: supplier.id });
+                setIsSupplierModalOpen(false);
+              }}
+            />
           </Content>
         </Spin>
       </Layout>

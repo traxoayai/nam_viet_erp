@@ -11,6 +11,7 @@ import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
+import WarehouseListPage from "@/pages/settings/WarehouseListPage";
 
 const routes: RouteObject[] = [
   // === Layout Chính (ĐƯỢC BẢO VỆ) ===
@@ -92,10 +93,13 @@ const routes: RouteObject[] = [
             element: <div>Chức năng Báo Cáo đang được phát triển</div>,
           },
           {
-            path: "settings", // /settings
-            element: (
-              <div>Chức năng Cấu hình hệ thống đang được phát triển</div>
-            ),
+            path: "settings",
+            // (SENKO: Tạm thời trỏ đến trang Kho, sau này sẽ làm trang Cấu hình chung)
+            element: <Navigate to="/settings/warehouses" replace />,
+          },
+          {
+            path: "settings/warehouses",
+            element: <WarehouseListPage />,
           },
           {
             path: "products", // (Vẫn giữ link /products cũ Sếp đã tạo)
