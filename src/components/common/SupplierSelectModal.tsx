@@ -1,5 +1,5 @@
 // src/components/common/SupplierSelectModal.tsx
-import { Modal, Button, Input, Table, Spin, App as AntApp } from "antd";
+import { Modal, Button, Input, Table, Spin } from "antd";
 import React, { useState, useEffect } from "react";
 
 import { useDebounce } from "@/hooks/useDebounce";
@@ -25,7 +25,6 @@ const SupplierSelectModal: React.FC<SupplierSelectModalProps> = ({
     page,
     pageSize,
     totalCount,
-    fetchSuppliers,
     setFilters,
     setPage,
   } = useSupplierStore();

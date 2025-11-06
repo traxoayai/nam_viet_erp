@@ -55,7 +55,6 @@ const ProductFormPage: React.FC = () => {
 
   const {
     warehouses,
-    suppliers,
     fetchCommonData,
     currentProduct,
     getProductDetails,

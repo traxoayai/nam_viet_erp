@@ -17,30 +17,19 @@ import {
   MenuUnfoldOutlined,
   MenuFoldOutlined,
 } from "@ant-design/icons";
-import {
-  Layout,
-  Button,
-  Typography,
-  Menu,
-  Avatar,
-  Badge,
-  Dropdown,
-  message,
-} from "antd";
+import { Layout, Button, Menu, Avatar, Badge, Dropdown, message } from "antd";
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 
 import Logo from "@/assets/logo.png";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuthStore } from "@/stores/authStore";
 
 const { Header, Sider, Content } = Layout;
-const { Title } = Typography;
 
 const MainLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const navigate = useNavigate();
 
   const { user, setSession, setUser } = useAuthStore();
 

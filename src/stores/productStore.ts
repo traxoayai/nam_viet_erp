@@ -47,16 +47,32 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
 
   fetchCommonData: async () => {
     try {
-      const [warehousesData, suppliersData] = await Promise.all([
-        warehouseService.getWarehouses(),
+      const defaultPage = 1;
+      const largePageSize = 99999;
+      const defaultFilters = {}; // Tham số filters rỗng
+
+      const [warehousesResult, suppliersResult] = await Promise.all([
+        // SỬA LỖI (TS2554): Truyền 3 tham số riêng lẻ
+        warehouseService.getWarehouses(
+          defaultFilters, // 1. filters
+          defaultPage, // 2. page
+          largePageSize // 3. pageSize
+        ),
+
+        // Giữ nguyên: Gọi supplierService không có tham số
         supplierService.getSuppliers(),
       ]);
+
       set({
-        warehouses: warehousesData,
-        suppliers: suppliersData,
+        // Giữ nguyên: Lấy .data từ kết quả của warehouse
+        warehouses: warehousesResult.data,
+
+        // Giữ nguyên: Lấy trực tiếp kết quả của supplier
+        suppliers: suppliersResult,
       });
     } catch (error) {
-      console.error("Lỗi khi tải dữ liệu chung:", error);
+      console.error("Lỗi khi tải dữ liệu chung (kho, ncc):", error);
+      set({ warehouses: [], suppliers: [] });
     }
   },
 
