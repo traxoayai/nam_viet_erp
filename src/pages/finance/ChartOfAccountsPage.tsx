@@ -361,13 +361,13 @@ const ChartOfAccountsPage: React.FC = () => {
               onConfirm={() => handleDelete(record)}
               okText="Đồng ý"
               cancelText="Hủy"
-              disabled={record.children ? record.children.length > 0 : null}
+              disabled={!!(record.children && record.children.length > 0)}
             >
               <Button
                 type="text"
                 danger
                 icon={<DeleteOutlined />}
-                disabled={record.children ? record.children.length > 0 : null}
+                disabled={!!(record.children && record.children.length > 0)}
               />
             </Popconfirm>
           </Tooltip>
@@ -508,7 +508,7 @@ const ChartOfAccountsPage: React.FC = () => {
                     placeholder="Chọn tài khoản cha (nếu có)"
                     treeDefaultExpandAll
                     filterTreeNode={(input, node) =>
-                      (node?.title ?? "")
+                      String(node?.title ?? "") // <-- SỬA LỖI: Ép kiểu an toàn
                         .toLowerCase()
                         .includes(input.toLowerCase())
                     }
