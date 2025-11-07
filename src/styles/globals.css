@@ -1,6 +1,6 @@
 /* src/styles/globals.css */
 
-/* --- Cấu hình Header (theo yêu cầu của Sếp) --- */
+/* --- Cấu hình Header --- */
 
 /* 1. Làm cho Header "mỏng" lại */
 .app-header {
@@ -35,8 +35,7 @@
 /* --- Tối ưu không gian (theo yêu cầu 6-8px) --- */
 /* Ghi đè padding của Content Layout */
 .app-content-layout {
-  /* Sếp yêu cầu 6-8px, Em đề xuất 16px để dễ thở. 
-     Sếp có thể đổi thành 8px nếu muốn nén hơn nữa. */
+  /* có thể đổi thành 10px ĐỂ hiển thị Cân đối*/
   margin: 10px;
   padding: 0;
   background: #f5f5f5;

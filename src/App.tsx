@@ -24,7 +24,6 @@ function App() {
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
       }
     );
 
@@ -32,7 +31,7 @@ function App() {
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, [setSession, setUser, setLoading]);
+  }, []);
 
   return <>{element}</>;
 }

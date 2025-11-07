@@ -1,133 +1,410 @@
 // src/router/index.tsx
 import { Navigate, type RouteObject } from "react-router-dom";
 
-import ProtectedRoute from "./ProtectedRoute"; // <-- MỚI: Import "Bảo vệ"
+import ProtectedRoute from "./ProtectedRoute";
 
 import BlankLayout from "@/components/layouts/BlankLayout";
 import MainLayout from "@/components/layouts/MainLayout";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
+import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
+import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
 import WarehouseListPage from "@/pages/settings/WarehouseListPage";
+
+// --- IMPORT CÁC TRANG MỚI ---
+// (Đây là trang duy nhất chúng ta đã code)
+
+// (Tất cả các trang khác sẽ được import ở đây khi Sếp và em xây dựng)
+
+// --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
+// Dùng để tạo nhanh trang "Đang xây dựng"
+const PagePlaceholder = ({ title }: { title: string }) => (
+  <div>
+    <h2>{title}</h2>
+    <p>Chức năng này đang được phát triển...</p>
+  </div>
+);
 
 const routes: RouteObject[] = [
   // === Layout Chính (ĐƯỢC BẢO VỆ) ===
   {
     path: "/",
-    element: <ProtectedRoute />, // <-- MỚI: Bọc bằng "Bảo vệ"
+    element: <ProtectedRoute />,
     children: [
       {
-        element: <MainLayout />, // Layout lồng bên trong
+        element: <MainLayout />,
         children: [
+          // 1. Trang chủ
           {
             index: true, // Đây là /
-            element: <div>TRANG DASHBOARD CHÍNH (Trang chủ)</div>,
+            element: <PagePlaceholder title="Trang chủ (Dashboard)" />,
+          },
+
+          // 2. Kênh Cửa Hàng
+          {
+            path: "store/dashboard",
+            element: <PagePlaceholder title="Dashboard Cửa hàng" />,
           },
           {
-            path: "store", // /store
-            element: <div>Chức năng Cửa Hàng đang được phát triển</div>,
+            path: "store/appointments",
+            element: <PagePlaceholder title="Đặt Lịch Hẹn" />,
           },
           {
-            path: "medical", // /medical
-            element: <div>Chức năng Nghiệp vụ Y Tế đang được phát triển</div>,
+            path: "store/shipping-order",
+            element: <PagePlaceholder title="Tạo đơn Gửi Đi" />,
           },
           {
-            path: "b2b", // /b2b
-            element: <div>Chức năng Bán buôn đang được phát triển</div>,
+            path: "store/b2c-orders",
+            element: <PagePlaceholder title="DS đơn hàng B2C" />,
           },
           {
-            path: "inventory", // /inventory
-            element: <ProductListPage />,
+            path: "store/ecommerce",
+            element: <PagePlaceholder title="Kết nối Sàn TMĐT" />,
           },
           {
-            path: "inventory/new", // Trang "Thêm"
-            element: <ProductFormPage />,
+            path: "store/website/general",
+            element: (
+              <PagePlaceholder title="Website Bán Lẻ - Thông tin chung" />
+            ),
           },
           {
-            path: "inventory/edit/:id", // Trang "Sửa"
-            element: <ProductFormPage />,
+            path: "store/website/config",
+            element: <PagePlaceholder title="Website Bán Lẻ - Cấu hình" />,
           },
+          {
+            path: "store/website/content",
+            element: <PagePlaceholder title="Website Bán Lẻ - Nội dung" />,
+          },
+
+          // 3. Nghiệp vụ Y Tế
+          {
+            path: "medical/dashboard",
+            element: <PagePlaceholder title="Dashboard Y Tế" />,
+          },
+          {
+            path: "medical/clinic",
+            element: <PagePlaceholder title="Phòng Khám" />,
+          },
+          {
+            path: "medical/vaccination",
+            element: <PagePlaceholder title="Tiêm Chủng" />,
+          },
+
+          // 4. Bán buôn (B2B)
+          {
+            path: "b2b/dashboard",
+            element: <PagePlaceholder title="B2B Sales Dashboard" />,
+          },
+          {
+            path: "b2b/create-order",
+            element: <PagePlaceholder title="Tạo Đơn Hàng B2B" />,
+          },
+          {
+            path: "b2b/orders",
+            element: <PagePlaceholder title="DS Đơn hàng B2B" />,
+          },
+          {
+            path: "b2b/website/general",
+            element: <PagePlaceholder title="Website B2B - Thông tin chung" />,
+          },
+          {
+            path: "b2b/website/config",
+            element: <PagePlaceholder title="Website B2B - Cấu hình" />,
+          },
+          {
+            path: "b2b/website/content",
+            element: <PagePlaceholder title="Website B2B - Nội dung" />,
+          },
+
+          // 5. Combo và Dịch Vụ
+          {
+            path: "services",
+            element: <PagePlaceholder title="Combo và Dịch Vụ" />,
+          },
+
+          // 6. Kho - Hàng Hóa (Cập nhật route cũ)
+          {
+            path: "inventory",
+            element: <Navigate to="/inventory/products" replace />,
+          }, // Redirect /inventory cũ
+          { path: "inventory/products", element: <ProductListPage /> }, // Dùng component cũ
+          { path: "inventory/new", element: <ProductFormPage /> }, // Dùng component cũ
+          { path: "inventory/edit/:id", element: <ProductFormPage /> }, // Dùng component cũ
+          {
+            path: "inventory/purchase",
+            element: <PagePlaceholder title="Mua hàng" />,
+          },
+          {
+            path: "inventory/transfer",
+            element: <PagePlaceholder title="Chuyển kho" />,
+          },
+          {
+            path: "inventory/stocktake",
+            element: <PagePlaceholder title="Kiểm hàng" />,
+          },
+          {
+            path: "inventory/cost-adjustment",
+            element: <PagePlaceholder title="Điều chỉnh Giá Vốn" />,
+          },
+
+          // 7. Thao tác Nhanh
+          {
+            path: "quick/product-location",
+            element: <PagePlaceholder title="Cài nhanh Vị trí Sản phẩm" />,
+          },
+          {
+            path: "quick/price-edit",
+            element: <PagePlaceholder title="Sửa giá Sản Phẩm nhanh" />,
+          },
+          {
+            path: "quick/promo-code",
+            element: <PagePlaceholder title="Tạo nhanh Mã Giảm Giá" />,
+          },
+          {
+            path: "quick/prescription-template",
+            element: <PagePlaceholder title="Đơn thuốc Mẫu" />,
+          },
+          {
+            path: "quick/vaccination-template",
+            element: <PagePlaceholder title="Phác đồ Tiêm Chủng Mẫu" />,
+          },
+
+          // 8. Đối tác (Cập nhật route cũ)
           {
             path: "partners",
-            element: <SupplierListPage />,
+            element: <Navigate to="/partners/suppliers" replace />,
+          }, // Redirect /partners cũ
+          { path: "partners/suppliers", element: <SupplierListPage /> }, // Dùng component cũ
+          { path: "partners/new", element: <SupplierDetailPage /> }, // Dùng component cũ
+          { path: "partners/edit/:id", element: <SupplierDetailPage /> }, // Dùng component cũ
+          { path: "partners/detail/:id", element: <SupplierDetailPage /> }, // Dùng component cũ
+          {
+            path: "partners/shipping",
+            element: <PagePlaceholder title="Đối tác Vận Chuyển" />,
+          },
+
+          // 9. Quản lý Khách hàng (Cập nhật route cũ)
+          { path: "crm", element: <Navigate to="/crm/retail" replace /> },
+          {
+            path: "crm/retail",
+            element: <PagePlaceholder title="Khách kênh Cửa Hàng" />,
+          },
+          { path: "crm/b2b", element: <PagePlaceholder title="Khách B2B" /> },
+
+          // 10. Quản lý Marketing (Cập nhật route cũ)
+          {
+            path: "marketing",
+            element: <Navigate to="/marketing/dashboard" replace />,
           },
           {
-            path: "partners/new", // Trang Thêm mới
-            element: <SupplierDetailPage />,
+            path: "marketing/dashboard",
+            element: <PagePlaceholder title="Dashboard Marketing" />,
           },
           {
-            path: "partners/edit/:id", // Trang Sửa
-            element: <SupplierDetailPage />,
+            path: "marketing/campaigns",
+            element: <PagePlaceholder title="Quản lý Chiến dịch" />,
           },
           {
-            path: "partners/detail/:id", // Trang Xem
-            element: <SupplierDetailPage />,
+            path: "marketing/tools/segmentation",
+            element: <PagePlaceholder title="Trình tạo Phân khúc KH" />,
           },
           {
-            path: "crm", // /crm
-            element: (
-              <div>Chức năng Quản lý Khách hàng đang được phát triển</div>
-            ),
+            path: "marketing/tools/library",
+            element: <PagePlaceholder title="Thư viện Nội dung" />,
           },
           {
-            path: "marketing", // /marketing
-            element: (
-              <div>Chức năng Quản lý Marketing đang được phát triển</div>
-            ),
+            path: "marketing/tools/promo",
+            element: <PagePlaceholder title="Mã Giảm giá & QR Code" />,
           },
           {
-            path: "hr", // /hr
-            element: <div>Chức năng Quản lý Nhân sự đang được phát triển</div>,
+            path: "marketing/chatbot",
+            element: <PagePlaceholder title="Quản lý Chatbot AI" />,
+          },
+
+          // 11. Quản lý Nhân sự (Cập nhật route cũ)
+          { path: "hr", element: <Navigate to="/hr/dashboard" replace /> },
+          {
+            path: "hr/dashboard",
+            element: <PagePlaceholder title="Dashboard Nhân sự" />,
           },
           {
-            path: "finance", // /finance
-            element: (
-              <div>Chức năng Tài Chính & Kế Toán đang được phát triển</div>
-            ),
+            path: "hr/employees",
+            element: <PagePlaceholder title="Quản lý Hồ sơ Nhân viên" />,
           },
           {
-            path: "reports", // /reports
-            element: <div>Chức năng Báo Cáo đang được phát triển</div>,
+            path: "hr/contracts",
+            element: <PagePlaceholder title="Quản lý Hợp đồng & Giấy tờ" />,
           },
+          {
+            path: "hr/training",
+            element: <PagePlaceholder title="Quản lý Đào tạo" />,
+          },
+          {
+            path: "hr/kpi",
+            element: <PagePlaceholder title="Giao việc & KPI" />,
+          },
+          {
+            path: "hr/payroll",
+            element: <PagePlaceholder title="Quản lý Lương & Chế Độ" />,
+          },
+
+          // 12. Tài Chính & Kế Toán (Cập nhật route cũ)
+          {
+            path: "finance",
+            element: <Navigate to="/finance/dashboard" replace />,
+          },
+          {
+            path: "finance/dashboard",
+            element: <PagePlaceholder title="Dashboard Tài chính" />,
+          },
+          {
+            path: "finance/transactions",
+            element: <PagePlaceholder title="Quản lý Thu – Chi" />,
+          },
+          {
+            path: "finance/debts",
+            element: <PagePlaceholder title="Quản lý Công Nợ" />,
+          },
+          {
+            path: "finance/assets",
+            element: <PagePlaceholder title="Quản Lý Tài Sản" />,
+          },
+          {
+            path: "finance/reconciliation",
+            element: <PagePlaceholder title="Đối Soát Giao Dịch" />,
+          },
+          // --- TRANG CHÚNG TA ĐÃ CODE ---
+          {
+            path: "finance/accounting/chart-of-accounts",
+            element: <ChartOfAccountsPage />,
+          },
+          // ---------------------------------
+          {
+            path: "finance/accounting/journal",
+            element: <PagePlaceholder title="Sổ Nhật ký Chung" />,
+          },
+          {
+            path: "finance/accounting/misa-integration",
+            element: <PagePlaceholder title="Tích hợp MISA" />,
+          },
+          {
+            path: "finance/vat",
+            element: <PagePlaceholder title="Quản lý Hóa Đơn VAT" />,
+          },
+
+          // 13. Báo Cáo (Cập nhật route cũ)
+          {
+            path: "reports",
+            element: <Navigate to="/reports/sales/overview" replace />,
+          },
+          {
+            path: "reports/sales/overview",
+            element: <PagePlaceholder title="Báo cáo Bán hàng" />,
+          },
+          {
+            path: "reports/sales/profit-loss",
+            element: <PagePlaceholder title="Báo cáo Lãi - Lỗ" />,
+          },
+          {
+            path: "reports/sales/marketing",
+            element: <PagePlaceholder title="Báo cáo Marketing" />,
+          },
+          {
+            path: "reports/ops/inventory",
+            element: <PagePlaceholder title="Báo cáo Kho" />,
+          },
+          {
+            path: "reports/ops/purchase",
+            element: <PagePlaceholder title="Báo cáo Nhập hàng" />,
+          },
+          {
+            path: "reports/ops/crm",
+            element: <PagePlaceholder title="Báo cáo Chăm sóc KH" />,
+          },
+          {
+            path: "reports/admin/hr",
+            element: <PagePlaceholder title="Báo cáo Nhân viên & KPI" />,
+          },
+          {
+            path: "reports/admin/tasks",
+            element: <PagePlaceholder title="Báo cáo Tiến độ Công việc" />,
+          },
+          {
+            path: "reports/finance/cashflow",
+            element: <PagePlaceholder title="Sổ quỹ" />,
+          },
+
+          // 14. Cấu hình hệ thống (Cập nhật route cũ)
           {
             path: "settings",
-            // (SENKO: Tạm thời trỏ đến trang Kho, sau này sẽ làm trang Cấu hình chung)
-            element: <Navigate to="/settings/warehouses" replace />,
+            element: <Navigate to="/settings/users-roles" replace />,
+          },
+          { path: "settings/warehouses", element: <WarehouseListPage /> }, // Giữ route cũ của Sếp
+          {
+            path: "settings/users-roles",
+            element: <PagePlaceholder title="Người dùng & Phân quyền" />,
           },
           {
-            path: "settings/warehouses",
+            path: "settings/business/general",
+            element: <CompanyInfoPage />,
+          },
+          {
+            path: "settings/business/operations",
             element: <WarehouseListPage />,
+          }, // Ánh xạ menu mới vào component cũ
+          {
+            path: "settings/business/sales",
+            element: <PagePlaceholder title="Cấu hình Kinh Doanh" />,
           },
           {
-            path: "products", // (Vẫn giữ link /products cũ Sếp đã tạo)
-            element: <div>TRANG QUẢN LÝ SẢN PHẨM</div>,
+            path: "settings/business/finance",
+            element: <PagePlaceholder title="Cấu hình Tài Chính" />,
+          },
+          {
+            path: "settings/business/hr",
+            element: <PagePlaceholder title="Cấu hình Hành Chính - NS" />,
+          },
+          {
+            path: "settings/templates",
+            element: <PagePlaceholder title="Quản lý Mẫu & Biểu mẫu" />,
+          },
+          {
+            path: "settings/audit-log",
+            element: <PagePlaceholder title="Nhật ký Hệ thống" />,
+          },
+
+          // (Giữ lại route products cũ của Sếp, dù menu không còn)
+          {
+            path: "products",
+            element: <div>TRANG QUẢN LÝ SẢN PHẨM (CŨ)</div>,
           },
         ],
       },
     ],
   },
 
-  // === Layout Tràn Màn hình (POS - CŨNG PHẢI ĐƯỢC BẢO VỆ) ===
+  // === Layout Tràn Màn hình (POS - GIỮ NGUYÊN) ===
   {
     path: "/blank",
-    element: <ProtectedRoute />, // <-- MỚI: Bọc bằng "Bảo vệ"
+    element: <ProtectedRoute />,
     children: [
       {
-        element: <BlankLayout />, // Layout lồng bên trong
+        element: <BlankLayout />,
         children: [
           {
             path: "pos",
-            element: <div>TRANG BÁN HÀNG POS (ĐÃ ĐƯỢC BẢO VỆ)</div>,
+            element: <PagePlaceholder title="TRANG BÁN HÀNG POS" />,
           },
         ],
       },
     ],
   },
 
-  // === Layout Xác thực (Login/Register) ===
+  // === Layout Xác thực (Login/Register - GIỮ NGUYÊN) ===
   {
     path: "/auth",
     element: <BlankLayout />,
@@ -143,10 +420,10 @@ const routes: RouteObject[] = [
     ],
   },
 
-  // Chuyển hướng khi gõ sai
+  // Chuyển hướng khi gõ sai (GIỮ NGUYÊN)
   {
     path: "*",
-    element: <Navigate to="/" replace />, // Mặc định vào trang Dashboard (sẽ bị "Bảo vệ" chặn nếu chưa login)
+    element: <Navigate to="/" replace />,
   },
 ];
 
