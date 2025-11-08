@@ -322,7 +322,7 @@ const WarehouseListPage: React.FC = () => {
           okText="Lưu thay đổi"
           cancelText="Hủy"
           width={800}
-          destroyOnClose
+          destroyOnHidden
           confirmLoading={loading}
         >
           <Form

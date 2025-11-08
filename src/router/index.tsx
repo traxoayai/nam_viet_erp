@@ -13,6 +13,7 @@ import ProductListPage from "@/pages/inventory/ProductListPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
 import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
+import PermissionPage from "@/pages/settings/PermissionPage";
 import WarehouseListPage from "@/pages/settings/WarehouseListPage";
 
 // --- IMPORT CÁC TRANG MỚI ---
@@ -346,7 +347,7 @@ const routes: RouteObject[] = [
           { path: "settings/warehouses", element: <WarehouseListPage /> }, // Giữ route cũ của Sếp
           {
             path: "settings/users-roles",
-            element: <PagePlaceholder title="Người dùng & Phân quyền" />,
+            element: <PermissionPage />,
           },
           {
             path: "settings/business/general",
