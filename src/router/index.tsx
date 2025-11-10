@@ -12,8 +12,11 @@ import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
+import BankListPage from "@/pages/settings/BankListPage";
 import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
 import PermissionPage from "@/pages/settings/PermissionPage";
+import SystemSettingsHub from "@/pages/settings/SystemSettingsHub";
+import TransactionCategoryPage from "@/pages/settings/TransactionCategoryPage";
 import WarehouseListPage from "@/pages/settings/WarehouseListPage";
 
 // --- IMPORT CÁC TRANG MỚI ---
@@ -338,11 +341,9 @@ const routes: RouteObject[] = [
             path: "reports/finance/cashflow",
             element: <PagePlaceholder title="Sổ quỹ" />,
           },
-
-          // 14. Cấu hình hệ thống (Cập nhật route cũ)
           {
             path: "settings",
-            element: <Navigate to="/settings/users-roles" replace />,
+            element: <SystemSettingsHub />,
           },
           { path: "settings/warehouses", element: <WarehouseListPage /> }, // Giữ route cũ của Sếp
           {
@@ -361,10 +362,28 @@ const routes: RouteObject[] = [
             path: "settings/business/sales",
             element: <PagePlaceholder title="Cấu hình Kinh Doanh" />,
           },
+          // --- VÁ LỖI: Tái cấu trúc Cấu hình Tài Chính ---
           {
-            path: "settings/business/finance",
-            element: <PagePlaceholder title="Cấu hình Tài Chính" />,
+            // 1.9: Quản lý các loại Tài Khoản/Quỹ Tiền [cite: 2439, 2471]
+            path: "settings/business/finance/accounts",
+            element: <PagePlaceholder title="Quản lý Tài Khoản/Quỹ Tiền" />,
           },
+          {
+            // 1.8: Cài đặt các loại Thu – Chi [cite: 2438, 2470]
+            path: "settings/business/finance/categories",
+            element: <TransactionCategoryPage />,
+          },
+          {
+            // (Mục 1.9 trong Lộ trình - chúng ta vừa làm)
+            path: "settings/business/finance/banks",
+            element: <BankListPage />,
+          },
+          {
+            // (Mục Sếp mới bổ sung)
+            path: "settings/business/finance/recurring",
+            element: <PagePlaceholder title="Quản lý Thu - Chi tự động" />,
+          },
+          // ---------------------------------------------
           {
             path: "settings/business/hr",
             element: <PagePlaceholder title="Cấu hình Hành Chính - NS" />,

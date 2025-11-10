@@ -444,45 +444,12 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 14. Cấu hình hệ thống
-  getItem("Cấu hình hệ thống", "settings", <SettingOutlined />, [
-    getItem(
-      <Link to="/settings/users-roles">Người dùng & Phân quyền</Link>,
-      "/settings/users-roles",
-      <UserOutlined />
-    ),
-    getItem("Cấu hình Nghiệp vụ", "settings-business", <ToolOutlined />, [
-      getItem(
-        <Link to="/settings/business/general">Cấu hình Chung</Link>,
-        "/settings/business/general"
-      ),
-      getItem(
-        <Link to="/settings/business/operations">Cấu hình Vận Hành</Link>,
-        "/settings/business/operations"
-      ), // <-- Trang Kho của Sếp nằm ở đây
-      getItem(
-        <Link to="/settings/business/sales">Cấu hình Kinh Doanh</Link>,
-        "/settings/business/sales"
-      ),
-      getItem(
-        <Link to="/settings/business/finance">Cấu hình Tài Chính</Link>,
-        "/settings/business/finance"
-      ),
-      getItem(
-        <Link to="/settings/business/hr">Cấu hình Hành Chính - NS</Link>,
-        "/settings/business/hr"
-      ),
-    ]),
-    getItem(
-      <Link to="/settings/templates">Quản lý Mẫu & Biểu mẫu</Link>,
-      "/settings/templates",
-      <AppstoreOutlined />
-    ),
-    getItem(
-      <Link to="/settings/audit-log">Nhật ký Hệ thống</Link>,
-      "/settings/audit-log",
-      <AuditOutlined />
-    ),
-  ]),
+  // 14. Cấu hình hệ thống (ĐÃ SỬA: Trỏ về trang Hub)
+  getItem(
+    <Link to="/settings">Cấu hình hệ thống</Link>, // <-- Link trực tiếp
+    "/settings", // <-- Key là /settings
+    <SettingOutlined />
+  ),
 ];
 
 // --- KẾT THÚC CẤU TRÚC MENU ---
