@@ -17,6 +17,7 @@ import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
 import FundAccountPage from "@/pages/settings/FundAccountPage";
 import PermissionPage from "@/pages/settings/PermissionPage";
 import SystemSettingsHub from "@/pages/settings/SystemSettingsHub";
+import TemplateManagerPage from "@/pages/settings/TemplateManagerPage";
 import TransactionCategoryPage from "@/pages/settings/TransactionCategoryPage";
 import WarehouseListPage from "@/pages/settings/WarehouseListPage";
 
@@ -391,7 +392,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "settings/templates",
-            element: <PagePlaceholder title="Quản lý Mẫu & Biểu mẫu" />,
+            element: <TemplateManagerPage />,
           },
           {
             path: "settings/audit-log",
