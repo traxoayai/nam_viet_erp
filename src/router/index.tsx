@@ -14,6 +14,7 @@ import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
 import BankListPage from "@/pages/settings/BankListPage";
 import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
+import FundAccountPage from "@/pages/settings/FundAccountPage";
 import PermissionPage from "@/pages/settings/PermissionPage";
 import SystemSettingsHub from "@/pages/settings/SystemSettingsHub";
 import TransactionCategoryPage from "@/pages/settings/TransactionCategoryPage";
@@ -366,7 +367,7 @@ const routes: RouteObject[] = [
           {
             // 1.9: Quản lý các loại Tài Khoản/Quỹ Tiền [cite: 2439, 2471]
             path: "settings/business/finance/accounts",
-            element: <PagePlaceholder title="Quản lý Tài Khoản/Quỹ Tiền" />,
+            element: <FundAccountPage />,
           },
           {
             // 1.8: Cài đặt các loại Thu – Chi [cite: 2438, 2470]
