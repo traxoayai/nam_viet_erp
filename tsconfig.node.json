@@ -1,3 +1,4 @@
+//file tsconfig.node.json
 {
   "compilerOptions": {
     "composite": true,

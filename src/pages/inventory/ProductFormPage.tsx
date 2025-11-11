@@ -577,7 +577,25 @@ const ProductFormPage: React.FC = () => {
                           <Col span={12}>
                             <Form.Item
                               name={["inventorySettings", wh.key, "min"]}
-                              label={`Tồn Min (${wh.unit})`}
+                              label={
+                                <Form.Item
+                                  noStyle
+                                  dependencies={
+                                    wh.type === "b2b"
+                                      ? ["wholesaleUnit"]
+                                      : ["retailUnit"]
+                                  }
+                                >
+                                  {() => {
+                                    const unit =
+                                      wh.type === "b2b"
+                                        ? form.getFieldValue("wholesaleUnit")
+                                        : form.getFieldValue("retailUnit");
+                                    return `Tồn Min (${unit || "ĐV"})`;
+                                  }}
+                                                               
+                                </Form.Item>
+                              }
                               initialValue={0}
                             >
                               <InputNumber style={{ width: "100%" }} min={0} />
@@ -586,7 +604,24 @@ const ProductFormPage: React.FC = () => {
                           <Col span={12}>
                             <Form.Item
                               name={["inventorySettings", wh.key, "max"]}
-                              label={`Tồn Max (${wh.unit})`}
+                              label={
+                                <Form.Item
+                                  noStyle
+                                  dependencies={
+                                    wh.type === "b2b"
+                                      ? ["wholesaleUnit"]
+                                      : ["retailUnit"]
+                                  }
+                                >
+                                  {() => {
+                                    const unit =
+                                      wh.type === "b2b"
+                                        ? form.getFieldValue("wholesaleUnit")
+                                        : form.getFieldValue("retailUnit");
+                                    return `Tồn Max (${unit || "ĐV"})`;
+                                  }}
+                                </Form.Item>
+                              }
                               initialValue={0}
                             >
                               <InputNumber style={{ width: "100%" }} min={0} />

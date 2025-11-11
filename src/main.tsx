@@ -1,3 +1,4 @@
+// src/utils/main.tsx
 import "@ant-design/v5-patch-for-react-19"; // Dòng 1
 import { ConfigProvider, App as AntApp } from "antd";
 import viVN from "antd/locale/vi_VN";

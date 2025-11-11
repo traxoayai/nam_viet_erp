@@ -1,5 +1,6 @@
 // src/services/productService.ts
 import { v4 as uuidv4 } from "uuid"; // Import UUID
+import * as XLSX from "xlsx";
 
 import { supabase } from "@/lib/supabaseClient";
 import { ProductFilters } from "@/types/product";
@@ -173,10 +174,53 @@ export const uploadProductImage = async (file: File) => {
   return data.publicUrl;
 };
 
-// 9. HÀM NHẬP EXCEL (TẠM THỜI)
+// 9. HÀM NHẬP EXCEL ((Bulk Import))
 export const importProducts = async (file: File) => {
-  // (SENKO: Logic này rất phức tạp, cần 1 API microservice trên Cloud Run
-  // để đọc file Excel và gọi Upsert. Tạm thời Em sẽ mô phỏng.)
-  console.log("File to import:", file.name);
-  return new Promise((resolve) => setTimeout(resolve, 1000));
+  return new Promise(async (resolve, reject) => {
+    try {
+      // 1. Đọc file Excel thành dữ liệu thô
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName]; // 2. Chuyển đổi dữ liệu thành mảng JSON
+      const jsonArray: any[] = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        raw: false,
+      });
+
+      const headers: string[] = jsonArray[0] as string[];
+      const rawProducts = jsonArray.slice(1); // -- SỬA LỖI TẠI ĐÂY --
+      // 3. Lấy danh sách kho an toàn (loại bỏ khả năng null)
+      const { data: warehouses } = await supabase
+        .from("warehouses")
+        .select("key, id"); // Thêm kiểm tra: nếu warehouses là null, dùng mảng rỗng []
+      const safeWarehouses = warehouses || [];
+      const warehouseKeys = safeWarehouses.map((w) => w.key); // Không còn lỗi
+      // 4. Format dữ liệu thành định dạng RPC mong muốn
+
+      const productsToUpsert = rawProducts.map((row: any[]) => {
+        const product: any = { inventory_settings: {} };
+        row.forEach((value, index) => {
+          const header = headers[index]; // Xử lý các cột tồn kho
+          if (warehouseKeys.includes(header)) {
+            product.inventory_settings[header] = value;
+          } // Xử lý các cột sản phẩm
+          else {
+            product[header] = value;
+          }
+        });
+        return product;
+      }); // 5. Gửi mảng JSON đến hàm RPC
+
+      const { error: rpcError } = await supabase.rpc("bulk_upsert_products", {
+        p_products_array: productsToUpsert,
+      });
+
+      if (rpcError) throw rpcError;
+      resolve(productsToUpsert.length);
+    } catch (error) {
+      console.error("Import Error:", error);
+      reject(error);
+    }
+  });
 };

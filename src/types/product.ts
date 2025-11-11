@@ -1,14 +1,15 @@
 // src/types/product.ts
+import { Warehouse } from "@/types/warehouse";
 
-export interface Warehouse {
-  id: number;
-  key: string;
-  name: string;
-  unit: string;
-  warehouse_type?: "b2b" | "retail";
-  address?: string | null;
-  location_gps?: string | null;
-}
+// export interface Warehouse {
+//   id: number;
+//   key: string;
+//   name: string;
+//   unit: string;
+//   warehouse_type?: "b2b" | "retail";
+//   address?: string | null;
+//   location_gps?: string | null;
+// }
 
 export interface Supplier {
   id: number;

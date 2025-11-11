@@ -7,6 +7,7 @@ import BlankLayout from "@/components/layouts/BlankLayout";
 import MainLayout from "@/components/layouts/MainLayout";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
+import AssetManagementPage from "@/pages/finance/AssetManagementPage";
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
@@ -277,7 +278,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "finance/assets",
-            element: <PagePlaceholder title="Quản Lý Tài Sản" />,
+            element: <AssetManagementPage />,
           },
           {
             path: "finance/reconciliation",
