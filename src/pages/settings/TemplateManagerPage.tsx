@@ -13,7 +13,6 @@ import {
   CodeOutlined,
   FileTextOutlined,
 } from "@ant-design/icons";
-import { Editor } from "@tinymce/tinymce-react"; // <-- NÂNG CẤP V400: Import TinyMCE
 import {
   Input,
   Table,
@@ -39,7 +38,8 @@ import {
   Spin,
 } from "antd";
 import viVN from "antd/locale/vi_VN";
-import React, { useState, useEffect, useRef } from "react";
+import JoditEditor from "jodit-react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 
 import type { TableProps } from "antd";
 
@@ -75,7 +75,42 @@ const moduleOptions = [
 const TemplateManagerPage: React.FC = () => {
   const [form] = Form.useForm();
   const { message: antMessage } = AntApp.useApp();
-  const editorRef = useRef<any>(null); // Ref cho TinyMCE
+  const editorRef = useRef<any>(null); // ref cho jodit react
+  const joditConfig = useMemo(
+    () => ({
+      readonly: false,
+      height: 540,
+      placeholder: "Bắt đầu soạn thảo...", // Tắt các nút liên quan đến upload ảnh (vì ta chưa làm)
+      // Sếp có thể tùy chỉnh toolbar tại đây sau
+      buttons: [
+        "source",
+        "|",
+        "bold",
+        "italic",
+        "underline",
+        "|",
+        "ul",
+        "ol",
+        "|",
+        "font",
+        "fontsize",
+        "brush",
+        "paragraph",
+        "|",
+        "align",
+        "undo",
+        "redo",
+        "|",
+        "hr",
+        "table",
+        "link",
+        "|",
+        "fullsize",
+        "preview",
+      ],
+    }),
+    []
+  );
 
   const {
     templates,
@@ -122,11 +157,11 @@ const TemplateManagerPage: React.FC = () => {
   const handleSaveTemplate = async () => {
     try {
       const values = await form.validateFields();
-      const content = editorRef.current?.getContent() || ""; // Lấy nội dung từ Editor
+      // const content = editorRef.current?.getContent() || ""; // Lấy nội dung từ Editor
 
       const recordToSave = {
         ...values,
-        content: content,
+        // content: content,
         status: values.status ? "active" : "inactive",
       };
 
@@ -364,111 +399,21 @@ const TemplateManagerPage: React.FC = () => {
 
               {/* --- NÂNG CẤP V400: DÙNG TinyMCE --- */}
               <Form.Item
-                name="content" // Vẫn dùng Form.Item để validate
+                name="content"
                 rules={[
                   {
                     required: true,
                     message: "Nội dung không được để trống!",
                   },
-                ]}
+                ]} // Form.Item của AntD sẽ tự động lấy value và onChange
               >
-                <Editor
-                  apiKey="43olap2v6079s7rom3ygnwpn97c9id0i6no92oy1gclp6vg2" // (API Key của TinyMCE)
-                  onInit={(editor) => (editorRef.current = editor)}
-                  initialValue={
-                    editingRecord?.content || "<p>Bắt đầu soạn thảo...</p>"
-                  }
-                  onEditorChange={(content) => {
-                    form.setFieldsValue({ content: content }); // Đồng bộ với Form
-                  }}
-                  // THAY THẾ TOÀN BỘ KHỐI init={{...}} CŨ BẰNG KHỐI NÀY
-
-                  init={{
-                    height: 600,
-                    menubar: true,
-                    // --- NÂNG CẤP: Lấy toàn bộ plugin từ file PDF Sếp gửi ---
-                    plugins: [
-                      "advlist",
-                      "autolink",
-                      "lists",
-                      "link",
-                      "image",
-                      "charmap",
-                      "preview",
-                      "anchor",
-                      "searchreplace",
-                      "visualblocks",
-                      "code",
-                      "fullscreen",
-                      "insertdatetime",
-                      "media",
-                      "table",
-                      "code",
-                      "help",
-                      "wordcount",
-                      // Các plugin Premium Sếp được dùng thử [cite: 2036]
-                      "checklist",
-                      "mediaembed",
-                      "casechange",
-                      "formatpainter",
-                      "pageembed",
-                      "powerpaste",
-                      "advtable",
-                      "ai",
-                      "mergetags",
-                      "exportpdf",
-                      "exportword",
-                    ],
-                    // --- NÂNG CẤP: Lấy toolbar từ file PDF Sếp gửi ---
-                    toolbar:
-                      "undo redo | blocks fontfamily fontsize | " +
-                      "bold italic underline strikethrough | " +
-                      "link image media table mergetags | " +
-                      "align lineheight | checklist numlist bullist indent outdent | " +
-                      "emoticons charmap | removeformat | code fullscreen preview | help",
-
-                    content_style:
-                      "body { font-family:Helvetica,Arial,sans-serif; font-size:14px }",
-
-                    // --- NÂNG CẤP: Cấu hình các biến (Merge Tags) ---
-                    // (Lấy từ mockVariables trong "canvas")
-                    mergetags_list: [
-                      {
-                        value: "Company.Name",
-                        title: "Tên Công ty",
-                        menu: [
-                          { value: "{TenCongTy}", title: "Tên Công ty" },
-                          { value: "{DiaChiCongTy}", title: "Địa chỉ Công ty" },
-                          { value: "{MaSoThueCongTy}", title: "MST Công ty" },
-                        ],
-                      },
-                      {
-                        value: "User.Name",
-                        title: "Người dùng",
-                        menu: [
-                          { value: "{TenNguoiDung}", title: "Tên Người dùng" },
-                          { value: "{TenKhachHang}", title: "Tên Khách hàng" },
-                          { value: "{TenNhanVien}", title: "Tên Nhân viên" },
-                        ],
-                      },
-                      {
-                        value: "Order.Info",
-                        title: "Thông tin Đơn hàng",
-                        menu: [
-                          { value: "{MaDonHang}", title: "Mã Đơn hàng" },
-                          { value: "{NgayTaoDon}", title: "Ngày tạo Đơn" },
-                          { value: "{TongTienHang}", title: "Tổng Tiền hàng" },
-                          { value: "{ChietKhau}", title: "Chiết khấu" },
-                          {
-                            value: "{TongThanhToan}",
-                            title: "Tổng Thanh toán",
-                          },
-                          { value: "{SoTienNo}", title: "Số Tiền Nợ" },
-                        ],
-                      },
-                    ],
-                  }}
+                               
+                <JoditEditor
+                  ref={editorRef} // value được quản lý bởi Form.Item
+                  config={joditConfig} // onBlur={(newContent) => form.setFieldsValue({ content: newContent })}
+                  // onChange={(newContent) => {}} // Không cần onchange nếu dùng Form
                 />
+                             
               </Form.Item>
               {/* ------------------------------------- */}
             </Card>
@@ -562,27 +507,30 @@ const TemplateManagerPage: React.FC = () => {
       {/* CSS Toàn cục */}
       <style>{`
         .clickable-list-item:hover {
-          background-color: #f6f8fa;
-        }
-        .ant-table-cell .ant-tag {
-          margin: 0;
-        }
-        /* Style cho ReactQuill (Giữ lại để tương lai Sếp có thể đổi) */
-        .ql-toolbar {
-          border-top-left-radius: 8px;
-          border-top-right-radius: 8px;
-          border-color: #d0d7de !important;
-          background-color: #f6f8fa;
-        }
-        .ql-container {
-          border-bottom-left-radius: 8px;
-          border-bottom-right-radius: 8px;
-          border-color: #d0d7de !important;
-          font-size: 14px;
-        }
-        .ql-editor {
-          min-height: 540px;
-        }
+          background-color: #f6f8fa;
+        }
+        .ant-table-cell .ant-tag {
+          margin: 0;
+        }
+
+        /* --- CSS MỚI CHO JODIT (Github Style) --- */
+        .jodit-container:not(.jodit_inline) {
+          border: 1.5px solid #d0d7de !important;
+          border-radius: 8px;
+        }
+        .jodit-toolbar__box {
+          background-color: #f6f8fa !important;
+          border-top-left-radius: 8px;
+      A    border-top-right-radius: 8px;
+          border-bottom: 1.5px solid #d0d7de !important;
+        }
+        .jodit-workplace {
+          background-color: #fff !important;
+        }
+        .jodit-wysiwyg {
+          font-size: 14px;
+  Lỗi:       padding: 16px !important;
+        }
       `}</style>
 
       {viewMode === "list" ? renderListView() : renderEditorView()}
