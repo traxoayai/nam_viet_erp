@@ -20,9 +20,9 @@ import {
   Card,
   Typography,
   Select,
-  Avatar,
   Row,
   ConfigProvider,
+  TableProps,
   Col,
   Space,
   Tag,
@@ -34,14 +34,12 @@ import {
   Switch,
   Divider,
   Affix,
-  Collapse, // Giữ lại Collapse cho Hộp công cụ
+  Collapse, // Giữ lại cho Hộp công cụ
   Spin,
+  Avatar, // Giữ lại cho Card.Meta
 } from "antd";
 import viVN from "antd/locale/vi_VN";
-import React, { useState, useEffect, useRef } from "react";
-
-import type { TableProps } from "antd";
-import type { Jodit } from "jodit"; // Import type Jodit
+import React, { useState, useEffect } from "react"; // Sửa: Bỏ useRef
 
 // SỬA LỖI: Import component TextEditor
 import TextEditor from "@/components/common/TextEditor";
@@ -63,7 +61,6 @@ const typeMap = {
   email: { text: "Mẫu Email", color: "gold", icon: <MailOutlined /> },
   sms: { text: "Mẫu SMS", color: "cyan", icon: <MessageOutlined /> },
 };
-// Dữ liệu Module (từ Lộ trình của Sếp)
 const moduleOptions = [
   { value: "pos", label: "Bán hàng POS" },
   { value: "b2b", label: "Bán Buôn (B2B)" },
@@ -76,8 +73,8 @@ const moduleOptions = [
 // --- COMPONENT CHÍNH ---
 const TemplateManagerPage: React.FC = () => {
   const [form] = Form.useForm();
-  const { message: antMessage } = AntApp.useApp();
-  const editorRef = useRef<Jodit | null>(null); // SỬA LỖI: Dùng ref cho Jodit
+  const { message: antMessage } = AntApp.useApp(); // SỬA LỖI: Dùng state để giữ nội dung realtime
+  const [realtimeContent, setRealtimeContent] = useState("");
 
   const {
     templates,
@@ -105,35 +102,39 @@ const TemplateManagerPage: React.FC = () => {
   useEffect(() => {
     if (viewMode === "editor") {
       if (editingRecord) {
+        const content = editingRecord.content || "<p></p>";
         form.setFieldsValue({
           ...editingRecord,
           status: editingRecord.status === "active",
+          content: content, // Đảm bảo content không bị null
         });
+        setRealtimeContent(content); // Đồng bộ state realtime
       } else {
+        const content = "<p>Bắt đầu soạn thảo...</p>";
         form.resetFields();
         form.setFieldsValue({
           status: true,
           type: "pdf",
           module: "general",
-          content: "<p>Bắt đầu soạn thảo...</p>",
+          content: content,
         });
+        setRealtimeContent(content); // Đồng bộ state realtime
       }
     }
-  }, [viewMode, editingRecord, form]); // SỬA LỖI: Đây là hàm handleSaveTemplate đầy đủ
+  }, [viewMode, editingRecord, form]); // SỬA LỖI: Hàm handleSaveTemplate đầy đủ
 
   const handleSaveTemplate = async () => {
     const msgKey = "save_template";
     try {
-      antMessage.loading({ content: "Đang xử lý...", key: msgKey }); // Đồng bộ Jodit -> Form State TRƯỚC KHI validate
+      antMessage.loading({ content: "Đang xử lý...", key: msgKey }); // SỬA LỖI: Đồng bộ State (realtime) -> Form State TRƯỚC KHI validate
 
-      const currentContent = editorRef.current?.value || "";
-      form.setFieldsValue({ content: currentContent });
+      form.setFieldsValue({ content: realtimeContent });
 
       const values = await form.validateFields();
 
       const recordToSave = {
         ...values,
-        content: currentContent, // Đảm bảo lấy content mới nhất
+        content: realtimeContent, // Đảm bảo lấy content mới nhất
         status: values.status ? "active" : "inactive",
       };
 
@@ -244,7 +245,7 @@ const TemplateManagerPage: React.FC = () => {
                 icon={<EditOutlined />}
                 onClick={() => showEditor(record)}
               />
-                         
+                   
             </Tooltip>
                        
             <Tooltip title="Xem trước">
@@ -389,9 +390,8 @@ const TemplateManagerPage: React.FC = () => {
                   <Button
                     icon={<EyeOutlined />}
                     onClick={() => {
-                      // SỬA LỖI: Lấy content từ ref
-                      const currentContent = editorRef.current?.value || "";
-                      setPreviewContent(currentContent || "Chưa có nội dung.");
+                      // SỬA LỖI: Lấy content từ state
+                      setPreviewContent(realtimeContent || "Chưa có nội dung.");
                       setIsPreviewVisible(true);
                     }}
                   >
@@ -401,7 +401,7 @@ const TemplateManagerPage: React.FC = () => {
                   <Button
                     type="primary"
                     icon={<SaveOutlined />}
-                    onClick={handleSaveTemplate} // Sửa: onClick gọi hàm
+                    onClick={handleSaveTemplate}
                     loading={loading}
                   >
                                         Lưu Mẫu                  
@@ -443,7 +443,11 @@ const TemplateManagerPage: React.FC = () => {
                   },
                 ]}
               >
-                                <TextEditor ref={editorRef} />             
+                               
+                <TextEditor // ref={editorRef} // Không cần ref nữa
+                  onRealtimeChange={setRealtimeContent} // Cập nhật state
+                />
+                             
               </Form.Item>
                             {/* ------------------------------------- */}       
                  
@@ -465,8 +469,7 @@ const TemplateManagerPage: React.FC = () => {
                 rules={[{ required: true, message: "Vui lòng nhập tên Mẫu!" }]}
               >
                                
-                <Input placeholder="Vd: Hóa đơn Bán lẻ (POS - K80)" />         
-                   
+                <Input placeholder="Vd: Hóa đơn Bán lẻ (POS - K80)" />      
               </Form.Item>
                            
               <Row gutter={16}>
@@ -498,8 +501,8 @@ const TemplateManagerPage: React.FC = () => {
                       <Option value="print">Mẫu In (POS)</Option>               
                             <Option value="pdf">Mẫu PDF (A4)</Option>           
                                 <Option value="email">Mẫu Email</Option>       
-                                    <Option value="sms">Mẫu SMS</Option>       
-                                 
+                                    <Option value="sms">Mẫu SMS</Option>
+                      A                 
                     </Select>
                                      
                   </Form.Item>
@@ -520,7 +523,7 @@ const TemplateManagerPage: React.FC = () => {
                 />
                              
               </Form.Item>
-                       
+                         
             </Card>
                        
             <Card
@@ -531,14 +534,14 @@ const TemplateManagerPage: React.FC = () => {
             >
                            
               <Paragraph type="secondary" style={{ padding: "0 8px 8px 8px" }}>
-                              Nhấp vào 'Biến' để sao chép.              
+                                Nhấp vào 'Biến' để sao chép.              
               </Paragraph>
                            
               <Collapse accordion ghost>
                                
                 {variables.map((group) => (
                   <Panel header={group.label} key={group.key}>
-                                     
+                    s                 
                     <Space wrap>
                                            
                       {group.tags.map((tag) => (
@@ -577,23 +580,6 @@ const TemplateManagerPage: React.FC = () => {
         }
         .ant-table-cell .ant-tag {
           margin: 0;
-        }
-        /* --- CSS MỚI CHO JODIT (Github Style) --- */
-      .jodit-container:not(.jodit_inline) {
-          border: 1.5px solid #d0d7de !important;
-          border-radius: 8px;
-        }
-        .jodit-toolbar__box {
-          background-color: #f6f8fa !important;
-        border-top-left-radius: 8px;
-          border-top-right-radius: 8px;
-          border-bottom: 1.5px solid #d0d7de !important;
-        }
-        .jodit-workplace {
-          background-color: #fff !important;      }
-        .jodit-wysiwyg {
-          font-size: 14px;
-          padding: 16px !important;
         }
       `}</style>
             {viewMode === "list" ? renderListView() : renderEditorView()}     

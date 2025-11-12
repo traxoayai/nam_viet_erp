@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-// Khai báo kiểu dữ liệu cho các biến môi trường của chúng ta
+// file src/vite-env.d.ts - Khai báo kiểu dữ liệu cho các biến môi trường của chúng ta
 // Điều này giúp TypeScript tự động gợi ý và báo lỗi nếu Sếp gõ sai tên biến
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
