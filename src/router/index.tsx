@@ -7,6 +7,7 @@ import BlankLayout from "@/components/layouts/BlankLayout";
 import MainLayout from "@/components/layouts/MainLayout";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
+import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
 import AssetManagementPage from "@/pages/finance/AssetManagementPage";
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
@@ -198,7 +199,7 @@ const routes: RouteObject[] = [
           { path: "crm", element: <Navigate to="/crm/retail" replace /> },
           {
             path: "crm/retail",
-            element: <PagePlaceholder title="Khách kênh Cửa Hàng" />,
+            element: <CustomerB2CPage />,
           },
           { path: "crm/b2b", element: <PagePlaceholder title="Khách B2B" /> },
 
