@@ -20,6 +20,7 @@ import {
   Card,
   Typography,
   Select,
+  Avatar,
   Row,
   ConfigProvider,
   Col,
@@ -33,16 +34,17 @@ import {
   Switch,
   Divider,
   Affix,
-  Collapse,
-  Avatar,
+  Collapse, // Giữ lại Collapse cho Hộp công cụ
   Spin,
 } from "antd";
 import viVN from "antd/locale/vi_VN";
-import JoditEditor from "jodit-react";
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 import type { TableProps } from "antd";
+import type { Jodit } from "jodit"; // Import type Jodit
 
+// SỬA LỖI: Import component TextEditor
+import TextEditor from "@/components/common/TextEditor";
 import { useTemplateStore } from "@/stores/useTemplateStore";
 import { TemplateRecord, DocumentTemplate } from "@/types/template";
 
@@ -75,42 +77,7 @@ const moduleOptions = [
 const TemplateManagerPage: React.FC = () => {
   const [form] = Form.useForm();
   const { message: antMessage } = AntApp.useApp();
-  const editorRef = useRef<any>(null); // ref cho jodit react
-  const joditConfig = useMemo(
-    () => ({
-      readonly: false,
-      height: 540,
-      placeholder: "Bắt đầu soạn thảo...", // Tắt các nút liên quan đến upload ảnh (vì ta chưa làm)
-      // Sếp có thể tùy chỉnh toolbar tại đây sau
-      buttons: [
-        "source",
-        "|",
-        "bold",
-        "italic",
-        "underline",
-        "|",
-        "ul",
-        "ol",
-        "|",
-        "font",
-        "fontsize",
-        "brush",
-        "paragraph",
-        "|",
-        "align",
-        "undo",
-        "redo",
-        "|",
-        "hr",
-        "table",
-        "link",
-        "|",
-        "fullsize",
-        "preview",
-      ],
-    }),
-    []
-  );
+  const editorRef = useRef<Jodit | null>(null); // SỬA LỖI: Dùng ref cho Jodit
 
   const {
     templates,
@@ -152,16 +119,21 @@ const TemplateManagerPage: React.FC = () => {
         });
       }
     }
-  }, [viewMode, editingRecord, form]);
+  }, [viewMode, editingRecord, form]); // SỬA LỖI: Đây là hàm handleSaveTemplate đầy đủ
 
   const handleSaveTemplate = async () => {
+    const msgKey = "save_template";
     try {
+      antMessage.loading({ content: "Đang xử lý...", key: msgKey }); // Đồng bộ Jodit -> Form State TRƯỚC KHI validate
+
+      const currentContent = editorRef.current?.value || "";
+      form.setFieldsValue({ content: currentContent });
+
       const values = await form.validateFields();
-      // const content = editorRef.current?.getContent() || ""; // Lấy nội dung từ Editor
 
       const recordToSave = {
         ...values,
-        // content: content,
+        content: currentContent, // Đảm bảo lấy content mới nhất
         status: values.status ? "active" : "inactive",
       };
 
@@ -169,18 +141,33 @@ const TemplateManagerPage: React.FC = () => {
       if (editingRecord) {
         success = await updateTemplate(editingRecord.id, recordToSave);
         if (success)
-          antMessage.success(`Cập nhật mẫu "${values.name}" thành công!`);
+          antMessage.success({
+            content: `Cập nhật mẫu "${values.name}" thành công!`,
+            key: msgKey,
+          });
       } else {
         success = await addTemplate(recordToSave);
         if (success)
-          antMessage.success(`Thêm mới mẫu "${values.name}" thành công!`);
+          antMessage.success({
+            content: `Thêm mới mẫu "${values.name}" thành công!`,
+            key: msgKey,
+          });
       }
 
-      if (!success) {
-        antMessage.error("Thao tác thất bại. Tên mẫu có thể đã tồn tại.");
+      if (success) {
+        showList(); // Tự động quay về danh sách
+      } else {
+        antMessage.error({
+          content: "Thao tác thất bại. Tên mẫu có thể đã tồn tại.",
+          key: msgKey,
+        });
       }
     } catch (info) {
       console.log("Validate Failed:", info);
+      antMessage.error({
+        content: "Lỗi: Vui lòng kiểm tra các trường bắt buộc!",
+        key: msgKey,
+      });
     }
   };
 
@@ -196,9 +183,8 @@ const TemplateManagerPage: React.FC = () => {
   const copyVariable = (tag: string) => {
     navigator.clipboard.writeText(tag);
     antMessage.success(`Đã sao chép: ${tag}`);
-  };
+  }; // --- GIAO DIỆN DANH SÁCH ---
 
-  // --- GIAO DIỆN DANH SÁCH ---
   const renderListView = () => {
     const columns: TableProps<TemplateRecord>["columns"] = [
       {
@@ -227,7 +213,7 @@ const TemplateManagerPage: React.FC = () => {
           const typeInfo = typeMap[type] || {};
           return (
             <Tag icon={typeInfo.icon} color={typeInfo.color}>
-              {typeInfo.text}
+                            {typeInfo.text}           
             </Tag>
           );
         },
@@ -248,16 +234,21 @@ const TemplateManagerPage: React.FC = () => {
         width: 150,
         align: "center",
         fixed: "right",
-        render: (_, record: TemplateRecord) => (
+        render: (_: any, record: TemplateRecord) => (
           <Space size="small">
+                       
             <Tooltip title="Sửa (Vào Xưởng thiết kế)">
+                           
               <Button
                 type="text"
                 icon={<EditOutlined />}
                 onClick={() => showEditor(record)}
               />
+                         
             </Tooltip>
+                       
             <Tooltip title="Xem trước">
+                           
               <Button
                 type="text"
                 icon={<EyeOutlined />}
@@ -266,8 +257,11 @@ const TemplateManagerPage: React.FC = () => {
                   setIsPreviewVisible(true);
                 }}
               />
+                         
             </Tooltip>
+                       
             <Tooltip title="Xóa">
+                           
               <Popconfirm
                 title="Sếp chắc chắn muốn xóa?"
                 description={`Xóa mẫu "${record.name}"?`}
@@ -275,9 +269,13 @@ const TemplateManagerPage: React.FC = () => {
                 okText="Xóa"
                 cancelText="Hủy"
               >
-                <Button type="text" danger icon={<DeleteOutlined />} />
+                               
+                <Button type="text" danger icon={<DeleteOutlined />} />         
+                   
               </Popconfirm>
+                         
             </Tooltip>
+                     
           </Space>
         ),
       },
@@ -285,39 +283,56 @@ const TemplateManagerPage: React.FC = () => {
 
     return (
       <Card variant="outlined" styles={{ body: { padding: 12 } }}>
+               
         <Spin spinning={loading}>
+                   
           <Row
             justify="space-between"
             align="middle"
             style={{ marginBottom: 16 }}
           >
+                       
             <Col>
+                           
               <Title level={4} style={{ margin: 0 }}>
-                Quản lý Mẫu & Biểu mẫu
+                                Quản lý Mẫu & Biểu mẫu              
               </Title>
+                           
               <Text type="secondary">
-                "Xưởng thiết kế" các mẫu Hóa đơn, Hợp đồng, Email...
+                                "Xưởng thiết kế" các mẫu Hóa đơn, Hợp đồng,
+                Email...              
               </Text>
+                         
             </Col>
+                       
             <Col>
+                           
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={() => showEditor(null)}
               >
-                Thêm Mẫu Mới
+                                Thêm Mẫu Mới              
               </Button>
+                         
             </Col>
+                     
           </Row>
+                   
           <Row gutter={16} style={{ marginBottom: 16 }}>
+                       
             <Col flex="auto">
+                           
               <Input
                 prefix={<SearchOutlined />}
                 placeholder="Tìm theo tên mẫu..."
                 allowClear
               />
+                         
             </Col>
+                     
           </Row>
+                   
           <Table
             columns={columns}
             dataSource={templates}
@@ -326,16 +341,19 @@ const TemplateManagerPage: React.FC = () => {
             pagination={{ pageSize: 10 }}
             scroll={{ x: 1000 }}
           />
+                 
         </Spin>
+             
       </Card>
     );
-  };
+  }; // --- GIAO DIỆN EDITOR (XƯỞNG THIẾT KẾ) ---
 
-  // --- GIAO DIỆN EDITOR (XƯỞNG THIẾT KẾ) ---
   const renderEditorView = () => {
     return (
       <Form form={form} layout="vertical">
+               
         <Affix offsetTop={40} style={{ zIndex: 10 }}>
+                   
           <Card
             variant="outlined"
             style={{
@@ -345,59 +363,77 @@ const TemplateManagerPage: React.FC = () => {
             }}
             bodyStyle={{ padding: "12px 16px" }}
           >
+                       
             <Row justify="space-between" align="middle">
+                           
               <Col>
+                               
                 <Button icon={<ArrowLeftOutlined />} onClick={showList}>
-                  Quay lại Danh sách
+                                    Quay lại Danh sách                
                 </Button>
-                <Divider type="vertical" />
+                                <Divider type="vertical" />               
                 <Title level={4} style={{ margin: 0, display: "inline-block" }}>
+                                   
                   {editingRecord
                     ? `Sửa Mẫu: ${editingRecord.name}`
                     : "Tạo Mẫu Mới"}
+                                 
                 </Title>
+                             
               </Col>
+                           
               <Col>
+                               
                 <Space>
+                                   
                   <Button
                     icon={<EyeOutlined />}
                     onClick={() => {
-                      setPreviewContent(
-                        editorRef.current?.getContent() || "Chưa có nội dung."
-                      );
+                      // SỬA LỖI: Lấy content từ ref
+                      const currentContent = editorRef.current?.value || "";
+                      setPreviewContent(currentContent || "Chưa có nội dung.");
                       setIsPreviewVisible(true);
                     }}
                   >
-                    Xem trước
+                                        Xem trước                  
                   </Button>
+                                   
                   <Button
                     type="primary"
                     icon={<SaveOutlined />}
-                    onClick={handleSaveTemplate}
+                    onClick={handleSaveTemplate} // Sửa: onClick gọi hàm
                     loading={loading}
                   >
-                    Lưu Mẫu
+                                        Lưu Mẫu                  
                   </Button>
+                                 
                 </Space>
+                             
               </Col>
+                         
             </Row>
+                     
           </Card>
+                 
         </Affix>
-
+               
         <Row gutter={16}>
+                   
           <Col xs={24} md={16}>
+                       
             <Card
               variant="outlined"
               styles={{ body: { padding: "12px", background: "#FFF" } }}
             >
+                           
               <Card.Meta
                 avatar={<Avatar icon={<CodeOutlined />} />}
                 title="Trình soạn thảo Nội dung"
                 description="Soạn thảo chuyên nghiệp (giống Google Docs) cho mẫu."
                 style={{ marginBottom: 16 }}
               />
-
-              {/* --- NÂNG CẤP V400: DÙNG TinyMCE --- */}
+                            {/* --- SỬA LỖI: DÙNG Component Chung --- */}       
+                   
               <Form.Item
                 name="content"
                 rules={[
@@ -405,155 +441,185 @@ const TemplateManagerPage: React.FC = () => {
                     required: true,
                     message: "Nội dung không được để trống!",
                   },
-                ]} // Form.Item của AntD sẽ tự động lấy value và onChange
+                ]}
               >
-                               
-                <JoditEditor
-                  ref={editorRef} // value được quản lý bởi Form.Item
-                  config={joditConfig} // onBlur={(newContent) => form.setFieldsValue({ content: newContent })}
-                  // onChange={(newContent) => {}} // Không cần onchange nếu dùng Form
-                />
-                             
+                                <TextEditor ref={editorRef} />             
               </Form.Item>
-              {/* ------------------------------------- */}
+                            {/* ------------------------------------- */}       
+                 
             </Card>
+                     
           </Col>
-
+                   
           <Col xs={24} md={8}>
+                       
             <Card
               title="Thông tin Mẫu"
               variant="outlined"
               styles={{ body: { padding: "12px 16px" } }}
             >
+                           
               <Form.Item
                 name="name"
                 label="Tên Mẫu (Quản lý)"
                 rules={[{ required: true, message: "Vui lòng nhập tên Mẫu!" }]}
               >
-                <Input placeholder="Vd: Hóa đơn Bán lẻ (POS - K80)" />
+                               
+                <Input placeholder="Vd: Hóa đơn Bán lẻ (POS - K80)" />         
+                   
               </Form.Item>
+                           
               <Row gutter={16}>
+                               
                 <Col span={12}>
+                                   
                   <Form.Item
                     name="module"
                     label="Áp dụng cho Module"
                     rules={[{ required: true }]}
                   >
+                                       
                     <Select options={moduleOptions} placeholder="Chọn module" />
+                                     
                   </Form.Item>
+                                 
                 </Col>
+                               
                 <Col span={12}>
+                                   
                   <Form.Item
                     name="type"
                     label="Loại Mẫu"
                     rules={[{ required: true }]}
                   >
+                                       
                     <Select placeholder="Chọn loại mẫu">
-                      <Option value="print">Mẫu In (POS)</Option>
-                      <Option value="pdf">Mẫu PDF (A4)</Option>
-                      <Option value="email">Mẫu Email</Option>
-                      <Option value="sms">Mẫu SMS</Option>
+                                           
+                      <Option value="print">Mẫu In (POS)</Option>               
+                            <Option value="pdf">Mẫu PDF (A4)</Option>           
+                                <Option value="email">Mẫu Email</Option>       
+                                    <Option value="sms">Mẫu SMS</Option>       
+                                 
                     </Select>
+                                     
                   </Form.Item>
+                                 
                 </Col>
+                             
               </Row>
+                           
               <Form.Item
                 name="status"
                 label="Trạng thái"
                 valuePropName="checked"
               >
+                               
                 <Switch
                   checkedChildren="Đang áp dụng"
                   unCheckedChildren="Không áp dụng"
                 />
+                             
               </Form.Item>
+                       
             </Card>
-
+                       
             <Card
               title="Hộp công cụ (Biến có sẵn)"
               variant="outlined"
               style={{ marginTop: 16 }}
               bodyStyle={{ padding: 8 }}
             >
+                           
               <Paragraph type="secondary" style={{ padding: "0 8px 8px 8px" }}>
-                Nhấp vào 'Biến' để sao chép.
+                              Nhấp vào 'Biến' để sao chép.              
               </Paragraph>
+                           
               <Collapse accordion ghost>
+                               
                 {variables.map((group) => (
                   <Panel header={group.label} key={group.key}>
+                                     
                     <Space wrap>
+                                           
                       {group.tags.map((tag) => (
                         <Tag
                           key={tag}
                           onClick={() => copyVariable(tag)}
                           style={{ cursor: "pointer", userSelect: "all" }}
                         >
-                          {tag}
+                                                    {tag}                       
                         </Tag>
                       ))}
+                                         
                     </Space>
+                                     
                   </Panel>
                 ))}
+                             
               </Collapse>
+                         
             </Card>
+                     
           </Col>
+                 
         </Row>
+             
       </Form>
     );
   };
 
   return (
     <ConfigProvider locale={viVN}>
-      {/* CSS Toàn cục */}
+            {/* CSS Toàn cục */}     
       <style>{`
-        .clickable-list-item:hover {
+        .clickable-list-item:hover {
           background-color: #f6f8fa;
         }
         .ant-table-cell .ant-tag {
           margin: 0;
         }
-
         /* --- CSS MỚI CHO JODIT (Github Style) --- */
-        .jodit-container:not(.jodit_inline) {
+      .jodit-container:not(.jodit_inline) {
           border: 1.5px solid #d0d7de !important;
           border-radius: 8px;
         }
         .jodit-toolbar__box {
           background-color: #f6f8fa !important;
-          border-top-left-radius: 8px;
-      A    border-top-right-radius: 8px;
+        border-top-left-radius: 8px;
+          border-top-right-radius: 8px;
           border-bottom: 1.5px solid #d0d7de !important;
         }
         .jodit-workplace {
-          background-color: #fff !important;
-        }
+          background-color: #fff !important;      }
         .jodit-wysiwyg {
           font-size: 14px;
-  Lỗi:       padding: 16px !important;
+          padding: 16px !important;
         }
-      `}</style>
-
-      {viewMode === "list" ? renderListView() : renderEditorView()}
-
-      {/* Modal Xem trước Nội dung */}
+      `}</style>
+            {viewMode === "list" ? renderListView() : renderEditorView()}     
+      {/* Modal Xem trước Nội dung */}     
       <Modal
         title="Xem trước Nội dung Mẫu"
         open={isPreviewVisible}
         onCancel={() => setIsPreviewVisible(false)}
         footer={[
           <Button key="back" onClick={() => setIsPreviewVisible(false)}>
-            Đóng
+                        Đóng          
           </Button>,
         ]}
         width={800}
       >
+               
         <Card
           style={{ marginTop: 16, borderColor: "#d0d7de", minHeight: 400 }}
           bodyStyle={{ padding: 16 }}
         >
-          <div dangerouslySetInnerHTML={{ __html: previewContent }} />
+                    <div dangerouslySetInnerHTML={{ __html: previewContent }} />
+                 
         </Card>
+             
       </Modal>
+         
     </ConfigProvider>
   );
 };
