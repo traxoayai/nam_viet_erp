@@ -46,6 +46,7 @@ import {
 import viVN from "antd/locale/vi_VN";
 import dayjs from "dayjs";
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 
 import type { TableProps } from "antd";
@@ -126,6 +127,7 @@ const phoneFormatter = (value: string | undefined) => {
 // --- COMPONENT CHÍNH ---
 const CustomerB2CPage: React.FC = () => {
   const [form] = Form.useForm();
+  const navigate = useNavigate();
   const { message: antMessage, modal: antModal } = AntApp.useApp(); // SỬA LỖI H: antMessage
   // Lấy state từ "bộ não"
   const {
@@ -263,6 +265,7 @@ const CustomerB2CPage: React.FC = () => {
         medical_history: values.medical_history,
         tax_code: values.tax_code,
         contact_person_name: values.contact_person_name,
+        contact_person_phone: values.contact_person_phone,
         loyalty_points: values.loyalty_points || 0,
         status: values.status || "active", // Đảm bảo status không bị null
       }; // Lọc ra chỉ ID và Quan hệ
@@ -393,7 +396,6 @@ const CustomerB2CPage: React.FC = () => {
         fixed: "right",
         render: (_: any, record: CustomerListRecord) => (
           <Space>
-                       
             <Tooltip
               title={
                 record.type === "CaNhan"
@@ -401,30 +403,28 @@ const CustomerB2CPage: React.FC = () => {
                   : "Xem/Sửa Profile Tổ chức"
               }
             >
-                           
               <Button
                 type="text"
                 icon={<EditOutlined />}
-                onClick={() => showFormView(record.type, record)}
+                onClick={() => {
+                  if (record.type === "CaNhan") {
+                    showFormView(record.type, record);
+                  } else {
+                    navigate(`/crm/organization/edit/${record.id}`);
+                  }
+                }}
               />
-                         
             </Tooltip>
-                       
             <Tooltip title="Ngừng Giao dịch">
-                           
               <Popconfirm
                 title={`Ngừng GD khách "${record.name}"?`}
                 onConfirm={() => handleDelete(record)} // SỬA LỖI 1: Truyền cả object
                 okText="Đồng ý"
                 cancelText="Hủy"
               >
-                               
                 <Button type="text" danger icon={<DeleteOutlined />} />         
-                   
               </Popconfirm>
-                         
             </Tooltip>
-                     
           </Space>
         ),
       },
@@ -473,6 +473,13 @@ const CustomerB2CPage: React.FC = () => {
                   >
                     Xuất Excel
                   </Button>
+                  <Button
+                    type="primary"
+                    icon={<TeamOutlined />}
+                    onClick={() => navigate("/crm/organization/new")}
+                  >
+                    Thêm Khách (Tổ chức)
+                  </Button>
                                    
                   <Button
                     type="primary"
@@ -481,13 +488,9 @@ const CustomerB2CPage: React.FC = () => {
                   >
                     Thêm Khách (Cá nhân)
                   </Button>
-                                 
                 </Space>
-                             
               </Col>
-                         
             </Row>
-                       
             <Row gutter={16} style={{ marginBottom: "16px" }}>
                            
               <Col flex="auto">
@@ -1057,11 +1060,8 @@ const CustomerB2CPage: React.FC = () => {
                         </Form.Item>
                       </>
                     )}
-                                           
                   </Form.List>
-                                     
                 </TabPane>
-                                                       
                 {/* TAB 4: LỊCH SỬ GIAO DỊCH */}                     
                 <TabPane
                   tab={
@@ -1072,7 +1072,6 @@ const CustomerB2CPage: React.FC = () => {
                   }
                   key="4"
                 >
-                                           
                   <Table
                     columns={historyColumns} // SỬA LỖI E: Dùng editingCustomer.history
                     dataSource={editingCustomer?.history || []}
@@ -1086,17 +1085,11 @@ const CustomerB2CPage: React.FC = () => {
                       ),
                     }}
                   />
-                                       
                 </TabPane>
-                               
               </Tabs>
-                         
             </Card>
-                     
           </Spin>
-                 
         </Content>
-             
       </Form>
     );
   };
@@ -1120,11 +1113,11 @@ height: 100px !important;
            margin: 0 !important;
         }
       `}</style>
-                  {/* SỬA LỖI G: Sửa style và logic view */}     
+      {/* SỬA LỖI G: Sửa style và logic view */}     
       <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
                 {isFormView ? renderFormView() : renderListView()}     
       </Layout>
-        M           {/* NÂNG CẤP: Modal Tìm kiếm Giám hộ */}     
+      {/* NÂNG CẤP: Modal Tìm kiếm Giám hộ */}     
       <GuardianSelectModal
         open={isGuardianModalOpen}
         onClose={() => setIsGuardianModalOpen(false)}

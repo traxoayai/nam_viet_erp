@@ -45,6 +45,7 @@ export interface CustomerB2C {
   medical_history: string | null;
   tax_code: string | null;
   contact_person_name: string | null;
+  contact_person_phone: string | null;
   loyalty_points: number;
   status: CustomerStatus;
 }
@@ -87,6 +88,7 @@ export interface CustomerFormData {
   medical_history: string | null;
   tax_code: string | null;
   contact_person_name: string | null;
+  contact_person_phone: string | null;
   loyalty_points: number;
   status: CustomerStatus;
 }
@@ -95,6 +97,7 @@ export interface CustomerFormData {
 export interface CustomerB2CStoreState {
   customers: CustomerListRecord[];
   loading: boolean;
+  loadingDetails: boolean;
   isModalVisible: boolean; // Dùng cho Modal Thêm/Sửa
   isFormView: boolean; // Trạng thái xem (Danh sách / Form)
   editingCustomer: CustomerDetailsData | null;

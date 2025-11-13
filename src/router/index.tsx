@@ -7,6 +7,7 @@ import BlankLayout from "@/components/layouts/BlankLayout";
 import MainLayout from "@/components/layouts/MainLayout";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
+import CustomerB2COrgForm from "@/pages/crm/CustomerB2COrgForm";
 import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
 import AssetManagementPage from "@/pages/finance/AssetManagementPage";
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
@@ -200,6 +201,14 @@ const routes: RouteObject[] = [
           {
             path: "crm/retail",
             element: <CustomerB2CPage />,
+          },
+          {
+            path: "crm/organization/new",
+            element: <CustomerB2COrgForm />,
+          },
+          {
+            path: "crm/organization/edit/:id",
+            element: <CustomerB2COrgForm />,
           },
           { path: "crm/b2b", element: <PagePlaceholder title="Khách B2B" /> },
 

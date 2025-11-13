@@ -6,6 +6,7 @@ import {
   CustomerB2CStoreState,
   CustomerB2CType,
   CustomerListRecord,
+  //   CustomerDetailsData,
 } from "@/types/customer";
 
 export const useCustomerB2CStore = create<CustomerB2CStoreState>(
@@ -13,6 +14,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
     customers: [],
     loading: false,
     isModalVisible: false,
+    loadingDetails: false,
     isFormView: false,
     editingCustomer: null,
     editingCustomerType: "CaNhan",
@@ -35,13 +37,13 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
     },
 
     getCustomerDetails: async (id: number) => {
-      set({ loading: true, editingCustomer: null });
+      set({ loadingDetails: true, editingCustomer: null }); // <-- SỬA LỖI 2
       try {
         const data = await service.fetchCustomerDetails(id);
-        set({ editingCustomer: data, loading: false });
+        set({ editingCustomer: data, loadingDetails: false }); // <-- SỬA LỖI 2
       } catch (error: any) {
         console.error("Lỗi tải chi tiết khách hàng:", error);
-        set({ loading: false });
+        set({ loadingDetails: false }); // <-- SỬA LỖI 2
         throw error; // SỬA LỖI 4: Ném lỗi ra
       }
     }, // --- HÀM CRUD ---
