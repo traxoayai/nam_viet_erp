@@ -104,6 +104,8 @@ export interface CustomerB2CStoreState {
   editingCustomerType: CustomerB2CType; // 'CaNhan' hoặc 'ToChuc'
   totalCount: number; // --- Hàm hành động ---
   filters: any;
+  page: number; // <-- Phân trang
+  pageSize: number; // <-- Số nội dung hiển thị / trang
 
   fetchCustomers: (filters: any) => Promise<void>;
   getCustomerDetails: (id: number) => Promise<void>;
@@ -113,6 +115,7 @@ export interface CustomerB2CStoreState {
   reactivateCustomer: (id: number) => Promise<boolean>;
   exportToExcel: () => Promise<CustomerListRecord[]>;
   importCustomers: (file: File) => Promise<number>;
+  setPage: (page: number, pageSize: number) => void; // Phân trang
   showListView: () => void;
   showFormView: (type: CustomerB2CType, record?: CustomerListRecord) => void;
   closeModal: () => void; // (Dùng cho Modal Thêm Giám hộ)

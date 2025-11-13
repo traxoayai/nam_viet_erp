@@ -147,6 +147,9 @@ const CustomerB2CPage: React.FC = () => {
     reactivateCustomer,
     exportToExcel,
     importCustomers,
+    page, // <-- THÊM DÒNG NÀY
+    pageSize, // <-- THÊM DÒNG NÀY
+    setPage, // <-- THÊM DÒNG NÀY
     showListView,
     showFormView,
   } = useCustomerB2CStore(); // State cục bộ
@@ -171,7 +174,7 @@ const CustomerB2CPage: React.FC = () => {
 
   useEffect(() => {
     loadCustomers();
-  }, [loadCustomers]); // Điền form khi dữ liệu Sửa về
+  }, [debouncedSearch]); // Điền form khi dữ liệu Sửa về
 
   useEffect(() => {
     if (!isNew && editingCustomer && !loading) {
@@ -603,7 +606,15 @@ const CustomerB2CPage: React.FC = () => {
               dataSource={customers}
               bordered
               rowKey="key"
-              pagination={{ pageSize: 10, total: totalCount }}
+              pagination={{
+                current: page,
+                pageSize: pageSize,
+                total: totalCount,
+                onChange: setPage, // <-- KẾT NỐI HÀM SETPAGE
+                showSizeChanger: true,
+                showTotal: (total, range) =>
+                  `${range[0]}-${range[1]} của ${total} khách hàng`,
+              }}
               scroll={{ x: 1000 }}
             />
           </Spin>

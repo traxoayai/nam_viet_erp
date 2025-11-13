@@ -15,13 +15,17 @@ const CCCD_BUCKET = "customer_identity";
  * 1. Tải danh sách Khách hàng B2C (Phân trang & Tìm kiếm 2 chiều)
  */
 export const fetchCustomers = async (
-  filters: any
+  filters: any,
+  page: number, // <-- Phân trang
+  pageSize: number // <-- Phân trang
 ): Promise<{ data: CustomerListRecord[]; totalCount: number }> => {
   const { data, error } = await supabase.rpc("get_customers_b2c_list", {
     search_query: filters.search_query || null,
     type_filter: filters.type_filter || null,
     status_filter: filters.status_filter || null, // Sếp lưu ý: Hàm RPC này của chúng ta chưa hỗ trợ Phân trang (page_num, page_size)
     // Em sẽ thêm logic này vào RPC sau nếu Sếp yêu cầu.
+    page_num: page,
+    page_size: pageSize,
   });
 
   if (error) throw error;

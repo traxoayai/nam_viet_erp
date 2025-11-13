@@ -20,14 +20,21 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
     editingCustomerType: "CaNhan",
     totalCount: 0,
     filters: {}, // SỬA LỖI 1: Thêm filters
+    page: 1, // <-- THÊM DÒNG NÀY
+    pageSize: 10, // <-- THÊM DÒNG NÀY
     // --- HÀM TẢI DỮ LIỆU ---
 
     fetchCustomers: async (filters: any) => {
       // SỬA LỖI 1: Merge filters
       const finalFilters = { ...get().filters, ...filters };
+      const { page, pageSize } = get();
       set({ loading: true, filters: finalFilters });
       try {
-        const { data, totalCount } = await service.fetchCustomers(finalFilters);
+        const { data, totalCount } = await service.fetchCustomers(
+          finalFilters,
+          page,
+          pageSize
+        );
         set({ customers: data, totalCount, loading: false });
       } catch (error: any) {
         console.error("Lỗi tải danh sách khách hàng:", error);
@@ -52,7 +59,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
       set({ loading: true });
       try {
         const newId = await service.createCustomer(data, guardians);
-        await get().fetchCustomers({}); // Tải lại danh sách
+        await get().fetchCustomers(get().filters); // Tải lại danh sách
         set({ loading: false, isFormView: false });
         return newId;
       } catch (error: any) {
@@ -66,7 +73,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
       set({ loading: true });
       try {
         await service.updateCustomer(id, data, guardians);
-        await get().fetchCustomers({}); // Tải lại danh sách
+        await get().fetchCustomers(get().filters); // Tải lại danh sách
         set({ loading: false, isFormView: false });
         return true;
       } catch (error: any) {
@@ -80,7 +87,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
       set({ loading: true });
       try {
         await service.deleteCustomer(id);
-        await get().fetchCustomers({}); // Tải lại danh sách
+        await get().fetchCustomers(get().filters); // Tải lại danh sách
         set({ loading: false });
         return true;
       } catch (error: any) {
@@ -131,6 +138,10 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
         set({ loading: false });
         throw error;
       }
+    },
+    setPage: (page: number, pageSize: number) => {
+      set({ page, pageSize });
+      get().fetchCustomers(get().filters); // Tự động tải lại trang
     },
 
     // --- QUẢN LÝ UI ---
