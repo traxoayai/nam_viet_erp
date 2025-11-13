@@ -111,6 +111,8 @@ export interface CustomerB2CStoreState {
   updateCustomer: (id: number, data: any, guardians: any) => Promise<boolean>;
   deleteCustomer: (id: number) => Promise<boolean>; // --- Quản lý UI ---
   reactivateCustomer: (id: number) => Promise<boolean>;
+  exportToExcel: () => Promise<CustomerListRecord[]>;
+  importCustomers: (file: File) => Promise<number>;
   showListView: () => void;
   showFormView: (type: CustomerB2CType, record?: CustomerListRecord) => void;
   closeModal: () => void; // (Dùng cho Modal Thêm Giám hộ)

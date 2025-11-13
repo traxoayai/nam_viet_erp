@@ -88,7 +88,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
         set({ loading: false });
         throw error; // SỬA LỖI 4: Ném lỗi ra
       }
-    }, // --- QUẢN LÝ UI ---
+    },
 
     reactivateCustomer: async (id: number) => {
       set({ loading: true });
@@ -102,7 +102,38 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
         set({ loading: false });
         throw error;
       }
-    }, // --- QUẢN LÝ UI ---
+    },
+
+    // Xuất Excel
+    exportToExcel: async () => {
+      set({ loading: true });
+      const filters = get().filters; // Lấy filter hiện tại
+      try {
+        const data = await service.exportCustomers(filters);
+        set({ loading: false });
+        return data;
+      } catch (error: any) {
+        console.error("Lỗi xuất Excel:", error);
+        set({ loading: false });
+        throw error;
+      }
+    },
+    // Nhập File Excel Danh sách khách hàng
+    importCustomers: async (file: File) => {
+      set({ loading: true });
+      try {
+        const count = await service.importCustomers(file);
+        await get().fetchCustomers(get().filters); // Tải lại
+        set({ loading: false });
+        return count;
+      } catch (error: any) {
+        console.error("Lỗi Store Import:", error);
+        set({ loading: false });
+        throw error;
+      }
+    },
+
+    // --- QUẢN LÝ UI ---
 
     showListView: () => {
       set({ isFormView: false, editingCustomer: null });

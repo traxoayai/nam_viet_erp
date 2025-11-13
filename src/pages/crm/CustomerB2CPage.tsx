@@ -49,8 +49,10 @@ import dayjs from "dayjs";
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
+import * as XLSX from "xlsx";
 
-import type { TableProps } from "antd";
+import type { TableProps, UploadProps } from "antd";
+// import type { UploadRequestOption } from "antd/es/upload/interface";
 
 // IMPORT CÁC "BỘ NÃO" VÀ "KHUÔN MẪU"
 import GuardianSelectModal from "@/components/common/GuardianSelectModal";
@@ -143,6 +145,8 @@ const CustomerB2CPage: React.FC = () => {
     updateCustomer,
     deleteCustomer,
     reactivateCustomer,
+    exportToExcel,
+    importCustomers,
     showListView,
     showFormView,
   } = useCustomerB2CStore(); // State cục bộ
@@ -159,6 +163,7 @@ const CustomerB2CPage: React.FC = () => {
   const [currentGuardianField, setCurrentGuardianField] = useState<
     number | null
   >(null); // Tải danh sách
+  const [isImporting, setIsImporting] = useState(false);
 
   const loadCustomers = useCallback(() => {
     fetchCustomers({ search_query: debouncedSearch });
@@ -315,6 +320,73 @@ const CustomerB2CPage: React.FC = () => {
     }
   };
 
+  // Hàm Xuất Excel
+  const handleExportExcel = async () => {
+    antMessage.loading({
+      content: "Đang chuẩn bị dữ liệu xuất...",
+      key: "export",
+    });
+    try {
+      const dataToExport = await exportToExcel(); // Gọi từ store
+
+      if (dataToExport.length === 0) {
+        antMessage.info({
+          content: "Không có dữ liệu nào để xuất.",
+          key: "export",
+        });
+        return;
+      } // Tạo Bảng tính
+
+      const ws = XLSX.utils.json_to_sheet(dataToExport); // Tạo Sổ làm việc
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "DanhSachKhachHang"); // Xuất file
+      XLSX.writeFile(
+        wb,
+        `DS_KhachHang_B2C_${new Date().toISOString().split("T")[0]}.xlsx`
+      );
+
+      antMessage.success({
+        content: `Đã xuất ${dataToExport.length} khách hàng.`,
+        key: "export",
+      });
+    } catch (error: any) {
+      antMessage.error({
+        content: `Xuất file thất bại: ${error.message}`,
+        key: "export",
+      });
+    }
+  };
+
+  //Hàm Nhập Danh sách khách hàng từ Excle
+  const uploadProps: UploadProps = {
+    name: "file",
+    showUploadList: false,
+    customRequest: async ({ file, onSuccess, onError }: any) => {
+      setIsImporting(true);
+      antMessage.loading({
+        content: "Đang xử lý file Excel...",
+        key: "import",
+      });
+      try {
+        const count = await importCustomers(file as File);
+        if (onSuccess) onSuccess("ok");
+        antMessage.success({
+          content: `Import thành công! Đã thêm/cập nhật ${count} khách hàng.`,
+          key: "import",
+        }); // Store đã tự tải lại
+      } catch (error: any) {
+        if (onError) onError(error);
+        antMessage.error({
+          content: `Import thất bại: ${error.message}`,
+          key: "import",
+          duration: 5, // Cho 5 giây
+        });
+      } finally {
+        setIsImporting(false);
+      }
+    },
+  };
+
   const handleSelectGuardian = (guardian: CustomerListRecord) => {
     if (currentGuardianField === null) return;
 
@@ -456,7 +528,7 @@ const CustomerB2CPage: React.FC = () => {
     return (
       <Content style={{ padding: "0 12px" }}>
         <Card
-          style={styles.card} // SỬA LỖI B: Dùng styles.body
+          style={{ ...styles.card, margin: "0 12px 12px 12px" }}
           styles={{ body: { padding: "16px" } }}
         >
           <Spin spinning={loading} tip="Đang tải...">
@@ -473,20 +545,15 @@ const CustomerB2CPage: React.FC = () => {
 
               <Col>
                 <Space>
-                  <Button
-                    icon={<UploadOutlined />}
-                    onClick={() =>
-                      antMessage.info("Chức năng Import Excel sắp ra mắt.")
-                    }
-                  >
-                    Nhập Excel
-                  </Button>
-
+                  <Upload {...uploadProps}>
+                     
+                    <Button icon={<UploadOutlined />} loading={isImporting}>
+                          Nhập Excel  
+                    </Button>
+                  </Upload>
                   <Button
                     icon={<DownloadOutlined />}
-                    onClick={() =>
-                      antMessage.info("Chức năng Export Excel sắp ra mắt.")
-                    }
+                    onClick={handleExportExcel}
                   >
                     Xuất Excel
                   </Button>
@@ -616,7 +683,7 @@ const CustomerB2CPage: React.FC = () => {
         {/* Nội dung Form - NÂNG CẤP: Dùng Tabs */}
         <Content style={{ padding: "12px", paddingTop: "0" }}>
           <Spin spinning={loading} tip="Đang tải...">
-            <Card style={{ ...styles.card, margin: "12px 0 0 0" }}>
+            <Card style={{ ...styles.card, margin: "0" }}>
               <Tabs defaultActiveKey="1">
                 {/* TAB 1: Thông tin HCNS */}
                 <TabPane
