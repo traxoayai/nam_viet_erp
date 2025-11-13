@@ -1047,13 +1047,12 @@ const CustomerB2CPage: React.FC = () => {
                         <Form.Item>
                                                          
                           <Button
-                            type="dashed"
+                            type="primary"
+                            size="small"
                             onClick={() => add()} // SỬA LỖI B.3: AntD tự quản lý key
-                            block
                             icon={<PlusOutlined />}
                           >
-                                                              Thêm Người Giám hộ
-                                                           
+                            Thêm Người Giám hộ                                
                           </Button>
                         </Form.Item>
                       </>
