@@ -191,11 +191,8 @@ const CustomerB2COrgForm: React.FC = () => {
       `}</style>
            
       <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
-               
         <Form form={form} layout="vertical" onFinish={handleSave}>
-                   
           <Affix offsetTop={40} style={{ zIndex: 10 }}>
-                       
             <Card
               style={{
                 ...styles.card,
@@ -240,7 +237,6 @@ const CustomerB2COrgForm: React.FC = () => {
                   >
                     Lưu Hồ sơ                  
                   </Button>
-                                 
                 </Col>
                              
               </Row>

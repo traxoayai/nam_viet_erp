@@ -90,6 +90,20 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
       }
     }, // --- QUẢN LÝ UI ---
 
+    reactivateCustomer: async (id: number) => {
+      set({ loading: true });
+      try {
+        await service.reactivateCustomer(id);
+        await get().fetchCustomers(get().filters); // Tải lại danh sách
+        set({ loading: false });
+        return true;
+      } catch (error: any) {
+        console.error("Lỗi khôi phục khách hàng:", error);
+        set({ loading: false });
+        throw error;
+      }
+    }, // --- QUẢN LÝ UI ---
+
     showListView: () => {
       set({ isFormView: false, editingCustomer: null });
     },

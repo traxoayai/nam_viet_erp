@@ -81,6 +81,15 @@ export const deleteCustomer = async (id: number): Promise<boolean> => {
 };
 
 /**
+ * 5b. Khôi phục Khách hàng
+ */
+export const reactivateCustomer = async (id: number): Promise<boolean> => {
+  const { error } = await supabase.rpc("reactivate_customer_b2c", { p_id: id });
+  if (error) throw error;
+  return true;
+};
+
+/**
  * 6. Tải ảnh (Avatar, CCCD)
  */
 export const uploadAvatar = async (file: File) => {

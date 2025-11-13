@@ -14,6 +14,7 @@ import {
   DownloadOutlined,
   UploadOutlined,
   UsergroupAddOutlined,
+  SafetyOutlined,
   MinusCircleOutlined,
   SmileOutlined,
 } from "@ant-design/icons";
@@ -141,6 +142,7 @@ const CustomerB2CPage: React.FC = () => {
     createCustomer,
     updateCustomer,
     deleteCustomer,
+    reactivateCustomer,
     showListView,
     showFormView,
   } = useCustomerB2CStore(); // State cục bộ
@@ -304,6 +306,15 @@ const CustomerB2CPage: React.FC = () => {
     });
   };
 
+  const handleReactivate = async (record: CustomerListRecord) => {
+    try {
+      await reactivateCustomer(record.id);
+      antMessage.success(`Đã cho phép KH "${record.name}" giao dịch trở lại.`);
+    } catch (error: any) {
+      antMessage.error(error.message);
+    }
+  };
+
   const handleSelectGuardian = (guardian: CustomerListRecord) => {
     if (currentGuardianField === null) return;
 
@@ -395,7 +406,7 @@ const CustomerB2CPage: React.FC = () => {
         align: "center",
         fixed: "right",
         render: (_: any, record: CustomerListRecord) => (
-          <Space>
+          <Space size="small">
             <Tooltip
               title={
                 record.type === "CaNhan"
@@ -415,16 +426,28 @@ const CustomerB2CPage: React.FC = () => {
                 }}
               />
             </Tooltip>
-            <Tooltip title="Ngừng Giao dịch">
-              <Popconfirm
-                title={`Ngừng GD khách "${record.name}"?`}
-                onConfirm={() => handleDelete(record)} // SỬA LỖI 1: Truyền cả object
-                okText="Đồng ý"
-                cancelText="Hủy"
-              >
-                <Button type="text" danger icon={<DeleteOutlined />} />         
-              </Popconfirm>
-            </Tooltip>
+            {/* SỬA LỖI: LOGIC 2 CHIỀU */}
+            {record.status === "active" ? (
+              <Tooltip title="Ngừng Giao dịch">
+                <Popconfirm
+                  title={`Ngừng GD khách "${record.name}"?`}
+                  onConfirm={() => handleDelete(record)}
+                  okText="Đồng ý"
+                  cancelText="Hủy"
+                >
+                  <Button type="text" danger icon={<DeleteOutlined />} />
+                </Popconfirm>
+              </Tooltip>
+            ) : (
+              <Tooltip title="Cho phép Giao dịch trở lại">
+                <Button
+                  type="text"
+                  style={{ color: "green" }}
+                  icon={<SafetyOutlined />}
+                  onClick={() => handleReactivate(record)}
+                />
+              </Tooltip>
+            )}
           </Space>
         ),
       },
@@ -432,30 +455,24 @@ const CustomerB2CPage: React.FC = () => {
 
     return (
       <Content style={{ padding: "0 12px" }}>
-               
         <Card
           style={styles.card} // SỬA LỖI B: Dùng styles.body
           styles={{ body: { padding: "16px" } }}
         >
-                   
           <Spin spinning={loading} tip="Đang tải...">
-                       
             <Row
               justify="space-between"
               align="middle"
               style={{ marginBottom: "16px" }}
             >
-                           
               <Col>
                 <Title level={4} style={{ margin: 0 }}>
                   Quản lý Khách lẻ (B2C)
                 </Title>
               </Col>
-                           
+
               <Col>
-                               
                 <Space>
-                                   
                   <Button
                     icon={<UploadOutlined />}
                     onClick={() =>
@@ -464,7 +481,7 @@ const CustomerB2CPage: React.FC = () => {
                   >
                     Nhập Excel
                   </Button>
-                                   
+
                   <Button
                     icon={<DownloadOutlined />}
                     onClick={() =>
@@ -480,7 +497,7 @@ const CustomerB2CPage: React.FC = () => {
                   >
                     Thêm Khách (Tổ chức)
                   </Button>
-                                   
+
                   <Button
                     type="primary"
                     icon={<UserOutlined />}
@@ -492,9 +509,7 @@ const CustomerB2CPage: React.FC = () => {
               </Col>
             </Row>
             <Row gutter={16} style={{ marginBottom: "16px" }}>
-                           
               <Col flex="auto">
-                               
                 <Input
                   prefix={<SearchOutlined />}
                   placeholder="Tìm theo Tên, SĐT, Mã KH (Kể cả SĐT Giám hộ)..."
@@ -502,27 +517,20 @@ const CustomerB2CPage: React.FC = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                             
               </Col>
-                           
+
               <Col flex="200px">
-                               
                 <Select
                   placeholder="Lọc theo Hạng loại"
                   allowClear
                   style={{ width: "100%" }}
                   onChange={(val) => fetchCustomers({ type_filter: val })}
                 >
-                                   
-                  <Option value="CaNhan">Cá nhân (Bệnh nhân)</Option>           
-                        <Option value="ToChuc">Tổ chức (Mua lẻ)</Option>       
-                         
+                  <Option value="CaNhan">Cá nhân (Bệnh nhân)</Option>  
+                  <Option value="ToChuc">Tổ chức (Mua lẻ)</Option>   
                 </Select>
-                             
               </Col>
-                         
             </Row>
-                       
             <Table
               columns={columns}
               dataSource={customers}
@@ -531,11 +539,8 @@ const CustomerB2CPage: React.FC = () => {
               pagination={{ pageSize: 10, total: totalCount }}
               scroll={{ x: 1000 }}
             />
-                     
           </Spin>
-                 
         </Card>
-             
       </Content>
     );
   }; // 2. Giao diện Profile (Form View)
@@ -571,9 +576,8 @@ const CustomerB2CPage: React.FC = () => {
 
     return (
       <Form form={form} layout="vertical" onFinish={handleSave}>
-                {/* Thanh Affix */}       
+        {/* Thanh Affix */}
         <Affix offsetTop={40} style={{ zIndex: 10 }}>
-                   
           <Card
             style={{
               ...styles.card,
@@ -583,53 +587,38 @@ const CustomerB2CPage: React.FC = () => {
             }} // SỬA LỖI B: Dùng styles.body
             styles={{ body: { padding: "12px 16px" } }}
           >
-                       
             <Row justify="space-between" align="middle">
-                           
               <Col>
-                               
                 <Button icon={<ArrowLeftOutlined />} onClick={showListView}>
                   Quay lại Danh sách
                 </Button>
-                                <Divider type="vertical" />               
+                <Divider type="vertical" />
                 <Title level={4} style={{ margin: 0, display: "inline-block" }}>
-                                   
                   {isNew
                     ? "Thêm Khách hàng (Cá nhân)"
                     : `Hồ sơ: ${form.getFieldValue("name") || "..."}`}
-                                 
                 </Title>
-                             
               </Col>
-                           
+
               <Col>
-                               
                 <Button
                   type="primary"
                   icon={<SaveOutlined />}
                   htmlType="submit"
                   loading={loading}
                 >
-                                    Lưu Hồ sơ                
+                  Lưu Hồ sơ
                 </Button>
-                             
               </Col>
-                         
             </Row>
-                     
           </Card>
-                 
         </Affix>
-                {/* Nội dung Form - NÂNG CẤP: Dùng Tabs */}       
+        {/* Nội dung Form - NÂNG CẤP: Dùng Tabs */}
         <Content style={{ padding: "12px", paddingTop: "0" }}>
-                   
           <Spin spinning={loading} tip="Đang tải...">
-                       
             <Card style={{ ...styles.card, margin: "12px 0 0 0" }}>
-                             
               <Tabs defaultActiveKey="1">
-                                    {/* TAB 1: Thông tin HCNS */}               
-                   
+                {/* TAB 1: Thông tin HCNS */}
                 <TabPane
                   tab={
                     <Space>
@@ -639,17 +628,13 @@ const CustomerB2CPage: React.FC = () => {
                   }
                   key="1"
                 >
-                                         
                   <Row gutter={24}>
-                                                {/* Cột 1: Ảnh đại diện */}     
-                                         
+                    {/* Cột 1: Ảnh đại diện */}
                     <Col xs={24} md={8} lg={6} style={{ textAlign: "center" }}>
-                                                     
                       <Form.Item
                         label="Ảnh Đại diện"
                         style={{ textAlign: "center" }}
                       >
-                                                           
                         <Upload
                           action="#"
                           listType="picture-circle"
@@ -660,54 +645,39 @@ const CustomerB2CPage: React.FC = () => {
                           onRemove={() => setFileList([])}
                           style={{ display: "flex", justifyContent: "center" }}
                         >
-                                                                 
                           {fileList.length >= 1 ? null : (
                             <div>
                               <PlusOutlined />
                               <div style={{ marginTop: 8 }}>Tải ảnh</div>
                             </div>
                           )}
-                                                             
                         </Upload>
-                                                       
                       </Form.Item>
-                                                     
+
                       <Form.Item name="customer_code" label="Mã KH (Tự động)">
-                                                           
-                        <Input placeholder="KH-00X" disabled />                 
-                                     
+                        <Input placeholder="KH-00X" disabled />
                       </Form.Item>
-                                                 
                     </Col>
-                                                                           
-                    {/* Cột 2: Thông tin cá nhân & Pháp lý */}                 
-                             
+                    {/* Cột 2: Thông tin cá nhân & Pháp lý */}
+
                     <Col xs={24} md={16} lg={18}>
-                                                     
                       <Row gutter={16}>
-                                                            {/* Dòng 1 */}     
-                                                     
+                        {/* Dòng 1 */}
                         <Col xs={24} sm={12}>
-                                                                 
                           <Form.Item
                             name="name"
                             label="Họ và Tên"
                             rules={[{ required: true }]}
                           >
-                                                                       
-                            <Input />                                       
+                            <Input />
                           </Form.Item>
-                                                             
                         </Col>
-                                                           
                         <Col xs={24} sm={12}>
-                                                                 
                           <Form.Item
                             name="phone"
                             label="SĐT (Liên hệ chính)"
                             tooltip="Nếu là trẻ em, SĐT là bắt buộc và là SĐT Giám hộ chính."
                           >
-                                                                       
                             <Input
                               placeholder="Vd: 0965.637.788"
                               onChange={(e) => {
@@ -717,33 +687,21 @@ const CustomerB2CPage: React.FC = () => {
                                 });
                               }}
                             />
-                                                                   
                           </Form.Item>
-                                                             
                         </Col>
-                                                            {/* Dòng 2 */}     
-                                                       
+                        {/* Dòng 2 */}  
                         <Col xs={24} sm={8}>
-                                                                 
                           <Form.Item name="dob" label="Ngày sinh">
-                                                                       
                             <DatePicker
                               style={{ width: "100%" }}
                               format="DD/MM/YYYY"
                             />
-                                                                   
                           </Form.Item>
-                                                             
                         </Col>
-                                                           
                         <Col xs={24} sm={8}>
-                                                                 
                           <Form.Item label="Tuổi (Tự động)">
-                                                                     
                             {/* SỬA LỖI: Dùng Form.Item dependencies để tự động cập nhật */}
-                                                                     
                             <Form.Item noStyle dependencies={["dob"]}>
-                                                                         
                               {({ getFieldValue }) => (
                                 <Input
                                   value={calculateDetailedAge(
@@ -756,92 +714,56 @@ const CustomerB2CPage: React.FC = () => {
                                   }}
                                 />
                               )}
-                                                                       
                             </Form.Item>
-                                                                   
                           </Form.Item>
-                                                             
                         </Col>
-                                                             
                         <Col xs={24} sm={8}>
-                                                                 
                           <Form.Item name="gender" label="Giới tính">
-                                                                       
                             <Radio.Group>
-                                                                             
-                              <Radio value="Nam">Nam</Radio>                   
-                                                         
-                              <Radio value="Nữ">Nữ</Radio>                     
-                                                       
-                              <Radio value="Khác">Khác</Radio>                 
-                                                       
+                              <Radio value="Nam">Nam</Radio>
+                              <Radio value="Nữ">Nữ</Radio>
+                              <Radio value="Khác">Khác</Radio>
                             </Radio.Group>
-                                                                   
                           </Form.Item>
-                                                             
                         </Col>
-                                                           
-                        {/* Dòng 3: Pháp lý */}                                 
-                         
+                        {/* Dòng 3: Pháp lý */}
                         <Col xs={24} sm={8}>
-                                                                 
                           <Form.Item name="cccd" label="Số Căn cước Công dân">
-                                                                       
-                            <Input />                                       
+                            <Input />
                           </Form.Item>
-                                                             
                         </Col>
-                                                             
                         <Col xs={24} sm={8}>
-                                                                 
                           <Form.Item
                             name="cccd_issue_date"
                             label="Ngày cấp CCCD"
                           >
-                                                                       
                             <DatePicker
                               style={{ width: "100%" }}
                               format="DD/MM/YYYY"
                             />
-                                                                   
                           </Form.Item>
-                                                             
                         </Col>
-                                                             
                         <Col xs={24} sm={8}>
-                                                                 
                           <Form.Item
                             name="tinhTrangHonNhan"
                             label="Tình trạng Hôn nhân"
                           >
-                                                                       
                             <Select
                               options={maritalStatusOptions}
                               placeholder="Chọn tình trạng..."
                             />
-                                                                   
                           </Form.Item>
-                                                             
                         </Col>
-                                                             
                         <Col span={24}>
-                                                                 
                           <Form.Item name="address" label="Địa chỉ Thường trú">
-                                                                       
-                            <Input />                                       
+                            <Input />
                           </Form.Item>
-                                                             
                         </Col>
-                                                       
                       </Row>
-                                                 
                     </Col>
-                                           
                   </Row>
-                                     
                 </TabPane>
-                                                       
-                {/* TAB 2: Y TẾ & LỐI SỐNG */}                   
+                {/* TAB 2: Y TẾ & LỐI SỐNG */}
                 <TabPane
                   tab={
                     <Space>
@@ -850,53 +772,40 @@ const CustomerB2CPage: React.FC = () => {
                   }
                   key="2"
                 >
-                                           
                   <Row gutter={24}>
-                                               
                     <Col xs={24} md={12}>
-                                                     
                       <Title level={5} style={{ margin: 0 }}>
                         <SmileOutlined /> Bối cảnh & Lối sống
                       </Title>
-                      <Divider style={{ marginTop: 8 }} />                     
+                      <Divider style={{ marginTop: 8 }} />  
                       <Form.Item name="occupation" label="Nghề nghiệp">
-                                                           
                         <Input placeholder="Vd: Lái xe, Giáo viên, Kỹ sư IT..." />
-                                                       
                       </Form.Item>
-                                                     
                       <Form.Item
                         name="lifestyle_habits"
                         label="Thói quen sinh hoạt (Lối sống)"
                         tooltip="Giúp Dược sĩ tư vấn chính xác hơn."
                       >
-                                                           
                         <TextArea
                           rows={2}
                           placeholder="Vd: Hay thức khuya, hút thuốc, thích ăn cay, tập gym..."
                         />
-                                                       
                       </Form.Item>
-                                                 
                     </Col>
-                                               
+
                     <Col xs={24} md={12}>
-                                                     
                       <Title level={5} style={{ margin: 0 }}>
                         <MedicineBoxOutlined /> Thông tin Y tế (EMR)
                       </Title>
-                                                     
-                      <Divider style={{ marginTop: 8 }} />                     
-                               
+
+                      <Divider style={{ marginTop: 8 }} />
                       <Form.Item name="allergies" label="Dị ứng đã biết">
-                                                           
                         <TextArea
                           rows={2}
                           placeholder="Vd: Penicillin, Aspirin, Phấn hoa, Hải sản..."
                         />
-                                                       
                       </Form.Item>
-                                                     
+
                       <Form.Item
                         name="medical_history"
                         label="Bệnh nền / Mạn tính"
@@ -905,16 +814,11 @@ const CustomerB2CPage: React.FC = () => {
                           rows={2}
                           placeholder="Vd: Tăng huyết áp, Tiểu đường, Viêm mũi dị ứng..."
                         />
-                                                       
                       </Form.Item>
-                                                 
                     </Col>
-                                           
                   </Row>
-                                     
                 </TabPane>
-                                                       
-                {/* TAB 3: NGƯỜI GIÁM HỘ */}                   
+                {/* TAB 3: NGƯỜI GIÁM HỘ */}
                 <TabPane
                   tab={
                     <Space>
@@ -924,19 +828,15 @@ const CustomerB2CPage: React.FC = () => {
                   }
                   key="3"
                 >
-                                         
                   <Paragraph type="secondary">
-                                                Thêm thông tin người giám hộ
-                    (Bố, Mẹ...) nếu khách hàng là trẻ em.                      
-                          Sếp có thể tìm và liên kết với một hồ sơ khách hàng đã
-                    tồn tại.                        
+                    Thêm thông tin người giám hộ (Bố, Mẹ...) nếu khách hàng là
+                    trẻ em. Sếp có thể tìm và liên kết với một hồ sơ khách hàng
+                    đã tồn tại.
                   </Paragraph>
-                                                                 
+
                   <Form.List name="guardians">
-                                             
                     {(fields, { add, remove }) => (
                       <>
-                                                     
                         {fields.map(({ key, name, ...restField }) => (
                           <Card // SỬA LỖI 2 (Key): Dùng key từ Form.List (field.key)
                             key={key}
@@ -954,22 +854,16 @@ const CustomerB2CPage: React.FC = () => {
                               </Tooltip>
                             }
                           >
-                                                             
                             <Row gutter={16}>
-                                                                 
                               <Col xs={24} md={10}>
-                                                                     
-                                {/* Trường Ẩn lưu ID */}                       
-                                             
+                                {/* Trường Ẩn lưu ID */}  
                                 <Form.Item
                                   {...restField}
                                   name={[name, "guardian_id"]}
                                   hidden
                                 >
-                                                                         
-                                  <Input />                                     
+                                  <Input /> 
                                 </Form.Item>
-                                                                     
                                 <Form.Item
                                   {...restField}
                                   name={[name, "name"]}
@@ -981,7 +875,6 @@ const CustomerB2CPage: React.FC = () => {
                                     },
                                   ]}
                                 >
-                                                                         
                                   <Input
                                     readOnly
                                     placeholder="Bấm tìm kiếm để chọn..."
@@ -995,74 +888,58 @@ const CustomerB2CPage: React.FC = () => {
                                           setCurrentGuardianField(name); // 'name' là index
                                         }}
                                       >
-                                                                               
-                                              Tìm KH                            
-                                                       
+                                        Tìm KH
                                       </Button>
                                     }
                                   />
-                                                                       
                                 </Form.Item>
-                                                                   
                               </Col>
-                                                                 
                               <Col xs={12} md={7}>
-                                                                       
                                 <Form.Item
                                   {...restField}
                                   name={[name, "relationship"]} // SỬA LỖI D: Xóa fieldKey
                                   label="Mối quan hệ"
                                   rules={[{ required: true }]}
                                 >
-                                                                         
                                   <Select placeholder="Chọn...">
-                                    <Option value="Bố">Bố</Option>             
-                                    <Option value="Mẹ">Mẹ</Option>             
-                                    <Option value="Ông">Ông</Option>           
-                                    <Option value="Bà">Bà</Option>             
-                                    <Option value="Khác">Khác</Option>         
+                                    <Option value="Bố">Bố</Option> 
+                                    <Option value="Mẹ">Mẹ</Option> 
+                                    <Option value="Ông">Ông</Option>
+                                    <Option value="Bà">Bà</Option> 
+                                    <Option value="Khác">Khác</Option>  
                                   </Select>
-                                                                       
                                 </Form.Item>
-                                                                   
                               </Col>
-                                                                 
                               <Col xs={12} md={7}>
-                                                                       
                                 <Form.Item
                                   {...restField}
                                   name={[name, "phone"]}
                                   // SỬA LỖI D: Xóa fieldKey
                                   label="Số điện thoại"
                                 >
-                                                                         
                                   <Input placeholder="SĐT Giám hộ" readOnly /> 
-                                                                     
                                 </Form.Item>
-                                Note                               
+                                Note
                               </Col>
-                                                               
                             </Row>
-                                                     
                           </Card>
                         ))}
-                                                     
+
                         <Form.Item>
-                                                         
                           <Button
                             type="primary"
                             size="small"
                             onClick={() => add()} // SỬA LỖI B.3: AntD tự quản lý key
                             icon={<PlusOutlined />}
                           >
-                            Thêm Người Giám hộ                                
+                            Thêm Người Giám hộ
                           </Button>
                         </Form.Item>
                       </>
                     )}
                   </Form.List>
                 </TabPane>
-                {/* TAB 4: LỊCH SỬ GIAO DỊCH */}                     
+                {/* TAB 4: LỊCH SỬ GIAO DỊCH */}  
                 <TabPane
                   tab={
                     <Space>
@@ -1096,28 +973,28 @@ const CustomerB2CPage: React.FC = () => {
 
   return (
     <ConfigProvider locale={viVN}>
-            {/* CSS (Giữ nguyên) */}     
+      {/* CSS (Giữ nguyên) */}  
       <style>{`
-        .ant-table-thead > tr > th {
-          border-bottom: 1.5px solid #d0d7de !important;
-          background-color: #f6f8fa !important;
+  .ant-table-thead > tr > th {
+ border-bottom: 1.5px solid #d0d7de !important;
+ background-color: #f6f8fa !important;
 }
-        .ant-upload-list-item-container {
-          width: 100px !important;
+  .ant-upload-list-item-container {
+ width: 100px !important;
 height: 100px !important;
-        }
-        .ant-upload.ant-upload-select-picture-card {
-           width: 100px !important;
-           height: 100px !important;
-           padding: 0 !important;
-           margin: 0 !important;
-        }
-      `}</style>
-      {/* SỬA LỖI G: Sửa style và logic view */}     
+  }
+  .ant-upload.ant-upload-select-picture-card {
+  width: 100px !important;
+  height: 100px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  }
+   `}</style>
+      {/* SỬA LỖI G: Sửa style và logic view */}  
       <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
-                {isFormView ? renderFormView() : renderListView()}     
+        {isFormView ? renderFormView() : renderListView()}  
       </Layout>
-      {/* NÂNG CẤP: Modal Tìm kiếm Giám hộ */}     
+      {/* NÂNG CẤP: Modal Tìm kiếm Giám hộ */}  
       <GuardianSelectModal
         open={isGuardianModalOpen}
         onClose={() => setIsGuardianModalOpen(false)}
