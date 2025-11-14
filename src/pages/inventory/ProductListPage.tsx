@@ -29,7 +29,6 @@ import {
   App as AntApp,
   Alert,
   Dropdown,
-  Menu,
   Upload,
   Spin,
 } from "antd";
@@ -223,7 +222,7 @@ const ProductListPage = () => {
           <Text
             style={{ fontWeight: 500, color: stock > 0 ? "#333" : "#bfbfbf" }}
           >
-                        {stock}         {" "}
+            {stock}         
           </Text>
         ),
       })),
@@ -252,18 +251,14 @@ const ProductListPage = () => {
       key: "name",
       render: (text: string, record: Product) => (
         <div>
-                   {" "}
           <Text strong style={{ color: "#003a78" }}>
-                        {text}         {" "}
+            {text}         
           </Text>
-                    <br />         {" "}
-          <Text type="secondary">SKU: {record.sku}</Text>
-                    <br />         {" "}
+          <br />         <Text type="secondary">SKU: {record.sku}</Text>
+          <br />         
           <Text type="secondary" style={{ fontSize: 12 }}>
-                        {record.category_name} | {record.manufacturer_name}     
-               {" "}
+            {record.category_name} | {record.manufacturer_name}       
           </Text>
-                 {" "}
         </div>
       ),
     }, // THAY THẾ: Sử dụng mảng cột tồn kho động đã tính toán
@@ -276,9 +271,7 @@ const ProductListPage = () => {
       align: "center" as const,
       render: (status: string) => (
         <Tag color={status === "active" ? "green" : "red"}>
-                   {" "}
-          {status === "active" ? "Đang kinh doanh" : "Ngừng kinh doanh"}     
-           {" "}
+          {status === "active" ? "Đang kinh doanh" : "Ngừng kinh doanh"}       
         </Tag>
       ),
     },
@@ -290,23 +283,19 @@ const ProductListPage = () => {
       fixed: "right" as const,
       render: (_: any, record: Product) => (
         <Space>
-                   {" "}
           <Tooltip title="Sửa">
-                       {" "}
             <Button
               type="text"
               icon={<EditOutlined />}
               onClick={() => navigate(`/inventory/edit/${record.id}`)}
             />
-                     {" "}
           </Tooltip>
-                   {" "}
+
           <Tooltip
             title={
               record.status === "active" ? "Ngừng kinh doanh" : "Cho kinh doanh"
             }
           >
-                       {" "}
             <Button
               type="text"
               danger={record.status === "active"}
@@ -319,90 +308,69 @@ const ProductListPage = () => {
               }
               onClick={() => handleToggleStatus(record)}
             />
-                     {" "}
           </Tooltip>
-                 {" "}
         </Space>
       ),
     },
   ];
 
-  const bulkActionMenu = (
-    <Menu>
-           {" "}
-      <Menu.Item
-        key="set_active"
-        icon={<CheckCircleOutlined />}
-        onClick={() => handleBulkUpdateStatus("active")}
-      >
-                Chuyển sang "Đang kinh doanh"      {" "}
-      </Menu.Item>
-           {" "}
-      <Menu.Item
-        key="set_inactive"
-        icon={<StopOutlined />}
-        danger
-        onClick={() => handleBulkUpdateStatus("inactive")}
-      >
-                Chuyển sang "Ngừng kinh doanh"      {" "}
-      </Menu.Item>
-         {" "}
-    </Menu>
-  );
+  // SỬA LỖI: Chuyển sang cú pháp 'items' cho AntD v5
+  const bulkActionMenu = [
+    {
+      key: "set_active",
+      icon: <CheckCircleOutlined />,
+      label: "Chuyển sang 'Đang kinh doanh'",
+      onClick: () => handleBulkUpdateStatus("active"),
+    },
+    {
+      key: "set_inactive",
+      icon: <StopOutlined />,
+      label: "Chuyển sang 'Ngừng kinh doanh'",
+      danger: true,
+      onClick: () => handleBulkUpdateStatus("inactive"),
+    },
+  ];
 
   return (
     <Spin spinning={loading} tip="Đang tải dữ liệu...">
-           {" "}
       <Card styles={{ body: { padding: 12 } }}>
-                {/* Phần 1: Header */}       {" "}
+        {/* Phần 1: Header */}       
         <Row
           justify="space-between"
           align="middle"
           style={{ marginBottom: 24 }}
         >
-                   {" "}
           <Col>
-                       {" "}
             <Title level={4} style={{ margin: 0 }}>
-                            Danh sách Sản phẩm            {" "}
+              Danh sách Sản phẩm            
             </Title>
-                     {" "}
           </Col>
-                   {" "}
+
           <Col>
-                       {" "}
             <Space>
-                           {" "}
               <Upload {...uploadProps}>
-                               {" "}
                 <Button icon={<UploadOutlined />} loading={isImporting}>
-                                    Nhập Excel                {" "}
+                  Nhập Excel                
                 </Button>
-                             {" "}
               </Upload>
-                           {" "}
+
               <Button icon={<DownloadOutlined />} onClick={handleExportExcel}>
-                                Xuất Excel              {" "}
+                Xuất Excel              
               </Button>
-                           {" "}
+
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={() => navigate("/inventory/new")}
               >
-                                Thêm sản phẩm              {" "}
+                Thêm sản phẩm              
               </Button>
-                         {" "}
             </Space>
-                     {" "}
           </Col>
-                 {" "}
         </Row>
-                {/* Phần 2: Bộ lọc (Đã sửa) */}       {" "}
+        {/* Phần 2: Bộ lọc (Đã sửa) */}       
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-                   {" "}
           <Col flex="auto">
-                       {" "}
             <Input
               prefix={<SearchOutlined />}
               placeholder="Tìm theo Tên, SKU, Hoạt chất, Barcode..."
@@ -410,21 +378,17 @@ const ProductListPage = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-                     {" "}
           </Col>
-                   {" "}
+
           <Col>
-                       {" "}
             <Input
               placeholder="Phân loại"
               style={{ width: 150 }}
               onChange={(e) => setFilters({ category_filter: e.target.value })}
             />
-                     {" "}
           </Col>
-                   {" "}
+
           <Col>
-                       {" "}
             <Input
               placeholder="Nhà sản xuất"
               style={{ width: 180 }}
@@ -432,11 +396,9 @@ const ProductListPage = () => {
                 setFilters({ manufacturer_filter: e.target.value })
               }
             />
-                     {" "}
           </Col>
-                   {" "}
+
           <Col>
-                       {" "}
             <Select
               placeholder="Trạng thái"
               style={{ width: 150 }}
@@ -447,11 +409,9 @@ const ProductListPage = () => {
               ]}
               onChange={(value) => setFilters({ status_filter: value })}
             />
-                     {" "}
           </Col>
-                 {" "}
         </Row>
-                {/* Thanh Hành động Hàng loạt (Đã kết nối) */}       {" "}
+        {/* Thanh Hành động Hàng loạt (Đã kết nối) */}       
         {hasSelected ? (
           <Alert
             message={`${selectedRowKeys.length} sản phẩm được chọn`}
@@ -460,16 +420,11 @@ const ProductListPage = () => {
             style={{ marginBottom: 16 }}
             action={
               <Space>
-                               {" "}
-                <Dropdown overlay={bulkActionMenu}>
-                                   {" "}
+                <Dropdown menu={{ items: bulkActionMenu }}>
                   <Button size="small">
-                                        Cập nhật Trạng thái <DownOutlined />   
-                                 {" "}
+                    Cập nhật Trạng thái <DownOutlined />                 
                   </Button>
-                                 {" "}
                 </Dropdown>
-                               {" "}
                 <Button
                   size="small"
                   icon={<TagOutlined />}
@@ -477,9 +432,8 @@ const ProductListPage = () => {
                     antMessage.info("Chức năng Gắn nhãn đang được phát triển")
                   }
                 >
-                                    Gắn nhãn                {" "}
+                  Gắn nhãn                
                 </Button>
-                               {" "}
                 <Button
                   size="small"
                   icon={<PrinterOutlined />}
@@ -487,24 +441,21 @@ const ProductListPage = () => {
                     antMessage.info("Chức năng In nhãn đang được phát triển")
                   }
                 >
-                                    In nhãn mã vạch                {" "}
+                  In nhãn mã vạch                
                 </Button>
-                               {" "}
                 <Button
                   size="small"
                   danger
                   icon={<DeleteOutlined />}
                   onClick={handleBulkDelete}
                 >
-                                    Xóa {selectedRowKeys.length} sản phẩm      
-                           {" "}
+                  Xóa {selectedRowKeys.length} sản phẩm                
                 </Button>
-                             {" "}
               </Space>
             }
           />
         ) : null}
-                {/* Phần 3: Bảng dữ liệu */}       {" "}
+        {/* Phần 3: Bảng dữ liệu */}       
         <Table
           rowSelection={rowSelection}
           columns={columns}
@@ -523,9 +474,8 @@ const ProductListPage = () => {
               `${range[0]}-${range[1]} của ${total} sản phẩm`,
           }}
         />
-                {/* Modal đã bị xóa (theo chỉ thị) */}     {" "}
+        {/* Modal đã bị xóa (theo chỉ thị) */}     
       </Card>
-         {" "}
     </Spin>
   );
 };

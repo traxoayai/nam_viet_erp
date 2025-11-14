@@ -7,6 +7,7 @@ import BlankLayout from "@/components/layouts/BlankLayout";
 import MainLayout from "@/components/layouts/MainLayout";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
+import CustomerB2BPage from "@/pages/crm/CustomerB2BPage";
 import CustomerB2COrgForm from "@/pages/crm/CustomerB2COrgForm";
 import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
 import AssetManagementPage from "@/pages/finance/AssetManagementPage";
@@ -210,7 +211,7 @@ const routes: RouteObject[] = [
             path: "crm/organization/edit/:id",
             element: <CustomerB2COrgForm />,
           },
-          { path: "crm/b2b", element: <PagePlaceholder title="Khách B2B" /> },
+          { path: "crm/b2b", element: <CustomerB2BPage /> },
 
           // 10. Quản lý Marketing (Cập nhật route cũ)
           {

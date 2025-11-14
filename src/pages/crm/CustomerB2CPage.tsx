@@ -667,7 +667,11 @@ const CustomerB2CPage: React.FC = () => {
           >
             <Row justify="space-between" align="middle">
               <Col>
-                <Button icon={<ArrowLeftOutlined />} onClick={showListView}>
+                <Button
+                  type="primary"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={showListView}
+                >
                   Quay lại Danh sách
                 </Button>
                 <Divider type="vertical" />

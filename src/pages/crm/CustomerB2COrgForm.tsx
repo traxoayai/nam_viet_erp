@@ -208,6 +208,7 @@ const CustomerB2COrgForm: React.FC = () => {
                 <Col>
                                    
                   <Button
+                    type="primary"
                     icon={<ArrowLeftOutlined />}
                     onClick={() => navigate("/crm/retail")}
                   >
@@ -238,7 +239,6 @@ const CustomerB2COrgForm: React.FC = () => {
                     Lưu Hồ sơ                  
                   </Button>
                 </Col>
-                             
               </Row>
                          
             </Card>
@@ -291,7 +291,6 @@ const CustomerB2COrgForm: React.FC = () => {
                                   justifyContent: "center",
                                 }}
                               >
-                                           
                                 {fileList.length >= 1 ? null : (
                                   <div>
                                     <PlusOutlined />
