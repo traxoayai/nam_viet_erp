@@ -14,6 +14,7 @@ import AssetManagementPage from "@/pages/finance/AssetManagementPage";
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
+import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
 import BankListPage from "@/pages/settings/BankListPage";
@@ -194,7 +195,7 @@ const routes: RouteObject[] = [
           { path: "partners/detail/:id", element: <SupplierDetailPage /> }, // Dùng component cũ
           {
             path: "partners/shipping",
-            element: <PagePlaceholder title="Đối tác Vận Chuyển" />,
+            element: <ShippingPartnerPage />,
           },
 
           // 9. Quản lý Khách hàng (Cập nhật route cũ)
