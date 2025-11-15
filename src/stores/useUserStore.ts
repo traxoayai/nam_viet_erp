@@ -74,7 +74,7 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
   deleteUser: async (userId) => {
     set({ loadingUsers: true });
     try {
-      await userService.deleteAuthUser(userId);
+      await userService.deleteUser(userId);
       await get().fetchUsers(); // Tải lại
       set({ loadingUsers: false });
       return true;
@@ -84,6 +84,37 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
       return false;
     }
   },
+
+  // updateUserStatus: async (userId: string, status: string) => {
+  //   set({ loadingUsers: true });
+  //   try {
+  //     await userService.updateUserStatus(userId, status);
+  //     await get().fetchUsers(); // Tải lại
+  //     set({ loadingUsers: false });
+  //     return true;
+  //   } catch (error: any) {
+  //     console.error("Lỗi cập nhật trạng thái user:", error);
+  //     set({ loadingUsers: false });
+  //     throw error;
+  //   }
+  // },
+
+  /**
+   * (MỚI) Admin Duyệt User
+   */
+  approveUser: async (userId: string) => {
+    set({ loadingUsers: true });
+    try {
+      await userService.approveUser(userId);
+      await get().fetchUsers(); // Tải lại danh sách
+      set({ loadingUsers: false });
+      return true;
+    } catch (error: any) {
+      console.error("Lỗi khi duyệt user:", error);
+      set({ loadingUsers: false });
+      throw error;
+    }
+  }, // --- QUẢN LÝ UI ---
 
   updateUserStatus: async (userId, status) => {
     // (Tạm thời)

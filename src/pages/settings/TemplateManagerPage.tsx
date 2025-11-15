@@ -214,7 +214,7 @@ const TemplateManagerPage: React.FC = () => {
           const typeInfo = typeMap[type] || {};
           return (
             <Tag icon={typeInfo.icon} color={typeInfo.color}>
-                            {typeInfo.text}           
+              {typeInfo.text}
             </Tag>
           );
         },
@@ -237,19 +237,15 @@ const TemplateManagerPage: React.FC = () => {
         fixed: "right",
         render: (_: any, record: TemplateRecord) => (
           <Space size="small">
-                       
             <Tooltip title="Sửa (Vào Xưởng thiết kế)">
-                           
               <Button
                 type="text"
                 icon={<EditOutlined />}
                 onClick={() => showEditor(record)}
               />
-                   
             </Tooltip>
-                       
+
             <Tooltip title="Xem trước">
-                           
               <Button
                 type="text"
                 icon={<EyeOutlined />}
@@ -258,11 +254,9 @@ const TemplateManagerPage: React.FC = () => {
                   setIsPreviewVisible(true);
                 }}
               />
-                         
             </Tooltip>
-                       
+
             <Tooltip title="Xóa">
-                           
               <Popconfirm
                 title="Sếp chắc chắn muốn xóa?"
                 description={`Xóa mẫu "${record.name}"?`}
@@ -270,13 +264,9 @@ const TemplateManagerPage: React.FC = () => {
                 okText="Xóa"
                 cancelText="Hủy"
               >
-                               
-                <Button type="text" danger icon={<DeleteOutlined />} />         
-                   
+                <Button type="text" danger icon={<DeleteOutlined />} />
               </Popconfirm>
-                         
             </Tooltip>
-                     
           </Space>
         ),
       },
@@ -284,56 +274,40 @@ const TemplateManagerPage: React.FC = () => {
 
     return (
       <Card variant="outlined" styles={{ body: { padding: 12 } }}>
-               
         <Spin spinning={loading}>
-                   
           <Row
             justify="space-between"
             align="middle"
             style={{ marginBottom: 16 }}
           >
-                       
             <Col>
-                           
               <Title level={4} style={{ margin: 0 }}>
-                                Quản lý Mẫu & Biểu mẫu              
+                Quản lý Mẫu & Biểu mẫu
               </Title>
-                           
               <Text type="secondary">
-                                "Xưởng thiết kế" các mẫu Hóa đơn, Hợp đồng,
-                Email...              
+                "Xưởng thiết kế" các mẫu Hóa đơn, Hợp đồng, Email...
               </Text>
-                         
             </Col>
-                       
+
             <Col>
-                           
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={() => showEditor(null)}
               >
-                                Thêm Mẫu Mới              
+                Thêm Mẫu Mới
               </Button>
-                         
             </Col>
-                     
           </Row>
-                   
           <Row gutter={16} style={{ marginBottom: 16 }}>
-                       
             <Col flex="auto">
-                           
               <Input
                 prefix={<SearchOutlined />}
                 placeholder="Tìm theo tên mẫu..."
                 allowClear
               />
-                         
             </Col>
-                     
           </Row>
-                   
           <Table
             columns={columns}
             dataSource={templates}
@@ -342,9 +316,7 @@ const TemplateManagerPage: React.FC = () => {
             pagination={{ pageSize: 10 }}
             scroll={{ x: 1000 }}
           />
-                 
         </Spin>
-             
       </Card>
     );
   }; // --- GIAO DIỆN EDITOR (XƯỞNG THIẾT KẾ) ---
@@ -352,9 +324,7 @@ const TemplateManagerPage: React.FC = () => {
   const renderEditorView = () => {
     return (
       <Form form={form} layout="vertical">
-               
         <Affix offsetTop={40} style={{ zIndex: 10 }}>
-                   
           <Card
             variant="outlined"
             style={{
@@ -364,29 +334,20 @@ const TemplateManagerPage: React.FC = () => {
             }}
             bodyStyle={{ padding: "12px 16px" }}
           >
-                       
             <Row justify="space-between" align="middle">
-                           
               <Col>
-                               
                 <Button icon={<ArrowLeftOutlined />} onClick={showList}>
-                                    Quay lại Danh sách                
+                  Quay lại Danh sách
                 </Button>
-                                <Divider type="vertical" />               
+                <Divider type="vertical" />
                 <Title level={4} style={{ margin: 0, display: "inline-block" }}>
-                                   
                   {editingRecord
                     ? `Sửa Mẫu: ${editingRecord.name}`
                     : "Tạo Mẫu Mới"}
-                                 
                 </Title>
-                             
               </Col>
-                           
               <Col>
-                               
                 <Space>
-                                   
                   <Button
                     icon={<EyeOutlined />}
                     onClick={() => {
@@ -395,45 +356,35 @@ const TemplateManagerPage: React.FC = () => {
                       setIsPreviewVisible(true);
                     }}
                   >
-                                        Xem trước                  
+                    Xem trước
                   </Button>
-                                   
+
                   <Button
                     type="primary"
                     icon={<SaveOutlined />}
                     onClick={handleSaveTemplate}
                     loading={loading}
                   >
-                                        Lưu Mẫu                  
+                    Lưu Mẫu
                   </Button>
-                                 
                 </Space>
-                             
               </Col>
-                         
             </Row>
-                     
           </Card>
-                 
         </Affix>
-               
         <Row gutter={16}>
-                   
           <Col xs={24} md={16}>
-                       
             <Card
               variant="outlined"
               styles={{ body: { padding: "12px", background: "#FFF" } }}
             >
-                           
               <Card.Meta
                 avatar={<Avatar icon={<CodeOutlined />} />}
                 title="Trình soạn thảo Nội dung"
                 description="Soạn thảo chuyên nghiệp (giống Google Docs) cho mẫu."
                 style={{ marginBottom: 16 }}
               />
-                            {/* --- SỬA LỖI: DÙNG Component Chung --- */}       
-                   
+              {/* --- SỬA LỖI: DÙNG Component Chung --- */}
               <Form.Item
                 name="content"
                 rules={[
@@ -443,169 +394,129 @@ const TemplateManagerPage: React.FC = () => {
                   },
                 ]}
               >
-                               
                 <TextEditor // ref={editorRef} // Không cần ref nữa
                   onRealtimeChange={setRealtimeContent} // Cập nhật state
                 />
-                             
               </Form.Item>
-                            {/* ------------------------------------- */}       
-                 
+              {/* ------------------------------------- */}
             </Card>
-                     
           </Col>
-                   
           <Col xs={24} md={8}>
-                       
             <Card
               title="Thông tin Mẫu"
               variant="outlined"
               styles={{ body: { padding: "12px 16px" } }}
             >
-                           
               <Form.Item
                 name="name"
                 label="Tên Mẫu (Quản lý)"
                 rules={[{ required: true, message: "Vui lòng nhập tên Mẫu!" }]}
               >
-                               
-                <Input placeholder="Vd: Hóa đơn Bán lẻ (POS - K80)" />      
+                <Input placeholder="Vd: Hóa đơn Bán lẻ (POS - K80)" />
               </Form.Item>
-                           
               <Row gutter={16}>
-                               
                 <Col span={12}>
-                                   
                   <Form.Item
                     name="module"
                     label="Áp dụng cho Module"
                     rules={[{ required: true }]}
                   >
-                                       
                     <Select options={moduleOptions} placeholder="Chọn module" />
-                                     
                   </Form.Item>
-                                 
                 </Col>
-                               
+
                 <Col span={12}>
-                                   
                   <Form.Item
                     name="type"
                     label="Loại Mẫu"
                     rules={[{ required: true }]}
                   >
-                                       
                     <Select placeholder="Chọn loại mẫu">
-                                           
-                      <Option value="print">Mẫu In (POS)</Option>               
-                            <Option value="pdf">Mẫu PDF (A4)</Option>           
-                                <Option value="email">Mẫu Email</Option>       
-                                    <Option value="sms">Mẫu SMS</Option>
-                      A                 
+                      <Option value="print">Mẫu In (POS)</Option>{" "}
+                      <Option value="pdf">Mẫu PDF (A4)</Option>{" "}
+                      <Option value="email">Mẫu Email</Option>
+                      <Option value="sms">Mẫu SMS</Option>A
                     </Select>
-                                     
                   </Form.Item>
-                                 
                 </Col>
-                             
               </Row>
-                           
               <Form.Item
                 name="status"
                 label="Trạng thái"
                 valuePropName="checked"
               >
-                               
                 <Switch
                   checkedChildren="Đang áp dụng"
                   unCheckedChildren="Không áp dụng"
                 />
-                             
               </Form.Item>
-                         
             </Card>
-                       
+
             <Card
               title="Hộp công cụ (Biến có sẵn)"
               variant="outlined"
               style={{ marginTop: 16 }}
               bodyStyle={{ padding: 8 }}
             >
-                           
               <Paragraph type="secondary" style={{ padding: "0 8px 8px 8px" }}>
-                                Nhấp vào 'Biến' để sao chép.              
+                Nhấp vào 'Biến' để sao chép.
               </Paragraph>
-                           
               <Collapse accordion ghost>
-                               
                 {variables.map((group) => (
                   <Panel header={group.label} key={group.key}>
-                    s                 
+                    s
                     <Space wrap>
-                                           
                       {group.tags.map((tag) => (
                         <Tag
                           key={tag}
                           onClick={() => copyVariable(tag)}
                           style={{ cursor: "pointer", userSelect: "all" }}
                         >
-                                                    {tag}                       
+                          {tag}
                         </Tag>
                       ))}
-                                         
                     </Space>
-                                     
                   </Panel>
                 ))}
-                             
               </Collapse>
-                         
             </Card>
-                     
           </Col>
-                 
         </Row>
-             
       </Form>
     );
   };
 
   return (
     <ConfigProvider locale={viVN}>
-            {/* CSS Toàn cục */}     
+      {/* CSS Toàn cục */}
       <style>{`
-        .clickable-list-item:hover {
-          background-color: #f6f8fa;
-        }
-        .ant-table-cell .ant-tag {
-          margin: 0;
-        }
-      `}</style>
-            {viewMode === "list" ? renderListView() : renderEditorView()}     
-      {/* Modal Xem trước Nội dung */}     
+ .clickable-list-item:hover {
+ background-color: #f6f8fa;
+ }
+ .ant-table-cell .ant-tag {
+ margin: 0;
+ }
+ `}</style>
+      {viewMode === "list" ? renderListView() : renderEditorView()}
+      {/* Modal Xem trước Nội dung */}
       <Modal
         title="Xem trước Nội dung Mẫu"
         open={isPreviewVisible}
         onCancel={() => setIsPreviewVisible(false)}
         footer={[
           <Button key="back" onClick={() => setIsPreviewVisible(false)}>
-                        Đóng          
+            Đóng
           </Button>,
         ]}
         width={800}
       >
-               
         <Card
           style={{ marginTop: 16, borderColor: "#d0d7de", minHeight: 400 }}
           bodyStyle={{ padding: 16 }}
         >
-                    <div dangerouslySetInnerHTML={{ __html: previewContent }} />
-                 
+          <div dangerouslySetInnerHTML={{ __html: previewContent }} />
         </Card>
-             
       </Modal>
-         
     </ConfigProvider>
   );
 };

@@ -20,6 +20,8 @@ import {
   LockOutlined,
   PauseCircleOutlined,
   StopOutlined,
+  ClockCircleOutlined,
+  SafetyOutlined, // <-- THÊM DÒNG NÀY (Cho nút Duyệt)
 } from "@ant-design/icons";
 import {
   Input,
@@ -58,6 +60,33 @@ import { Role } from "@/types/role";
 import { UserRoleInfo, UserAssignment } from "@/types/user";
 
 const { Text } = Typography;
+
+// const roleColorMap: { [key: string]: string } = {
+//   "Super-Admin": "gold",
+//   "B2B-Manager": "blue",
+//   "POS-Seller": "green",
+//   Accountant: "cyan",
+//   "Warehouse-Manager": "purple",
+//   "HR-Manager": "magenta",
+//   "Finance-Manager": "volcano",
+// };
+
+const statusMap: Record<
+  UserRoleInfo["status"],
+  { label: string; color: string; icon: React.ReactNode }
+> = {
+  active: {
+    label: "Đang hoạt động",
+    color: "success",
+    icon: <CheckCircleOutlined />,
+  },
+  pending_approval: {
+    label: "Chờ duyệt",
+    color: "warning",
+    icon: <ClockCircleOutlined />,
+  },
+  inactive: { label: "Tạm dừng", color: "default", icon: <StopOutlined /> },
+};
 
 // --- COMPONENT TAB 1 (ĐÃ VÁ LỖI 'bordered') ---
 const TabRoleManagement: React.FC = () => {
@@ -308,23 +337,23 @@ const UserAssignments: React.FC<{ assignments: UserAssignment[] | null }> = ({
   );
 };
 
-const statusMap = {
-  active: {
-    text: "Đang làm việc",
-    color: "green",
-    icon: <CheckCircleOutlined />,
-  },
-  paused: {
-    text: "Tạm nghỉ",
-    color: "orange",
-    icon: <PauseCircleOutlined />,
-  },
-  inactive: {
-    text: "Đã nghỉ việc",
-    color: "red",
-    icon: <StopOutlined />,
-  },
-};
+// const statusMap = {
+//   active: {
+//     text: "Đang làm việc",
+//     color: "green",
+//     icon: <CheckCircleOutlined />,
+//   },
+//   paused: {
+//     text: "Tạm nghỉ",
+//     color: "orange",
+//     icon: <PauseCircleOutlined />,
+//   },
+//   inactive: {
+//     text: "Đã nghỉ việc",
+//     color: "red",
+//     icon: <StopOutlined />,
+//   },
+// };
 
 const TabUserManagement: React.FC = () => {
   const { message: antMessage } = AntApp.useApp();
@@ -345,6 +374,7 @@ const TabUserManagement: React.FC = () => {
     updateAssignments,
     updateUserStatus,
     deleteUser,
+    approveUser,
   } = useUserStore();
 
   const { roles, fetchRoles } = useRoleStore();
@@ -396,7 +426,7 @@ const TabUserManagement: React.FC = () => {
     const success = await updateUserStatus(user.key, newStatus);
     if (success) {
       const statusText =
-        statusMap[newStatus as keyof typeof statusMap]?.text || newStatus;
+        statusMap[newStatus as keyof typeof statusMap]?.label || newStatus;
       antMessage.success(
         `Đã cập nhật trạng thái của ${user.name} thành "${statusText}"`
       );
@@ -411,6 +441,27 @@ const TabUserManagement: React.FC = () => {
       antMessage.success(`Đã xóa người dùng ${user.name}`);
     } else {
       antMessage.error("Xóa thất bại.");
+    }
+  };
+
+  /**
+   * (MỚI) Xử lý Duyệt User
+   */
+  const handleApproveUser = async (user: UserRoleInfo) => {
+    const msgKey = "approve_user";
+    antMessage.loading({ content: "Đang duyệt user...", key: msgKey });
+    try {
+      await approveUser(user.key); // user.key là user_id
+      antMessage.success({
+        content: `Đã duyệt thành công user ${user.name}`,
+        key: msgKey,
+      }); // (Store đã tự tải lại danh sách)
+    } catch (error: any) {
+      console.error("Lỗi khi duyệt user:", error);
+      antMessage.error({
+        content: `Duyệt thất bại: ${error.message}`,
+        key: msgKey,
+      });
     }
   };
 
@@ -456,86 +507,106 @@ const TabUserManagement: React.FC = () => {
       title: "Trạng thái",
       dataIndex: "status",
       key: "status",
-      render: (status: string) => {
-        const statusInfo =
-          statusMap[status as keyof typeof statusMap] || statusMap.inactive;
+      width: 180, // Tăng độ rộng
+      render: (status: UserRoleInfo["status"]) => {
+        // Sửa: Dùng kiểu 'UserRoleInfo["status"]'
+        // SỬA: Dùng statusMap (ở scope ngoài)
+        const statusInfo = statusMap[status] || statusMap.inactive;
         return (
-          <Tag
-            color={statusInfo.color}
-            icon={statusInfo.icon}
-            style={{ margin: 0 }}
-          >
-            {statusInfo.text}
+          <Tag icon={statusInfo.icon} color={statusInfo.color}>
+            {statusInfo.label}
           </Tag>
         );
-      },
+      }, // SỬA: Thêm filter "Chờ duyệt"
+      filters: [
+        { text: "Đang hoạt động", value: "active" },
+        { text: "Chờ duyệt", value: "pending_approval" },
+        { text: "Tạm dừng", value: "inactive" },
+      ],
+      onFilter: (value: any, record) => record.status === value,
     },
     {
       title: "Hành động",
       key: "action",
       align: "center" as const,
       width: 100,
-      render: (_, record: UserRoleInfo) => (
-        <Dropdown
-          menu={{
-            items: [
-              {
-                key: "1",
-                icon: <EditOutlined />,
-                label: "Sửa Thông tin & Phân quyền",
-                onClick: () => openEditModal(record),
-              },
-              {
-                key: "2",
-                icon: <CheckCircleOutlined />,
-                label: "Cập nhật Trạng thái",
-                children: [
-                  {
-                    key: "2-1",
-                    icon: <CheckCircleOutlined />,
-                    label: "Đang làm việc",
-                    onClick: () => handleUpdateStatus(record, "active"),
-                    disabled: record.status === "active",
+      render: (_, record: UserRoleInfo) => {
+        // SỬA LỖI: LOGIC NÚT DUYỆT
+        if (record.status === "pending_approval") {
+          return (
+            <Tooltip title="Duyệt Hồ sơ">
+              <Popconfirm
+                title={`Duyệt cho user "${record.name}" vào hệ thống?`}
+                okText="Duyệt"
+                onConfirm={() => handleApproveUser(record)}
+              >
+                <Button
+                  type="text"
+                  style={{ color: "green" }}
+                  icon={<SafetyOutlined />}
+                />
+              </Popconfirm>
+            </Tooltip>
+          );
+        } // (Nếu không pending, hiển thị menu cũ)
+
+        return (
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: "1",
+                  icon: <EditOutlined />,
+                  label: "Sửa Thông tin & Phân quyền",
+                  onClick: () => openEditModal(record),
+                },
+                {
+                  key: "2",
+                  icon: <CheckCircleOutlined />,
+                  label: "Cập nhật Trạng thái",
+                  children: [
+                    {
+                      key: "2-1",
+                      icon: <CheckCircleOutlined />,
+                      label: "Đang làm việc",
+                      onClick: () => handleUpdateStatus(record, "active"),
+                      disabled: record.status === "active",
+                    }, // (Sửa lỗi: File Sếp gửi thiếu "paused")
+                    {
+                      key: "2-2",
+                      icon: <PauseCircleOutlined />,
+                      label: "Tạm dừng",
+                      onClick: () => handleUpdateStatus(record, "inactive"),
+                      disabled: record.status === "inactive",
+                    },
+                  ],
+                },
+                { type: "divider" },
+                {
+                  key: "3",
+                  icon: <DeleteOutlined />,
+                  danger: true,
+                  label: "Xóa người dùng (Nguy hiểm)", // SỬA: Chỉ dùng Text
+                  // SỬA: Chuyển logic sang onClick
+                  onClick: () => {
+                    Modal.confirm({
+                      title: `XÓA VĨNH VIỄN user "${record.name}"?`,
+                      content:
+                        "Hành động này sẽ XÓA user khỏi Auth. Chỉ dùng khi Sếp tạo nhầm.",
+                      okText: "Xóa Vĩnh viễn",
+                      okType: "danger",
+                      cancelText: "Hủy",
+                      onOk: () => handleDeleteUser(record),
+                    });
                   },
-                  {
-                    key: "2-2",
-                    icon: <PauseCircleOutlined />,
-                    label: "Tạm nghỉ",
-                    onClick: () => handleUpdateStatus(record, "paused"),
-                    disabled: record.status === "paused",
-                  },
-                  {
-                    key: "2-3",
-                    icon: <StopOutlined />,
-                    label: "Đã nghỉ việc",
-                    onClick: () => handleUpdateStatus(record, "inactive"),
-                    disabled: record.status === "inactive",
-                  },
-                ],
-              },
-              { type: "divider" },
-              {
-                key: "3",
-                icon: <DeleteOutlined />,
-                danger: true,
-                label: (
-                  <Popconfirm
-                    title={`Xóa vĩnh viễn user "${record.name}"?`}
-                    description="Hành động này sẽ xóa user khỏi hệ thống!"
-                    onConfirm={() => handleDeleteUser(record)}
-                    okText="Xóa"
-                    cancelText="Hủy"
-                  >
-                    <span>Xóa người dùng</span>
-                  </Popconfirm>
-                ),
-              },
-            ],
-          }}
-        >
-          <Button type="text" icon={<MoreOutlined />} />
-        </Dropdown>
-      ),
+                },
+              ],
+            }}
+          >
+            <Button type="text" icon={<MoreOutlined />} />
+          </Dropdown>
+        );
+      },
     },
   ];
 
@@ -614,7 +685,8 @@ const TabUserManagement: React.FC = () => {
             />
           </Form.Item>
           <Text type="secondary">
-            Một lời mời kèm mật khẩu khởi tạo sẽ được gửi tới email này.
+            Tạo mới User và Gán mật khẩu tạm thời. Một Email sẽ gửi tới User để
+            họ đổi Mật Khẩu.
           </Text>
         </Form>
       </Modal>
@@ -659,7 +731,10 @@ const TabUserManagement: React.FC = () => {
                               marginBottom: 16,
                             }}
                             variant="outlined" // <-- VÁ LỖI 'bordered'
-                            bodyStyle={{ paddingBottom: 8 }}
+                            styles={{
+                              body: { paddingBottom: 8 },
+                            }}
+                            // bodyStyle={{ paddingBottom: 8 }}
                           >
                             <Row gutter={16} align="middle">
                               <Col flex="auto">

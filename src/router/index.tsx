@@ -5,8 +5,12 @@ import ProtectedRoute from "./ProtectedRoute";
 
 import BlankLayout from "@/components/layouts/BlankLayout";
 import MainLayout from "@/components/layouts/MainLayout";
+import OnboardingLayout from "@/components/layouts/OnboardingLayout";
 import LoginPage from "@/pages/auth/LoginPage";
+import PendingApprovalPage from "@/pages/auth/PendingApprovalPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
+import UpdatePasswordPage from "@/pages/auth/UpdatePasswordPage";
+import UpdateProfilePage from "@/pages/auth/UpdateProfilePage";
 import CustomerB2BPage from "@/pages/crm/CustomerB2BPage";
 import CustomerB2COrgForm from "@/pages/crm/CustomerB2COrgForm";
 import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
@@ -451,6 +455,30 @@ const routes: RouteObject[] = [
       {
         path: "register",
         element: <RegisterPage />,
+      },
+    ],
+  },
+  // === Layout Onboarding (Ép buộc Đổi MK / Cập nhật Profile) ===
+  {
+    path: "/onboarding",
+    element: <ProtectedRoute />, // Vẫn bảo vệ
+    children: [
+      {
+        element: <OnboardingLayout />, // Layout KHÔNG CÓ Menu
+        children: [
+          {
+            path: "update-password",
+            element: <UpdatePasswordPage />,
+          },
+          {
+            path: "update-profile",
+            element: <UpdateProfilePage />,
+          },
+          {
+            path: "pending-approval",
+            element: <PendingApprovalPage />,
+          },
+        ],
       },
     ],
   },

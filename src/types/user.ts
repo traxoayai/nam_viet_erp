@@ -14,7 +14,7 @@ export interface UserRoleInfo {
   name: string;
   email: string;
   avatar: string | null;
-  status: "active" | "inactive" | "paused"; // Sẽ nâng cấp sau
+  status: "pending_approval" | "active" | "inactive"; // Sẽ nâng cấp sau
   assignments: UserAssignment[] | null; // Mảng các quyền
 }
 
@@ -41,4 +41,5 @@ export interface UserStoreState {
   updateAssignments: (userId: string, assignments: any[]) => Promise<boolean>;
   updateUserStatus: (userId: string, status: string) => Promise<boolean>;
   deleteUser: (userId: string) => Promise<boolean>;
+  approveUser: (userId: string) => Promise<boolean>;
 }

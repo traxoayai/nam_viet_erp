@@ -9,12 +9,12 @@ import {
   Spin,
   App as AntApp,
 } from "antd";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import Logo from "@/assets/logo.png"; // <-- MỚI: Import logo
-import { supabase } from "@/lib/supabaseClient"; // Import "bộ đàm" Supabase
-import { useAuthStore } from "@/stores/authStore"; // Import "kho" auth
+// import { supabase } from "@/lib/supabaseClient"; // Import "bộ đàm" Supabase
+import { useAuthStore } from "@/stores/useAuthStore"; // SỬA LỖI: Import đúng "bộ não"
 
 const { Title } = Typography;
 
@@ -22,37 +22,35 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
-  const { setSession, setUser } = useAuthStore(); // Lấy hàm để set session
+  // SỬA LỖI: Lấy hàm 'login' từ "Bộ não"
+  const login = useAuthStore((state) => state.login);
+  const user = useAuthStore((state) => state.user);
 
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
-      // Gọi Supabase để đăng nhập
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: values.email,
-        password: values.password,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data.session && data.user) {
-        // Lưu session vào "kho" Zustand
-        setSession(data.session);
-        setUser(data.user);
-
-        message.success("Đăng nhập thành công!");
-        navigate("/"); // Chuyển hướng đến Dashboard
-      } else {
-        throw new Error("Không nhận được thông tin session.");
-      }
+      // SỬA LỖI: Gọi hàm login (đã bao gồm fetchProfile)
+      await login(values);
+      message.success("Đăng nhập thành công!"); // (Không cần navigate, Gatekeeper sẽ tự điều hướng)
+      // navigate("/");
     } catch (error: any) {
-      message.error(error.message || "Đăng nhập thất bại. Vui lòng thử lại.");
+      // Sửa lỗi hiển thị (Bad Request là 'Invalid login credentials')
+      let errorMessage = error.message;
+      if (error.message.includes("400")) {
+        errorMessage = "Sai email hoặc mật khẩu. Vui lòng thử lại.";
+      }
+      message.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (user) {
+      // Đã đăng nhập, đẩy về trang chủ (Gatekeeper sẽ xử lý tiếp)
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   return (
     <div

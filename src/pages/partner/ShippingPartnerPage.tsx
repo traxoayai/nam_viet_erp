@@ -346,9 +346,8 @@ const ShippingPartnerPage: React.FC = () => {
  background-color: #f6f8fa !important;
   }
   `}</style>
-
       <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
-        <Content style={{ padding: "0 12px" }}>
+        <Content style={{ padding: "0 10px" }}>
           <Card style={styles.card} styles={{ body: { padding: "16px" } }}>
             <Spin spinning={loading} tip="Đang tải...">
               {/* Phần 1: Header - Tiêu đề và Nút bấm */}

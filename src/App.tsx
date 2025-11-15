@@ -1,39 +1,33 @@
 // src/App.tsx
+import { ConfigProvider, App as AntApp } from "antd"; // <-- SỬA LỖI: Thêm AntApp
+import viVN from "antd/locale/vi_VN"; // (Sếp đã có file này)
 import { useEffect } from "react";
 import { useRoutes } from "react-router-dom";
 
 import routes from "./router";
-import { useAuthStore } from "./stores/authStore";
+import { useAuthStore } from "./stores/useAuthStore";
 
-import { supabase } from "@/lib/supabaseClient";
+import theme from "@/theme"; // (Sếp đã có file này)
+
+// Xóa: import { supabase } from "@/lib/supabaseClient";
+// (Vì App.tsx không cần gọi Supabase trực tiếp nữa)
 
 function App() {
   const element = useRoutes(routes);
-  const { setSession, setUser, setLoading } = useAuthStore();
+  const checkUserSession = useAuthStore((state) => state.checkUserSession);
 
   useEffect(() => {
-    // 1. Lấy session hiện tại ngay khi app tải
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // 1. Chỉ gọi 1 lần duy nhất khi App tải
+    checkUserSession(); // SỬA LỖI 2: Thêm mảng dependencies rỗng
+  }, []); // SỬA LỖI 1: Xóa toàn bộ logic 'supabase.auth.onAuthStateChange'
+  // (Vì nó đã được chuyển vào bên trong 'useAuthStore.ts' ở [Mục 124])
+  // SỬA LỖI 3: (Từ [Mục 126]) Bọc AntApp và ConfigProvider
 
-    // 2. Lắng nghe mọi thay đổi về Auth (Login, Logout)
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-      }
-    );
-
-    // Dọn dẹp listener khi component bị hủy
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, []);
-
-  return <>{element}</>;
+  return (
+    <ConfigProvider locale={viVN} theme={theme}>
+      <AntApp>{element}</AntApp>   
+    </ConfigProvider>
+  );
 }
 
 export default App;
