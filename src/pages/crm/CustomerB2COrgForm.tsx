@@ -45,7 +45,7 @@ const { Title } = Typography;
 // --- CSS INLINE (Style từ Canvas) ---
 const styles = {
   card: {
-    margin: "12px",
+    margin: "8px",
     border: "1.5px solid #d0d7de",
     borderRadius: "8px",
   },
@@ -184,12 +184,11 @@ const CustomerB2COrgForm: React.FC = () => {
 
   return (
     <ConfigProvider locale={viVN}>
-           
       <style>{`
-        .ant-upload-list-item-container { width: 100px !important; height: 100px !important; }
-        .ant-upload.ant-upload-select-picture-card { width: 100px !important; height: 100px !important; padding: 0 !important; margin: 0 !important; }
-      `}</style>
-           
+    .ant-upload-list-item-container { width: 100px !important; height: 100px !important; }
+    .ant-upload.ant-upload-select-picture-card { width: 100px !important; height: 100px !important; padding: 0 !important; margin: 0 !important; }
+   `}</style>
+
       <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
         <Form form={form} layout="vertical" onFinish={handleSave}>
           <Affix offsetTop={40} style={{ zIndex: 10 }}>
@@ -202,55 +201,43 @@ const CustomerB2COrgForm: React.FC = () => {
               }}
               styles={{ body: { padding: "12px 16px" } }}
             >
-                           
               <Row justify="space-between" align="middle">
-                               
                 <Col>
-                                   
                   <Button
                     type="primary"
                     icon={<ArrowLeftOutlined />}
                     onClick={() => navigate("/crm/retail")}
                   >
-                    Quay lại Danh sách                  
+                    Quay lại Danh sách
                   </Button>
-                                    <Divider type="vertical" />                 
+                  <Divider type="vertical" />
                   <Title
                     level={4}
                     style={{ margin: 0, display: "inline-block" }}
                   >
-                                       
                     {isNew
                       ? "Thêm Khách hàng (Tổ chức)"
                       : `Hồ sơ: ${form.getFieldValue("name") || "..."}`}
-                                     
                   </Title>
-                                 
                 </Col>
-                               
+
                 <Col>
-                                   
                   <Button
                     type="primary"
                     icon={<SaveOutlined />}
                     htmlType="submit"
                     loading={loading}
                   >
-                    Lưu Hồ sơ                  
+                    Lưu Hồ sơ
                   </Button>
                 </Col>
               </Row>
-                         
             </Card>
-                     
           </Affix>
-                   
+
           <Content style={{ padding: "12px", paddingTop: "0" }}>
-                       
             <Spin spinning={loading} tip="Đang tải...">
-                           
               <Card style={{ ...styles.card, margin: "12px 0 0 0" }}>
-                               
                 <Tabs
                   defaultActiveKey="1"
                   type="card"
@@ -265,19 +252,16 @@ const CustomerB2COrgForm: React.FC = () => {
                       ),
                       children: (
                         <Row gutter={24}>
-                               
                           <Col
                             xs={24}
                             md={8}
                             lg={6}
                             style={{ textAlign: "center" }}
                           >
-                                   
                             <Form.Item
                               label="Logo Tổ chức"
                               style={{ textAlign: "center" }}
                             >
-                                       
                               <Upload
                                 action="#"
                                 listType="picture-circle"
@@ -297,26 +281,19 @@ const CustomerB2COrgForm: React.FC = () => {
                                     <div style={{ marginTop: 8 }}>Tải ảnh</div>
                                   </div>
                                 )}
-                                         
                               </Upload>
-                                     
                             </Form.Item>
-                                   
+
                             <Form.Item
                               name="customer_code"
                               label="Mã KH (Tự động)"
                             >
-                                       
-                              <Input placeholder="KH-00X" disabled />           
-                                             
+                              <Input placeholder="KH-00X" disabled />
                             </Form.Item>
-                                 
                           </Col>
-                               
+
                           <Col xs={24} md={16} lg={18}>
-                                   
                             <Row gutter={16}>
-                                       
                               <Col xs={24} sm={12}>
                                 <Form.Item
                                   name="name"
@@ -326,13 +303,13 @@ const CustomerB2COrgForm: React.FC = () => {
                                   <Input />
                                 </Form.Item>
                               </Col>
-                                       
+
                               <Col xs={24} sm={12}>
                                 <Form.Item name="tax_code" label="Mã số thuế">
                                   <Input />
                                 </Form.Item>
                               </Col>
-                                       
+
                               <Col xs={24} sm={12}>
                                 <Form.Item
                                   name="contact_person_name"
@@ -358,7 +335,7 @@ const CustomerB2COrgForm: React.FC = () => {
                                   />
                                 </Form.Item>
                               </Col>
-                                       
+
                               <Col xs={24} sm={12}>
                                 <Form.Item
                                   name="phone"
@@ -375,7 +352,7 @@ const CustomerB2COrgForm: React.FC = () => {
                                   />
                                 </Form.Item>
                               </Col>
-                                       
+
                               <Col xs={24} sm={12}>
                                 <Form.Item name="email" label="Email Tổ chức">
                                   <Input type="email" />

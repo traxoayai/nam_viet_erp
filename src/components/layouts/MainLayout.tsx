@@ -1,4 +1,5 @@
 // src/components/layouts/MainLayout.tsx
+// (ĐÃ NÂNG CẤP V400: Sửa Lỗi 3 - Hiển thị Tên User và Thêm Menu)
 import {
   // --- Icons CŨ Sếp đã có ---
   HomeOutlined,
@@ -17,8 +18,6 @@ import {
   UserOutlined,
   MenuUnfoldOutlined,
   MenuFoldOutlined,
-
-  // --- Icons MỚI Em thêm vào ---
   AppstoreOutlined,
   SolutionOutlined,
   WalletOutlined,
@@ -26,27 +25,23 @@ import {
   GlobalOutlined,
   MedicineBoxOutlined,
   SendOutlined,
-  // DeploymentUnitOutlined,
   PlusOutlined,
-  // EyeOutlined,
   StockOutlined,
   DollarCircleOutlined,
   DatabaseOutlined,
-  // UsergroupAddOutlined,
   AreaChartOutlined,
-  // PieChartOutlined,
-  // BookOutlined,
   ApartmentOutlined,
   BankOutlined,
   TeamOutlined,
-  // NotificationOutlined,
-  GiftOutlined, // Cho Combo
-  RocketOutlined, // Cho Thao tác nhanh
+  GiftOutlined,
+  RocketOutlined,
   BarcodeOutlined,
   ToolOutlined,
   ScheduleOutlined,
   ExperimentOutlined,
-  TruckOutlined,
+  TruckOutlined, // --- Icons MỚI (Cho Menu Dropdown) ---
+  LockOutlined,
+  IdcardOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -55,16 +50,16 @@ import {
   Avatar,
   Badge,
   Dropdown,
-  message,
+  // SỬA: Sẽ đổi sang AntApp
   type MenuProps,
-} from "antd"; // Thêm MenuProps
+  App as AntApp, // SỬA: Dùng AntApp
+} from "antd";
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { Outlet } from "react-router-dom";
+import { Link, Outlet, useNavigate } from "react-router-dom"; // SỬA: Thêm useNavigate
 
 import Logo from "@/assets/logo.png";
-import { supabase } from "@/lib/supabaseClient";
-import { useAuthStore } from "@/stores/authStore";
+// XÓA: import { supabase } from "@/lib/supabaseClient";
+import { useAuthStore } from "@/stores/useAuthStore"; // SỬA: Sửa đường dẫn
 
 const { Header, Sider, Content } = Layout;
 
@@ -86,12 +81,10 @@ function getItem(
   } as MenuItem;
 }
 
-// --- MỚI: Toàn bộ cấu trúc Menu 14 mục của Sếp ---
+// --- Cấu trúc Menu 14 mục của Sếp (GIỮ NGUYÊN) ---
 const finalMenuItems: MenuItem[] = [
   // 1. Trang chủ
-  getItem(<Link to="/">Trang chủ</Link>, "/", <HomeOutlined />),
-
-  // 2. Kênh Cửa Hàng
+  getItem(<Link to="/">Trang chủ</Link>, "/", <HomeOutlined />), // 2. Kênh Cửa Hàng
   getItem("Kênh Cửa Hàng", "store", <ShopOutlined />, [
     getItem(
       <Link to="/store/dashboard">Dashboard Cửa hàng</Link>,
@@ -107,7 +100,7 @@ const finalMenuItems: MenuItem[] = [
       <Link to="/blank/pos">Tạo đơn tại Cửa Hàng [POS]</Link>,
       "/blank/pos",
       <WalletOutlined />
-    ), // Link ra layout riêng
+    ),
     getItem(
       <Link to="/store/shipping-order">Tạo đơn Gửi Đi</Link>,
       "/store/shipping-order",
@@ -137,9 +130,7 @@ const finalMenuItems: MenuItem[] = [
         "/store/website/content"
       ),
     ]),
-  ]),
-
-  // 3. Nghiệp vụ Y Tế
+  ]), // 3. Nghiệp vụ Y Tế
   getItem("Nghiệp vụ Y Tế", "medical", <HeartOutlined />, [
     getItem(
       <Link to="/medical/dashboard">Dashboard Y Tế</Link>,
@@ -156,9 +147,7 @@ const finalMenuItems: MenuItem[] = [
       "/medical/vaccination",
       <ExperimentOutlined />
     ),
-  ]),
-
-  // 4. Bán buôn
+  ]), // 4. Bán buôn
   getItem("Bán buôn (B2B)", "b2b", <ShoppingCartOutlined />, [
     getItem(
       <Link to="/b2b/dashboard">Thông tin chung B2B</Link>,
@@ -189,21 +178,17 @@ const finalMenuItems: MenuItem[] = [
         "/b2b/website/content"
       ),
     ]),
-  ]),
-
-  // 5. Combo và Dịch Vụ (MỚI)
+  ]), // 5. Combo và Dịch Vụ
   getItem(
     <Link to="/services">Combo và Dịch Vụ</Link>,
     "services",
     <GiftOutlined />
-  ),
-
-  // 6. Kho - Hàng Hóa
+  ), // 6. Kho - Hàng Hóa
   getItem("Kho – Hàng Hóa", "inventory", <DropboxOutlined />, [
     getItem(
       <Link to="/inventory/products">Danh sách Sản Phẩm</Link>,
       "/inventory/products"
-    ), // Sửa link này
+    ),
     getItem(
       <Link to="/inventory/purchase">Mua hàng</Link>,
       "/inventory/purchase",
@@ -224,9 +209,7 @@ const finalMenuItems: MenuItem[] = [
       "/inventory/cost-adjustment",
       <DollarCircleOutlined />
     ),
-  ]),
-
-  // 7. Thao tác Nhanh (MỚI)
+  ]), // 7. Thao tác Nhanh
   getItem("Thao tác Nhanh", "quick-actions", <RocketOutlined />, [
     getItem(
       <Link to="/quick/product-location">Cài nhanh Vị trí Sản phẩm</Link>,
@@ -253,22 +236,18 @@ const finalMenuItems: MenuItem[] = [
       "/quick/vaccination-template",
       <ExperimentOutlined />
     ),
-  ]),
-
-  // 8. Đối tác
+  ]), // 8. Đối tác
   getItem("Đối tác", "partners", <ContactsOutlined />, [
     getItem(
       <Link to="/partners/suppliers">Nhà Cung Cấp</Link>,
       "/partners/suppliers"
-    ), // Sửa link
+    ),
     getItem(
       <Link to="/partners/shipping">Đối tác Vận Chuyển</Link>,
       "/partners/shipping",
       <TruckOutlined />
     ),
-  ]),
-
-  // 9. Quản lý Khách hàng
+  ]), // 9. Quản lý Khách hàng
   getItem("Quản lý Khách hàng", "crm", <UserOutlined />, [
     getItem(
       <Link to="/crm/retail">Khách kênh Cửa Hàng</Link>,
@@ -276,9 +255,7 @@ const finalMenuItems: MenuItem[] = [
       <ShopOutlined />
     ),
     getItem(<Link to="/crm/b2b">Khách B2B</Link>, "/crm/b2b", <TeamOutlined />),
-  ]),
-
-  // 10. Quản lý Marketing
+  ]), // 10. Quản lý Marketing
   getItem("Quản lý Marketing", "marketing", <BulbOutlined />, [
     getItem(
       <Link to="/marketing/dashboard">Dashboard Marketing</Link>,
@@ -309,9 +286,7 @@ const finalMenuItems: MenuItem[] = [
       "/marketing/chatbot",
       <GlobalOutlined />
     ),
-  ]),
-
-  // 11. Quản lý Nhân sự
+  ]), // 11. Quản lý Nhân sự
   getItem("Quản lý Nhân sự", "hr", <AuditOutlined />, [
     getItem(
       <Link to="/hr/dashboard">Dashboard Nhân sự</Link>,
@@ -343,9 +318,7 @@ const finalMenuItems: MenuItem[] = [
       "/hr/payroll",
       <DollarCircleOutlined />
     ),
-  ]),
-
-  // 12. Tài Chính & Kế Toán
+  ]), // 12. Tài Chính & Kế Toán
   getItem("Tài Chính & Kế Toán", "finance", <AccountBookOutlined />, [
     getItem(
       <Link to="/finance/dashboard">Dashboard Tài chính</Link>,
@@ -378,7 +351,7 @@ const finalMenuItems: MenuItem[] = [
           Hệ thống Tài Khoản
         </Link>,
         "/finance/accounting/chart-of-accounts"
-      ), // <-- Trang Sếp vừa làm
+      ),
       getItem(
         <Link to="/finance/accounting/journal">Sổ Nhật ký Chung</Link>,
         "/finance/accounting/journal"
@@ -393,9 +366,7 @@ const finalMenuItems: MenuItem[] = [
       "/finance/vat",
       <ContainerOutlined />
     ),
-  ]),
-
-  // 13. Báo Cáo
+  ]), // 13. Báo Cáo
   getItem("Báo Cáo", "reports", <LineChartOutlined />, [
     getItem("Báo cáo Kinh doanh", "report-sales", <AreaChartOutlined />, [
       getItem(
@@ -441,43 +412,48 @@ const finalMenuItems: MenuItem[] = [
         "/reports/finance/cashflow"
       ),
     ]),
-  ]),
-
-  // 14. Cấu hình hệ thống
-  // 14. Cấu hình hệ thống (ĐÃ SỬA: Trỏ về trang Hub)
+  ]), // 14. Cấu hình hệ thống
   getItem(
-    <Link to="/settings">Cấu hình hệ thống</Link>, // <-- Link trực tiếp
-    "/settings", // <-- Key là /settings
+    <Link to="/settings">Cấu hình hệ thống</Link>,
+    "/settings",
     <SettingOutlined />
   ),
 ];
-
 // --- KẾT THÚC CẤU TRÚC MENU ---
 
 const MainLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const { message } = AntApp.useApp(); // SỬA: Thêm AntApp
+  const navigate = useNavigate(); // SỬA: Thêm Navigate
+  // SỬA LỖI 3: Kết nối đúng store và lấy đúng state
 
-  const { user, setSession, setUser } = useAuthStore();
+  const { user, profile, logout } = useAuthStore(); // SỬA LỖI 3: Dùng hàm logout từ "Bộ não"
 
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      message.error("Đăng xuất thất bại: " + error.message);
-    } else {
-      setSession(null);
-      setUser(null);
-      message.success("Đã đăng xuất!");
-      // ProtectedRoute sẽ tự động xử lý việc chuyển hướng
-    }
-  };
+  const handleLogout = () => {
+    message.success("Đã đăng xuất!");
+    logout(); // Gatekeeper sẽ tự động xử lý việc chuyển hướng
+  }; // SỬA LỖI 3: Cập nhật menu items
 
   const userMenuItems = [
-    // Đổi tên biến để không trùng
+    {
+      key: "profile",
+      label: "Cập nhật Hồ sơ",
+      icon: <IdcardOutlined />,
+      onClick: () => navigate("/onboarding/update-profile"),
+    },
+    {
+      key: "password",
+      label: "Đổi Mật khẩu",
+      icon: <LockOutlined />,
+      onClick: () => navigate("/onboarding/update-password"),
+    },
+    { type: "divider" as const },
     {
       key: "logout",
       icon: <LogoutOutlined />,
       label: "Đăng xuất",
       onClick: handleLogout,
+      danger: true, // Thêm danger cho Đăng xuất
     },
   ];
 
@@ -487,55 +463,89 @@ const MainLayout: React.FC = () => {
         trigger={null}
         collapsible
         collapsed={collapsed}
-        collapsedWidth={65} // Sếp có thể chỉnh thành 80 nếu logo to
-        width={260} // Tăng chiều rộng Sider để chứa menu con
-        style={{ background: "#001529" }}
+        collapsedWidth={65}
+        width={260}
+        style={{
+          background: "#ffffffff", // SỬA: Đổi sang nền trắng
+          borderRight: "1px solid #e8e8e8ff", // Thêm viền
+          position: "fixed",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          overflow: "auto",
+        }}
       >
         <div
           style={{
-            height: "48px",
+            height: "64px", // SỬA: Đồng bộ 64px
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "white",
-            fontWeight: 600,
-            fontSize: 25,
-            overflow: "hidden",
+            padding: "0 16px",
           }}
         >
-          {collapsed ? (
-            <img
-              src={Logo}
-              alt="Logo"
-              style={{ width: 40, height: 40, objectFit: "contain" }}
-            />
-          ) : (
-            "Dược Nam Việt"
+          <img
+            src={Logo}
+            alt="Logo"
+            style={{
+              height: 40,
+              marginRight: collapsed ? 0 : 8,
+              transition: "margin-right 0.2s",
+            }}
+          />
+
+          {!collapsed && (
+            <span
+              style={{
+                fontSize: "18px",
+                fontWeight: 600,
+                color: "#00b96b",
+              }}
+            >
+              DƯỢC NAM VIỆT
+            </span>
           )}
         </div>
 
-        {/* --- ĐÂY LÀ PHẦN SẾP CẦN THAY ĐỔI --- */}
-        <Menu
-          theme="dark"
+        <Menu // theme="dark" // SỬA: Bỏ theme dark
           mode="inline"
           defaultSelectedKeys={["/"]}
-          // defaultOpenKeys={['store']} // Sếp có thể mở sẵn 1 mục nếu muốn
-          items={finalMenuItems} // <-- SỬ DỤNG MẢNG MỚI
+          items={finalMenuItems}
         />
-        {/* ------------------------------------- */}
       </Sider>
-      <Layout>
-        <Header className="app-header">
-          <div style={{ display: "flex", alignItems: "center", flexGrow: 1 }}>
+
+      <Layout
+        style={{
+          marginLeft: collapsed ? 65 : 260,
+          transition: "margin-left 0.2s",
+        }}
+      >
+        <Header
+          style={{
+            background: "#fff", // SỬA: Nền trắng
+            padding: "0 16px 0 0", // SỬA: Căn chỉnh padding
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottom: "1px solid #f0f0f0", // SỬA: Thêm viền
+            height: 48, // SỬA: Đồng bộ 48px
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center" }}>
             <Button
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed(!collapsed)}
-              className="menu-trigger-btn"
+              style={{
+                fontSize: "16px",
+                width: 64,
+                height: 64,
+              }}
             />
+            {/* Sếp có thể thêm Breadcrumb ở đây */}
           </div>
 
-          <div style={{ display: "flex", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Button
               type="text"
               shape="circle"
@@ -544,20 +554,35 @@ const MainLayout: React.FC = () => {
                   <BellOutlined />
                 </Badge>
               }
-              style={{ marginRight: 8 }}
             />
+
             <Dropdown menu={{ items: userMenuItems }} trigger={["click"]}>
               <Button type="text" style={{ height: "auto", padding: "0 8px" }}>
-                <Avatar icon={<UserOutlined />} />
+                {/* SỬA LỖI 3: Dùng Avatar từ 'profile' */}
+
+                <Avatar src={profile?.avatar_url} icon={<UserOutlined />} />
+
                 <span style={{ marginLeft: 8, fontWeight: 500, color: "#333" }}>
-                  {user?.email || "User"}
+                  {/* SỬA LỖI 3: Dùng Tên từ 'profile' */}
+                  {profile?.full_name || user?.email || "User"}
                 </span>
               </Button>
             </Dropdown>
           </div>
         </Header>
-        <Content className="app-content-layout">
-          <Outlet />
+
+        <Content
+          style={{
+            margin: 0,
+            overflow: "auto",
+            background: "#f9f9f9",
+            borderRadius: 8,
+          }}
+        >
+          {/* SỬA: Thêm 1 div bọc ngoài với padding */}
+          <div style={{ padding: 6, minHeight: "calc(100vh - 96px)" }}>
+            <Outlet />
+          </div>
         </Content>
       </Layout>
     </Layout>

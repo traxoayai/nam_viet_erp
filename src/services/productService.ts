@@ -224,3 +224,77 @@ export const importProducts = async (file: File) => {
     }
   });
 };
+
+/**
+ * 10. HÀM TÌM KIẾM ĐA NĂNG (Nâng cấp V2)
+ * @param keyword Từ khóa tìm kiếm
+ * @param types Mảng các loại dịch vụ cần tìm (vd: ['service'] hoặc ['service', 'bundle'])
+ * Mặc định tìm tất cả nếu không truyền.
+ */
+export const searchProductsForDropdown = async (
+  keyword: string,
+  types: string[] = ["service", "bundle"] // Mặc định tìm cả Gói và Dịch vụ lẻ
+) => {
+  const searchTerm = keyword?.trim().toLowerCase() || "";
+
+  // 1. Tìm trong bảng Sản phẩm (Vật tư) - Luôn tìm
+  let productQuery = supabase
+    .from("products")
+    .select("id, name, sku, retail_unit, actual_cost, image_url")
+    .eq("status", "active") // Chỉ lấy SP đang hoạt động
+    .limit(20);
+
+  // 2. Tìm trong bảng Dịch vụ (Theo loại yêu cầu)
+  let serviceQuery = supabase
+    .from("service_packages")
+    .select("id, name, sku, unit, total_cost_price, price, type, created_at")
+    .in("type", types) // Lọc theo loại (service/bundle)
+    .eq("status", "active")
+    .limit(20);
+
+  // Áp dụng bộ lọc tìm kiếm
+  if (searchTerm) {
+    productQuery = productQuery.or(
+      `name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`
+    );
+    serviceQuery = serviceQuery.or(
+      `name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`
+    );
+  } else {
+    // Nếu không gõ gì -> Lấy mới nhất
+    productQuery = productQuery.order("created_at", { ascending: false });
+    serviceQuery = serviceQuery.order("created_at", { ascending: false });
+  }
+
+  // Chạy song song
+  const [prodRes, svcRes] = await Promise.all([productQuery, serviceQuery]);
+
+  if (prodRes.error) console.error("Lỗi tìm SP:", prodRes.error);
+  if (svcRes.error) console.error("Lỗi tìm DV:", svcRes.error);
+
+  // Chuẩn hóa dữ liệu đầu ra
+  const products = (prodRes.data || []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    unit: p.retail_unit,
+    price: p.actual_cost, // Giá vốn
+    retail_price: 0, // SP ko có giá bán cố định ở đây
+    image: p.image_url,
+    type: "product",
+  }));
+
+  const services = (svcRes.data || []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    sku: s.sku,
+    unit: s.unit,
+    price: s.total_cost_price, // Giá vốn
+    retail_price: s.price, // Giá bán
+    image: null,
+    type: s.type, // 'service' hoặc 'bundle'
+  }));
+
+  // Trả về danh sách gộp (Dịch vụ lên đầu)
+  return [...services, ...products];
+};

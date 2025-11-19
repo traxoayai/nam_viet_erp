@@ -80,7 +80,7 @@ const { TabPane } = Tabs;
 // SỬA LỖI B & G: Bỏ style 'layout' và 'cardBody'
 const styles = {
   card: {
-    margin: "12px",
+    margin: "0px",
     border: "1.5px solid #d0d7de",
     borderRadius: "8px",
   },
@@ -532,7 +532,7 @@ const CustomerB2CPage: React.FC = () => {
       <Content style={{ padding: "0 12px" }}>
         <Card
           style={{ ...styles.card, margin: "0 12px 12px 12px" }}
-          styles={{ body: { padding: "16px" } }}
+          styles={{ body: { padding: "12px" } }}
         >
           <Spin spinning={loading} tip="Đang tải...">
             <Row
@@ -659,7 +659,7 @@ const CustomerB2CPage: React.FC = () => {
           <Card
             style={{
               ...styles.card,
-              margin: "0 12px",
+              margin: "0 8px",
               borderTopLeftRadius: 0,
               borderTopRightRadius: 0,
             }} // SỬA LỖI B: Dùng styles.body
@@ -696,7 +696,7 @@ const CustomerB2CPage: React.FC = () => {
           </Card>
         </Affix>
         {/* Nội dung Form - NÂNG CẤP: Dùng Tabs */}
-        <Content style={{ padding: "12px", paddingTop: "0" }}>
+        <Content style={{ padding: "10px", paddingTop: "0" }}>
           <Spin spinning={loading} tip="Đang tải...">
             <Card style={{ ...styles.card, margin: "0" }}>
               <Tabs defaultActiveKey="1">
@@ -730,7 +730,7 @@ const CustomerB2CPage: React.FC = () => {
                           {fileList.length >= 1 ? null : (
                             <div>
                               <PlusOutlined />
-                              <div style={{ marginTop: 8 }}>Tải ảnh</div>
+                              <div style={{ marginTop: 0 }}>Tải ảnh</div>
                             </div>
                           )}
                         </Upload>

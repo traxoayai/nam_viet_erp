@@ -21,6 +21,7 @@ import ProductListPage from "@/pages/inventory/ProductListPage";
 import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
+import ServicePackagePage from "@/pages/services/ServicePackagePage"; // <-- THÊM DÒNG NÀY
 import BankListPage from "@/pages/settings/BankListPage";
 import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
 import FundAccountPage from "@/pages/settings/FundAccountPage";
@@ -138,7 +139,7 @@ const routes: RouteObject[] = [
           // 5. Combo và Dịch Vụ
           {
             path: "services",
-            element: <PagePlaceholder title="Combo và Dịch Vụ" />,
+            element: <ServicePackagePage />,
           },
 
           // 6. Kho - Hàng Hóa (Cập nhật route cũ)

@@ -509,8 +509,6 @@ const TabUserManagement: React.FC = () => {
       key: "status",
       width: 180, // Tăng độ rộng
       render: (status: UserRoleInfo["status"]) => {
-        // Sửa: Dùng kiểu 'UserRoleInfo["status"]'
-        // SỬA: Dùng statusMap (ở scope ngoài)
         const statusInfo = statusMap[status] || statusMap.inactive;
         return (
           <Tag icon={statusInfo.icon} color={statusInfo.color}>
