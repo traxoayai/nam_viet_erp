@@ -24,6 +24,7 @@ import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
 import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
+import VaccinationTemplatePage from "@/pages/quick/VaccinationTemplatePage";
 import ServicePackagePage from "@/pages/services/ServicePackagePage"; // <-- THÊM DÒNG NÀY
 import BankListPage from "@/pages/settings/BankListPage";
 import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
@@ -189,7 +190,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "quick/vaccination-template",
-            element: <PagePlaceholder title="Phác đồ Tiêm Chủng Mẫu" />,
+            element: <VaccinationTemplatePage />,
           },
 
           // 8. Đối tác (Cập nhật route cũ)

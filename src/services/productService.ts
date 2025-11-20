@@ -154,7 +154,6 @@ export const exportProducts = async (filters: ProductFilters) => {
 };
 
 // 8. HÀM TẢI ẢNH (TỪ storageService.ts)
-// (Em di chuyển luôn vào đây cho tiện quản lý)
 export const uploadProductImage = async (file: File) => {
   const bucket = "product_images";
   const fileExt = file.name.split(".").pop();
@@ -226,75 +225,89 @@ export const importProducts = async (file: File) => {
 };
 
 /**
- * 10. HÀM TÌM KIẾM ĐA NĂNG (Nâng cấp V2)
- * @param keyword Từ khóa tìm kiếm
- * @param types Mảng các loại dịch vụ cần tìm (vd: ['service'] hoặc ['service', 'bundle'])
- * Mặc định tìm tất cả nếu không truyền.
+ * 10. HÀM TÌM KIẾM ĐA NĂNG (Universal Search) - ĐÃ FIX LỖI
  */
 export const searchProductsForDropdown = async (
   keyword: string,
-  types: string[] = ["service", "bundle"] // Mặc định tìm cả Gói và Dịch vụ lẻ
+  types: string[] = ["service", "bundle"]
 ) => {
   const searchTerm = keyword?.trim().toLowerCase() || "";
 
-  // 1. Tìm trong bảng Sản phẩm (Vật tư) - Luôn tìm
-  let productQuery = supabase
-    .from("products")
-    .select("id, name, sku, retail_unit, actual_cost, image_url")
-    .eq("status", "active") // Chỉ lấy SP đang hoạt động
-    .limit(20);
+  // 1. Lọc các loại hợp lệ cho bảng service_packages
+  const validServiceTypes = types.filter((t) =>
+    ["service", "bundle"].includes(t)
+  );
 
-  // 2. Tìm trong bảng Dịch vụ (Theo loại yêu cầu)
-  let serviceQuery = supabase
-    .from("service_packages")
-    .select("id, name, sku, unit, total_cost_price, price, type, created_at")
-    .in("type", types) // Lọc theo loại (service/bundle)
-    .eq("status", "active")
-    .limit(20);
+  const queries = [];
 
-  // Áp dụng bộ lọc tìm kiếm
-  if (searchTerm) {
-    productQuery = productQuery.or(
-      `name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`
-    );
-    serviceQuery = serviceQuery.or(
-      `name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`
-    );
-  } else {
-    // Nếu không gõ gì -> Lấy mới nhất
-    productQuery = productQuery.order("created_at", { ascending: false });
-    serviceQuery = serviceQuery.order("created_at", { ascending: false });
+  // QUERY 1: Luôn tìm trong bảng Products (Nếu types chứa 'product' hoặc không truyền types)
+  if (types.includes("product") || types.length === 0) {
+    let productQuery = supabase
+      .from("products")
+      .select("id, name, sku, retail_unit, actual_cost, image_url")
+      .eq("status", "active")
+      .limit(20);
+
+    if (searchTerm) {
+      productQuery = productQuery.or(
+        `name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`
+      );
+    } else {
+      productQuery = productQuery.order("created_at", { ascending: false });
+    }
+    queries.push(productQuery.then((res) => ({ type: "product", res })));
+  }
+
+  // QUERY 2: Chỉ tìm Service NẾU có type hợp lệ
+  if (validServiceTypes.length > 0) {
+    let serviceQuery = supabase
+      .from("service_packages")
+      .select("id, name, sku, unit, total_cost_price, price, type, created_at")
+      .in("type", validServiceTypes) // Chỉ truyền service/bundle
+      .eq("status", "active")
+      .limit(20);
+
+    if (searchTerm) {
+      serviceQuery = serviceQuery.or(
+        `name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`
+      );
+    } else {
+      serviceQuery = serviceQuery.order("created_at", { ascending: false });
+    }
+    queries.push(serviceQuery.then((res) => ({ type: "service", res })));
   }
 
   // Chạy song song
-  const [prodRes, svcRes] = await Promise.all([productQuery, serviceQuery]);
+  const results = await Promise.all(queries);
 
-  if (prodRes.error) console.error("Lỗi tìm SP:", prodRes.error);
-  if (svcRes.error) console.error("Lỗi tìm DV:", svcRes.error);
+  const prodRes = results.find((r) => r.type === "product")?.res;
+  const svcRes = results.find((r) => r.type === "service")?.res;
 
-  // Chuẩn hóa dữ liệu đầu ra
-  const products = (prodRes.data || []).map((p) => ({
+  if (prodRes?.error) console.error("Lỗi tìm SP:", prodRes.error);
+  if (svcRes?.error) console.error("Lỗi tìm DV:", svcRes.error);
+
+  // Chuẩn hóa dữ liệu
+  const products = (prodRes?.data || []).map((p: any) => ({
     id: p.id,
     name: p.name,
     sku: p.sku,
     unit: p.retail_unit,
-    price: p.actual_cost, // Giá vốn
-    retail_price: 0, // SP ko có giá bán cố định ở đây
+    price: p.actual_cost,
+    retail_price: 0,
     image: p.image_url,
     type: "product",
   }));
 
-  const services = (svcRes.data || []).map((s) => ({
+  const services = (svcRes?.data || []).map((s: any) => ({
     id: s.id,
     name: s.name,
     sku: s.sku,
     unit: s.unit,
-    price: s.total_cost_price, // Giá vốn
-    retail_price: s.price, // Giá bán
+    price: s.total_cost_price,
+    retail_price: s.price,
     image: null,
-    type: s.type, // 'service' hoặc 'bundle'
+    type: s.type,
   }));
 
-  // Trả về danh sách gộp (Dịch vụ lên đầu)
   return [...services, ...products];
 };
