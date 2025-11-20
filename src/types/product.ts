@@ -45,6 +45,11 @@ export interface ProductStoreState {
   warehouses: Warehouse[];
   suppliers: Supplier[]; // Thêm Nhà Cung Cấp
 
+  // --- THÊM MỚI: Dữ liệu danh mục & hãng ---
+  uniqueCategories: string[];
+  uniqueManufacturers: string[];
+  // ---------------------------------------
+
   // Trạng thái
   loading: boolean;
   loadingDetails: boolean;
@@ -71,6 +76,8 @@ export interface ProductStoreState {
   deleteProducts: (ids: React.Key[]) => Promise<void>;
   exportToExcel: () => Promise<any[]>;
 
+  // --- THÊM MỚI: Hàm tải danh mục ---
+  fetchClassifications: () => Promise<void>;
   // Hàm nội bộ
   setFilters: (filters: Partial<ProductFilters>) => void;
   setPage: (page: number, pageSize: number) => void;

@@ -410,21 +410,25 @@ const ServicePackagePage: React.FC = () => {
               {/* COMPONENT DÙNG CHUNG - FIX LỖI 1: Thêm value={selectValue} */}
               <DebounceProductSelect
                 style={{ width: "100%", marginBottom: 16 }}
-                // CHỈ CHO PHÉP TÌM DỊCH VỤ LẺ VÀ VẬT TƯ (Không tìm Combo)
                 searchTypes={["service"]}
-                value={selectValue} // <-- Kiểm soát giá trị
-                onChange={(option) => {
-                  // 1. Xử lý Logic thêm hàng
+                value={selectValue}
+                onChange={(_, option: any) => {
+                  // --- BẮT ĐẦU ĐOẠN SỬA ---
+                  // Kiểm tra an toàn: Nếu không có option hoặc product thì dừng ngay
+                  if (!option || !option.product) {
+                    console.warn("Không lấy được thông tin sản phẩm từ option");
+                    return;
+                  }
                   const product = option.product;
+                  // --- KẾT THÚC ĐOẠN SỬA ---
+
                   const currentItems = form.getFieldValue(listName) || [];
 
-                  // Tìm xem sản phẩm đã có trong list chưa
                   const existingIndex = currentItems.findIndex(
                     (i: any) => i.id === product.id
                   );
 
                   if (existingIndex >= 0) {
-                    // FIX LỖI 2: Cập nhật trực tiếp vào ô Quantity thay vì set cả mảng
                     const currentQty =
                       currentItems[existingIndex].quantity || 0;
                     form.setFieldValue(
@@ -433,27 +437,22 @@ const ServicePackagePage: React.FC = () => {
                     );
                     message.success(`Đã tăng số lượng: ${product.name}`);
                   } else {
-                    // Thêm mới
                     const newItem = {
                       id: product.id,
                       name: product.name,
-                      unit: product.retail_unit, // Vật tư dùng retail_unit
+                      unit: product.retail_unit || product.unit, // Fallback unit
                       quantity: 1,
-                      unitPrice: product.actual_cost, // Dùng giá vốn
+                      unitPrice: product.actual_cost || product.price || 0, // Fallback price
                       scheduleDays: 0,
                     };
-                    // Thêm vào cuối mảng
                     add(newItem);
                     message.success(`Đã thêm: ${product.name}`);
                   }
 
-                  // 2. Tính toán lại tổng tiền
-                  // (Cần timeout nhỏ để đợi Form cập nhật value xong)
                   setTimeout(() => {
                     handleFormValuesChange({}, form.getFieldsValue());
                   }, 0);
 
-                  // 3. FIX LỖI 1: Xóa trắng ô tìm kiếm
                   setSelectValue(null);
                 }}
               />

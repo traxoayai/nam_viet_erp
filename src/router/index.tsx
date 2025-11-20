@@ -18,6 +18,8 @@ import AssetManagementPage from "@/pages/finance/AssetManagementPage";
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
+import DiscountCodeManagement from "@/pages/marketing/DiscountCodeManagement";
+import LoyaltyPolicyPage from "@/pages/marketing/LoyaltyPolicyPage";
 import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
@@ -242,7 +244,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "marketing/tools/promo",
-            element: <PagePlaceholder title="Mã Giảm giá & QR Code" />,
+            element: <DiscountCodeManagement />,
           },
           {
             path: "marketing/chatbot",
@@ -381,6 +383,11 @@ const routes: RouteObject[] = [
           {
             path: "settings/business/sales",
             element: <PagePlaceholder title="Cấu hình Kinh Doanh" />,
+          },
+          // --- MỚI: Chính sách Tích điểm ---
+          {
+            path: "settings/business/loyalty",
+            element: <LoyaltyPolicyPage />,
           },
           // --- VÁ LỖI: Tái cấu trúc Cấu hình Tài Chính ---
           {

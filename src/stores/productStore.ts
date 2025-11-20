@@ -1,7 +1,8 @@
 // src/stores/productStore.ts
 import { create } from "zustand";
 
-import * as productService from "@/services/productService"; // Import tất cả
+import { supabase } from "@/lib/supabaseClient"; // <-- MỚI: Import để gọi RPC
+import * as productService from "@/services/productService";
 import * as supplierService from "@/services/supplierService";
 import * as warehouseService from "@/services/warehouseService";
 import { ProductStoreState, ProductFilters } from "@/types/product";
@@ -12,10 +13,15 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
   warehouses: [],
   suppliers: [],
 
+  // --- MỚI: Khởi tạo rỗng ---
+  uniqueCategories: [],
+  uniqueManufacturers: [],
+  // -------------------------
+
   // Trạng thái
   loading: false,
-  loadingDetails: false, // Thêm loading cho form
-  currentProduct: null, // Thêm sản phẩm đang sửa
+  loadingDetails: false,
+  currentProduct: null,
 
   // Lọc & Phân trang
   filters: {},
@@ -49,25 +55,19 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
     try {
       const defaultPage = 1;
       const largePageSize = 99999;
-      const defaultFilters = {}; // Tham số filters rỗng
+      const defaultFilters = {};
 
       const [warehousesResult, suppliersResult] = await Promise.all([
-        // SỬA LỖI (TS2554): Truyền 3 tham số riêng lẻ
         warehouseService.getWarehouses(
-          defaultFilters, // 1. filters
-          defaultPage, // 2. page
-          largePageSize // 3. pageSize
+          defaultFilters,
+          defaultPage,
+          largePageSize
         ),
-
-        // Giữ nguyên: Gọi supplierService không có tham số
         supplierService.getSuppliers(),
       ]);
 
       set({
-        // Giữ nguyên: Lấy .data từ kết quả của warehouse
         warehouses: warehousesResult.data,
-
-        // Giữ nguyên: Lấy trực tiếp kết quả của supplier
         suppliers: suppliersResult,
       });
     } catch (error) {
@@ -76,7 +76,29 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
     }
   },
 
-  // HÀM MỚI (CHO FORM SỬA)
+  // --- HÀM MỚI: Gọi RPC để lấy danh sách Nhóm & Hãng ---
+  fetchClassifications: async () => {
+    try {
+      const [catRes, manRes] = await Promise.all([
+        supabase.rpc("get_distinct_categories"),
+        supabase.rpc("get_distinct_manufacturers"),
+      ]);
+
+      if (catRes.error) throw catRes.error;
+      if (manRes.error) throw manRes.error;
+
+      set({
+        uniqueCategories: (catRes.data || []).map((i: any) => i.category_name),
+        uniqueManufacturers: (manRes.data || []).map(
+          (i: any) => i.manufacturer_name
+        ),
+      });
+    } catch (error) {
+      console.error("Lỗi tải phân loại:", error);
+    }
+  },
+  // -----------------------------------------------------
+
   getProductDetails: async (id: number) => {
     set({ loadingDetails: true, currentProduct: null });
     try {
@@ -90,45 +112,40 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
 
   // --- HÀNH ĐỘNG CẬP NHẬT DỮ LIỆU ---
 
-  // HÀM MỚI (CHO FORM SỬA)
   updateProduct: async (id: number, data: any) => {
-    set({ loading: true }); // Dùng loading chung
+    set({ loading: true });
     await productService.updateProduct(id, data);
-    await get().fetchProducts(); // Tải lại danh sách
+    await get().fetchProducts();
     set({ loading: false });
   },
 
-  // HÀM MỚI
   addProduct: async (data: any) => {
     set({ loading: true });
     await productService.addProduct(data);
-    await get().fetchProducts(); // Tải lại danh sách
+    await get().fetchProducts();
     set({ loading: false });
   },
 
-  // HÀM MỚI (HÀNG LOẠT)
   updateStatus: async (ids: React.Key[], status: "active" | "inactive") => {
     set({ loading: true });
     await productService.updateProductsStatus(ids, status);
-    await get().fetchProducts(); // Tải lại danh sách
+    await get().fetchProducts();
     set({ loading: false });
   },
 
-  // HÀM MỚI (HÀNG LOẠT)
   deleteProducts: async (ids: React.Key[]) => {
     set({ loading: true });
     await productService.deleteProducts(ids);
-    await get().fetchProducts(); // Tải lại danh sách
+    await get().fetchProducts();
     set({ loading: false });
   },
 
-  // HÀM MỚI
   exportToExcel: async () => {
     set({ loading: true });
     const filters = get().filters;
     const data = await productService.exportProducts(filters);
     set({ loading: false });
-    return data; // Trả data về cho UI xử lý
+    return data;
   },
 
   // --- HÀNH ĐỘNG CỤC BỘ ---
