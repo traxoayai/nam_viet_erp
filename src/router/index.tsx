@@ -23,6 +23,7 @@ import LoyaltyPolicyPage from "@/pages/marketing/LoyaltyPolicyPage";
 import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
+import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
 import ServicePackagePage from "@/pages/services/ServicePackagePage"; // <-- THÊM DÒNG NÀY
 import BankListPage from "@/pages/settings/BankListPage";
 import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
@@ -184,7 +185,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "quick/prescription-template",
-            element: <PagePlaceholder title="Đơn thuốc Mẫu" />,
+            element: <PrescriptionTemplatePage />,
           },
           {
             path: "quick/vaccination-template",

@@ -1,12 +1,13 @@
 // src/pages/marketing/DiscountCodeManagement.tsx
 import {
+  SearchOutlined,
   PlusOutlined,
-  ReloadOutlined,
   DeleteOutlined,
   QrcodeOutlined,
   TagOutlined,
   UserOutlined,
   GlobalOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -16,7 +17,6 @@ import {
   Card,
   Typography,
   Select,
-  Divider,
   Row,
   Col,
   ConfigProvider,
@@ -25,6 +25,7 @@ import {
   Modal,
   Form,
   InputNumber,
+  Divider,
   Tooltip,
   Popconfirm,
   DatePicker,
@@ -36,6 +37,7 @@ import viVN from "antd/locale/vi_VN";
 import dayjs from "dayjs";
 import { useState, useEffect } from "react";
 
+// Import Store & Components
 import DebounceCustomerSelect from "@/components/common/DebounceCustomerSelect";
 import { useProductStore } from "@/stores/productStore";
 import { usePromotionStore, Promotion } from "@/stores/usePromotionStore";
@@ -63,24 +65,37 @@ const DiscountCodeManagement = () => {
     createPromotion,
     deletePromotion,
   } = usePromotionStore();
+  // Lấy dữ liệu Nhóm hàng/Hãng từ ProductStore
+  const { uniqueCategories, uniqueManufacturers, fetchClassifications } =
+    useProductStore();
+
+  // State Modal & Form
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isQrModalVisible, setIsQrModalVisible] = useState(false);
   const [qrCodeValue, setQrCodeValue] = useState("");
-  // MỚI: Lấy danh sách Nhóm & Hãng từ Store
-  const { uniqueCategories, uniqueManufacturers, fetchClassifications } =
-    useProductStore();
 
   // State điều khiển UI Form
   const [discountType, setDiscountType] = useState("percent");
   const [promoType, setPromoType] = useState("public");
-  const [scopeType, setScopeType] = useState("all"); // all | category | brand
+  const [scopeType, setScopeType] = useState("all");
+
+  // --- STATE TÌM KIẾM & LỌC (MỚI THÊM) ---
+  const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(
+    undefined
+  );
 
   const [form] = Form.useForm();
 
+  // Effect 1: Tải dữ liệu ban đầu & danh mục
   useEffect(() => {
-    fetchPromotions();
     fetchClassifications();
   }, []);
+
+  // Effect 2: Gọi API tìm kiếm khi search/filter thay đổi (MỚI)
+  useEffect(() => {
+    fetchPromotions(searchText, statusFilter);
+  }, [searchText, statusFilter]);
 
   const showAddModal = () => {
     setDiscountType("percent");
@@ -102,7 +117,6 @@ const DiscountCodeManagement = () => {
     try {
       const values = await form.validateFields();
 
-      // Xử lý dữ liệu trước khi gửi
       const payload = {
         code: values.code,
         name: values.campaignName,
@@ -114,16 +128,9 @@ const DiscountCodeManagement = () => {
           values.discount_type === "percent" ? values.max_discount_value : null,
         min_order_value: values.minPurchase || 0,
         total_usage_limit: values.maxUsage,
-
-        // Xử lý khách hàng (Nếu chọn nhiều -> Gửi mảng ID)
-        // Nếu type = personal, values.customer_ids sẽ là mảng UUID
         customer_ids: values.type === "personal" ? values.customer_ids : null,
-
-        // Xử lý phạm vi
         apply_to_scope: values.apply_to_scope,
-        // Lưu ID của danh mục/brand vào JSON (ở đây demo nhập text, thực tế nên là Select)
         apply_to_ids: values.apply_to_ids ? [values.apply_to_ids] : [],
-
         valid_from: values.validDates[0].toISOString(),
         valid_to: values.validDates[1].toISOString(),
         status: values.status,
@@ -181,7 +188,7 @@ const DiscountCodeManagement = () => {
           case "all":
             return <Tag>Toàn sàn</Tag>;
           case "category":
-            return <Tag color="cyan">Theo Nhóm hàng</Tag>;
+            return <Tag color="cyan">Theo Nhóm</Tag>;
           case "brand":
             return <Tag color="orange">Theo Hãng</Tag>;
           default:
@@ -245,16 +252,15 @@ const DiscountCodeManagement = () => {
     <ConfigProvider locale={viVN}>
       <Layout style={styles.layout}>
         <Content>
-          <Card
-            bordered={false}
-            style={styles.card}
-            bodyStyle={{ padding: 16 }}
-          >
+          <Card bordered={false} style={styles.card} bodyStyle={{ padding: 0 }}>
+            {/* Header */}
             <div
               style={{
+                padding: "16px 24px",
+                borderBottom: "1px solid #f0f0f0",
                 display: "flex",
                 justifyContent: "space-between",
-                marginBottom: 16,
+                alignItems: "center",
               }}
             >
               <Title level={4} style={{ margin: 0 }}>
@@ -269,20 +275,48 @@ const DiscountCodeManagement = () => {
               </Button>
             </div>
 
-            <div style={styles.table}>
-              <Table
-                columns={columns}
-                dataSource={promotions}
-                loading={loading}
-                rowKey="id"
-                pagination={{ pageSize: 10, size: "small" }}
-                size="small"
-              />
+            {/* --- THANH TÌM KIẾM & BỘ LỌC (MỚI THÊM) --- */}
+            <div
+              style={{
+                padding: "16px 24px",
+                borderBottom: "1px solid #f0f0f0",
+              }}
+            >
+              <Row gutter={16}>
+                <Col flex="auto">
+                  <Input
+                    prefix={<SearchOutlined />}
+                    placeholder="Tìm theo Mã Code, Tên chiến dịch..."
+                    allowClear
+                    onChange={(e) => setSearchText(e.target.value)}
+                  />
+                </Col>
+                <Col flex="200px">
+                  <Select
+                    placeholder="Trạng thái"
+                    allowClear
+                    style={{ width: "100%" }}
+                    onChange={(val) => setStatusFilter(val)}
+                  >
+                    <Select.Option value="active">Hiệu lực</Select.Option>
+                    <Select.Option value="inactive">Hết hạn/Ẩn</Select.Option>
+                  </Select>
+                </Col>
+              </Row>
             </div>
+
+            <Table
+              columns={columns}
+              dataSource={promotions}
+              loading={loading}
+              rowKey="id"
+              pagination={{ pageSize: 10, size: "small" }}
+            />
           </Card>
         </Content>
       </Layout>
 
+      {/* Modal Thêm Mã */}
       <Modal
         title="Tạo Mã Giảm Giá Mới"
         open={isModalVisible}
@@ -435,15 +469,14 @@ const DiscountCodeManagement = () => {
                     >
                       <Radio.Group buttonStyle="solid">
                         <Radio.Button value="public">
-                          <GlobalOutlined /> Công khai (Ai cũng dùng được)
+                          <GlobalOutlined /> Công khai
                         </Radio.Button>
                         <Radio.Button value="personal">
-                          <UserOutlined /> Tặng Riêng (Specific User)
+                          <UserOutlined /> Tặng Riêng (VIP)
                         </Radio.Button>
                       </Radio.Group>
                     </Form.Item>
 
-                    {/* NÂNG CẤP: Chọn nhiều khách hàng */}
                     {promoType === "personal" && (
                       <Form.Item
                         name="customer_ids"
@@ -454,10 +487,9 @@ const DiscountCodeManagement = () => {
                             message: "Vui lòng chọn ít nhất 1 khách hàng",
                           },
                         ]}
-                        help="Hệ thống sẽ tự động tạo các mã riêng biệt cho từng khách hàng được chọn (VD: HE2025-1, HE2025-2...)"
+                        help="Hệ thống sẽ tự động tạo mã riêng cho từng khách hàng."
                       >
                         <DebounceCustomerSelect />
-                        {/* Lưu ý: DebounceCustomerSelect cần hỗ trợ mode="multiple" trong file gốc */}
                       </Form.Item>
                     )}
 
@@ -474,7 +506,6 @@ const DiscountCodeManagement = () => {
                       </Radio.Group>
                     </Form.Item>
 
-                    {/* NÂNG CẤP: UI Chọn Phạm vi (Dữ liệu Thật) */}
                     {scopeType === "category" && (
                       <Form.Item
                         name="apply_to_ids"
@@ -483,7 +514,7 @@ const DiscountCodeManagement = () => {
                       >
                         <Select
                           placeholder="Chọn nhóm hàng..."
-                          showSearch // Cho phép gõ để tìm
+                          showSearch
                           optionFilterProp="children"
                         >
                           {uniqueCategories.map((cat) => (
@@ -502,7 +533,7 @@ const DiscountCodeManagement = () => {
                       >
                         <Select
                           placeholder="Chọn hãng sản xuất..."
-                          showSearch // Cho phép gõ để tìm
+                          showSearch
                           optionFilterProp="children"
                         >
                           {uniqueManufacturers.map((man) => (
@@ -521,7 +552,7 @@ const DiscountCodeManagement = () => {
 
           <Form.Item
             name="status"
-            label="Trạng thái kích hoạt"
+            label="Trạng thái"
             initialValue="active"
             hidden
           >
@@ -530,7 +561,7 @@ const DiscountCodeManagement = () => {
         </Form>
       </Modal>
 
-      {/* Modal QR Code Native (Fix Lỗi 1) */}
+      {/* Modal QR Code */}
       <Modal
         title="Quét mã để nhận ưu đãi"
         open={isQrModalVisible}
@@ -548,7 +579,7 @@ const DiscountCodeManagement = () => {
             <Title level={3} style={{ margin: 0 }}>
               {qrCodeValue}
             </Title>
-            <Text type="secondary">Đưa mã này cho nhân viên thu ngân</Text>
+            <Text type="secondary">Đưa mã này cho thu ngân</Text>
           </Space>
         </div>
       </Modal>

@@ -22,14 +22,25 @@ export interface Promotion {
 }
 
 export const promotionService = {
-  async fetchPromotions() {
-    const { data, error } = await supabase
+  async fetchPromotions(search: string = "", status?: string) {
+    // <-- CẬP NHẬT THAM SỐ
+    let query = supabase
       .from("promotions")
       .select("*")
       .order("created_at", { ascending: false });
 
+    // Logic lọc
+    if (status) {
+      query = query.eq("status", status);
+    }
+    if (search) {
+      // Tìm theo mã code HOẶC tên chiến dịch
+      query = query.or(`code.ilike.%${search}%,name.ilike.%${search}%`);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
-    return data as Promotion[];
+    return data as Promotion[]; // (Nhớ import type Promotion)
   },
 
   // 2. Tạo mã mới (Hỗ trợ tạo hàng loạt cho nhiều khách)
