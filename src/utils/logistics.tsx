@@ -38,7 +38,7 @@ export const formatPackingString = (
  * Hàm render cho Ant Design Table Column
  * Trả về ReactNode (JSX) nên file cần có đuôi .tsx
  */
-export const renderPackingColumn = (text: any, record: LogisticsRecord) => {
+export const renderPackingColumn = (record: LogisticsRecord) => {
   const qty = record.quantity || 0;
   // Lấy items_per_carton từ record.product (nếu có) hoặc mặc định là 1
   const packSize = record.product?.items_per_carton || 1;

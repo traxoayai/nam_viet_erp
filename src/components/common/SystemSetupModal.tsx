@@ -1,3 +1,4 @@
+// src/components/common/SystemSetupModal.tsx
 import {
   BellOutlined,
   DownloadOutlined,
@@ -12,34 +13,43 @@ const { Text, Paragraph } = Typography;
 export const SystemSetupModal: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
-  const [permissionStatus, setPermissionStatus] =
-    useState<NotificationPermission>(Notification.permission);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null); // Biến lưu sự kiện cài PWA
+
+  // --- SỬA LỖI TẠI ĐÂY ---
+  // Thay vì: const [permissionStatus, setPermissionStatus] = ...
+  // Ta dùng dấu phẩy "," để bỏ qua biến đầu tiên, chỉ lấy hàm setPermissionStatus
+  const [, setPermissionStatus] = useState<string>("default");
+
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
     // 1. Kiểm tra quyền Thông báo
     const checkPermission = () => {
-      const status = Notification.permission;
-      setPermissionStatus(status);
+      // Kiểm tra an toàn: Nếu trình duyệt không hỗ trợ Notification thì thôi
+      if (typeof Notification === "undefined") return;
 
-      // Nếu chưa cấp quyền HOẶC chưa cài App (logic cài app check sau), mở Modal
+      const status = Notification.permission;
+      setPermissionStatus(status); // Cập nhật state để trigger re-render
+
+      // Nếu chưa cấp quyền, mở Modal
       if (status !== "granted") {
         setIsModalOpen(true);
         setCurrentStep(0); // Step 0: Xin quyền
       } else {
-        // Nếu đã cấp quyền, kiểm tra xem có sự kiện cài App không
-        // (Lưu ý: Nếu App đã cài rồi, deferredPrompt sẽ null -> Modal không hiện -> Tốt)
+        // Quyền đã OK, chờ sự kiện cài App
       }
     };
 
     checkPermission();
 
-    // 2. Lắng nghe sự kiện cài đặt PWA (Chỉ Chrome/Android hỗ trợ tốt)
+    // 2. Lắng nghe sự kiện cài đặt PWA
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
       // Nếu quyền thông báo ok rồi, mà chưa cài app -> Mở modal nhảy sang bước cài app
-      if (Notification.permission === "granted") {
+      if (
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+      ) {
         setIsModalOpen(true);
         setCurrentStep(1);
       }
@@ -58,15 +68,20 @@ export const SystemSetupModal: React.FC = () => {
   // HÀNH ĐỘNG 1: XIN QUYỀN THÔNG BÁO
   const requestNotificationPermission = async () => {
     try {
+      if (typeof Notification === "undefined") {
+        message.error("Trình duyệt không hỗ trợ thông báo.");
+        return;
+      }
+
       const permission = await Notification.requestPermission();
       setPermissionStatus(permission);
+
       if (permission === "granted") {
         message.success("Đã cấp quyền thành công!");
-        // Tự động chuyển bước hoặc đóng nếu không có PWA prompt
+        // Tự động chuyển bước hoặc đóng
         if (deferredPrompt) {
           setCurrentStep(1);
         } else {
-          // Nếu không thể cài App (ví dụ trên iOS hoặc đã cài), hiện bước Hoàn tất
           setCurrentStep(2);
         }
       } else {
@@ -141,7 +156,7 @@ export const SystemSetupModal: React.FC = () => {
             </Button>
           ) : (
             <Text type="secondary">
-              (Máy Sếp đã cài rồi hoặc không hỗ trợ tự động. Hãy nhấn "Tiếp
+              (Máy Bạn đã cài rồi hoặc không hỗ trợ tự động. Hãy nhấn "Tiếp
               tục")
             </Text>
           )}
@@ -173,15 +188,14 @@ export const SystemSetupModal: React.FC = () => {
     },
   ];
 
-  // Nếu user đã làm xong hết (Quyền OK, ko còn prompt cài app), thì không render gì cả
   if (!isModalOpen) return null;
 
   return (
     <Modal
       title="⚙️ Thiết lập Hệ thống Nam Việt EMS"
       open={isModalOpen}
-      footer={null} // Tắt footer mặc định để custom trong content
-      closable={false} // Không cho tắt, bắt buộc làm
+      footer={null}
+      closable={false}
       maskClosable={false}
       centered
     >
@@ -194,7 +208,7 @@ export const SystemSetupModal: React.FC = () => {
         {steps[currentStep].content}
       </div>
 
-      {/* Nút Skip (Dành cho trường hợp kẹt - Tùy chọn) */}
+      {/* Nút Skip */}
       {currentStep === 1 && !deferredPrompt && (
         <div className="text-right mt-4">
           <Button onClick={() => setCurrentStep(2)}>Bỏ qua bước này</Button>

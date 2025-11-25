@@ -398,18 +398,20 @@ const ProductFormPage: React.FC = () => {
                       name="items_per_carton"
                       label="Quy cách (SL/Thùng)"
                       initialValue={1}
-                      tooltip="SL hộp trong 1 thùng"
+                      rules={[{ required: true, message: "Bắt buộc nhập" }]}
+                      tooltip="Một thùng chứa bao nhiêu đơn vị bán buôn?"
                     >
                       <InputNumber
                         style={{ width: "100%" }}
                         min={1}
-                        addonAfter="Đơn vị/Thùng"
                         formatter={(value) =>
                           `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                         }
+                        // --- SỬA LỖI TẠI ĐÂY: Thêm 'as any' ---
                         parser={(value) =>
-                          value?.replace(/\$\s?|(,*)/g, "") as unknown as number
+                          value?.replace(/\$\s?|(,*)/g, "") as any
                         }
+                        addonAfter="Đơn vị/Thùng"
                       />
                     </Form.Item>
                   </Col>

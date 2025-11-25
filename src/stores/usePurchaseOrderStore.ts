@@ -16,6 +16,7 @@ interface StoreState {
   setFilters: (newFilters: Partial<PurchaseOrderFilters>) => void;
   setPage: (page: number, pageSize: number) => void;
   deleteOrder: (id: number) => Promise<void>;
+  autoCreateOrders: (type: "MIN_MAX" | "AI") => Promise<void>;
 }
 
 export const usePurchaseOrderStore = create<StoreState>((set, get) => ({
