@@ -33,6 +33,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useSupplierStore } from "@/stores/supplierStore";
+import { useBankStore } from "@/stores/useBankStore"; // <-- MỚI: Import Bank Store
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -43,17 +44,7 @@ const SupplierDetailPage: React.FC = () => {
   const { id } = useParams();
   const { message: antMessage } = AntApp.useApp();
 
-  const handleCancel = () => {
-    // (Nếu đang ở chế độ Sửa và Form đang bật) -> Khóa form lại và reset
-    if (isEditing && !formDisabled) {
-      setFormDisabled(true);
-      form.setFieldsValue(currentSupplier);
-    } else {
-      // (Nếu đang ở chế độ Thêm mới) -> Quay về danh sách
-      navigate("/partners");
-    }
-  };
-
+  // Lấy dữ liệu từ Supplier Store
   const {
     currentSupplier,
     loadingDetails,
@@ -62,26 +53,62 @@ const SupplierDetailPage: React.FC = () => {
     updateSupplier,
   } = useSupplierStore();
 
+  // Lấy dữ liệu từ Bank Store (MỚI)
+  const { banks, fetchBanks } = useBankStore();
+
   // Quyết định xem đây là trang "Thêm" (id=undefined) hay "Sửa"
   const isEditing = !!id;
   // State để bật/tắt chế độ chỉnh sửa trên form
   const [formDisabled, setFormDisabled] = useState(isEditing);
 
-  // Tải dữ liệu chi tiết nếu là trang "Sửa"
+  // Danh sách chuẩn hóa các hình thức giao hàng
+  const DELIVERY_METHODS = [
+    {
+      value: "Xe khách/Chành xe",
+      label: "Xe khách / Chành xe (Cần ra bến lấy)",
+    },
+    { value: "NCC tự giao", label: "NCC tự giao hàng (Freeship)" },
+    {
+      value: "Dịch vụ vận chuyển",
+      label: "Dịch vụ vận chuyển (Viettel/GHTK...)",
+    },
+    { value: "Xe nhà (Tự lấy)", label: "Xe công ty đi lấy (Tự lấy)" },
+  ];
+
+  // 1. Tải danh sách Ngân hàng ngay khi vào trang (MỚI)
+  useEffect(() => {
+    fetchBanks();
+  }, [fetchBanks]);
+
+  // 2. Tải dữ liệu chi tiết nếu là trang "Sửa"
   useEffect(() => {
     if (isEditing) {
       getSupplierDetails(Number(id));
     }
   }, [isEditing, id, getSupplierDetails]);
 
-  // Điền dữ liệu vào form sau khi tải xong
+  // 3. Điền dữ liệu vào form sau khi tải xong
   useEffect(() => {
     if (isEditing && currentSupplier) {
       form.setFieldsValue(currentSupplier);
     } else {
       form.resetFields();
+      form.setFieldsValue({
+        status: "active",
+        lead_time: 0,
+        payment_term: "Thanh toán ngay",
+      });
     }
   }, [isEditing, currentSupplier, form]);
+
+  const handleCancel = () => {
+    if (isEditing && !formDisabled) {
+      setFormDisabled(true);
+      form.setFieldsValue(currentSupplier);
+    } else {
+      navigate("/partners");
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -91,12 +118,12 @@ const SupplierDetailPage: React.FC = () => {
       if (isEditing) {
         success = await updateSupplier(Number(id), values);
         if (success) antMessage.success("Cập nhật thành công!");
-        setFormDisabled(true); // Khóa form lại
+        setFormDisabled(true);
       } else {
         const newSupplier = await addSupplier(values);
         if (newSupplier) {
           antMessage.success("Thêm mới thành công!");
-          navigate(`/partners/edit/${newSupplier}`); // Chuyển sang trang Sửa
+          navigate(`/partners/edit/${newSupplier}`);
         }
       }
 
@@ -111,7 +138,7 @@ const SupplierDetailPage: React.FC = () => {
   return (
     <Spin spinning={loadingDetails} tip="Đang tải dữ liệu...">
       <Card styles={{ body: { padding: 12 } }}>
-        {/* Header của trang chi tiết */}
+        {/* Header */}
         <Row
           justify="space-between"
           align="middle"
@@ -148,7 +175,7 @@ const SupplierDetailPage: React.FC = () => {
           disabled={formDisabled ? isEditing : undefined}
         >
           <Tabs type="card">
-            {/* TAB 1: THÔNG TIN CHUNG (LÁT CẮT 1) */}
+            {/* TAB 1: THÔNG TIN CHUNG */}
             <Tabs.TabPane
               tab={
                 <Space>
@@ -198,18 +225,39 @@ const SupplierDetailPage: React.FC = () => {
                     </Form.Item>
                   </Col>
                 </Row>
+
                 <Divider orientation="left" plain>
                   Thông tin Tài chính & Vận hành
                 </Divider>
+
                 <Row gutter={24}>
+                  {/* --- CẬP NHẬT: CHỌN NGÂN HÀNG TỪ DANH SÁCH --- */}
                   <Col span={8}>
-                    <Form.Item name="bank_account" label="Số Tài khoản TT">
-                      <Input prefix={<BankOutlined />} />
+                    <Form.Item
+                      name="bank_name"
+                      label="Ngân hàng (Thụ hưởng)"
+                      tooltip="Chọn đúng ngân hàng để hỗ trợ tạo mã QR thanh toán sau này."
+                    >
+                      <Select
+                        showSearch
+                        placeholder="Chọn ngân hàng..."
+                        optionFilterProp="children"
+                        filterOption={(input, option) =>
+                          (option?.label ?? "")
+                            .toLowerCase()
+                            .includes(input.toLowerCase())
+                        }
+                        options={banks.map((bank) => ({
+                          value: bank.short_name, // Lưu tên viết tắt (VD: VCB)
+                          label: `${bank.short_name} - ${bank.name}`, // Hiển thị đầy đủ
+                        }))}
+                        allowClear
+                      />
                     </Form.Item>
                   </Col>
                   <Col span={8}>
-                    <Form.Item name="bank_name" label="Ngân hàng">
-                      <Input />
+                    <Form.Item name="bank_account" label="Số Tài khoản TT">
+                      <Input prefix={<BankOutlined />} />
                     </Form.Item>
                   </Col>
                   <Col span={8}>
@@ -217,20 +265,27 @@ const SupplierDetailPage: React.FC = () => {
                       <Input />
                     </Form.Item>
                   </Col>
+                  {/* --------------------------------------------- */}
+
                   <Col span={8}>
                     <Form.Item
                       name="payment_term"
                       label="Điều khoản Thanh toán"
                     >
-                      <Input />
+                      <Input placeholder="VD: Công nợ 30 ngày" />
                     </Form.Item>
                   </Col>
                   <Col span={8}>
                     <Form.Item
                       name="delivery_method"
-                      label="Hình thức Giao hàng"
+                      label="Hình thức Giao hàng Mặc định"
+                      tooltip="Hệ thống sẽ dùng thông tin này để tự động tính toán phương án vận chuyển khi tạo đơn hàng."
                     >
-                      <Input />
+                      <Select
+                        placeholder="Chọn hình thức..."
+                        options={DELIVERY_METHODS}
+                        allowClear
+                      />
                     </Form.Item>
                   </Col>
                   <Col span={8}>
@@ -265,7 +320,7 @@ const SupplierDetailPage: React.FC = () => {
               </Card>
             </Tabs.TabPane>
 
-            {/* CÁC TAB KHÁC (THEO LỘ TRÌNH TINH GỌN) */}
+            {/* CÁC TAB KHÁC */}
             <Tabs.TabPane
               tab={
                 <Space>
@@ -301,7 +356,7 @@ const SupplierDetailPage: React.FC = () => {
             </Tabs.TabPane>
           </Tabs>
 
-          {/* Thanh Action (Nút bấm) */}
+          {/* Thanh Action */}
           {!isEditing || (isEditing && !formDisabled) ? (
             <Affix offsetBottom={0}>
               <Card

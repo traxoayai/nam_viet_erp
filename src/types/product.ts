@@ -1,16 +1,6 @@
 // src/types/product.ts
 import { Warehouse } from "@/types/warehouse";
 
-// export interface Warehouse {
-//   id: number;
-//   key: string;
-//   name: string;
-//   unit: string;
-//   warehouse_type?: "b2b" | "retail";
-//   address?: string | null;
-//   location_gps?: string | null;
-// }
-
 export interface Supplier {
   id: number;
   name: string;
@@ -22,20 +12,41 @@ export interface Product {
   name: string;
   sku: string;
   image_url: string;
-  category_name: string; // Đã đổi
-  manufacturer_name: string; // Đã đổi
+  category_name: string;
+  manufacturer_name: string;
+  distributor_id?: number; // Thêm trường này để map với Form
   status: "active" | "inactive";
+
+  // Tồn kho hiển thị
   inventory_b2b: number;
   inventory_pkdh: number;
   inventory_ntdh1: number;
   inventory_ntdh2: number;
   inventory_potec: number;
+
+  // --- LOGISTICS (MỚI) ---
+  items_per_carton?: number;
+  carton_weight?: number;
+  carton_dimensions?: string;
+  purchasing_policy?: "ALLOW_LOOSE" | "FULL_CARTON_ONLY";
+
+  // Giá & Đơn vị (Để hiển thị chi tiết)
+  invoice_price?: number;
+  actual_cost?: number;
+  wholesale_unit?: string;
+  retail_unit?: string;
+  conversion_factor?: number;
+  wholesale_margin_value?: number;
+  wholesale_margin_type?: "%" | "đ";
+  retail_margin_value?: number;
+  retail_margin_type?: "%" | "đ";
+  inventory_settings?: any;
 }
 
 export interface ProductFilters {
   search_query?: string;
-  category_filter?: string; // Đã đổi
-  manufacturer_filter?: string; // Đã đổi
+  category_filter?: string;
+  manufacturer_filter?: string;
   status_filter?: "active" | "inactive";
 }
 
@@ -43,12 +54,11 @@ export interface ProductStoreState {
   // Dữ liệu
   products: Product[];
   warehouses: Warehouse[];
-  suppliers: Supplier[]; // Thêm Nhà Cung Cấp
+  suppliers: Supplier[];
 
-  // --- THÊM MỚI: Dữ liệu danh mục & hãng ---
+  // Dữ liệu danh mục & hãng
   uniqueCategories: string[];
   uniqueManufacturers: string[];
-  // ---------------------------------------
 
   // Trạng thái
   loading: boolean;
@@ -61,7 +71,7 @@ export interface ProductStoreState {
   pageSize: number;
   totalCount: number;
 
-  //Hàm đọc
+  // Hàm đọc
   fetchProducts: () => Promise<void>;
   fetchCommonData: () => Promise<void>;
   getProductDetails: (id: number) => Promise<void>;
@@ -76,8 +86,9 @@ export interface ProductStoreState {
   deleteProducts: (ids: React.Key[]) => Promise<void>;
   exportToExcel: () => Promise<any[]>;
 
-  // --- THÊM MỚI: Hàm tải danh mục ---
+  // Hàm tải danh mục
   fetchClassifications: () => Promise<void>;
+
   // Hàm nội bộ
   setFilters: (filters: Partial<ProductFilters>) => void;
   setPage: (page: number, pageSize: number) => void;

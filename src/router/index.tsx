@@ -23,6 +23,7 @@ import LoyaltyPolicyPage from "@/pages/marketing/LoyaltyPolicyPage";
 import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
+import PurchaseOrderMasterPage from "@/pages/purchasing/PurchaseOrderMasterPage";
 import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
 import VaccinationTemplatePage from "@/pages/quick/VaccinationTemplatePage";
 import ServicePackagePage from "@/pages/services/ServicePackagePage"; // <-- THÊM DÒNG NÀY
@@ -156,7 +157,7 @@ const routes: RouteObject[] = [
           { path: "inventory/edit/:id", element: <ProductFormPage /> }, // Dùng component cũ
           {
             path: "inventory/purchase",
-            element: <PagePlaceholder title="Mua hàng" />,
+            element: <PurchaseOrderMasterPage />,
           },
           {
             path: "inventory/transfer",

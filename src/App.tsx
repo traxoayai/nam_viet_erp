@@ -1,31 +1,35 @@
 // src/App.tsx
-import { ConfigProvider, App as AntApp } from "antd"; // <-- SỬA LỖI: Thêm AntApp
-import viVN from "antd/locale/vi_VN"; // (Sếp đã có file này)
+import { ConfigProvider, App as AntApp } from "antd";
+import viVN from "antd/locale/vi_VN";
 import { useEffect } from "react";
 import { useRoutes } from "react-router-dom";
 
 import routes from "./router";
 import { useAuthStore } from "./stores/useAuthStore";
 
-import theme from "@/theme"; // (Sếp đã có file này)
+import { SystemSetupModal } from "@/components/common/SystemSetupModal";
+import { NotificationProvider } from "@/contexts/NotificationContext";
+import theme from "@/theme";
 
-// Xóa: import { supabase } from "@/lib/supabaseClient";
-// (Vì App.tsx không cần gọi Supabase trực tiếp nữa)
+// --- MỚI: Import SystemSetupModal ---
 
 function App() {
   const element = useRoutes(routes);
   const checkUserSession = useAuthStore((state) => state.checkUserSession);
 
   useEffect(() => {
-    // 1. Chỉ gọi 1 lần duy nhất khi App tải
-    checkUserSession(); // SỬA LỖI 2: Thêm mảng dependencies rỗng
-  }, []); // SỬA LỖI 1: Xóa toàn bộ logic 'supabase.auth.onAuthStateChange'
-  // (Vì nó đã được chuyển vào bên trong 'useAuthStore.ts' ở [Mục 124])
-  // SỬA LỖI 3: (Từ [Mục 126]) Bọc AntApp và ConfigProvider
+    checkUserSession();
+  }, []);
 
   return (
     <ConfigProvider locale={viVN} theme={theme}>
-      <AntApp>{element}</AntApp>   
+      <NotificationProvider>
+        <AntApp>
+          {/* Đặt ở đây để nó luôn kiểm tra đè lên mọi giao diện */}
+          <SystemSetupModal />
+          {element}
+        </AntApp>
+      </NotificationProvider>
     </ConfigProvider>
   );
 }

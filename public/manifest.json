@@ -1,0 +1,22 @@
+{
+  "name": "Nam Việt EMS - Hệ thống Quản trị",
+  "short_name": "Nam Việt EMS",
+  "description": "Hệ thống quản trị doanh nghiệp dược phẩm Nam Việt",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1677ff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

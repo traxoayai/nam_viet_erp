@@ -1,12 +1,12 @@
-// src/pages/inventory/ProductFormPage.tsx
 import {
   UploadOutlined,
   InfoCircleOutlined,
   DollarOutlined,
   ContainerOutlined,
+  TruckOutlined,
   SaveOutlined,
   CloseCircleOutlined,
-  FilePdfOutlined,
+  // FilePdfOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
 import {
@@ -36,15 +36,16 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { UploadFile, UploadProps } from "antd/es/upload/interface";
 
 import SupplierSelectModal from "@/components/common/SupplierSelectModal";
+// SỬ DỤNG SERVICE
 import {
   addProduct,
   updateProduct,
   uploadProductImage,
-} from "@/services/productService"; // Import các hàm API
+} from "@/services/productService";
 import { useProductStore } from "@/stores/productStore";
 
 const { Content } = Layout;
-const { Title, Paragraph } = Typography;
+const { Title } = Typography;
 const { Option } = Select;
 
 const ProductFormPage: React.FC = () => {
@@ -68,80 +69,79 @@ const ProductFormPage: React.FC = () => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [selectedSupplierName, setSelectedSupplierName] = useState("");
 
-  // Tải data chung (kho, ncc)
   useEffect(() => {
     fetchCommonData();
   }, [fetchCommonData]);
 
-  // Tải data chi tiết sản phẩm (nếu là Sửa)
   useEffect(() => {
     if (isEditing) {
       getProductDetails(Number(id));
     }
   }, [isEditing, id, getProductDetails]);
 
-  // Điền form sau khi data chi tiết đã tải xong
   useEffect(() => {
     if (isEditing && currentProduct) {
+      // Fill dữ liệu vào form
       form.setFieldsValue(currentProduct);
-      if (currentProduct.distributor) {
-        // Tải tên NCC từ "bộ não" để hiển thị
+
+      // Hiển thị tên NCC
+      if (currentProduct.distributor_id) {
         const supplier = useProductStore
           .getState()
-          .suppliers.find((s) => s.id === currentProduct.distributor);
+          .suppliers.find((s) => s.id === currentProduct.distributor_id);
         if (supplier) setSelectedSupplierName(supplier.name);
       }
-      if (currentProduct.imageUrl) {
-        setImageUrl(currentProduct.imageUrl);
+
+      // Hiển thị ảnh
+      if (currentProduct.image_url) {
+        setImageUrl(currentProduct.image_url);
         setFileList([
           {
             uid: "-1",
             name: "image.png",
             status: "done",
-            url: currentProduct.imageUrl,
+            url: currentProduct.image_url,
           },
         ]);
+      }
+
+      // Map trường active_ingredient -> tags của form (nếu chưa có)
+      if (currentProduct.active_ingredient && !form.getFieldValue("tags")) {
+        form.setFieldsValue({ tags: currentProduct.active_ingredient });
       }
     }
   }, [isEditing, currentProduct, form]);
 
   const handleCancel = () => {
-    navigate("/inventory"); // Quay lại trang danh sách
+    navigate("/inventory");
   };
 
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
       let finalImageUrl = imageUrl;
-
-      // 1. Nếu người dùng TẢI ẢNH MỚI
       if (fileList.length > 0 && fileList[0].originFileObj) {
         antMessage.loading({ content: "Đang tải ảnh lên...", key: "upload" });
         finalImageUrl = await uploadProductImage(fileList[0].originFileObj);
         antMessage.success({ content: "Tải ảnh thành công!", key: "upload" });
       }
 
-      // 2. Gói dữ liệu
       const finalValues = { ...values, imageUrl: finalImageUrl };
-      console.log("Form Values to Save:", finalValues);
 
       if (isEditing) {
-        // CHẾ ĐỘ SỬA
         await updateProduct(Number(id), finalValues);
-        antMessage.success(
-          `Cập nhật sản phẩm "${finalValues.productName}" thành công!`
-        );
+        antMessage.success(`Cập nhật sản phẩm thành công!`);
       } else {
-        // CHẾ ĐỘ THÊM
         await addProduct(finalValues);
-        antMessage.success(
-          `Tạo sản phẩm "${finalValues.productName}" thành công!`
-        );
+        antMessage.success(`Tạo sản phẩm thành công!`);
       }
 
-      navigate("/inventory"); // Quay về trang danh sách
+      navigate("/inventory");
     } catch (error: any) {
-      antMessage.error(`Lỗi: ${error.message || "Không thể lưu sản phẩm"}`);
+      console.error(error);
+      // Hiển thị lỗi chi tiết hơn nếu có
+      const msg = error.message || error.details || "Không thể lưu sản phẩm";
+      antMessage.error(`Lỗi: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -157,43 +157,17 @@ const ProductFormPage: React.FC = () => {
     window.open(`https://www.google.com/search?tbm=isch&q=${query}`, "_blank");
   };
 
-  // Logic Tải ảnh (customRequest) - GIỜ LÀ THẬT
-  const handleUpload: UploadProps["customRequest"] = async ({
-    onSuccess,
-    onError,
-  }) => {
-    try {
-      // Chúng ta sẽ "giả lập" việc tải lên thành công ở đây
-      // Logic tải thật sẽ nằm trong onFinish
-      // Điều này cho phép user "preview" ảnh trước khi bấm LƯU
-      if (onSuccess) {
-        onSuccess("ok");
-      }
-    } catch (err) {
-      if (onError) {
-        onError(err as Error);
-      }
-    }
+  const handleUpload: UploadProps["customRequest"] = async ({ onSuccess }) => {
+    if (onSuccess) onSuccess("ok");
   };
 
   const onUploadChange: UploadProps["onChange"] = ({
     fileList: newFileList,
   }) => {
     setFileList(newFileList);
-    if (newFileList.length === 0) {
-      setImageUrl("");
-    } else {
-      // Cập nhật state file để onFinish có thể dùng
-      setFileList(
-        newFileList.map((f) => ({
-          ...f,
-          originFileObj: f.originFileObj || undefined,
-        }))
-      );
-    }
+    if (newFileList.length === 0) setImageUrl("");
   };
 
-  // (Logic tính giá từ Canvas của Sếp - giữ nguyên)
   const calculatePrices = () => {
     const allValues = form.getFieldsValue();
     const actualCost = parseFloat(allValues.actualCost) || 0;
@@ -235,7 +209,7 @@ const ProductFormPage: React.FC = () => {
           <Content style={{ padding: "12px" }}>
             <Title level={4} style={{ marginBottom: "12px" }}>
               {isEditing
-                ? `Chỉnh sửa: ${currentProduct?.productName || `Sản phẩm (ID: ${id})`}`
+                ? `Chỉnh sửa: ${currentProduct?.name || "Sản phẩm"}`
                 : "Thêm Sản phẩm mới"}
             </Title>
             <Form
@@ -244,7 +218,6 @@ const ProductFormPage: React.FC = () => {
               onFinish={onFinish}
               onValuesChange={calculatePrices}
             >
-              {/* Section 1: Thông tin Chung */}
               <Card
                 title={
                   <Space>
@@ -253,11 +226,6 @@ const ProductFormPage: React.FC = () => {
                 }
                 bordered={false}
                 style={{ marginBottom: 24 }}
-                extra={
-                  <Button icon={<FilePdfOutlined />} disabled>
-                    Làm giàu dữ liệu từ PDF (Sắp ra mắt)
-                  </Button>
-                }
               >
                 <Row gutter={24}>
                   <Col xs={24} md={6}>
@@ -271,13 +239,12 @@ const ProductFormPage: React.FC = () => {
                       >
                         {fileList.length === 0 && (
                           <div>
-                            {" "}
-                            <UploadOutlined /> <div>Tải ảnh lên</div>{" "}
+                            <UploadOutlined /> <div>Tải ảnh lên</div>
                           </div>
                         )}
                       </Upload>
                       <Input
-                        placeholder="Hoặc dán URL ảnh vào đây..."
+                        placeholder="URL ảnh..."
                         value={imageUrl}
                         onChange={(e) => setImageUrl(e.target.value)}
                         addonAfter={
@@ -296,14 +263,13 @@ const ProductFormPage: React.FC = () => {
                           width={102}
                           height={102}
                           src={imageUrl}
-                          preview={false}
+                          fallback="error"
                           style={{
                             marginTop: 8,
                             border: "1px dashed #d9d9d9",
-                            padding: "4px",
-                            borderRadius: "8px",
+                            padding: 4,
+                            borderRadius: 8,
                           }}
-                          fallback="https://placehold.co/102x102/eee/ccc?text=Invalid URL"
                         />
                       ) : null}
                     </Form.Item>
@@ -325,69 +291,59 @@ const ProductFormPage: React.FC = () => {
                         </Form.Item>
                       </Col>
                       <Col xs={24} sm={12} lg={6}>
-                        <Form.Item name="barcode" label="Mã vạch (Barcode)">
+                        <Form.Item name="barcode" label="Mã vạch">
                           <Input />
                         </Form.Item>
                       </Col>
-
                       <Col xs={24} sm={12} lg={8}>
                         <Form.Item name="category" label="Phân loại SP">
-                          <Input placeholder="vd: Kháng sinh" />
+                          <Input />
                         </Form.Item>
                       </Col>
                       <Col xs={24} sm={12} lg={8}>
                         <Form.Item name="manufacturer" label="Công ty Sản xuất">
-                          <Input placeholder="vd: Dược Hậu Giang" />
+                          <Input />
                         </Form.Item>
                       </Col>
                       <Col xs={24} sm={12} lg={8}>
-                        {/* 1. Form Item GIẢ (chỉ để hiển thị) */}
                         <Form.Item label="Công ty Phân phối (NCC)">
                           <Input
-                            placeholder="Nhấn để chọn nhà cung cấp"
-                            value={selectedSupplierName} // value này sẽ KHÔNG bị ghi đè
+                            placeholder="Chọn nhà cung cấp..."
+                            value={selectedSupplierName}
                             onClick={() => setIsSupplierModalOpen(true)}
                             readOnly
                             addonAfter={<SearchOutlined />}
                             style={{ cursor: "pointer" }}
                           />
                         </Form.Item>
-
-                        {/* 2. Form Item THẬT (dùng để lưu ID, không hiển thị) */}
                         <Form.Item name="distributor" hidden>
                           <Input />
                         </Form.Item>
                       </Col>
-
                       <Col xs={24} sm={12} lg={8}>
                         <Form.Item name="registrationNumber" label="Số Đăng ký">
                           <Input />
                         </Form.Item>
                       </Col>
                       <Col xs={24} sm={12} lg={8}>
-                        <Form.Item name="packingSpec" label="Quy cách đóng gói">
-                          <Input placeholder="vd: Hộp 10 vỉ x 10 viên" />
+                        <Form.Item name="packingSpec" label="Quy cách (Text)">
+                          <Input placeholder="Hộp 10 vỉ..." />
                         </Form.Item>
                       </Col>
                       <Col xs={24} sm={12} lg={8}>
                         <Form.Item name="tags" label="Hoạt chất chính">
-                          <Input placeholder="vd: Paracetamol" />
+                          <Input />
                         </Form.Item>
                       </Col>
                     </Row>
                     <Divider />
-                    <Form.Item
-                      name="description"
-                      label="Mô tả & Hướng dẫn sử dụng chung"
-                    >
+                    <Form.Item name="description" label="Mô tả & HDSD">
                       <Input.TextArea rows={4} />
                     </Form.Item>
-                    {/* (Các trường HDSD khác giữ nguyên) */}
                   </Col>
                 </Row>
               </Card>
 
-              {/* Section 2: Giá & Kinh Doanh (Giữ nguyên) */}
               <Card
                 title={
                   <Space>
@@ -425,19 +381,88 @@ const ProductFormPage: React.FC = () => {
                       <InputNumber style={{ width: "100%" }} min={1} />
                     </Form.Item>
                   </Col>
+
+                  <Col span={24}>
+                    <Divider orientation="left" plain>
+                      <Space>
+                        <TruckOutlined />
+                        <span className="font-semibold text-blue-600">
+                          Thông tin Vận chuyển (Logistics)
+                        </span>
+                      </Space>
+                    </Divider>
+                  </Col>
+
+                  <Col xs={24} sm={8}>
+                    <Form.Item
+                      name="items_per_carton"
+                      label="Quy cách (SL/Thùng)"
+                      initialValue={1}
+                      tooltip="SL hộp trong 1 thùng"
+                    >
+                      <InputNumber
+                        style={{ width: "100%" }}
+                        min={1}
+                        addonAfter="Đơn vị/Thùng"
+                        formatter={(value) =>
+                          `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                        }
+                        parser={(value) =>
+                          value?.replace(/\$\s?|(,*)/g, "") as unknown as number
+                        }
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={8}>
+                    <Form.Item
+                      name="carton_weight"
+                      label="Trọng lượng (kg)"
+                      initialValue={0}
+                    >
+                      <InputNumber
+                        style={{ width: "100%" }}
+                        min={0}
+                        step={0.1}
+                        addonAfter="kg"
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={8}>
+                    <Form.Item
+                      name="purchasing_policy"
+                      label="Chính sách nhập"
+                      initialValue="ALLOW_LOOSE"
+                    >
+                      <Select>
+                        <Option value="ALLOW_LOOSE">Cho phép nhập lẻ</Option>
+                        <Option value="FULL_CARTON_ONLY">
+                          Chỉ nhập nguyên thùng
+                        </Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={24}>
+                    <Form.Item
+                      name="carton_dimensions"
+                      label="Kích thước (DxRxC)"
+                    >
+                      <Input placeholder="30x40x50 cm" />
+                    </Form.Item>
+                  </Col>
+
                   <Col span={24}>
                     <Divider orientation="left" plain>
                       Giá Vốn & Lợi Nhuận
                     </Divider>
                   </Col>
                   <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item name="invoicePrice" label="Giá nhập trên HĐ">
+                    <Form.Item name="invoicePrice" label="Giá nhập HĐ">
                       <InputNumber
                         style={{ width: "100%" }}
-                        formatter={(value) =>
-                          `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                        formatter={(v) =>
+                          `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                         }
-                        parser={(value) => value!.replace(/đ\s?|(,*)/g, "")}
+                        parser={(v) => v!.replace(/đ\s?|(,*)/g, "")}
                         addonAfter="đ"
                       />
                     </Form.Item>
@@ -451,14 +476,15 @@ const ProductFormPage: React.FC = () => {
                     >
                       <InputNumber
                         style={{ width: "100%" }}
-                        formatter={(value) =>
-                          `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                        formatter={(v) =>
+                          `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                         }
-                        parser={(value) => value!.replace(/đ\s?|(,*)/g, "")}
+                        parser={(v) => v!.replace(/đ\s?|(,*)/g, "")}
                         addonAfter="đ"
                       />
                     </Form.Item>
                   </Col>
+
                   <Col xs={24} sm={12} md={8} lg={4}>
                     <Form.Item label="Lãi Bán Buôn">
                       <Input.Group compact>
@@ -467,10 +493,7 @@ const ProductFormPage: React.FC = () => {
                           noStyle
                           initialValue={0}
                         >
-                          <InputNumber
-                            style={{ width: "calc(100% - 60px)" }}
-                            min={0}
-                          />
+                          <InputNumber style={{ width: "calc(100% - 60px)" }} />
                         </Form.Item>
                         <Form.Item
                           name="wholesaleMarginType"
@@ -486,17 +509,14 @@ const ProductFormPage: React.FC = () => {
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item label="Lãi Bán lẻ (trên ĐV Buôn)">
+                    <Form.Item label="Lãi Bán Lẻ">
                       <Input.Group compact>
                         <Form.Item
                           name="retailMarginValue"
                           noStyle
                           initialValue={0}
                         >
-                          <InputNumber
-                            style={{ width: "calc(100% - 60px)" }}
-                            min={0}
-                          />
+                          <InputNumber style={{ width: "calc(100% - 60px)" }} />
                         </Form.Item>
                         <Form.Item
                           name="retailMarginType"
@@ -511,47 +531,45 @@ const ProductFormPage: React.FC = () => {
                       </Input.Group>
                     </Form.Item>
                   </Col>
+
                   <Col xs={24} sm={12} md={8} lg={4}>
                     <Form.Item
                       name="estimatedWholesalePrice"
-                      label={`Giá Bán Buôn`}
+                      label="Giá Bán Buôn"
                     >
                       <InputNumber
                         style={{
                           width: "100%",
                           fontWeight: "bold",
-                          backgroundColor: "#f0f2f5",
+                          background: "#f0f2f5",
                         }}
-                        formatter={(value) =>
-                          `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                        formatter={(v) =>
+                          `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                         }
-                        parser={(value) => value!.replace(/đ\s?|(,*)/g, "")}
-                        addonAfter="đ"
                         readOnly
+                        addonAfter="đ"
                       />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item name="estimatedRetailPrice" label={`Giá Bán Lẻ`}>
+                    <Form.Item name="estimatedRetailPrice" label="Giá Bán Lẻ">
                       <InputNumber
                         style={{
                           width: "100%",
                           fontWeight: "bold",
-                          backgroundColor: "#f0f2f5",
+                          background: "#f0f2f5",
                         }}
-                        formatter={(value) =>
-                          `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                        formatter={(v) =>
+                          `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                         }
-                        parser={(value) => value!.replace(/đ\s?|(,*)/g, "")}
-                        addonAfter="đ"
                         readOnly
+                        addonAfter="đ"
                       />
                     </Form.Item>
                   </Col>
                 </Row>
               </Card>
 
-              {/* Section 3: Cài đặt Tồn kho (Đã sửa) */}
               <Card
                 title={
                   <Space>
@@ -561,10 +579,6 @@ const ProductFormPage: React.FC = () => {
                 bordered={false}
                 style={{ marginBottom: 24 }}
               >
-                <Paragraph type="secondary">
-                  Cài đặt tồn kho tối thiểu và tối đa cho từng kho. Khi tồn kho
-                  dưới mức tối thiểu, hệ thống sẽ tự động gợi ý nhập hàng.
-                </Paragraph>
                 <Row gutter={[16, 16]}>
                   {warehouses.map((wh) => (
                     <Col xs={24} sm={12} md={8} lg={6} key={wh.key}>
@@ -577,25 +591,7 @@ const ProductFormPage: React.FC = () => {
                           <Col span={12}>
                             <Form.Item
                               name={["inventorySettings", wh.key, "min"]}
-                              label={
-                                <Form.Item
-                                  noStyle
-                                  dependencies={
-                                    wh.type === "b2b"
-                                      ? ["wholesaleUnit"]
-                                      : ["retailUnit"]
-                                  }
-                                >
-                                  {() => {
-                                    const unit =
-                                      wh.type === "b2b"
-                                        ? form.getFieldValue("wholesaleUnit")
-                                        : form.getFieldValue("retailUnit");
-                                    return `Tồn Min (${unit || "ĐV"})`;
-                                  }}
-                                                               
-                                </Form.Item>
-                              }
+                              label="Tồn Min"
                               initialValue={0}
                             >
                               <InputNumber style={{ width: "100%" }} min={0} />
@@ -604,24 +600,7 @@ const ProductFormPage: React.FC = () => {
                           <Col span={12}>
                             <Form.Item
                               name={["inventorySettings", wh.key, "max"]}
-                              label={
-                                <Form.Item
-                                  noStyle
-                                  dependencies={
-                                    wh.type === "b2b"
-                                      ? ["wholesaleUnit"]
-                                      : ["retailUnit"]
-                                  }
-                                >
-                                  {() => {
-                                    const unit =
-                                      wh.type === "b2b"
-                                        ? form.getFieldValue("wholesaleUnit")
-                                        : form.getFieldValue("retailUnit");
-                                    return `Tồn Max (${unit || "ĐV"})`;
-                                  }}
-                                </Form.Item>
-                              }
+                              label="Tồn Max"
                               initialValue={0}
                             >
                               <InputNumber style={{ width: "100%" }} min={0} />
@@ -634,7 +613,6 @@ const ProductFormPage: React.FC = () => {
                 </Row>
               </Card>
 
-              {/* Thanh Action (Đã kết nối) */}
               <Affix offsetBottom={0}>
                 <Card
                   styles={{
@@ -666,14 +644,12 @@ const ProductFormPage: React.FC = () => {
                 </Card>
               </Affix>
             </Form>
-            {/* --- THÊM MODAL CHỌN NCC --- */}
             <SupplierSelectModal
               open={isSupplierModalOpen}
               onClose={() => setIsSupplierModalOpen(false)}
-              onSelect={(supplier) => {
-                // Cập nhật cả ID (vào Form) và Tên (vào State)
-                form.setFieldsValue({ distributor: supplier.id });
-                setSelectedSupplierName(supplier.name);
+              onSelect={(s) => {
+                form.setFieldsValue({ distributor: s.id });
+                setSelectedSupplierName(s.name);
                 setIsSupplierModalOpen(false);
               }}
             />

@@ -42,8 +42,6 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
   getSupplierDetails: async (id: number) => {
     set({ loadingDetails: true, currentSupplier: null });
     try {
-      // (SENKO: Tạm thời chúng ta sẽ tải từ bảng,
-      // vì hàm RPC get_product_details quá phức tạp cho NCC)
       const { data, error } = await supabase
         .from("suppliers")
         .select("*")
@@ -72,25 +70,29 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
     set({ loading: true });
     try {
       const { data, error } = await supabase.rpc("create_supplier", {
-        // Khớp 100% với Form (camelCase) và "Cỗ máy" (snake_case)
+        // SỬA LỖI: Đổi từ camelCase sang snake_case để khớp với Form
         p_name: values.name,
-        p_tax_code: values.taxCode || null, // Sửa 'tax_code' -> 'taxCode'
-        p_contact_person: values.contactPerson || null, // Sửa 'contact_person' -> 'contactPerson'
+        p_tax_code: values.tax_code || null,
+        p_contact_person: values.contact_person || null,
         p_phone: values.phone,
-        p_email: values.email || null, // Sửa 'email' -> 'email'
+        p_email: values.email || null,
         p_address: values.address || null,
-        p_payment_term: values.paymentTerm || null, // Sửa 'payment_term' -> 'paymentTerm'
+        p_payment_term: values.payment_term || null,
+
+        p_bank_account: values.bank_account || null,
+        p_bank_name: values.bank_name || null,
+        p_bank_holder: values.bank_holder || null,
+        p_delivery_method: values.delivery_method || null,
+        p_lead_time: values.lead_time || null,
+
         p_status: values.status,
         p_notes: values.notes || null,
       });
 
       if (error) throw error;
 
-      await get().fetchSuppliers(); // Tải lại dữ liệu
+      await get().fetchSuppliers();
       set({ loading: false });
-
-      // Trả về ID (data[0].id) hoặc một giá trị nhận dạng
-      // Hàm RPC trả về BIGINT (ID), nên 'data' chính là ID đó
       return data;
     } catch (error: any) {
       console.error("Lỗi khi thêm NCC:", error.message);
@@ -100,28 +102,33 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
   },
 
   updateSupplier: async (id: number, values: any) => {
-    set({ loadingDetails: true }); // Dùng loading của form
+    set({ loadingDetails: true });
     try {
       const { error } = await supabase.rpc("update_supplier", {
         p_id: id,
+        // SỬA LỖI: Đổi từ camelCase sang snake_case để khớp với Form
         p_name: values.name,
-        p_tax_code: values.taxCode,
-        p_address: values.address,
-        p_contact_person: values.contactPerson,
+        p_tax_code: values.tax_code || null,
+        p_contact_person: values.contact_person || null,
         p_phone: values.phone,
-        p_email: values.email,
-        p_bank_account: values.bankAccount,
-        p_bank_name: values.bankName,
-        p_bank_holder: values.bankHolder,
-        p_payment_term: values.paymentTerm,
-        p_delivery_method: values.deliveryMethod,
-        p_lead_time: values.leadTime,
+        p_email: values.email || null,
+        p_address: values.address || null,
+        p_payment_term: values.payment_term || null,
+
+        p_bank_account: values.bank_account || null,
+        p_bank_name: values.bank_name || null,
+        p_bank_holder: values.bank_holder || null,
+        p_delivery_method: values.delivery_method || null,
+        p_lead_time: values.lead_time || null,
+
         p_status: values.status,
-        p_notes: values.notes,
+        p_notes: values.notes || null,
       });
+
       if (error) throw error;
+
       set({ loadingDetails: false });
-      await get().fetchSuppliers(); // Tải lại danh sách
+      await get().fetchSuppliers();
       return true;
     } catch (error) {
       console.error("Lỗi khi cập nhật NCC:", error);
