@@ -73,7 +73,7 @@ const ProductListPage = () => {
 
   useEffect(() => {
     fetchCommonData();
-  }, [fetchCommonData]); // Tải sản phẩm (chỉ khi page, pageSize thay đổi)
+  }, []); // <--- Rỗng: Chỉ chạy 1 lần khi vào trang
 
   useEffect(() => {
     fetchProducts();

@@ -384,3 +384,35 @@ export const searchProductsForDropdown = async (
 
   return [...services, ...products];
 };
+
+// 11. HÀM TÌM KIẾM CHUYÊN BIỆT CHO MUA HÀNG (Wholesale)
+// Gọi RPC mới search_products_for_purchase của CORE
+export const searchProductsForPurchase = async (keyword: string) => {
+  const { data, error } = await supabase.rpc("search_products_for_purchase", {
+    p_keyword: keyword || "",
+  });
+
+  if (error) {
+    console.error("Lỗi tìm kiếm mua hàng:", error);
+    return [];
+  }
+
+  // Map dữ liệu trả về chuẩn format cho Dropdown
+  return data.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    // LOGIC QUAN TRỌNG: Mua hàng thì ưu tiên hiện Đơn vị Bán buôn
+    unit: p.wholesale_unit || "Hộp",
+    price: p.actual_cost, // Giá vốn hiện tại
+    retail_price: 0,
+    image: p.image_url,
+    type: "product",
+
+    // Dữ liệu gốc quan trọng để tính toán
+    items_per_carton: p.items_per_carton,
+    wholesale_unit: p.wholesale_unit,
+    retail_unit: p.retail_unit,
+    last_price: p.latest_purchase_price, // Giá nhập lần cuối (từ CORE)
+  }));
+};

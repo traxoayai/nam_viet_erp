@@ -16,17 +16,23 @@ import CustomerB2COrgForm from "@/pages/crm/CustomerB2COrgForm";
 import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
 import AssetManagementPage from "@/pages/finance/AssetManagementPage";
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
+// --- IMPORT TRANG MỚI: HÓA ĐƠN ---
+import InvoiceListPage from "@/pages/finance/invoices/InvoiceListPage";
+import InvoiceVerifyPage from "@/pages/finance/invoices/InvoiceVerifyPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
+import WarehouseInboundPage from "@/pages/inventory/receipt/WarehouseInboundPage";
+import WarehouseReceiptPage from "@/pages/inventory/receipt/WarehouseReceiptPage";
 import DiscountCodeManagement from "@/pages/marketing/DiscountCodeManagement";
 import LoyaltyPolicyPage from "@/pages/marketing/LoyaltyPolicyPage";
 import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
+import PurchaseOrderDetail from "@/pages/purchasing/PurchaseOrderDetail";
 import PurchaseOrderMasterPage from "@/pages/purchasing/PurchaseOrderMasterPage";
 import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
 import VaccinationTemplatePage from "@/pages/quick/VaccinationTemplatePage";
-import ServicePackagePage from "@/pages/services/ServicePackagePage"; // <-- THÊM DÒNG NÀY
+import ServicePackagePage from "@/pages/services/ServicePackagePage";
 import BankListPage from "@/pages/settings/BankListPage";
 import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
 import FundAccountPage from "@/pages/settings/FundAccountPage";
@@ -35,16 +41,9 @@ import SystemSettingsHub from "@/pages/settings/SystemSettingsHub";
 import TemplateManagerPage from "@/pages/settings/TemplateManagerPage";
 import TransactionCategoryPage from "@/pages/settings/TransactionCategoryPage";
 import WarehouseListPage from "@/pages/settings/WarehouseListPage";
-
-// --- IMPORT CÁC TRANG MỚI ---
-// (Đây là trang duy nhất chúng ta đã code)
-
-// (Tất cả các trang khác sẽ được import ở đây khi Sếp và em xây dựng)
-
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
-// Dùng để tạo nhanh trang "Đang xây dựng"
 const PagePlaceholder = ({ title }: { title: string }) => (
-  <div>
+  <div style={{ padding: 20 }}>
     <h2>{title}</h2>
     <p>Chức năng này đang được phát triển...</p>
   </div>
@@ -147,17 +146,25 @@ const routes: RouteObject[] = [
             element: <ServicePackagePage />,
           },
 
-          // 6. Kho - Hàng Hóa (Cập nhật route cũ)
+          // 6. Kho - Hàng Hóa
           {
             path: "inventory",
             element: <Navigate to="/inventory/products" replace />,
-          }, // Redirect /inventory cũ
-          { path: "inventory/products", element: <ProductListPage /> }, // Dùng component cũ
-          { path: "inventory/new", element: <ProductFormPage /> }, // Dùng component cũ
-          { path: "inventory/edit/:id", element: <ProductFormPage /> }, // Dùng component cũ
+          },
+          { path: "inventory/products", element: <ProductListPage /> },
+          { path: "inventory/new", element: <ProductFormPage /> },
+          { path: "inventory/edit/:id", element: <ProductFormPage /> },
           {
             path: "inventory/purchase",
-            element: <PurchaseOrderMasterPage />,
+            element: <Navigate to="/purchase-orders" replace />,
+          },
+          {
+            path: "inventory/receipt/:poId", // Route động theo PO ID
+            element: <WarehouseReceiptPage />,
+          },
+          {
+            path: "inventory/inbound",
+            element: <WarehouseInboundPage />,
           },
           {
             path: "inventory/transfer",
@@ -170,6 +177,27 @@ const routes: RouteObject[] = [
           {
             path: "inventory/cost-adjustment",
             element: <PagePlaceholder title="Điều chỉnh Giá Vốn" />,
+          },
+
+          // =========================================================
+          // --- MODULE MUA HÀNG (PURCHASING) ---
+          // =========================================================
+          {
+            path: "purchase-orders",
+            children: [
+              {
+                index: true,
+                element: <PurchaseOrderMasterPage />,
+              },
+              {
+                path: "new",
+                element: <PurchaseOrderDetail />,
+              },
+              {
+                path: ":id",
+                element: <PurchaseOrderDetail />,
+              },
+            ],
           },
 
           // 7. Thao tác Nhanh
@@ -194,21 +222,21 @@ const routes: RouteObject[] = [
             element: <VaccinationTemplatePage />,
           },
 
-          // 8. Đối tác (Cập nhật route cũ)
+          // 8. Đối tác
           {
             path: "partners",
             element: <Navigate to="/partners/suppliers" replace />,
-          }, // Redirect /partners cũ
-          { path: "partners/suppliers", element: <SupplierListPage /> }, // Dùng component cũ
-          { path: "partners/new", element: <SupplierDetailPage /> }, // Dùng component cũ
-          { path: "partners/edit/:id", element: <SupplierDetailPage /> }, // Dùng component cũ
-          { path: "partners/detail/:id", element: <SupplierDetailPage /> }, // Dùng component cũ
+          },
+          { path: "partners/suppliers", element: <SupplierListPage /> },
+          { path: "partners/new", element: <SupplierDetailPage /> },
+          { path: "partners/edit/:id", element: <SupplierDetailPage /> },
+          { path: "partners/detail/:id", element: <SupplierDetailPage /> },
           {
             path: "partners/shipping",
             element: <ShippingPartnerPage />,
           },
 
-          // 9. Quản lý Khách hàng (Cập nhật route cũ)
+          // 9. Quản lý Khách hàng
           { path: "crm", element: <Navigate to="/crm/retail" replace /> },
           {
             path: "crm/retail",
@@ -224,7 +252,7 @@ const routes: RouteObject[] = [
           },
           { path: "crm/b2b", element: <CustomerB2BPage /> },
 
-          // 10. Quản lý Marketing (Cập nhật route cũ)
+          // 10. Quản lý Marketing
           {
             path: "marketing",
             element: <Navigate to="/marketing/dashboard" replace />,
@@ -254,7 +282,7 @@ const routes: RouteObject[] = [
             element: <PagePlaceholder title="Quản lý Chatbot AI" />,
           },
 
-          // 11. Quản lý Nhân sự (Cập nhật route cũ)
+          // 11. Quản lý Nhân sự
           { path: "hr", element: <Navigate to="/hr/dashboard" replace /> },
           {
             path: "hr/dashboard",
@@ -281,7 +309,7 @@ const routes: RouteObject[] = [
             element: <PagePlaceholder title="Quản lý Lương & Chế Độ" />,
           },
 
-          // 12. Tài Chính & Kế Toán (Cập nhật route cũ)
+          // 12. Tài Chính & Kế Toán
           {
             path: "finance",
             element: <Navigate to="/finance/dashboard" replace />,
@@ -306,12 +334,10 @@ const routes: RouteObject[] = [
             path: "finance/reconciliation",
             element: <PagePlaceholder title="Đối Soát Giao Dịch" />,
           },
-          // --- TRANG CHÚNG TA ĐÃ CODE ---
           {
             path: "finance/accounting/chart-of-accounts",
             element: <ChartOfAccountsPage />,
           },
-          // ---------------------------------
           {
             path: "finance/accounting/journal",
             element: <PagePlaceholder title="Sổ Nhật ký Chung" />,
@@ -320,12 +346,19 @@ const routes: RouteObject[] = [
             path: "finance/accounting/misa-integration",
             element: <PagePlaceholder title="Tích hợp MISA" />,
           },
-          {
-            path: "finance/vat",
-            element: <PagePlaceholder title="Quản lý Hóa Đơn VAT" />,
-          },
 
-          // 13. Báo Cáo (Cập nhật route cũ)
+          // --- CẬP NHẬT: KHO HÓA ĐƠN SỐ & SCAN AI ---
+          {
+            path: "finance/invoices",
+            element: <InvoiceListPage />,
+          },
+          {
+            path: "finance/invoices/verify/:id",
+            element: <InvoiceVerifyPage />, // Trang đối chiếu AI
+          },
+          // ------------------------------------------
+
+          // 13. Báo Cáo
           {
             path: "reports",
             element: <Navigate to="/reports/sales/overview" replace />,
@@ -370,7 +403,7 @@ const routes: RouteObject[] = [
             path: "settings",
             element: <SystemSettingsHub />,
           },
-          { path: "settings/warehouses", element: <WarehouseListPage /> }, // Giữ route cũ của Sếp
+          { path: "settings/warehouses", element: <WarehouseListPage /> },
           {
             path: "settings/users-roles",
             element: <PermissionPage />,
@@ -382,38 +415,31 @@ const routes: RouteObject[] = [
           {
             path: "settings/business/operations",
             element: <WarehouseListPage />,
-          }, // Ánh xạ menu mới vào component cũ
+          },
           {
             path: "settings/business/sales",
             element: <PagePlaceholder title="Cấu hình Kinh Doanh" />,
           },
-          // --- MỚI: Chính sách Tích điểm ---
           {
             path: "settings/business/loyalty",
             element: <LoyaltyPolicyPage />,
           },
-          // --- VÁ LỖI: Tái cấu trúc Cấu hình Tài Chính ---
           {
-            // 1.9: Quản lý các loại Tài Khoản/Quỹ Tiền [cite: 2439, 2471]
             path: "settings/business/finance/accounts",
             element: <FundAccountPage />,
           },
           {
-            // 1.8: Cài đặt các loại Thu – Chi [cite: 2438, 2470]
             path: "settings/business/finance/categories",
             element: <TransactionCategoryPage />,
           },
           {
-            // (Mục 1.9 trong Lộ trình - chúng ta vừa làm)
             path: "settings/business/finance/banks",
             element: <BankListPage />,
           },
           {
-            // (Mục Sếp mới bổ sung)
             path: "settings/business/finance/recurring",
             element: <PagePlaceholder title="Quản lý Thu - Chi tự động" />,
           },
-          // ---------------------------------------------
           {
             path: "settings/business/hr",
             element: <PagePlaceholder title="Cấu hình Hành Chính - NS" />,
@@ -426,8 +452,6 @@ const routes: RouteObject[] = [
             path: "settings/audit-log",
             element: <PagePlaceholder title="Nhật ký Hệ thống" />,
           },
-
-          // (Giữ lại route products cũ của Sếp, dù menu không còn)
           {
             path: "products",
             element: <div>TRANG QUẢN LÝ SẢN PHẨM (CŨ)</div>,
@@ -437,7 +461,7 @@ const routes: RouteObject[] = [
     ],
   },
 
-  // === Layout Tràn Màn hình (POS - GIỮ NGUYÊN) ===
+  // === Layout Tràn Màn hình (POS) ===
   {
     path: "/blank",
     element: <ProtectedRoute />,
@@ -454,7 +478,7 @@ const routes: RouteObject[] = [
     ],
   },
 
-  // === Layout Xác thực (Login/Register - GIỮ NGUYÊN) ===
+  // === Layout Xác thực (Login/Register) ===
   {
     path: "/auth",
     element: <BlankLayout />,
@@ -469,13 +493,13 @@ const routes: RouteObject[] = [
       },
     ],
   },
-  // === Layout Onboarding (Ép buộc Đổi MK / Cập nhật Profile) ===
+  // === Layout Onboarding ===
   {
     path: "/onboarding",
-    element: <ProtectedRoute />, // Vẫn bảo vệ
+    element: <ProtectedRoute />,
     children: [
       {
-        element: <OnboardingLayout />, // Layout KHÔNG CÓ Menu
+        element: <OnboardingLayout />,
         children: [
           {
             path: "update-password",
@@ -494,7 +518,6 @@ const routes: RouteObject[] = [
     ],
   },
 
-  // Chuyển hướng khi gõ sai (GIỮ NGUYÊN)
   {
     path: "*",
     element: <Navigate to="/" replace />,

@@ -1,10 +1,9 @@
-import { message } from "antd";
 import { create } from "zustand";
 
 import { purchaseOrderService } from "@/services/purchaseOrderService";
 import { PurchaseOrderMaster, PurchaseOrderFilters } from "@/types/purchase";
 
-interface StoreState {
+interface PurchaseOrderState {
   orders: PurchaseOrderMaster[];
   loading: boolean;
   totalCount: number;
@@ -13,13 +12,13 @@ interface StoreState {
   filters: PurchaseOrderFilters;
 
   fetchOrders: () => Promise<void>;
-  setFilters: (newFilters: Partial<PurchaseOrderFilters>) => void;
-  setPage: (page: number, pageSize: number) => void;
+  setFilters: (filters: Partial<PurchaseOrderFilters>) => void;
+  setPage: (page: number, pageSize?: number) => void;
   deleteOrder: (id: number) => Promise<void>;
-  autoCreateOrders: (type: "MIN_MAX" | "AI") => Promise<void>;
+  autoCreateOrders: (type: string) => Promise<void>;
 }
 
-export const usePurchaseOrderStore = create<StoreState>((set, get) => ({
+export const usePurchaseOrderStore = create<PurchaseOrderState>((set, get) => ({
   orders: [],
   loading: false,
   totalCount: 0,
@@ -29,60 +28,53 @@ export const usePurchaseOrderStore = create<StoreState>((set, get) => ({
 
   fetchOrders: async () => {
     set({ loading: true });
+    const { page, pageSize, filters } = get();
     try {
-      const { filters, page, pageSize } = get();
+      // FIX: Gọi đúng thứ tự tham số của service.getPOs(filters, page, pageSize)
+      // (Dựa theo file service mới nhất Sếp đang dùng)
       const { data, totalCount } = await purchaseOrderService.getPOs(
         filters,
         page,
         pageSize
       );
 
-      // Map key cho Table
-      const mappedData = data.map((item) => ({
-        ...item,
-        key: item.id.toString(),
-      }));
-      set({ orders: mappedData, totalCount, loading: false });
+      set({ orders: data, totalCount, loading: false });
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching orders:", error);
       set({ loading: false });
     }
   },
 
   setFilters: (newFilters) => {
-    set((state) => ({ filters: { ...state.filters, ...newFilters }, page: 1 }));
+    set((state) => ({
+      filters: { ...state.filters, ...newFilters },
+      page: 1, // Reset về trang 1 khi lọc
+    }));
     get().fetchOrders();
   },
 
   setPage: (page, pageSize) => {
-    set({ page, pageSize });
+    set({ page, pageSize: pageSize || get().pageSize });
     get().fetchOrders();
   },
 
   deleteOrder: async (id) => {
     try {
       await purchaseOrderService.deletePO(id);
-      message.success("Đã hủy đơn hàng");
       get().fetchOrders();
-    } catch (error: any) {
-      message.error(error.message || "Hủy thất bại");
+    } catch (error) {
+      console.error(error);
     }
   },
 
-  autoCreateOrders: async (type: "MIN_MAX" | "AI") => {
-    set({ loading: true });
+  autoCreateOrders: async (type) => {
     try {
       if (type === "MIN_MAX") {
-        const count = await purchaseOrderService.autoCreateMinMax();
-        message.success(`Đã tạo tự động ${count} đơn hàng dự trù cho kho B2B!`);
-      } else {
-        message.info("Tính năng AI đang phát triển...");
+        await purchaseOrderService.autoCreateMinMax();
+        get().fetchOrders();
       }
-      get().fetchOrders();
-    } catch (error: any) {
-      message.error(`Lỗi: ${error.message}`);
-    } finally {
-      set({ loading: false });
+    } catch (error) {
+      console.error(error);
     }
   },
 }));

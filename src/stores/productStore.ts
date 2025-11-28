@@ -52,6 +52,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
   },
 
   fetchCommonData: async () => {
+    if (get().warehouses.length > 0) return;
     try {
       const defaultPage = 1;
       const largePageSize = 99999;

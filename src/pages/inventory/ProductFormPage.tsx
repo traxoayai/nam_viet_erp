@@ -71,7 +71,7 @@ const ProductFormPage: React.FC = () => {
 
   useEffect(() => {
     fetchCommonData();
-  }, [fetchCommonData]);
+  }, []); // <--- Rỗng: Chỉ chạy 1 lần
 
   useEffect(() => {
     if (isEditing) {

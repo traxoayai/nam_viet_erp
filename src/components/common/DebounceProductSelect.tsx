@@ -13,24 +13,16 @@ import { searchProductsForDropdown } from "@/services/productService";
 
 const { Text } = Typography;
 
-// interface ProductOption {
-//   id: number;
-//   sku: string;
-//   name: string;
-//   unit: string;
-//   price: number;
-//   retail_price: number;
-//   image: string | null;
-//   type: "product" | "service" | "bundle";
-// }
-
 interface DebounceProductSelectProps {
   value?: any;
   onChange?: (value: any, option: any) => void;
   placeholder?: string;
   style?: React.CSSProperties;
-  // Thêm prop này để điều khiển tìm Gói hay không
   searchTypes?: string[]; // vd: ['service'] hoặc ['service', 'bundle']
+
+  // --- TÍNH NĂNG MỚI: HÀM TÌM KIẾM TÙY CHỈNH ---
+  // Cho phép truyền hàm tìm kiếm riêng (ví dụ: tìm hàng buôn) vào đây
+  fetcher?: (keyword: string) => Promise<any[]>;
 }
 
 const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
@@ -39,6 +31,7 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
   placeholder = "🔍 Tìm thuốc, vật tư hoặc dịch vụ...",
   style,
   searchTypes = ["service", "bundle"], // Mặc định tìm tất cả
+  fetcher, // Prop mới nhận hàm tìm kiếm
 }) => {
   const [options, setOptions] = useState<any[]>([]);
   const [fetching, setFetching] = useState(false);
@@ -50,8 +43,16 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
   const fetchOptions = async (keyword: string) => {
     setFetching(true);
     try {
-      // Truyền searchTypes vào service
-      const items = await searchProductsForDropdown(keyword, searchTypes);
+      let items = [];
+
+      // LOGIC QUYẾT ĐỊNH DÙNG HÀM NÀO
+      if (fetcher) {
+        // Nếu có fetcher riêng (Trang Mua hàng) -> Dùng nó
+        items = await fetcher(keyword);
+      } else {
+        // Nếu không (Trang POS, Voucher...) -> Dùng mặc định
+        items = await searchProductsForDropdown(keyword, searchTypes);
+      }
 
       const formattedOptions = items.map((item: any) => ({
         label: (
@@ -114,14 +115,26 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
                 <span>
                   {item.sku} | {item.unit}
                 </span>
-                {/* Hiển thị giá bán nếu là Bundle/Service, giá vốn nếu là Product */}
+
+                {/* LOGIC HIỂN THỊ GIÁ THÔNG MINH */}
                 <Text type="secondary">
-                  {item.type === "product" ? "Giá vốn: " : "Giá bán: "}
-                  {new Intl.NumberFormat("vi-VN", {
-                    style: "currency",
-                    currency: "VND",
-                  }).format(
-                    item.type === "product" ? item.price : item.retail_price
+                  {item.last_price > 0 ? (
+                    // Nếu có giá nhập cũ (Trang Mua hàng) -> Hiện giá cũ
+                    <span style={{ color: "#faad14" }}>
+                      Giá cũ:{" "}
+                      {new Intl.NumberFormat("vi-VN").format(item.last_price)}
+                    </span>
+                  ) : (
+                    // Mặc định -> Hiện giá bán/giá vốn hiện tại
+                    <>
+                      {item.type === "product" ? "Giá vốn: " : "Giá bán: "}
+                      {new Intl.NumberFormat("vi-VN", {
+                        style: "currency",
+                        currency: "VND",
+                      }).format(
+                        item.type === "product" ? item.price : item.retail_price
+                      )}
+                    </>
                   )}
                 </Text>
               </div>
@@ -129,16 +142,7 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
           </div>
         ),
         value: item.id,
-        product: {
-          // Map dữ liệu gốc
-          id: item.id,
-          name: item.name,
-          sku: item.sku,
-          retail_unit: item.unit,
-          actual_cost: item.price,
-          image_url: item.image,
-          type: item.type, // Quan trọng để biết nó là gì
-        },
+        product: item, // Trả về nguyên object đã map
       }));
 
       setOptions(formattedOptions);
@@ -152,9 +156,8 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
     fetchOptions(debouncedSearch);
   }, [debouncedSearch]);
 
-  // 2. FIX LỖI KHÓ CHỊU: Trigger tìm kiếm ngay khi click vào ô (Focus)
+  // 2. Trigger tìm kiếm ngay khi click vào ô (Focus)
   const onFocus = () => {
-    // Nếu danh sách đang rỗng, tải ngay gợi ý (từ khóa rỗng)
     if (options.length === 0) {
       fetchOptions("");
     }
@@ -166,7 +169,7 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
       labelInValue={false}
       filterOption={false}
       onSearch={setSearchQuery}
-      onFocus={onFocus} // <--- CHÌA KHÓA ĐỂ HIỆN GỢI Ý NGAY
+      onFocus={onFocus}
       notFoundContent={
         fetching ? (
           <Spin size="small" />

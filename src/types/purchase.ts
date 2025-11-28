@@ -10,6 +10,7 @@ export interface PurchaseOrderMaster {
   code: string;
   supplier_id: number;
   supplier_name: string;
+  status: string;
   delivery_status: DeliveryStatus;
   payment_status: PaymentStatus;
   final_amount: number;
@@ -22,6 +23,7 @@ export interface PurchaseOrderMaster {
   progress_payment: number; // 0 - 100
   delivery_method: string;
   total_cartons: number;
+  Shipping_partner_name?: string;
 }
 
 export interface PurchaseOrderFilters {
@@ -30,4 +32,5 @@ export interface PurchaseOrderFilters {
   payment_status?: string;
   date_from?: string;
   date_to?: string;
+  status?: string;
 }

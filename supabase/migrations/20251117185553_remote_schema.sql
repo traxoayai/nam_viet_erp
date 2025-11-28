@@ -1,4 +1,4 @@
-
+-- supabase/migrations/20251117185553_remote_schema.sql
 
 
 SET statement_timeout = 0;
@@ -4866,6 +4866,3 @@ using ((bucket_id = 'system_assets'::text));
   for insert
   to authenticated
 with check ((bucket_id = 'system_assets'::text));
-
-
-

@@ -1,7 +1,5 @@
 // src/components/layouts/MainLayout.tsx
-// (ĐÃ NÂNG CẤP V400: Sửa Lỗi 3 - Hiển thị Tên User và Thêm Menu)
 import {
-  // --- Icons CŨ Sếp đã có ---
   HomeOutlined,
   ShopOutlined,
   HeartOutlined,
@@ -19,6 +17,7 @@ import {
   MenuUnfoldOutlined,
   MenuFoldOutlined,
   AppstoreOutlined,
+  DownloadOutlined,
   SolutionOutlined,
   WalletOutlined,
   ContainerOutlined,
@@ -39,52 +38,49 @@ import {
   ToolOutlined,
   ScheduleOutlined,
   ExperimentOutlined,
-  TruckOutlined, // --- Icons MỚI (Cho Menu Dropdown) ---
+  TruckOutlined,
   LockOutlined,
   IdcardOutlined,
+  FilePdfOutlined,
+  ProductOutlined, // <-- Thêm icon mới
 } from "@ant-design/icons";
 import {
   Layout,
   Button,
+  Grid,
   Menu,
   Avatar,
   Badge,
+  Drawer,
   Dropdown,
-  // SỬA: Sẽ đổi sang AntApp
   type MenuProps,
-  App as AntApp, // SỬA: Dùng AntApp
+  App as AntApp,
 } from "antd";
-import React, { useState } from "react";
-import { Link, Outlet, useNavigate } from "react-router-dom"; // SỬA: Thêm useNavigate
+import React, { useState, useEffect } from "react";
+import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 
 import Logo from "@/assets/logo.png";
-// XÓA: import { supabase } from "@/lib/supabaseClient";
-import { useAuthStore } from "@/stores/useAuthStore"; // SỬA: Sửa đường dẫn
+import { useAuthStore } from "@/stores/useAuthStore";
 
 const { Header, Sider, Content } = Layout;
+const { useBreakpoint } = Grid; // Hook kiểm tra kích thước màn hình
 
-// --- MỚI: Định nghĩa kiểu MenuItem ---
 type MenuItem = Required<MenuProps>["items"][number];
 
-// --- MỚI: Hàm trợ giúp tạo Item cho Menu ---
 function getItem(
   label: React.ReactNode,
   key: React.Key,
   icon?: React.ReactNode,
   children?: MenuItem[]
 ): MenuItem {
-  return {
-    key,
-    icon,
-    children,
-    label,
-  } as MenuItem;
+  return { key, icon, children, label } as MenuItem;
 }
 
-// --- Cấu trúc Menu 14 mục của Sếp (GIỮ NGUYÊN) ---
 const finalMenuItems: MenuItem[] = [
   // 1. Trang chủ
-  getItem(<Link to="/">Trang chủ</Link>, "/", <HomeOutlined />), // 2. Kênh Cửa Hàng
+  getItem(<Link to="/">Trang chủ</Link>, "/", <HomeOutlined />),
+
+  // 2. Kênh Cửa Hàng
   getItem("Kênh Cửa Hàng", "store", <ShopOutlined />, [
     getItem(
       <Link to="/store/dashboard">Dashboard Cửa hàng</Link>,
@@ -130,7 +126,9 @@ const finalMenuItems: MenuItem[] = [
         "/store/website/content"
       ),
     ]),
-  ]), // 3. Nghiệp vụ Y Tế
+  ]),
+
+  // 3. Nghiệp vụ Y Tế
   getItem("Nghiệp vụ Y Tế", "medical", <HeartOutlined />, [
     getItem(
       <Link to="/medical/dashboard">Dashboard Y Tế</Link>,
@@ -147,7 +145,9 @@ const finalMenuItems: MenuItem[] = [
       "/medical/vaccination",
       <ExperimentOutlined />
     ),
-  ]), // 4. Bán buôn
+  ]),
+
+  // 4. Bán buôn
   getItem("Bán buôn (B2B)", "b2b", <ShoppingCartOutlined />, [
     getItem(
       <Link to="/b2b/dashboard">Thông tin chung B2B</Link>,
@@ -178,21 +178,32 @@ const finalMenuItems: MenuItem[] = [
         "/b2b/website/content"
       ),
     ]),
-  ]), // 5. Combo và Dịch Vụ
+  ]),
+
+  // 5. Combo và Dịch Vụ
   getItem(
     <Link to="/services">Combo và Dịch Vụ</Link>,
     "services",
     <GiftOutlined />
-  ), // 6. Kho - Hàng Hóa
+  ),
+
+  // 6. Kho - Hàng Hóa
   getItem("Kho – Hàng Hóa", "inventory", <DropboxOutlined />, [
     getItem(
       <Link to="/inventory/products">Danh sách Sản Phẩm</Link>,
-      "/inventory/products"
+      "/inventory/products",
+      <ProductOutlined />
     ),
     getItem(
       <Link to="/inventory/purchase">Mua hàng</Link>,
       "/inventory/purchase",
       <ShoppingCartOutlined />
+    ),
+    // --- MỚI: NHẬP KHO (INBOUND) ---
+    getItem(
+      <Link to="/inventory/inbound">Nhập Kho (Chờ hàng)</Link>,
+      "/inventory/inbound",
+      <DownloadOutlined />
     ),
     getItem(
       <Link to="/inventory/transfer">Chuyển kho</Link>,
@@ -209,7 +220,9 @@ const finalMenuItems: MenuItem[] = [
       "/inventory/cost-adjustment",
       <DollarCircleOutlined />
     ),
-  ]), // 7. Thao tác Nhanh
+  ]),
+
+  // 7. Thao tác Nhanh
   getItem("Thao tác Nhanh", "quick-actions", <RocketOutlined />, [
     getItem(
       <Link to="/quick/product-location">Cài nhanh Vị trí Sản phẩm</Link>,
@@ -236,7 +249,9 @@ const finalMenuItems: MenuItem[] = [
       "/quick/vaccination-template",
       <ExperimentOutlined />
     ),
-  ]), // 8. Đối tác
+  ]),
+
+  // 8. Đối tác
   getItem("Đối tác", "partners", <ContactsOutlined />, [
     getItem(
       <Link to="/partners/suppliers">Nhà Cung Cấp</Link>,
@@ -247,7 +262,9 @@ const finalMenuItems: MenuItem[] = [
       "/partners/shipping",
       <TruckOutlined />
     ),
-  ]), // 9. Quản lý Khách hàng
+  ]),
+
+  // 9. CRM
   getItem("Quản lý Khách hàng", "crm", <UserOutlined />, [
     getItem(
       <Link to="/crm/retail">Khách kênh Cửa Hàng</Link>,
@@ -255,7 +272,9 @@ const finalMenuItems: MenuItem[] = [
       <ShopOutlined />
     ),
     getItem(<Link to="/crm/b2b">Khách B2B</Link>, "/crm/b2b", <TeamOutlined />),
-  ]), // 10. Quản lý Marketing
+  ]),
+
+  // 10. Marketing
   getItem("Quản lý Marketing", "marketing", <BulbOutlined />, [
     getItem(
       <Link to="/marketing/dashboard">Dashboard Marketing</Link>,
@@ -286,7 +305,9 @@ const finalMenuItems: MenuItem[] = [
       "/marketing/chatbot",
       <GlobalOutlined />
     ),
-  ]), // 11. Quản lý Nhân sự
+  ]),
+
+  // 11. Nhân sự
   getItem("Quản lý Nhân sự", "hr", <AuditOutlined />, [
     getItem(
       <Link to="/hr/dashboard">Dashboard Nhân sự</Link>,
@@ -318,13 +339,24 @@ const finalMenuItems: MenuItem[] = [
       "/hr/payroll",
       <DollarCircleOutlined />
     ),
-  ]), // 12. Tài Chính & Kế Toán
+  ]),
+
+  // 12. Tài Chính & Kế Toán (CẬP NHẬT MENU MỚI TẠI ĐÂY)
   getItem("Tài Chính & Kế Toán", "finance", <AccountBookOutlined />, [
     getItem(
       <Link to="/finance/dashboard">Dashboard Tài chính</Link>,
       "/finance/dashboard",
       <AppstoreOutlined />
     ),
+
+    // --- MỤC MỚI: KHO HÓA ĐƠN SỐ ---
+    getItem(
+      <Link to="/finance/invoices">Kho Hóa Đơn Số (AI Scan)</Link>,
+      "/finance/invoices",
+      <FilePdfOutlined />
+    ),
+    // -------------------------------
+
     getItem(
       <Link to="/finance/transactions">Quản lý Thu – Chi</Link>,
       "/finance/transactions",
@@ -362,11 +394,13 @@ const finalMenuItems: MenuItem[] = [
       ),
     ]),
     getItem(
-      <Link to="/finance/vat">Quản lý Hóa Đơn VAT</Link>,
+      <Link to="/finance/vat">Quản lý Hóa Đơn VAT (Xuất)</Link>,
       "/finance/vat",
       <ContainerOutlined />
     ),
-  ]), // 13. Báo Cáo
+  ]),
+
+  // 13. Báo Cáo
   getItem("Báo Cáo", "reports", <LineChartOutlined />, [
     getItem("Báo cáo Kinh doanh", "report-sales", <AreaChartOutlined />, [
       getItem(
@@ -412,27 +446,35 @@ const finalMenuItems: MenuItem[] = [
         "/reports/finance/cashflow"
       ),
     ]),
-  ]), // 14. Cấu hình hệ thống
+  ]),
+
+  // 14. Cấu hình
   getItem(
     <Link to="/settings">Cấu hình hệ thống</Link>,
     "/settings",
     <SettingOutlined />
   ),
 ];
-// --- KẾT THÚC CẤU TRÚC MENU ---
 
 const MainLayout: React.FC = () => {
+  const screens = useBreakpoint(); // Kiểm tra màn hình (xs, sm, md...)
   const [collapsed, setCollapsed] = useState(false);
-  const { message } = AntApp.useApp(); // SỬA: Thêm AntApp
-  const navigate = useNavigate(); // SỬA: Thêm Navigate
-  // SỬA LỖI 3: Kết nối đúng store và lấy đúng state
+  const [mobileOpen, setMobileOpen] = useState(false); // State cho Mobile Drawer
 
-  const { user, profile, logout } = useAuthStore(); // SỬA LỖI 3: Dùng hàm logout từ "Bộ não"
+  const { message } = AntApp.useApp();
+  const navigate = useNavigate();
+  const location = useLocation(); // Để active menu đúng
+  const { user, profile, logout } = useAuthStore();
+
+  // Tự động đóng Drawer khi chuyển trang trên mobile
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = () => {
     message.success("Đã đăng xuất!");
-    logout(); // Gatekeeper sẽ tự động xử lý việc chuyển hướng
-  }; // SỬA LỖI 3: Cập nhật menu items
+    logout();
+  };
 
   const userMenuItems = [
     {
@@ -453,96 +495,163 @@ const MainLayout: React.FC = () => {
       icon: <LogoutOutlined />,
       label: "Đăng xuất",
       onClick: handleLogout,
-      danger: true, // Thêm danger cho Đăng xuất
+      danger: true,
     },
   ];
 
-  return (
-    <Layout style={{ minHeight: "100vh" }}>
-      <Sider
-        trigger={null}
-        collapsible
-        collapsed={collapsed}
-        collapsedWidth={65}
-        width={260}
+  // Sidebar Content (Tách ra để dùng chung cho cả Sider và Drawer)
+  const SidebarContent = (
+    <>
+      <div
         style={{
-          background: "#ffffffff", // SỬA: Đổi sang nền trắng
-          borderRight: "1px solid #e8e8e8ff", // Thêm viền
-          position: "fixed",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          overflow: "auto",
+          height: "64px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "0 16px",
+          borderBottom: "1px solid #f0f0f0",
         }}
       >
-        <div
+        <img
+          src={Logo}
+          alt="Logo"
           style={{
-            height: "64px", // SỬA: Đồng bộ 64px
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "0 16px",
+            height: 32,
+            marginRight: collapsed ? 0 : 8,
+            transition: "all 0.2s",
+          }}
+        />
+        {!collapsed && (
+          <span
+            style={{
+              fontSize: "16px",
+              fontWeight: 700,
+              color: "#00b96b",
+              whiteSpace: "nowrap",
+            }}
+          >
+            DƯỢC NAM VIỆT
+          </span>
+        )}
+      </div>
+      <Menu
+        mode="inline"
+        defaultSelectedKeys={[location.pathname]}
+        defaultOpenKeys={[
+          "store",
+          "medical",
+          "b2b",
+          "inventory",
+          "finance",
+          "reports",
+        ]} // Mở sẵn các nhóm chính
+        items={finalMenuItems} // (Biến finalMenuItems lấy từ code cũ của Sếp)
+        style={{ borderRight: 0 }}
+      />
+    </>
+  );
+
+  return (
+    <Layout style={{ minHeight: "100vh" }}>
+      {/* 1. SIDEBAR CHO DESKTOP (Ẩn khi màn hình nhỏ) */}
+      {screens.md ? (
+        <Sider
+          trigger={null}
+          collapsible
+          collapsed={collapsed}
+          width={250}
+          style={{
+            background: "#fff",
+            borderRight: "1px solid #e8e8e8",
+            position: "fixed",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            overflowY: "auto",
+            overflowX: "hidden",
+            zIndex: 10,
           }}
         >
-          <img
-            src={Logo}
-            alt="Logo"
-            style={{
-              height: 40,
-              marginRight: collapsed ? 0 : 8,
-              transition: "margin-right 0.2s",
-            }}
-          />
+          {SidebarContent}
+        </Sider>
+      ) : null}
 
-          {!collapsed && (
+      {/* 2. DRAWER CHO MOBILE (Chỉ hiện khi màn hình nhỏ) */}
+      {!screens.md && (
+        <Drawer
+          placement="left"
+          onClose={() => setMobileOpen(false)}
+          open={mobileOpen}
+          width={280}
+          bodyStyle={{ padding: 0 }}
+          closable={false} // Tắt nút X mặc định để tự custom
+        >
+          {/* Copy SidebarContent nhưng set collapsed = false để luôn hiện logo */}
+          <div
+            style={{
+              height: "64px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 16px",
+              borderBottom: "1px solid #f0f0f0",
+            }}
+          >
+            <img src={Logo} alt="Logo" style={{ height: 32, marginRight: 8 }} />
             <span
-              style={{
-                fontSize: "18px",
-                fontWeight: 600,
-                color: "#00b96b",
-              }}
+              style={{ fontSize: "16px", fontWeight: 700, color: "#00b96b" }}
             >
               DƯỢC NAM VIỆT
             </span>
-          )}
-        </div>
+          </div>
+          <Menu
+            mode="inline"
+            defaultSelectedKeys={[location.pathname]}
+            items={finalMenuItems}
+            style={{ borderRight: 0 }}
+          />
+        </Drawer>
+      )}
 
-        <Menu // theme="dark" // SỬA: Bỏ theme dark
-          mode="inline"
-          defaultSelectedKeys={["/"]}
-          items={finalMenuItems}
-        />
-      </Sider>
-
+      {/* 3. MAIN LAYOUT */}
       <Layout
         style={{
-          marginLeft: collapsed ? 65 : 260,
+          marginLeft: screens.md ? (collapsed ? 80 : 250) : 0,
           transition: "margin-left 0.2s",
         }}
       >
         <Header
           style={{
-            background: "#fff", // SỬA: Nền trắng
-            padding: "0 16px 0 0", // SỬA: Căn chỉnh padding
+            background: "#fff",
+            padding: "0 16px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            borderBottom: "1px solid #f0f0f0", // SỬA: Thêm viền
-            height: 48, // SỬA: Đồng bộ 48px
+            borderBottom: "1px solid #f0f0f0",
+            height: 64,
+            position: "sticky",
+            top: 0,
+            zIndex: 9,
           }}
         >
           <div style={{ display: "flex", alignItems: "center" }}>
-            <Button
-              type="text"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed(!collapsed)}
-              style={{
-                fontSize: "16px",
-                width: 64,
-                height: 64,
-              }}
-            />
-            {/* Sếp có thể thêm Breadcrumb ở đây */}
+            {screens.md ? (
+              // Nút Toggle cho Desktop
+              <Button
+                type="text"
+                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={() => setCollapsed(!collapsed)}
+                style={{ fontSize: "16px", width: 48, height: 48 }}
+              />
+            ) : (
+              // Nút Mở Drawer cho Mobile
+              <Button
+                type="text"
+                icon={<MenuUnfoldOutlined />}
+                onClick={() => setMobileOpen(true)}
+                style={{ fontSize: "16px", width: 48, height: 48 }}
+              />
+            )}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -555,32 +664,43 @@ const MainLayout: React.FC = () => {
                 </Badge>
               }
             />
-
             <Dropdown menu={{ items: userMenuItems }} trigger={["click"]}>
-              <Button type="text" style={{ height: "auto", padding: "0 8px" }}>
-                {/* SỬA LỖI 3: Dùng Avatar từ 'profile' */}
-
-                <Avatar src={profile?.avatar_url} icon={<UserOutlined />} />
-
-                <span style={{ marginLeft: 8, fontWeight: 500, color: "#333" }}>
-                  {/* SỬA LỖI 3: Dùng Tên từ 'profile' */}
-                  {profile?.full_name || user?.email || "User"}
-                </span>
+              <Button
+                type="text"
+                style={{
+                  height: "auto",
+                  padding: "4px 8px",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                <Avatar
+                  src={profile?.avatar_url}
+                  icon={<UserOutlined />}
+                  size="small"
+                />
+                {screens.md ? (
+                  <span
+                    style={{ marginLeft: 8, fontWeight: 500, color: "#333" }}
+                  >
+                    {profile?.full_name || user?.email || "User"}
+                  </span>
+                ) : null}
               </Button>
             </Dropdown>
           </div>
         </Header>
 
         <Content
-          style={{
-            margin: 0,
-            overflow: "auto",
-            background: "#f9f9f9",
-            borderRadius: 8,
-          }}
+          style={{ margin: 0, overflow: "initial", background: "#f5f7fa" }}
         >
-          {/* SỬA: Thêm 1 div bọc ngoài với padding */}
-          <div style={{ padding: 6, minHeight: "calc(100vh - 96px)" }}>
+          {/* Container chính: Trên mobile padding nhỏ (8px), Desktop padding lớn (24px) */}
+          <div
+            style={{
+              padding: screens.md ? 24 : 8,
+              minHeight: "calc(100vh - 64px)",
+            }}
+          >
             <Outlet />
           </div>
         </Content>
