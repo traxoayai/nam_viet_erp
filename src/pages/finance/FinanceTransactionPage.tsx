@@ -30,8 +30,14 @@ import {
   App,
 } from "antd";
 import dayjs from "dayjs";
+import timezone from "dayjs/plugin/timezone";
+import utc from "dayjs/plugin/utc";
+import { useState } from "react";
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 import { FinanceFormModal } from "./components/FinanceFormModal";
+import { TransactionDetailModal } from "./components/TransactionDetailModal"; // Import Modal mới
 import { useFinanceTransactionLogic } from "./hooks/useFinanceTransactionLogic";
 
 import { useFinanceStore } from "@/stores/useFinanceStore";
@@ -45,6 +51,7 @@ const FinanceTransactionPage = () => {
   const { confirmTransaction, exportExcel, deleteTransaction } =
     useFinanceStore();
   const { message } = App.useApp();
+  const [viewRecord, setViewRecord] = useState<TransactionRecord | null>(null);
 
   // Chỉ xóa phiếu Pending
   const canDelete = (record: TransactionRecord) => record.status === "pending";
@@ -62,13 +69,30 @@ const FinanceTransactionPage = () => {
       render: (code: string) => <Tag color="blue">{code}</Tag>,
     },
     {
-      title: "Ngày",
+      title: "Ngày tạo", // Đổi tên cho rõ nghĩa
       dataIndex: "transaction_date",
-      width: 140,
-      // --- SỬA LỖI 3: Timezone ---
-      // Nếu server trả về UTC (có Z), trình duyệt tự convert.
-      // Nếu không, ép kiểu:
-      render: (date: string) => dayjs(date).format("DD/MM/YYYY HH:mm"),
+      width: 150, // Tăng độ rộng một chút
+      // AURA FIX: Format hiển thị Giờ trước, Ngày sau để dễ nhìn
+      render: (date: string) => {
+        if (!date) return "--";
+        // dayjs tự động chuyển UTC sang Local Time (Vietnam GMT+7)
+        return (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              lineHeight: 1.2,
+            }}
+          >
+            <span style={{ fontWeight: 500 }}>
+              {dayjs(date).format("HH:mm")}
+            </span>
+            <span style={{ fontSize: 12, color: "#888" }}>
+              {dayjs(date).format("DD/MM/YYYY")}
+            </span>
+          </div>
+        );
+      },
     },
     // --- SỬA LỖI 4: Thêm cột Diễn giải ---
     {
@@ -217,9 +241,7 @@ const FinanceTransactionPage = () => {
             <Button
               size="small"
               icon={<EyeOutlined />}
-              onClick={() =>
-                message.info("Chức năng xem chi tiết đang phát triển")
-              }
+              onClick={() => setViewRecord(record)}
             />
           </Tooltip>
 
@@ -341,6 +363,11 @@ const FinanceTransactionPage = () => {
           open={logic.isModalOpen}
           onCancel={() => logic.setIsModalOpen(false)}
           initialFlow={logic.modalFlow}
+        />
+        <TransactionDetailModal
+          open={!!viewRecord}
+          data={viewRecord}
+          onCancel={() => setViewRecord(null)}
         />
       </Content>
     </Layout>

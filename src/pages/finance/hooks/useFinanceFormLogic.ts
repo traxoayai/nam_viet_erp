@@ -116,20 +116,32 @@ export const useFinanceFormLogic = (
   };
 
   const handleSupplierChange = (supplierId: number) => {
-    const supplier = suppliers.find((s) => s.id === supplierId);
-    if (supplier) {
-      // @ts-ignore
-      const bin = supplier.bank_bin || "";
-      // @ts-ignore
-      const acc = supplier.bank_account || "";
-      // @ts-ignore
-      const holder = supplier.bank_holder || "";
+    // Reset trước
+    setManualBankInfo({ bin: "", acc: "", holder: "" });
+    setQrUrl(null);
 
-      if (bin && acc) {
-        setManualBankInfo({ bin, acc, holder });
+    // 1. Tìm trong Store (Dữ liệu đã có sẵn khi load trang)
+    const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+
+    if (selectedSupplier) {
+      // / @ts-ignore - (Tạm thời ignore nếu Type chưa update kịp, nhưng dữ liệu thực tế đã có)
+      const { bank_bin, bank_account, bank_holder } = selectedSupplier;
+
+      if (bank_bin && bank_account) {
+        setManualBankInfo({
+          bin: bank_bin,
+          acc: bank_account,
+          holder: bank_holder || "", // Đã có sẵn từ Store
+        });
+
+        // Tự động tạo QR nếu đã nhập số tiền
+        // (Effect generateQR sẽ tự chạy khi manualBankInfo thay đổi)
+
+        message.success(
+          `Đã điền thông tin ngân hàng: ${bank_holder || bank_account}`
+        );
       } else {
-        setManualBankInfo({ bin: "", acc: "", holder: "" });
-        message.warning("NCC này chưa có thông tin ngân hàng đầy đủ.");
+        message.info("Nhà cung cấp này chưa có thông tin ngân hàng.");
       }
     }
   };

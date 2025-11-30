@@ -508,7 +508,7 @@ const MainLayout: React.FC = () => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: "0 16px",
+          padding: "0 10px",
           borderBottom: "1px solid #f0f0f0",
         }}
       >
@@ -617,13 +617,13 @@ const MainLayout: React.FC = () => {
       <Layout
         style={{
           marginLeft: screens.md ? (collapsed ? 80 : 250) : 0,
-          transition: "margin-left 0.2s",
+          transition: "margin-left 0.1s",
         }}
       >
         <Header
           style={{
             background: "#fff",
-            padding: "0 16px",
+            padding: "0 12px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
