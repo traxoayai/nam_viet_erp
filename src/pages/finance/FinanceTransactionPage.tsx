@@ -33,8 +33,6 @@ import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
 import { useState } from "react";
-dayjs.extend(utc);
-dayjs.extend(timezone);
 
 import { FinanceFormModal } from "./components/FinanceFormModal";
 import { TransactionDetailModal } from "./components/TransactionDetailModal"; // Import Modal mới
@@ -42,6 +40,9 @@ import { useFinanceTransactionLogic } from "./hooks/useFinanceTransactionLogic";
 
 import { useFinanceStore } from "@/stores/useFinanceStore";
 import { TransactionRecord } from "@/types/finance";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const { Content } = Layout;
 const { RangePicker } = DatePicker;
@@ -75,7 +76,7 @@ const FinanceTransactionPage = () => {
       // AURA FIX: Format hiển thị Giờ trước, Ngày sau để dễ nhìn
       render: (date: string) => {
         if (!date) return "--";
-        // dayjs tự động chuyển UTC sang Local Time (Vietnam GMT+7)
+        const vnTime = dayjs(date).tz("Asia/Ho_Chi_Minh");
         return (
           <div
             style={{
@@ -84,11 +85,9 @@ const FinanceTransactionPage = () => {
               lineHeight: 1.2,
             }}
           >
-            <span style={{ fontWeight: 500 }}>
-              {dayjs(date).format("HH:mm")}
-            </span>
+            <span style={{ fontWeight: 500 }}>{vnTime.format("HH:mm")}</span>
             <span style={{ fontSize: 12, color: "#888" }}>
-              {dayjs(date).format("DD/MM/YYYY")}
+              {vnTime.format("DD/MM/YYYY")}
             </span>
           </div>
         );

@@ -8,6 +8,7 @@ import {
   FilePdfOutlined,
   FileUnknownOutlined,
   DownloadOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 import {
   Modal,
@@ -18,6 +19,7 @@ import {
   Divider,
   Button,
   Empty,
+  Space,
 } from "antd";
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
@@ -26,7 +28,6 @@ import React from "react";
 
 import { TransactionRecord } from "@/types/finance";
 
-// CẤU HÌNH GIỜ VIỆT NAM
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
@@ -49,62 +50,100 @@ export const TransactionDetailModal: React.FC<Props> = ({
   const sign = isIncome ? "+" : "-";
   const color = isIncome ? "#52c41a" : "#f5222d";
 
-  // --- HÀM XỬ LÝ HIỂN THỊ FILE ---
-  const renderEvidence = (url: string) => {
-    // Lấy đuôi file (ví dụ: .png, .pdf)
-    const extension = url.split(".").pop()?.toLowerCase() || "";
-    const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(extension);
-    const isPdf = extension === "pdf";
+  // --- AURA LOGIC: Xử lý hiển thị file đính kèm chuẩn xác ---
+  const renderEvidence = () => {
+    // 1. Kiểm tra dữ liệu từ CORE
+    const url = data.evidence_url;
 
-    if (isImage) {
+    if (!url || url.trim() === "") {
       return (
-        <Image
-          src={url}
-          alt="Chứng từ"
-          height={250}
-          style={{
-            objectFit: "contain",
-            borderRadius: 8,
-            border: "1px solid #f0f0f0",
-          }}
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={<Text type="secondary">Không có chứng từ đính kèm</Text>}
         />
       );
     }
 
-    // Nếu không phải ảnh, hiển thị nút bấm mở file
+    // 2. Phân loại file dựa trên đuôi mở rộng (Extension)
+    // Clean URL trước khi check (bỏ query params nếu có)
+    const cleanUrl = url.split("?")[0].toLowerCase();
+    const extension = cleanUrl.split(".").pop() || "";
+
+    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "heic"];
+    const isImage = imageExtensions.includes(extension);
+    const isPdf = extension === "pdf";
+
+    // 3. Hiển thị theo loại
+    if (isImage) {
+      return (
+        <div
+          style={{
+            textAlign: "center",
+            background: "#f0f2f5",
+            padding: 12,
+            borderRadius: 8,
+          }}
+        >
+          <Image
+            src={url}
+            alt="Chứng từ"
+            height={300}
+            style={{ objectFit: "contain", borderRadius: 4 }}
+            fallback="https://placehold.co/400x300/e0e0e0/888888?text=Lỗi+tải+ảnh"
+          />
+        </div>
+      );
+    }
+
+    // Nếu là PDF hoặc file khác -> Hiển thị dạng Card tải về
     return (
       <div
         style={{
-          textAlign: "center",
-          padding: 20,
-          background: "#fafafa",
-          borderRadius: 8,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          padding: 24,
+          background: "#f9f9f9",
           border: "1px dashed #d9d9d9",
+          borderRadius: 8,
         }}
       >
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: 16 }}>
           {isPdf ? (
             <FilePdfOutlined style={{ fontSize: 48, color: "#ff4d4f" }} />
           ) : (
             <FileUnknownOutlined style={{ fontSize: 48, color: "#1890ff" }} />
           )}
         </div>
-        <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+        <Text strong style={{ fontSize: 16, marginBottom: 4 }}>
           Tài liệu đính kèm ({extension.toUpperCase()})
         </Text>
-        <Button
-          type="primary"
-          icon={<DownloadOutlined />}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
+        <Text
+          type="secondary"
+          style={{ marginBottom: 16, fontSize: 12, maxWidth: "80%" }}
+          ellipsis
         >
-          Mở tài liệu để xem
-        </Button>
+          {url.split("/").pop()} {/* Hiển thị tên file */}
+        </Text>
+
+        <Space>
+          <Button
+            type="primary"
+            icon={<EyeOutlined />}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Xem tài liệu
+          </Button>
+          <Button icon={<DownloadOutlined />} href={url} download>
+            Tải về
+          </Button>
+        </Space>
       </div>
     );
   };
-  // --------------------------------
+  // ---------------------------------------------------------
 
   const renderStatus = (status: string) => {
     switch (status) {
@@ -147,7 +186,9 @@ export const TransactionDetailModal: React.FC<Props> = ({
       footer={null}
       width={700}
       centered
+      destroyOnClose // Reset modal khi đóng để tránh cache ảnh cũ
     >
+      {/* Phần Header Số tiền & Trạng thái */}
       <div style={{ textAlign: "center", marginBottom: 24, marginTop: 12 }}>
         <Text type="secondary" style={{ fontSize: 14 }}>
           Số tiền giao dịch
@@ -160,6 +201,7 @@ export const TransactionDetailModal: React.FC<Props> = ({
         <div style={{ marginTop: 8 }}>{renderStatus(data.status)}</div>
       </div>
 
+      {/* Phần Thông tin chi tiết */}
       <Descriptions
         bordered
         column={1}
@@ -167,7 +209,6 @@ export const TransactionDetailModal: React.FC<Props> = ({
         labelStyle={{ width: 160, fontWeight: 500 }}
       >
         <Descriptions.Item label="Ngày tạo phiếu">
-          {/* AURA FIX: Ép buộc hiển thị giờ Việt Nam (GMT+7) */}
           {dayjs(data.transaction_date)
             .tz("Asia/Ho_Chi_Minh")
             .format("HH:mm - DD/MM/YYYY")}
@@ -197,25 +238,13 @@ export const TransactionDetailModal: React.FC<Props> = ({
         </Descriptions.Item>
       </Descriptions>
 
-      {/* --- PHẦN CHỨNG TỪ ĐÍNH KÈM (NÂNG CẤP) --- */}
       <Divider orientation="left" style={{ fontSize: 14, color: "#1890ff" }}>
         <FileImageOutlined /> Chứng từ đính kèm
       </Divider>
 
-      <div style={{ textAlign: "center" }}>
-        {data.evidence_url ? (
-          renderEvidence(data.evidence_url)
-        ) : (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <Text type="secondary">Không có chứng từ/hóa đơn đính kèm</Text>
-            }
-          />
-        )}
-      </div>
+      {/* Gọi hàm render đã chuẩn hóa */}
+      {renderEvidence()}
 
-      {/* Bảng kê tiền mặt (Nếu có) */}
       {data.cash_tally && Object.keys(data.cash_tally).length > 0 ? (
         <>
           <Divider orientation="left" style={{ fontSize: 14 }}>
