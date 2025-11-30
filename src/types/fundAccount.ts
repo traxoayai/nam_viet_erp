@@ -9,6 +9,7 @@ export interface FundAccount {
   account_number: string | null;
   bank_id: number | null; // <-- NÂNG CẤP
   initial_balance: number;
+  balance: number;
   status: "active" | "locked";
   created_at?: string;
   updated_at?: string;

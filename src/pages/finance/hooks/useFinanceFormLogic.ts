@@ -1,0 +1,237 @@
+// src/pages/finance/hooks/useFinanceFormLogic.ts
+import { Form, App } from "antd";
+import { useState, useEffect, useCallback } from "react";
+
+import type { UploadFile } from "antd/es/upload/interface";
+
+import { uploadFile } from "@/services/storageService";
+import { useSupplierStore } from "@/stores/supplierStore";
+import { useFinanceStore } from "@/stores/useFinanceStore";
+import { useTransactionCategoryStore } from "@/stores/useTransactionCategoryStore";
+import { useUserStore } from "@/stores/useUserStore";
+import { CreateTransactionParams } from "@/types/finance";
+
+export const useFinanceFormLogic = (
+  open: boolean,
+  onCancel: () => void,
+  initialFlow: "in" | "out"
+) => {
+  const { message } = App.useApp();
+  const [form] = Form.useForm();
+
+  const { createTransaction, fetchOpenAdvances, openAdvances } =
+    useFinanceStore();
+  const { users, fetchUsers } = useUserStore();
+  const { suppliers, fetchSuppliers } = useSupplierStore();
+  const { categories, fetchCategories } = useTransactionCategoryStore();
+
+  const [businessType, setBusinessType] = useState<
+    "trade" | "advance" | "reimbursement" | "other"
+  >("trade");
+  const [loading, setLoading] = useState(false);
+
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [cashTallyTotal, setCashTallyTotal] = useState(0);
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [reimburseDiff, setReimburseDiff] = useState<number | null>(null);
+  const [manualBankInfo, setManualBankInfo] = useState({
+    bin: "",
+    acc: "",
+    holder: "",
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.resetFields();
+      form.setFieldsValue({ flow: initialFlow, business_type: "trade" });
+
+      setBusinessType("trade");
+      setFileList([]);
+      setQrUrl(null);
+      setCashTallyTotal(0);
+      setReimburseDiff(null);
+      setManualBankInfo({ bin: "", acc: "", holder: "" });
+
+      if (users.length === 0) fetchUsers();
+      if (suppliers.length === 0) fetchSuppliers();
+      if (categories.length === 0) fetchCategories();
+    }
+  }, [
+    open,
+    initialFlow,
+    form,
+    users.length,
+    fetchUsers,
+    suppliers.length,
+    fetchSuppliers,
+    categories.length,
+    fetchCategories,
+  ]);
+
+  // --- LOGIC HOÀN ỨNG (UPDATED) ---
+
+  const handleEmployeeChange = async (userId: string) => {
+    if (businessType === "reimbursement") {
+      // Reset các trường liên quan
+      form.setFieldsValue({
+        ref_advance_id: null,
+        advanced_amount: 0,
+        actual_spent: 0,
+      });
+      setReimburseDiff(null);
+
+      // Gọi Store để tải danh sách phiếu tạm ứng
+      await fetchOpenAdvances(userId);
+    }
+  };
+
+  const handleReimburseCalc = useCallback(() => {
+    const advanced = form.getFieldValue("advanced_amount") || 0;
+    const spent = form.getFieldValue("actual_spent") || 0;
+    const diff = spent - advanced;
+    setReimburseDiff(diff);
+
+    if (diff > 0) {
+      // Chi thêm cho nhân viên
+      form.setFieldsValue({ flow: "out", amount: diff });
+    } else {
+      // Thu lại tiền thừa
+      form.setFieldsValue({ flow: "in", amount: Math.abs(diff) });
+    }
+  }, [form]);
+
+  // AURA FIX: Hàm xử lý khi chọn phiếu tạm ứng cụ thể
+  const handleAdvanceSelect = (advanceId: number) => {
+    const advance = openAdvances.find((a) => a.id === advanceId);
+    if (advance) {
+      // 1. Tự động điền số tiền đã ứng (QUAN TRỌNG)
+      const advanceAmt = Number(advance.amount);
+      form.setFieldsValue({ advanced_amount: advanceAmt });
+
+      // 2. Tính toán lại ngay lập tức (nếu đã nhập thực chi trước đó)
+      handleReimburseCalc();
+
+      message.success(`Đã chọn phiếu tạm ứng: ${advanceAmt.toLocaleString()}đ`);
+    }
+  };
+
+  const handleSupplierChange = (supplierId: number) => {
+    const supplier = suppliers.find((s) => s.id === supplierId);
+    if (supplier) {
+      // @ts-ignore
+      const bin = supplier.bank_bin || "";
+      // @ts-ignore
+      const acc = supplier.bank_account || "";
+      // @ts-ignore
+      const holder = supplier.bank_holder || "";
+
+      if (bin && acc) {
+        setManualBankInfo({ bin, acc, holder });
+      } else {
+        setManualBankInfo({ bin: "", acc: "", holder: "" });
+        message.warning("NCC này chưa có thông tin ngân hàng đầy đủ.");
+      }
+    }
+  };
+
+  const generateQR = (amount: number, desc: string) => {
+    if (manualBankInfo.bin && manualBankInfo.acc && amount > 0) {
+      const description = encodeURIComponent(desc || "Thanh toan");
+      const accountName = encodeURIComponent(manualBankInfo.holder || "");
+      const url = `https://img.vietqr.io/image/${manualBankInfo.bin}-${manualBankInfo.acc}-compact2.png?amount=${amount}&addInfo=${description}&accountName=${accountName}`;
+      setQrUrl(url);
+    } else {
+      setQrUrl(null);
+    }
+  };
+
+  const calculateCashTally = (values: Record<string, number>) => {
+    if (!values) return;
+    let total = 0;
+    Object.entries(values).forEach(([denom, count]) => {
+      total += Number(denom) * (count || 0);
+    });
+    setCashTallyTotal(total);
+  };
+
+  const handleFinish = async (values: any) => {
+    setLoading(true);
+    try {
+      let evidenceUrl = null;
+      if (fileList.length > 0 && fileList[0].originFileObj) {
+        try {
+          evidenceUrl = await uploadFile(
+            fileList[0].originFileObj,
+            "finance_evidence"
+          );
+        } catch (err: any) {
+          console.warn("Lỗi upload ảnh:", err);
+        }
+      }
+
+      const payload: CreateTransactionParams = {
+        p_flow: values.flow,
+        p_business_type: values.business_type,
+        p_fund_account_id: values.fund_account_id,
+        p_amount: values.amount,
+        p_category_id: values.category_id,
+        p_description: values.description,
+        p_status: "pending",
+        p_evidence_url: evidenceUrl || undefined,
+        p_cash_tally: values.cash_tally,
+        p_ref_advance_id: values.ref_advance_id,
+        p_partner_type: "other",
+      };
+
+      if (["advance", "reimbursement"].includes(values.business_type)) {
+        payload.p_partner_type = "employee";
+        payload.p_partner_id = values.employee_id;
+      } else if (values.business_type === "trade") {
+        if (values.partner_type === "supplier") {
+          payload.p_partner_type = "supplier";
+          payload.p_partner_id = values.supplier_id;
+          const sup = suppliers.find((s) => s.id === values.supplier_id);
+          if (sup) payload.p_partner_name = sup.name;
+        } else {
+          payload.p_partner_type = "customer";
+          payload.p_partner_name = values.partner_name;
+        }
+      } else {
+        payload.p_partner_name = values.partner_name;
+      }
+
+      const success = await createTransaction(payload);
+      if (success) onCancel();
+    } catch (error: any) {
+      message.error(error.message || "Có lỗi xảy ra");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return {
+    form,
+    loading,
+    users,
+    suppliers,
+    openAdvances,
+    categories,
+    businessType,
+    setBusinessType,
+    qrUrl,
+    setQrUrl,
+    cashTallyTotal,
+    calculateCashTally,
+    fileList,
+    setFileList,
+    reimburseDiff,
+    handleReimburseCalc,
+    manualBankInfo,
+    setManualBankInfo,
+    handleEmployeeChange,
+    handleAdvanceSelect,
+    handleSupplierChange,
+    generateQR,
+    handleFinish,
+  };
+};

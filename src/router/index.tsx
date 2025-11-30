@@ -15,8 +15,9 @@ import CustomerB2BPage from "@/pages/crm/CustomerB2BPage";
 import CustomerB2COrgForm from "@/pages/crm/CustomerB2COrgForm";
 import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
 import AssetManagementPage from "@/pages/finance/AssetManagementPage";
-import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 // --- IMPORT TRANG MỚI: HÓA ĐƠN ---
+import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
+import FinanceTransactionPage from "@/pages/finance/FinanceTransactionPage";
 import InvoiceListPage from "@/pages/finance/invoices/InvoiceListPage";
 import InvoiceVerifyPage from "@/pages/finance/invoices/InvoiceVerifyPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
@@ -320,7 +321,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "finance/transactions",
-            element: <PagePlaceholder title="Quản lý Thu – Chi" />,
+            element: <FinanceTransactionPage />,
           },
           {
             path: "finance/debts",

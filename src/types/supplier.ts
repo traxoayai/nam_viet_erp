@@ -9,7 +9,11 @@ export interface Supplier {
   status: "active" | "inactive";
   debt: number;
 
-  // Các trường chi tiết (từ Canvas của Sếp)
+  // Bổ sung trường ngân hàng cho VietQR
+
+  bank_bin?: string; // Mã BIN ngân hàng (quan trọng cho VietQR)
+
+  // Các trường chi tiết
   address?: string;
   tax_code?: string;
   email?: string;
