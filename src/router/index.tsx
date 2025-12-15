@@ -33,6 +33,7 @@ import PurchaseOrderDetail from "@/pages/purchasing/PurchaseOrderDetail";
 import PurchaseOrderMasterPage from "@/pages/purchasing/PurchaseOrderMasterPage";
 import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
 import VaccinationTemplatePage from "@/pages/quick/VaccinationTemplatePage";
+import CreateB2BOrderPage from "@/pages/sales/CreateB2BOrderPage";
 import ServicePackagePage from "@/pages/services/ServicePackagePage";
 import BankListPage from "@/pages/settings/BankListPage";
 import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
@@ -122,7 +123,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "b2b/create-order",
-            element: <PagePlaceholder title="Tạo Đơn Hàng B2B" />,
+            element: <CreateB2BOrderPage />,
           },
           {
             path: "b2b/orders",

@@ -98,7 +98,7 @@ const FinanceTransactionPage = () => {
       title: "Nội dung / Diễn giải",
       dataIndex: "description",
       render: (text: string, record: TransactionRecord) => (
-        <div style={{ maxWidth: 300 }}>
+        <div style={{ maxWidth: 250 }}>
           <div className="font-medium text-blue-800">{record.partner_name}</div>
           <div
             className="text-xs text-gray-600"
@@ -163,7 +163,7 @@ const FinanceTransactionPage = () => {
     {
       title: "Hành động",
       key: "action",
-      width: 160, // Tăng độ rộng một chút
+      width: 200, // Tăng độ rộng một chút
       fixed: "right" as const,
       align: "center" as const,
       render: (_: any, record: TransactionRecord) => (

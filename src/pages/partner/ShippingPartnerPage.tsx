@@ -181,6 +181,8 @@ const ShippingPartnerPage: React.FC = () => {
         cut_off_time: values.cutOffTime
           ? values.cutOffTime.format("HH:mm:ss")
           : null,
+        speed_hours: 24, // Mặc định 24h
+        base_fee: 0, // Mặc định 0đ
       };
       const rulesData = (values.deliveryRules || []).map((r: any) => ({
         zone_name: r.zone_name,

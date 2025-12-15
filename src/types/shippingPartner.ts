@@ -31,6 +31,8 @@ export interface ShippingPartner {
   cut_off_time: string | null; // (HH:mm)
   created_at?: string;
   updated_at?: string;
+  speed_hours: number;
+  base_fee: number;
 }
 
 // --- 4. Bảng Danh sách (Output của RPC get_shipping_partners_list) ---
@@ -43,6 +45,8 @@ export interface ShippingPartnerListRecord {
   phone: string | null;
   cut_off_time: string | null; // (HH:mm)
   status: ShippingPartnerStatus;
+  speed_hours: number;
+  base_fee: number;
 }
 
 // --- 5. Chi tiết (Output của RPC get_shipping_partner_details) ---
@@ -62,6 +66,8 @@ export interface ShippingPartnerFormData {
   notes: string | null;
   status: ShippingPartnerStatus;
   cut_off_time: string | null; // Dayjs object sẽ được format thành string
+  speed_hours: number;
+  base_fee: number;
 }
 
 // --- 7. Khuôn mẫu "Bộ não" (Store) ---

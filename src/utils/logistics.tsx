@@ -1,5 +1,4 @@
 // src/utils/logistics.tsx
-//import React from "react";
 
 // Định nghĩa kiểu dữ liệu cho record để TypeScript hiểu
 interface LogisticsRecord {

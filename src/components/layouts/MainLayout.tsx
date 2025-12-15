@@ -1,16 +1,16 @@
 // src/components/layouts/MainLayout.tsx
 import {
-  HomeOutlined,
+  //HomeOutlined,
   ShopOutlined,
-  HeartOutlined,
+  //HeartOutlined,
   ShoppingCartOutlined,
-  DropboxOutlined,
+  //DropboxOutlined,
   ContactsOutlined,
   BulbOutlined,
   AuditOutlined,
-  AccountBookOutlined,
-  LineChartOutlined,
-  SettingOutlined,
+  // AccountBookOutlined,
+  // LineChartOutlined,
+  // SettingOutlined,
   BellOutlined,
   LogoutOutlined,
   UserOutlined,
@@ -42,7 +42,18 @@ import {
   LockOutlined,
   IdcardOutlined,
   FilePdfOutlined,
-  ProductOutlined, // <-- Thêm icon mới
+  ProductOutlined,
+  SettingFilled,
+  PieChartFilled,
+  EuroCircleFilled,
+  //HomeFilled,
+  //ShopFilled,
+  //ShoppingFilled,
+  HeartTwoTone,
+  HomeTwoTone,
+  ShoppingTwoTone,
+  ShopTwoTone,
+  GiftTwoTone, // <-- Thêm icon mới
 } from "@ant-design/icons";
 import {
   Layout,
@@ -78,10 +89,10 @@ function getItem(
 
 const finalMenuItems: MenuItem[] = [
   // 1. Trang chủ
-  getItem(<Link to="/">Trang chủ</Link>, "/", <HomeOutlined />),
+  getItem(<Link to="/">Trang chủ</Link>, "/", <HomeTwoTone />),
 
   // 2. Kênh Cửa Hàng
-  getItem("Kênh Cửa Hàng", "store", <ShopOutlined />, [
+  getItem("Kênh Cửa Hàng", "store", <ShoppingTwoTone />, [
     getItem(
       <Link to="/store/dashboard">Dashboard Cửa hàng</Link>,
       "/store/dashboard",
@@ -129,7 +140,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 3. Nghiệp vụ Y Tế
-  getItem("Nghiệp vụ Y Tế", "medical", <HeartOutlined />, [
+  getItem("Nghiệp vụ Y Tế", "medical", <HeartTwoTone />, [
     getItem(
       <Link to="/medical/dashboard">Dashboard Y Tế</Link>,
       "/medical/dashboard",
@@ -148,7 +159,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 4. Bán buôn
-  getItem("Bán buôn (B2B)", "b2b", <ShoppingCartOutlined />, [
+  getItem("Bán buôn (B2B)", "b2b", <ShopTwoTone />, [
     getItem(
       <Link to="/b2b/dashboard">Thông tin chung B2B</Link>,
       "/b2b/dashboard",
@@ -184,11 +195,11 @@ const finalMenuItems: MenuItem[] = [
   getItem(
     <Link to="/services">Combo và Dịch Vụ</Link>,
     "services",
-    <GiftOutlined />
+    <GiftTwoTone />
   ),
 
   // 6. Kho - Hàng Hóa
-  getItem("Kho – Hàng Hóa", "inventory", <DropboxOutlined />, [
+  getItem("Kho – Hàng Hóa", "inventory", <ProductOutlined />, [
     getItem(
       <Link to="/inventory/products">Danh sách Sản Phẩm</Link>,
       "/inventory/products",
@@ -342,7 +353,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 12. Tài Chính & Kế Toán (CẬP NHẬT MENU MỚI TẠI ĐÂY)
-  getItem("Tài Chính & Kế Toán", "finance", <AccountBookOutlined />, [
+  getItem("Tài Chính & Kế Toán", "finance", <EuroCircleFilled />, [
     getItem(
       <Link to="/finance/dashboard">Dashboard Tài chính</Link>,
       "/finance/dashboard",
@@ -401,7 +412,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 13. Báo Cáo
-  getItem("Báo Cáo", "reports", <LineChartOutlined />, [
+  getItem("Báo Cáo", "reports", <PieChartFilled />, [
     getItem("Báo cáo Kinh doanh", "report-sales", <AreaChartOutlined />, [
       getItem(
         <Link to="/reports/sales/overview">Báo cáo Bán hàng</Link>,
@@ -452,7 +463,7 @@ const finalMenuItems: MenuItem[] = [
   getItem(
     <Link to="/settings">Cấu hình hệ thống</Link>,
     "/settings",
-    <SettingOutlined />
+    <SettingFilled />
   ),
 ];
 

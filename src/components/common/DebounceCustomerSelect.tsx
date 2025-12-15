@@ -1,22 +1,15 @@
+// src/components/common/DebounceCustomerSelect.tsx
 import { UserOutlined } from "@ant-design/icons";
-import { Select, Spin, Avatar, Typography, Empty, Tag } from "antd";
+import { Select, Spin, Avatar, Typography, Empty } from "antd";
 import React, { useEffect, useState } from "react";
 
 import { useDebounce } from "@/hooks/useDebounce";
-import { supabase } from "@/lib/supabaseClient";
-
-export interface Customer {
-  id: string;
-  name: string; // DB Sếp là 'name'
-  phone: string; // DB Sếp là 'phone'
-  type: string;
-  avatar_url?: string;
-  customer_code: string;
-}
+import { salesService } from "@/services/salesService"; // Dùng service mới
 
 interface DebounceCustomerSelectProps {
-  value?: any; // Để tương thích Form
-  onChange?: (value: any) => void;
+  value?: any;
+  // AURA FIX: Sửa type onChange để chấp nhận 2 tham số
+  onChange?: (value: any, option?: any) => void;
   placeholder?: string;
   style?: React.CSSProperties;
 }
@@ -35,22 +28,10 @@ const DebounceCustomerSelect: React.FC<DebounceCustomerSelectProps> = ({
   const fetchOptions = async (keyword: string) => {
     setFetching(true);
     try {
-      const term = keyword.trim().toLowerCase();
-      let query = supabase
-        .from("customers")
-        .select("id, name, phone, avatar_url, customer_code, type")
-        .limit(20);
+      // Gọi API B2B Search mới
+      const data = await salesService.searchCustomers(keyword);
 
-      if (term) {
-        query = query.or(`name.ilike.%${term}%,phone.ilike.%${term}%`);
-      } else {
-        query = query.order("created_at", { ascending: false });
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const formattedOptions = (data || []).map((c: Customer) => ({
+      const formattedOptions = data.map((c: any) => ({
         label: (
           <div
             style={{
@@ -60,21 +41,21 @@ const DebounceCustomerSelect: React.FC<DebounceCustomerSelectProps> = ({
               padding: "4px 0",
             }}
           >
-            <Avatar src={c.avatar_url} size="small" icon={<UserOutlined />} />
+            <Avatar
+              size="small"
+              icon={<UserOutlined />}
+              style={{ backgroundColor: "#87d068" }}
+            />
             <div style={{ lineHeight: 1.2 }}>
               <Typography.Text strong>{c.name}</Typography.Text>
               <div style={{ fontSize: 11, color: "#666" }}>
-                {c.customer_code} | {c.phone}
-                {c.type === "ToChuc" && (
-                  <Tag color="blue" style={{ marginLeft: 4, fontSize: 9 }}>
-                    Tổ chức
-                  </Tag>
-                )}
+                MST: {c.tax_code} | {c.phone}
               </div>
             </div>
           </div>
         ),
         value: c.id,
+        customer: c, // Đính kèm full object để dùng ở ngoài
       }));
       setOptions(formattedOptions);
     } catch (err) {
@@ -85,31 +66,27 @@ const DebounceCustomerSelect: React.FC<DebounceCustomerSelectProps> = ({
   };
 
   useEffect(() => {
-    fetchOptions(debouncedSearch);
+    if (debouncedSearch) fetchOptions(debouncedSearch);
   }, [debouncedSearch]);
 
   return (
     <Select
       showSearch
-      mode="multiple"
       filterOption={false}
       onSearch={setSearchQuery}
-      onFocus={() => {
-        if (options.length === 0) fetchOptions("");
-      }}
       notFoundContent={
         fetching ? (
           <Spin size="small" />
         ) : (
           <Empty
-            description="Không tìm thấy"
             image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="Không tìm thấy"
           />
         )
       }
       options={options}
       value={value}
-      onChange={onChange}
+      onChange={onChange} // Giờ đã khớp Type
       placeholder={placeholder}
       style={style}
       loading={fetching}
