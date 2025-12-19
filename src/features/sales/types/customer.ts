@@ -1,4 +1,4 @@
-// src/types/customer.ts
+// src/features/sales/types/customer.ts
 
 // --- 1. ENUMs & Types (Khớp với CSDL) ---
 export type CustomerB2CType = "CaNhan" | "ToChuc";

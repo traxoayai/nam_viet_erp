@@ -1,3 +1,5 @@
+// src/features/sales/types/b2b.types.ts
+
 // 1. Dữ liệu từng dòng đơn hàng
 export interface B2BOrderItem {
   id: string;

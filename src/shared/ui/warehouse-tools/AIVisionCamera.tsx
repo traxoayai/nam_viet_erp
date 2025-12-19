@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { Modal, Button, message, Spin, Grid, Typography } from "antd";
-import { Camera, X, RefreshCw, CheckCircle } from "lucide-react";
+import { Camera, X, RefreshCw } from "lucide-react";
 
 import { inventoryService } from "@/features/inventory/api/inventoryService";
 

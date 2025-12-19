@@ -1,4 +1,4 @@
-// src/types/customerB2B.ts
+// src/features/sales/types/customerB2B.ts
 
 // Import ENUM chung từ file B2C (vì nó là public.account_status)
 import { CustomerStatus } from "@/features/sales/types/customer";

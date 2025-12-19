@@ -1,4 +1,4 @@
-// src/types/pos_sales.ts
+// src/features/sales/types/pos_sales.ts
 import { VoucherRecord } from "@/features/sales/types/b2b_sales";
 export type SalesOrderStatus = "DRAFT" | "QUOTE" | "CONFIRMED";
 
