@@ -1,4 +1,4 @@
-// src/components/layouts/MainLayout.tsx
+// src/shared/ui/layouts/MainLayout.tsx
 import {
   //HomeOutlined,
   ShopOutlined,
@@ -56,6 +56,7 @@ import {
   ShopTwoTone,
   GiftTwoTone, // <-- Thêm icon mới
 } from "@ant-design/icons";
+import { LogOut } from "lucide-react";
 import {
   Layout,
   Button,
@@ -213,9 +214,14 @@ const finalMenuItems: MenuItem[] = [
     ),
     // --- MỚI: NHẬP KHO (INBOUND) ---
     getItem(
-      <Link to="/inventory/inbound">Nhập Kho (Chờ hàng)</Link>,
+      <Link to="/inventory/inbound">Nhập Kho</Link>,
       "/inventory/inbound",
       <DownloadOutlined />
+    ),
+    getItem(
+      <Link to="/inventory/outbound">Xuất Kho</Link>,
+      "/inventory/outbound",
+      <LogOut size={16} /> // Lucide Icon
     ),
     getItem(
       <Link to="/inventory/transfer">Chuyển kho</Link>,

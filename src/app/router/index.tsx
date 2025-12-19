@@ -21,6 +21,7 @@ import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
 import WarehouseInboundPage from "@/pages/inventory/receipt/WarehouseInboundPage";
 import WarehouseReceiptPage from "@/pages/inventory/receipt/WarehouseReceiptPage";
+import WarehouseOutboundPage from "@/pages/inventory/outbound/WarehouseOutboundPage";
 import DiscountCodeManagement from "@/pages/marketing/DiscountCodeManagement";
 import LoyaltyPolicyPage from "@/pages/marketing/LoyaltyPolicyPage";
 import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
@@ -173,6 +174,10 @@ const routes: RouteObject[] = [
           {
             path: "inventory/inbound",
             element: <WarehouseInboundPage />,
+          },
+          {
+            path: "inventory/outbound",
+            element: <WarehouseOutboundPage />,
           },
           {
             path: "inventory/transfer",
