@@ -1,18 +1,26 @@
 // src/pages/sales/CreateB2BOrderPage.tsx
 import { ArrowLeftOutlined } from "@ant-design/icons";
-import { Layout, Row, Col, Typography, Card, Input, message } from "antd";
+import {
+  Layout,
+  Row,
+  Col,
+  Typography,
+  Card,
+  Input,
+  message,
+} from "antd";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { ActionButtons } from "@/features/sales-b2b/create/components/Footer/ActionButtons";
-import { PaymentSummary } from "@/features/sales-b2b/create/components/Footer/PaymentSummary";
-import { VoucherSelector } from "@/features/sales-b2b/create/components/Footer/VoucherSelector";
-import { CustomerInfoCard } from "@/features/sales-b2b/create/components/Header/CustomerInfoCard";
-import { CustomerSelector } from "@/features/sales-b2b/create/components/Header/CustomerSelector";
-import { ShippingForm } from "@/features/sales-b2b/create/components/Header/ShippingForm";
-import { SalesOrderTable } from "@/features/sales-b2b/create/components/ProductGrid/SalesOrderTable";
-import { useCreateOrderB2B } from "@/features/sales-b2b/create/hooks/useCreateOrderB2B";
-import { salesService } from "@/services/salesService";
+import { salesService } from "@/features/sales/api/salesService";
+import { PaymentSummary } from "@/features/sales/components/Footer/PaymentSummary";
+import { VoucherSelector } from "@/features/sales/components/Footer/VoucherSelector";
+import { CustomerInfoCard } from "@/features/sales/components/Header/CustomerInfoCard";
+import { CustomerSelector } from "@/features/sales/components/Header/CustomerSelector";
+import { ShippingForm } from "@/features/sales/components/Header/ShippingForm";
+import { SalesOrderTable } from "@/features/sales/components/ProductGrid/SalesOrderTable";
+import { useCreateOrderB2B } from "@/features/sales/hooks/useCreateOrderB2B";
+import { ActionButtons } from "@/features/sales/components/Footer/ActionButtons";
 
 const { Content } = Layout;
 const { Title } = Typography;

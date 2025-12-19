@@ -3,7 +3,7 @@ import { ClockCircleOutlined, LogoutOutlined } from "@ant-design/icons";
 import { Button, Card, Layout, Result, Typography } from "antd";
 import React from "react";
 
-import { useAuthStore } from "@/stores/useAuthStore";
+import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 
 const { Content } = Layout;
 const { Title, Paragraph } = Typography;

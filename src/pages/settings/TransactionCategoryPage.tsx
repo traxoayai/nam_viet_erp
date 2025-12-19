@@ -30,8 +30,8 @@ import React, { useEffect } from "react";
 
 import type { TableProps } from "antd";
 
-import { useTransactionCategoryStore } from "@/stores/useTransactionCategoryStore";
-import { TransactionCategoryRecord } from "@/types/transactionCategory";
+import { useTransactionCategoryStore } from "@/features/finance/stores/useTransactionCategoryStore";
+import { TransactionCategoryRecord } from "@/features/finance/types/transactionCategory";
 
 const { Title, Text } = Typography;
 const { Option } = Select;

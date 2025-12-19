@@ -4,12 +4,12 @@ import viVN from "antd/locale/vi_VN";
 import { useEffect } from "react";
 import { useRoutes } from "react-router-dom";
 
-import routes from "./router";
-import { useAuthStore } from "./stores/useAuthStore";
+import routes from "./app/router";
+import { useAuthStore } from "./features/auth/stores/useAuthStore";
 
-import { SystemSetupModal } from "@/components/common/SystemSetupModal";
-import { NotificationProvider } from "@/contexts/NotificationContext";
-import theme from "@/theme";
+import { NotificationProvider } from "@/app/contexts/NotificationContext";
+import theme from "@/app/theme";
+import { SystemSetupModal } from "@/shared/ui/common/SystemSetupModal";
 
 // --- MỚI: Import SystemSetupModal ---
 

@@ -35,8 +35,8 @@ import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { supabase } from "@/lib/supabaseClient";
-import { purchaseOrderService } from "@/services/purchaseOrderService";
+import { supabase } from "@/shared/lib/supabaseClient";
+import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;

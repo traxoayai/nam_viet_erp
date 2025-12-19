@@ -28,8 +28,8 @@ import customParseFormat from "dayjs/plugin/customParseFormat"; // Import plugin
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
-import { invoiceService } from "@/services/invoiceService";
-import { useProductStore } from "@/stores/productStore";
+import { invoiceService } from "@/features/finance/api/invoiceService";
+import { useProductStore } from "@/features/inventory/stores/productStore";
 
 // Kích hoạt plugin parse định dạng tùy chỉnh
 dayjs.extend(customParseFormat);

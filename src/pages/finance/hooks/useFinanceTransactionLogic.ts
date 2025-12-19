@@ -1,7 +1,7 @@
 // src/pages/finance/hooks/useFinanceTransactionLogic.ts
 import { useState, useEffect } from "react";
 
-import { useFinanceStore } from "@/stores/useFinanceStore";
+import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
 
 export const useFinanceTransactionLogic = () => {
   const {

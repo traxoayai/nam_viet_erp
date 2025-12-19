@@ -8,12 +8,12 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./App.tsx";
 import "antd/dist/reset.css";
-import "./styles/globals.css";
+import "./app/styles/globals.css";
 import "dayjs/locale/vi";
 
 // --- MỚI: Import Context ---
-import { AuthProvider } from "@/contexts/AuthProvider";
-import { NotificationProvider } from "@/contexts/NotificationContext";
+import { AuthProvider } from "@/app/contexts/AuthProvider";
+import { NotificationProvider } from "@/app/contexts/NotificationContext";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

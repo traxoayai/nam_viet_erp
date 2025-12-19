@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import Logo from "@/assets/logo.png"; // <-- MỚI: Import logo
-import { supabase } from "@/lib/supabaseClient"; // Import "bộ đàm" Supabase
+import { supabase } from "@/shared/lib/supabaseClient"; // Import "bộ đàm" Supabase
 
 const { Title } = Typography;
 

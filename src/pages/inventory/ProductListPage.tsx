@@ -38,10 +38,10 @@ import * as XLSX from "xlsx";
 
 import type { TableProps, UploadProps } from "antd";
 
-import { useDebounce } from "@/hooks/useDebounce";
-import * as productService from "@/services/productService";
-import { useProductStore } from "@/stores/productStore";
-import { Product } from "@/types/product";
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import * as productService from "@/features/inventory/api/productService";
+import { useProductStore } from "@/features/inventory/stores/productStore";
+import { Product } from "@/features/inventory/types/product";
 
 const { Title, Text } = Typography;
 

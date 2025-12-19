@@ -36,7 +36,7 @@ import * as XLSX from "xlsx"; // Nhớ cài: npm install xlsx
 
 import InvoiceUploadModal from "./InvoiceUploadModal";
 
-import { invoiceService } from "@/services/invoiceService";
+import { invoiceService } from "@/features/finance/api/invoiceService";
 
 const { Content } = Layout;
 const { Text } = Typography;

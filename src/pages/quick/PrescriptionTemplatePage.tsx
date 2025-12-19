@@ -36,9 +36,9 @@ import {
 import viVN from "antd/locale/vi_VN";
 import React, { useEffect, useState } from "react";
 
-import DebounceProductSelect from "@/components/common/DebounceProductSelect";
-import { usePrescriptionTemplateStore } from "@/stores/usePrescriptionTemplateStore";
-import { PrescriptionTemplate } from "@/types/prescriptionTemplate";
+import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect";
+import { usePrescriptionTemplateStore } from "@/features/settings/stores/usePrescriptionTemplateStore";
+import { PrescriptionTemplate } from "@/features/settings/types/prescriptionTemplate";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;

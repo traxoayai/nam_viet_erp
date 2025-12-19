@@ -38,9 +38,12 @@ import dayjs from "dayjs";
 import { useState, useEffect } from "react";
 
 // Import Store & Components
-import DebounceCustomerSelect from "@/components/common/DebounceCustomerSelect";
-import { useProductStore } from "@/stores/productStore";
-import { usePromotionStore, Promotion } from "@/stores/usePromotionStore";
+import DebounceCustomerSelect from "@/shared/ui/common/DebounceCustomerSelect";
+import { useProductStore } from "@/features/inventory/stores/productStore";
+import {
+  usePromotionStore,
+  Promotion,
+} from "@/features/marketing/stores/usePromotionStore";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;

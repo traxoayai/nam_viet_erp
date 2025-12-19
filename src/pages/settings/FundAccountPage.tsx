@@ -32,9 +32,9 @@ import React, { useEffect } from "react";
 import type { TableProps } from "antd";
 
 // --- NÂNG CẤP V400: Import các "bộ não" ---
-import { useBankStore } from "@/stores/useBankStore"; // Dùng để lấy danh sách ngân hàng
-import { useFundAccountStore } from "@/stores/useFundAccountStore";
-import { FundAccountRecord } from "@/types/fundAccount";
+import { useBankStore } from "@/features/finance/stores/useBankStore"; // Dùng để lấy danh sách ngân hàng
+import { useFundAccountStore } from "@/features/finance/stores/useFundAccountStore";
+import { FundAccountRecord } from "@/features/finance/types/fundAccount";
 
 const { Title, Text } = Typography;
 const { Option } = Select;

@@ -32,8 +32,8 @@ import {
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { useSupplierStore } from "@/stores/supplierStore";
-import { useBankStore } from "@/stores/useBankStore"; // <-- MỚI: Import Bank Store
+import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
+import { useBankStore } from "@/features/finance/stores/useBankStore"; // <-- MỚI: Import Bank Store
 
 const { Title, Text } = Typography;
 const { Option } = Select;

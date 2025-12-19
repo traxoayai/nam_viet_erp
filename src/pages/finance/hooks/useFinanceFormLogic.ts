@@ -4,12 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 
 import type { UploadFile } from "antd/es/upload/interface";
 
-import { uploadFile } from "@/services/storageService";
-import { useSupplierStore } from "@/stores/supplierStore";
-import { useFinanceStore } from "@/stores/useFinanceStore";
-import { useTransactionCategoryStore } from "@/stores/useTransactionCategoryStore";
-import { useUserStore } from "@/stores/useUserStore";
-import { CreateTransactionParams } from "@/types/finance";
+import { uploadFile } from "@/shared/api/storageService";
+import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
+import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
+import { useTransactionCategoryStore } from "@/features/finance/stores/useTransactionCategoryStore";
+import { useUserStore } from "@/features/auth/stores/useUserStore";
+import { CreateTransactionParams } from "@/features/finance/types/finance";
 
 export const useFinanceFormLogic = (
   open: boolean,

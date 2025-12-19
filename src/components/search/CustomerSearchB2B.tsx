@@ -3,8 +3,8 @@ import { UserOutlined } from "@ant-design/icons";
 import { Select, Spin, Typography, Empty, Tag } from "antd";
 import { useState, useEffect } from "react";
 
-import { useDebounce } from "@/hooks/useDebounce";
-import { salesService } from "@/services/salesService";
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import { salesService } from "@/features/sales/api/salesService";
 
 const { Text } = Typography;
 

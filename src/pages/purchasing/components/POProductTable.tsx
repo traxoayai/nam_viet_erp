@@ -15,7 +15,7 @@ import {
 import React from "react";
 
 // FIX: Import POItem để định nghĩa kiểu dữ liệu chính xác
-import { POItem } from "@/types/purchaseOrderTypes";
+import { POItem } from "@/features/purchasing/types/purchaseOrderTypes";
 
 const { useBreakpoint } = Grid;
 const { Text } = Typography;

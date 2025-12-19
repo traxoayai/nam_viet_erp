@@ -32,8 +32,8 @@ import {
 import viVN from "antd/locale/vi_VN";
 import { useEffect } from "react";
 
-import { useLoyaltyStore } from "@/stores/useLoyaltyStore";
-import { LoyaltyPolicy } from "@/types/loyalty";
+import { useLoyaltyStore } from "@/features/marketing/stores/useLoyaltyStore";
+import { LoyaltyPolicy } from "@/features/marketing/types/loyalty";
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;

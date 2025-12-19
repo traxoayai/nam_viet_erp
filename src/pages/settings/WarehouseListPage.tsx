@@ -30,9 +30,9 @@ import React, { useState, useEffect } from "react";
 
 import type { TableProps } from "antd";
 
-import { useDebounce } from "@/hooks/useDebounce";
-import { useWarehouseStore } from "@/stores/warehouseStore";
-import { Warehouse } from "@/types/warehouse";
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import { useWarehouseStore } from "@/features/inventory/stores/warehouseStore";
+import { Warehouse } from "@/features/inventory/types/warehouse";
 
 const { Title, Text } = Typography;
 const { Option } = Select;

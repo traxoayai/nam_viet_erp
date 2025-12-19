@@ -29,9 +29,9 @@ import { useNavigate } from "react-router-dom"; // Import useNavigate
 
 import type { TableProps } from "antd";
 
-import { useDebounce } from "@/hooks/useDebounce";
-import { useSupplierStore } from "@/stores/supplierStore";
-import { Supplier } from "@/types/supplier";
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
+import { Supplier } from "@/features/purchasing/types/supplier";
 
 const { Title, Text } = Typography;
 

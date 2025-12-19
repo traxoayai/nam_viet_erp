@@ -53,11 +53,11 @@ import React, { useState, useEffect } from "react";
 import type { TableProps, TabsProps } from "antd";
 
 // import { supabase } from "@/lib/supabaseClient";
-import { useRoleStore } from "@/stores/useRoleStore";
-import { useUserStore } from "@/stores/useUserStore";
-import { useWarehouseStore } from "@/stores/warehouseStore";
-import { Role } from "@/types/role";
-import { UserRoleInfo, UserAssignment } from "@/types/user";
+import { useRoleStore } from "@/features/auth/stores/useRoleStore";
+import { useUserStore } from "@/features/auth/stores/useUserStore";
+import { useWarehouseStore } from "@/features/inventory/stores/warehouseStore";
+import { Role } from "@/features/auth/types/role";
+import { UserRoleInfo, UserAssignment } from "@/features/auth/types/user";
 
 const { Text } = Typography;
 

@@ -35,8 +35,8 @@ import React, { useState, useEffect, useMemo } from "react";
 // import { useNavigate } from "react-router-dom";
 
 // import { uploadAvatar, uploadIdentityCard } from "@/services/storageService"; // Giả định
-import { useAuthStore } from "@/stores/useAuthStore";
-import { useBankStore } from "@/stores/useBankStore";
+import { useAuthStore } from "@/features/auth/stores/useAuthStore";
+import { useBankStore } from "@/features/finance/stores/useBankStore";
 
 const { Content } = Layout;
 const { Title, Paragraph } = Typography;

@@ -35,14 +35,14 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import type { UploadFile, UploadProps } from "antd/es/upload/interface";
 
-import SupplierSelectModal from "@/components/common/SupplierSelectModal";
+import SupplierSelectModal from "@/shared/ui/common/SupplierSelectModal";
 // SỬ DỤNG SERVICE
 import {
   addProduct,
   updateProduct,
   uploadProductImage,
-} from "@/services/productService";
-import { useProductStore } from "@/stores/productStore";
+} from "@/features/inventory/api/productService";
+import { useProductStore } from "@/features/inventory/stores/productStore";
 
 const { Content } = Layout;
 const { Title } = Typography;

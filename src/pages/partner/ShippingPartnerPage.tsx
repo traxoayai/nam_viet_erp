@@ -45,15 +45,15 @@ import { v4 as uuidv4 } from "uuid";
 import type { TableProps } from "antd";
 
 // IMPORT "BỘ NÃO" VÀ "KHUÔN MẪU"
-import { useDebounce } from "@/hooks/useDebounce";
-import { useShippingPartnerStore } from "@/stores/useShippingPartnerStore";
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import { useShippingPartnerStore } from "@/features/partners/stores/useShippingPartnerStore";
 import {
   ShippingPartnerListRecord,
   ShippingPartnerFormData,
   //   ShippingRule,
   ShippingPartnerStatus,
   ShippingPartnerType,
-} from "@/types/shippingPartner";
+} from "@/features/partners/types/shippingPartner";
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;

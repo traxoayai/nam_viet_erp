@@ -45,9 +45,9 @@ import dayjs from "dayjs";
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { purchaseOrderService } from "@/services/purchaseOrderService";
-import { usePurchaseOrderStore } from "@/stores/usePurchaseOrderStore";
-import { PurchaseOrderMaster } from "@/types/purchase";
+import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
+import { usePurchaseOrderStore } from "@/features/purchasing/stores/usePurchaseOrderStore";
+import { PurchaseOrderMaster } from "@/features/purchasing/types/purchase";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;

@@ -35,9 +35,9 @@ import { v4 as uuidv4 } from "uuid";
 import type { TableProps } from "antd";
 
 // IMPORT "BỘ NÃO" VÀ "KHUÔN MẪU"
-import { uploadAvatar } from "@/services/customerService";
-import { useCustomerB2CStore } from "@/stores/useCustomerB2CStore";
-import { CustomerHistory, CustomerFormData } from "@/types/customer";
+import { uploadAvatar } from "@/features/sales/api/customerService";
+import { useCustomerB2CStore } from "@/features/sales/stores/useCustomerB2CStore";
+import { CustomerHistory, CustomerFormData } from "@/features/sales/types/customer";
 
 const { Content } = Layout;
 const { Title } = Typography;

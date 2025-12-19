@@ -38,8 +38,8 @@ import { FinanceFormModal } from "./components/FinanceFormModal";
 import { TransactionDetailModal } from "./components/TransactionDetailModal"; // Import Modal mới
 import { useFinanceTransactionLogic } from "./hooks/useFinanceTransactionLogic";
 
-import { useFinanceStore } from "@/stores/useFinanceStore";
-import { TransactionRecord } from "@/types/finance";
+import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
+import { TransactionRecord } from "@/features/finance/types/finance";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);

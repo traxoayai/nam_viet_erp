@@ -14,7 +14,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import Logo from "@/assets/logo.png"; // <-- MỚI: Import logo
 // import { supabase } from "@/lib/supabaseClient"; // Import "bộ đàm" Supabase
-import { useAuthStore } from "@/stores/useAuthStore"; // SỬA LỖI: Import đúng "bộ não"
+import { useAuthStore } from "@/features/auth/stores/useAuthStore"; // SỬA LỖI: Import đúng "bộ não"
 
 const { Title } = Typography;
 

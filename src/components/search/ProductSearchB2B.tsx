@@ -3,9 +3,9 @@ import { BarcodeOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import { Select, Avatar, Tag, Typography, Spin, Empty } from "antd";
 import { useState, useEffect } from "react";
 
-import { useDebounce } from "@/hooks/useDebounce";
-import { salesService } from "@/services/salesService";
-import { useSalesStore } from "@/stores/useSalesStore";
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import { salesService } from "@/features/sales/api/salesService";
+import { useSalesStore } from "@/features/sales/stores/useSalesStore";
 
 const { Text } = Typography;
 

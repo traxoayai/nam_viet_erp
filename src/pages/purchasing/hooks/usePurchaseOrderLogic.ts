@@ -4,11 +4,11 @@ import dayjs from "dayjs";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { supabase } from "@/lib/supabaseClient";
-import { purchaseOrderService } from "@/services/purchaseOrderService";
-import { useProductStore } from "@/stores/productStore";
+import { supabase } from "@/shared/lib/supabaseClient";
+import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
+import { useProductStore } from "@/features/inventory/stores/productStore";
 // Import Interface từ file Type chung để tránh lỗi vòng lặp
-import { POItem } from "@/types/purchaseOrderTypes";
+import { POItem } from "@/features/purchasing/types/purchaseOrderTypes";
 
 export const usePurchaseOrderLogic = () => {
   const { message, modal } = App.useApp();

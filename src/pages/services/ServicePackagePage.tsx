@@ -43,10 +43,10 @@ import dayjs from "dayjs";
 import React, { useState, useEffect } from "react";
 
 // Import Stores & Components
-import DebounceProductSelect from "@/components/common/DebounceProductSelect"; // <-- MỚI: Component dùng chung
-import { useServicePackageStore } from "@/stores/useServicePackageStore";
-import { useWarehouseStore } from "@/stores/warehouseStore"; // <-- MỚI: Store kho
-import { ServicePackageRecord } from "@/types/servicePackage";
+import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect"; // <-- MỚI: Component dùng chung
+import { useServicePackageStore } from "@/features/marketing/stores/useServicePackageStore";
+import { useWarehouseStore } from "@/features/inventory/stores/warehouseStore"; // <-- MỚI: Store kho
+import { ServicePackageRecord } from "@/features/marketing/types/servicePackage";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;

@@ -37,7 +37,7 @@ import type { TableProps } from "antd"; // Import kiểu dữ liệu
 import "dayjs/locale/vi";
 
 // --- NÂNG CẤP V400: Sử dụng Alias Path ---
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 const { Title, Text } = Typography;
 

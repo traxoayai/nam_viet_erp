@@ -56,17 +56,17 @@ import type { TableProps, TabsProps } from "antd";
 // import type { UploadRequestOption } from "antd/es/upload/interface";
 
 // IMPORT "BỘ NÃO" VÀ "KHUÔN MẪU"
-import { useDebounce } from "@/hooks/useDebounce";
-import { uploadLicense } from "@/services/customerB2BService"; // Service B2B
-import { useCustomerB2BStore } from "@/stores/useCustomerB2BStore"; // Store B2B
-import { useUserStore } from "@/stores/useUserStore"; // Store Users (cho NVKD)
-import { CustomerStatus } from "@/types/customer"; // Lấy Status từ B2C
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import { uploadLicense } from "@/features/sales/api/customerB2BService"; // Service B2B
+import { useCustomerB2BStore } from "@/features/sales/stores/useCustomerB2BStore"; // Store B2B
+import { useUserStore } from "@/features/auth/stores/useUserStore"; // Store Users (cho NVKD)
+import { CustomerStatus } from "@/features/sales/types/customer"; // Lấy Status từ B2C
 import {
   CustomerB2BListRecord,
   CustomerB2BFormData,
   //   CustomerB2BContact,
   TransactionHistory,
-} from "@/types/customerB2B";
+} from "@/features/sales/types/customerB2B";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;

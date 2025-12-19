@@ -26,9 +26,9 @@ import React, { useEffect } from "react";
 
 import { useFinanceFormLogic } from "../hooks/useFinanceFormLogic";
 
-import { useBankStore } from "@/stores/useBankStore";
-import { useFinanceStore } from "@/stores/useFinanceStore";
-import { useTransactionCategoryStore } from "@/stores/useTransactionCategoryStore";
+import { useBankStore } from "@/features/finance/stores/useBankStore";
+import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
+import { useTransactionCategoryStore } from "@/features/finance/stores/useTransactionCategoryStore";
 
 const { Option } = Select;
 const { Text } = Typography;

@@ -9,8 +9,8 @@ import { Modal, Upload, Steps, App } from "antd";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { invoiceService } from "@/services/invoiceService";
-import { useInvoiceStore } from "@/stores/invoiceStore";
+import { invoiceService } from "@/features/finance/api/invoiceService";
+import { useInvoiceStore } from "@/features/finance/stores/invoiceStore";
 
 const { Dragger } = Upload;
 //const { Text } = Typography;

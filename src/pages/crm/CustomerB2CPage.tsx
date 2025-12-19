@@ -55,10 +55,10 @@ import type { TableProps, UploadProps } from "antd";
 // import type { UploadRequestOption } from "antd/es/upload/interface";
 
 // IMPORT CÁC "BỘ NÃO" VÀ "KHUÔN MẪU"
-import GuardianSelectModal from "@/components/common/GuardianSelectModal";
-import { useDebounce } from "@/hooks/useDebounce";
-import { uploadAvatar } from "@/services/customerService"; // Chỉ import service upload
-import { useCustomerB2CStore } from "@/stores/useCustomerB2CStore";
+import GuardianSelectModal from "@/shared/ui/common/GuardianSelectModal";
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import { uploadAvatar } from "@/features/sales/api/customerService"; // Chỉ import service upload
+import { useCustomerB2CStore } from "@/features/sales/stores/useCustomerB2CStore";
 // import { useUserStore } from "@/stores/useUserStore"; // Dùng cho Tab Giám hộ
 // import { useWarehouseStore } from "@/stores/warehouseStore"; // Dùng cho Tab Tổ chức (sau)
 import {
@@ -68,7 +68,7 @@ import {
   CustomerHistory,
   //   CustomerGuardian,
   CustomerFormData,
-} from "@/types/customer";
+} from "@/features/sales/types/customer";
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;

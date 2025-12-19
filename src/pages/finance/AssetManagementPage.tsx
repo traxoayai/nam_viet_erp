@@ -43,12 +43,12 @@ import dayjs from "dayjs";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { v4 as uuidv4 } from "uuid";
 
-import { useDebounce } from "@/hooks/useDebounce";
-import { uploadAssetImage } from "@/services/assetService";
-import { useSupplierStore } from "@/stores/supplierStore";
-import { useAssetStore } from "@/stores/useAssetStore";
-import { useUserStore } from "@/stores/useUserStore";
-import { useWarehouseStore } from "@/stores/warehouseStore";
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import { uploadAssetImage } from "@/features/finance/api/assetService";
+import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
+import { useAssetStore } from "@/features/finance/stores/useAssetStore";
+import { useUserStore } from "@/features/auth/stores/useUserStore";
+import { useWarehouseStore } from "@/features/inventory/stores/warehouseStore";
 import {
   AssetListRecord,
   AssetStatus,
@@ -56,7 +56,7 @@ import {
   MaintenancePlan,
   MaintenanceHistory,
   MaintenanceExecType,
-} from "@/types/asset";
+} from "@/features/finance/types/asset";
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;

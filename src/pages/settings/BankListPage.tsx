@@ -34,8 +34,8 @@ import React, { useState, useEffect } from "react";
 import type { TableProps } from "antd";
 
 // --- NÂNG CẤP V400: Import "bộ não" ---
-import { useBankStore } from "@/stores/useBankStore";
-import { BankRecord } from "@/types/bank";
+import { useBankStore } from "@/features/finance/stores/useBankStore";
+import { BankRecord } from "@/features/finance/types/bank";
 
 const { Title, Text } = Typography;
 const { Option } = Select;

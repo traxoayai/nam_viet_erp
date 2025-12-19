@@ -26,7 +26,7 @@ import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
 import React from "react";
 
-import { TransactionRecord } from "@/types/finance";
+import { TransactionRecord } from "@/features/finance/types/finance";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
