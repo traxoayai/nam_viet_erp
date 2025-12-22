@@ -74,6 +74,7 @@ import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 
 import Logo from "@/assets/logo.png";
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
+import { BookingModal } from "@/features/booking/components/BookingModal";
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid; // Hook kiểm tra kích thước màn hình
@@ -479,6 +480,7 @@ const MainLayout: React.FC = () => {
   const screens = useBreakpoint(); // Kiểm tra màn hình (xs, sm, md...)
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false); // State cho Mobile Drawer
+  const [isBookingOpen, setIsBookingOpen] = useState(false);
 
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
@@ -684,6 +686,17 @@ const MainLayout: React.FC = () => {
                 </Badge>
               }
             />
+            
+            {/* BOOKING BUTTON */}
+            <Button 
+                type="primary" 
+                icon={<PlusOutlined />} 
+                onClick={() => setIsBookingOpen(true)}
+                style={{ borderRadius: 20 }}
+            >
+                {screens.md ? "Tạo Lịch Hẹn" : "Đặt Lịch"}
+            </Button>
+
             <Dropdown menu={{ items: userMenuItems }} trigger={["click"]}>
               <Button
                 type="text"
@@ -725,6 +738,7 @@ const MainLayout: React.FC = () => {
           </div>
         </Content>
       </Layout>
+      <BookingModal visible={isBookingOpen} onCancel={() => setIsBookingOpen(false)} />
     </Layout>
   );
 };

@@ -410,7 +410,7 @@ const ServicePackagePage: React.FC = () => {
               {/* COMPONENT DÙNG CHUNG - FIX LỖI 1: Thêm value={selectValue} */}
               <DebounceProductSelect
                 style={{ width: "100%", marginBottom: 16 }}
-                searchTypes={["service"]}
+                searchTypes={typesToSearch}
                 value={selectValue}
                 onChange={(_, option: any) => {
                   // --- BẮT ĐẦU ĐOẠN SỬA ---
@@ -568,6 +568,10 @@ const ServicePackagePage: React.FC = () => {
         </Form.List>
       );
     };
+    // LOGIC MỚI: Xác định loại cần tìm dựa trên formType
+    // Nếu là 'service' (Tạo dịch vụ lẻ) -> Cần tìm Vật tư tiêu hao (Product) để tính giá vốn
+    // Nếu là 'bundle' (Tạo gói) -> Cần tìm Dịch vụ con (Service) hoặc Sản phẩm (Product) để bán kèm
+    const typesToSearch = formType === 'service' ? ['product'] : ['service', 'product'];
 
     return (
       <Form

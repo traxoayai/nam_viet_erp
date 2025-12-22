@@ -1,358 +1,252 @@
 // src/pages/inventory/receipt/WarehouseInboundPage.tsx
 import {
-  SearchOutlined,
-  SyncOutlined,
-  DownloadOutlined,
-  TruckOutlined,
-  HomeOutlined,
-  RocketOutlined,
-  InboxOutlined,
-  CarOutlined,
-  CodeSandboxOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  HistoryOutlined,
-} from "@ant-design/icons";
+  ArrowRight,
+  Calendar,
+  CheckCircle,
+  Filter,
+  Package,
+  Printer,
+  Truck
+} from "lucide-react";
 import {
-  Layout,
-  Card,
-  Table,
   Button,
+  Card,
+  Col,
+  DatePicker,
+  Input,
+  Progress,
+  Row,
+  Select,
+  Space,
+  Table,
   Tag,
   Typography,
-  Space,
-  Input,
-  DatePicker,
-  Row,
-  Col,
-  Statistic,
-  Badge,
-  Tooltip,
-  Tabs,
-  App,
+  Grid,
 } from "antd";
-import dayjs from "dayjs";
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import dayjs from "dayjs";
+import { useState } from "react";
 
-import { supabase } from "@/shared/lib/supabaseClient";
-import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
+import { useInboundList } from "@/features/inventory/hooks/useInboundList";
+import { InboundTask } from "@/features/inventory/types/inbound";
 
-const { Content } = Layout;
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
-
-const logisticsMap: any = {
-  coach: { icon: <CarOutlined />, color: "orange", text: "Xe khách" },
-  "3pl": { icon: <RocketOutlined />, color: "blue", text: "DV Vận chuyển" },
-  internal: { icon: <HomeOutlined />, color: "green", text: "Xe nhà" },
-  supplier: { icon: <InboxOutlined />, color: "cyan", text: "NCC giao" },
-  Unknown: { icon: <TruckOutlined />, color: "default", text: "--" },
-};
+const { useBreakpoint } = Grid;
 
 const WarehouseInboundPage = () => {
-  const { message } = App.useApp();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any[]>([]);
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize: 10,
-    total: 0,
-  });
-  const [filters, setFilters] = useState<any>({});
+  const screens = useBreakpoint();
+  
+  // Clean Logic Hook
+  const {
+      tasks,
+      totalCount,
+      loading,
+      filters,
+      setPage,
+      handleSearch,
+      handleStatusChange,
+      handleDateChange,      
+  } = useInboundList();
 
-  // FIX 1: Thêm Tab để quản lý trạng thái
-  const [activeTab, setActiveTab] = useState<string>("pending");
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  useEffect(() => {
-    fetchData();
-
-    // FIX 3: REAL-TIME LISTENER
-    // Lắng nghe mọi thay đổi trên bảng purchase_orders
-    const channel = supabase
-      .channel("realtime_inbound_orders")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "purchase_orders" },
-        (payload) => {
-          // Khi có thay đổi (kế toán tạo đơn, hoặc kho nhập xong), tự động load lại
-          console.log("Realtime Update:", payload);
-          fetchData();
-          message.info("Dữ liệu vừa được cập nhật tự động");
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [pagination.current, JSON.stringify(filters), activeTab]); // Reload khi đổi tab
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      // Logic lọc theo Tab
-      // Tab 'pending': Lấy đơn chờ (pending, partial)
-      // Tab 'history': Lấy đơn xong (delivered)
-      const statusFilter = activeTab === "pending" ? "pending" : "delivered";
-
-      const { data: resData, totalCount } = await purchaseOrderService.getPOs(
-        {
-          ...filters,
-          deliveryStatus: statusFilter,
-        },
-        pagination.current,
-        pagination.pageSize
-      );
-
-      // Lọc Client-side bổ sung để chắc chắn (Do API getPOs đang dùng logic OR phức tạp)
-      let filtered = resData;
-      if (activeTab === "pending") {
-        filtered = resData.filter((o: any) =>
-          ["pending", "partial"].includes(o.delivery_status)
-        );
-      } else {
-        filtered = resData.filter(
-          (o: any) => o.delivery_status === "delivered"
-        );
-      }
-
-      setData(filtered);
-      // Lưu ý: Total có thể bị lệch nếu filter client, tốt nhất là API filter chuẩn.
-      // Tạm thời chấp nhận hiển thị total của API trả về.
-      setPagination((prev) => ({ ...prev, total: totalCount }));
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Columns Configuration
   const columns = [
     {
-      title: "Mã Đơn",
+      title: "Mã PO",
       dataIndex: "code",
-      width: 140,
+      width: 250,
       render: (text: string) => (
-        <Tag color="blue" style={{ fontWeight: "bold" }}>
-          {text}
-        </Tag>
+         <Text strong style={{ fontSize: 14 }}>{text}</Text>
       ),
     },
     {
-      title: "Nhà Cung Cấp",
+      title: "Nhà cung cấp / Logistics",
       dataIndex: "supplier_name",
-      ellipsis: true,
-    },
-    {
-      title: "Ngày Đặt",
-      dataIndex: "created_at",
-      width: 120,
-      render: (d: string) => dayjs(d).format("DD/MM/YYYY"),
-    },
-    {
-      title: "Vận chuyển",
-      key: "logistics",
-      width: 160,
-      render: (_: any, record: any) => {
-        const methodKey = record.delivery_method || "Unknown";
-        const info = logisticsMap[methodKey] || logisticsMap["Unknown"];
-        return (
-          <Space>
-            <Tag icon={info.icon} color={info.color}>
-              {info.text}
-            </Tag>
-            {/* Ẩn số kiện nếu đã xong để đỡ rối */}
-            {activeTab === "pending" && (
-              <Badge
-                count={record.total_cartons}
-                overflowCount={99}
-                style={{ backgroundColor: "#f0f2f5", color: "#666" }}
-              />
-            )}
-          </Space>
-        );
-      },
-    },
-    {
-      title: "Tiến độ",
-      dataIndex: "progress_delivery",
-      width: 150,
-      render: (val: number, record: any) => (
-        <div style={{ width: 120 }}>
-          <div
-            style={{
-              fontSize: 11,
-              display: "flex",
-              justifyContent: "space-between",
-            }}
-          >
-            <span>
-              {record.delivery_status === "delivered" ? "Hoàn tất" : "Đã nhập"}:
-            </span>
-            <strong>{val}%</strong>
-          </div>
-          <div
-            style={{
-              height: 6,
-              background: "#f0f0f0",
-              borderRadius: 3,
-              marginTop: 2,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                width: `${val}%`,
-                background: val === 100 ? "#52c41a" : "#1890ff",
-              }}
-            />
-          </div>
+      render: (text: string, record: InboundTask) => (
+        <div>
+           <div style={{ fontWeight: 500 }}>{text}</div>
+           {record.carrier_name && (
+               <div style={{ fontSize: 10, color: "#666", display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+                   <Truck size={12}/> 
+                   {record.carrier_name} 
+                   {record.carrier_contact && <span>- {record.carrier_contact}</span>}
+               </div>
+           )}
         </div>
       ),
     },
     {
-      title: "Hành động",
-      width: 100,
-      fixed: "right" as const,
-      align: "center" as const,
-      render: (_: any, record: any) => (
-        <Tooltip
-          title={
-            activeTab === "pending"
-              ? "Tiến hành Nhập kho"
-              : "Xem lại phiếu nhập"
-          }
+      title: "Thông tin kiện",
+      dataIndex: "total_packages",
+      width: 120,
+      render: (val: number) => val ? (
+         <Tag icon={<Package size={12}/>} color="default">{val} kiện</Tag>
+      ) : <span style={{color: '#ccc'}}>-</span>
+    },
+    {
+      title: "Dự kiến về",
+      dataIndex: "expected_delivery_time", // Or expected_delivery_date based on API
+      width: 150,
+      render: (date: string) => date ? (
+         <Space size={4}>
+            <Calendar size={14} color="#666"/>
+            <span>{dayjs(date).format("HH:mm DD/MM")}</span>
+         </Space>
+      ) : "—",
+    },
+    {
+      title: "Tiến độ nhập",
+      dataIndex: "progress_percent",
+      width: 160,
+      render: (percent: number, record: InboundTask) => (
+         <div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 2 }}>
+                <span>{record.item_count}/{record.total_count} SP</span>
+                <span>{percent}%</span>
+            </div>
+            <Progress 
+                percent={percent} 
+                showInfo={false} 
+                size="small" 
+                status={percent === 100 ? "success" : "active"}
+                strokeColor={percent === 100 ? "#52c41a" : "#1890ff"} 
+            />
+         </div>
+      )
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      width: 120,
+      render: (status: string) => {
+        let color = "default";
+        let text = "Chờ nhập";
+        
+        if (status === "partial") {
+            color = "processing";
+            text = "Đang nhập";
+        } else if (status === "completed") {
+            color = "success";
+            text = "Hoàn tất";
+        }
+
+        return <Tag color={color}>{text.toUpperCase()}</Tag>;
+      },
+    },
+    {
+      title: "Thao tác",
+      align: "right" as const,
+      width: 130,
+      render: (_: any, record: InboundTask) => (
+        <Button 
+           type="primary" 
+           size="small"
+           icon={record.status === 'completed' ? <CheckCircle size={14}/> : <ArrowRight size={14}/>}
+           ghost={record.status !== 'pending'}
+           onClick={() => navigate(`/inventory/receipt/${record.task_id}`)}
         >
-          <Button
-            type={activeTab === "pending" ? "primary" : "default"}
-            icon={
-              activeTab === "pending" ? (
-                <DownloadOutlined />
-              ) : (
-                <HistoryOutlined />
-              )
-            }
-            onClick={() => navigate(`/inventory/receipt/${record.id}`)}
-          >
-            {activeTab === "pending" ? "Nhập Kho" : "Xem lại"}
-          </Button>
-        </Tooltip>
+            {record.status === 'completed' ? "Xem" : "Nhập kho"}
+        </Button>
       ),
     },
   ];
 
   return (
-    <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
-      <Content style={{ padding: 24, width: "100%" }}>
-        <div
-          style={{
-            marginBottom: 16,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Space direction="vertical" size={0}>
-            <Title level={4} style={{ margin: 0 }}>
-              <CodeSandboxOutlined /> Quản lý Nhập Kho (Inbound)
-            </Title>
-            <Text type="secondary">Tiếp nhận và kiểm đếm hàng hóa về kho</Text>
-          </Space>
-          <Card
-            size="small"
-            bodyStyle={{ padding: "8px 16px" }}
-            bordered={false}
-          >
-            <Statistic
-              title="Đơn chờ xử lý"
-              value={data.length}
-              valueStyle={{ color: "#faad14", fontWeight: "bold" }}
-              prefix={<TruckOutlined />}
-            />
-          </Card>
+    <div style={{ padding: screens.md ? 24 : 12, paddingBottom: 80, background: "#f5f5f5", minHeight: "100vh" }}>
+      <Space direction="vertical" size="large" style={{ width: "100%" }}>
+        {/* HEADER */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+           <Space align="center" size={12}>
+               <div style={{ 
+                   width: 40, height: 40, 
+                   background: "#e6f7ff", 
+                   borderRadius: 8, 
+                   display: "flex", alignItems: "center", justifyContent: "center"
+               }}>
+                   <Package size={24} color="#1890ff" />
+               </div>
+               <div>
+                   <Title level={4} style={{ margin: 0 }}>Nhập Kho (Inbound)</Title>
+                   <Text type="secondary">Quản lý nhận hàng & PO</Text>
+               </div>
+           </Space>
         </div>
 
-        <Card bodyStyle={{ padding: 0 }}>
-          {/* TABS ĐIỀU HƯỚNG */}
-          <Tabs
-            activeKey={activeTab}
-            onChange={setActiveTab}
-            type="card"
-            tabBarStyle={{
-              margin: 0,
-              padding: "8px 16px 0",
-              background: "#fafafa",
-            }}
-            items={[
-              {
-                key: "pending",
-                label: (
-                  <span>
-                    <ClockCircleOutlined /> Đang chờ nhập
-                  </span>
-                ),
-              },
-              {
-                key: "history",
-                label: (
-                  <span>
-                    <CheckCircleOutlined /> Lịch sử đã nhập
-                  </span>
-                ),
-              },
-            ]}
-          />
-
-          <div style={{ padding: 16, borderBottom: "1px solid #f0f0f0" }}>
-            <Row gutter={16}>
-              <Col span={8}>
-                <Input
-                  prefix={<SearchOutlined />}
-                  placeholder="Tìm mã đơn, NCC..."
-                  onChange={(e) =>
-                    setFilters({ ...filters, search: e.target.value })
-                  }
-                />
-              </Col>
-              <Col span={6}>
-                <RangePicker
-                  placeholder={["Ngày đặt từ", "đến"]}
-                  style={{ width: "100%" }}
-                  onChange={(dates) =>
-                    setFilters({
-                      ...filters,
-                      dateFrom: dates?.[0]?.toISOString(),
-                      dateTo: dates?.[1]?.toISOString(),
-                    })
-                  }
-                />
-              </Col>
-              <Col span={10} style={{ textAlign: "right" }}>
-                <Button icon={<SyncOutlined />} onClick={fetchData}>
-                  Làm mới
-                </Button>
-              </Col>
+        {/* FILTER BAR */}
+        <Card bodyStyle={{ padding: 16 }} bordered={false}>
+            <Row gutter={[16, 16]} align="middle">
+                <Col xs={24} md={8}>
+                    <Input.Search 
+                        placeholder="Tìm mã PO, Nhà cung cấp, Vận đơn..."
+                        onSearch={handleSearch}
+                        enterButton
+                        allowClear
+                    />
+                </Col>
+                <Col xs={12} md={4}>
+                    <Select 
+                        style={{ width: "100%" }} 
+                        placeholder="Trạng thái"
+                        allowClear
+                        value={filters.status === 'all' ? undefined : filters.status}
+                        onChange={(val) => handleStatusChange(val || 'all')}
+                    >
+                        <Select.Option value="all">Tất cả</Select.Option>
+                        <Select.Option value="pending">Chờ nhập</Select.Option>
+                        <Select.Option value="partial">Đang nhập</Select.Option>
+                        <Select.Option value="completed">Đã xong</Select.Option>
+                    </Select>
+                </Col>
+                <Col xs={12} md={6}>
+                     <RangePicker 
+                         style={{ width: "100%" }}
+                         format="DD/MM/YYYY"
+                         onChange={handleDateChange}
+                     />
+                </Col>
+                
+                {/* Actions when selected */}
+                {selectedRowKeys.length > 0 && (
+                     <Col xs={24} md={6} style={{ textAlign: "right" }}>
+                         <Button icon={<Printer size={16}/>}>In phiếu xếp kệ ({selectedRowKeys.length})</Button>
+                     </Col>
+                )}
+                
+                {selectedRowKeys.length === 0 && (
+                     <Col xs={24} md={6} style={{ textAlign: "right" }}>
+                         <Button icon={<Filter size={16}/>}>Bộ lọc nâng cao</Button>
+                     </Col>
+                )}
             </Row>
-          </div>
-
-          <Table
-            dataSource={data}
-            columns={columns}
-            rowKey="id"
-            loading={loading}
-            pagination={{
-              ...pagination,
-              onChange: (p, ps) =>
-                setPagination({ ...pagination, current: p, pageSize: ps }),
-            }}
-            scroll={{ x: "max-content" }}
-          />
         </Card>
-      </Content>
-    </Layout>
+
+        {/* TABLE */}
+        <Card bodyStyle={{ padding: 0 }} bordered={false}>
+            <Table
+                rowSelection={{
+                    selectedRowKeys,
+                    onChange: setSelectedRowKeys
+                }}
+                loading={loading}
+                columns={columns}
+                dataSource={tasks}
+                rowKey="task_id"
+                pagination={{
+                    current: filters.page,
+                    pageSize: filters.pageSize,
+                    total: totalCount,
+                    showSizeChanger: true,
+                    onChange: (p, ps) => setPage(p, ps),
+                    showTotal: (total) => `Tổng ${total} đơn` 
+                }}
+                scroll={{ x: 900 }}
+            />
+        </Card>
+      </Space>
+    </div>
   );
 };
 

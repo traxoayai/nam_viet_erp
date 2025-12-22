@@ -285,7 +285,7 @@ const WarehouseOutboundPage = () => {
 
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Title level={4} style={{ margin: 0 }}>Trung Tâm Xuất Kho (V3)</Title>
+              <Title level={4} style={{ margin: 0 }}>Danh sách phiếu Xuất Kho</Title>
           </div>
 
           {/* 1. STATS CARDS */}
