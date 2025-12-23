@@ -1,0 +1,303 @@
+import { create } from 'zustand';
+import { transferService } from '../api/transferService';
+import { TransferMaster, TransferDetail } from '../types/transfer';
+import { message } from 'antd';
+
+interface TransferState {
+  transfers: TransferMaster[];
+  currentTransfer: TransferDetail | null;
+  loading: boolean;
+  totalCount: number;
+
+  fetchList: (params: { page?: number; pageSize?: number; status?: string; search?: string }) => Promise<void>;
+  createAutoRequest: (warehouseId: number, note?: string) => Promise<boolean>;
+  getDetail: (id: number) => Promise<void>;
+  updateStatus: (id: number, status: string) => Promise<void>;
+  approveRequest: (id: number, items: { id: number; qty_approved: number }[]) => Promise<boolean>;
+  cancelRequest: (id: number, reason: string) => Promise<boolean>;
+  
+  shippingDraft: Record<number, any[]>; // itemId -> picked batches
+  scannedCode: string;
+  isAllocationDone: boolean;
+
+  loadAvailableBatches: (productId: number) => Promise<any[]>;
+  setShippingDraft: (itemId: number, batches: any[]) => void;
+  initTransferOperation: (id: number) => Promise<void>;
+  handleBarcodeScan: (code: string) => void;
+  updateDraftItem: (itemId: number, batchId: number, quantity: number) => void;
+  submitTransferShipment: () => Promise<boolean>;
+  resetDetail: () => void;
+}
+
+export const useTransferStore = create<TransferState>((set, get) => ({
+  transfers: [],
+  currentTransfer: null,
+  shippingDraft: {},
+  scannedCode: '',
+  isAllocationDone: false,
+  loading: false,
+  totalCount: 0,
+
+  fetchList: async (params) => {
+    set({ loading: true });
+    try {
+      const { data, total } = await transferService.fetchTransfers(params);
+      set({ transfers: data, totalCount: total });
+    } catch (error: any) {
+      console.error('Error fetching transfers:', error);
+      message.error(error.message || 'Lỗi tải danh sách điều chuyển');
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  createAutoRequest: async (warehouseId, note) => {
+    set({ loading: true });
+    try {
+      await transferService.createAutoReplenishment(warehouseId, note);
+      message.success('Đã tạo phiếu yêu cầu điều chuyển thành công!');
+      // Refresh list if needed (typically done by calling component)
+      return true;
+    } catch (error: any) {
+      console.error('Error creating transfer request:', error);
+      message.error(error.message || 'Lỗi tạo phiếu điều chuyển');
+      return false;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  getDetail: async (id) => {
+    set({ loading: true, currentTransfer: null });
+    try {
+      const data = await transferService.getTransferDetail(id);
+      set({ currentTransfer: data });
+    } catch (error: any) {
+      console.error('Error fetching transfer detail:', error);
+      message.error(error.message || 'Lỗi tải chi tiết phiếu điều chuyển');
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  updateStatus: async (id, status) => {
+    // Optimistic update or wait? Let's wait for safety logic
+    set({ loading: true });
+    try {
+        // @ts-ignore
+        await transferService.updateTransferStatus(id, status);
+        message.success('Cập nhật trạng thái thành công');
+        
+        // Reload detail if current
+        const current = get().currentTransfer;
+        if (current && current.id === id) {
+            await get().getDetail(id);
+        }
+    } catch (error: any) {
+        console.error('Error updating status:', error);
+        message.error(error.message || 'Lỗi cập nhật trạng thái');
+    } finally {
+        set({ loading: false });
+    }
+  },
+
+  approveRequest: async (id, items) => {
+    set({ loading: true });
+    try {
+        await transferService.approveTransfer(id, items);
+        message.success('Đã duyệt phiếu điều chuyển thành công!');
+        // Refresh detail
+        await get().getDetail(id);
+        return true;
+    } catch (error: any) {
+        console.error('Error approving transfer:', error);
+        message.error(error.message || 'Lỗi duyệt phiếu');
+        return false;
+    } finally {
+        set({ loading: false });
+    }
+  },
+
+  cancelRequest: async (id, reason) => {
+    set({ loading: true });
+    try {
+        await transferService.cancelTransfer(id, reason);
+        message.success('Đã hủy phiếu điều chuyển.');
+        return true;
+    } catch (error: any) {
+        console.error('Error cancelling transfer:', error);
+        message.error(error.message || 'Lỗi hủy phiếu');
+        return false;
+    } finally {
+        set({ loading: false });
+    }
+  },
+
+  loadAvailableBatches: async (productId) => {
+      const current = get().currentTransfer;
+      if (!current) return [];
+      
+      try {
+          return await transferService.fetchSourceBatches(productId, current.source_warehouse_id);
+      } catch (error) {
+          console.error('Error fetching batches:', error);
+          return [];
+      }
+  },
+
+  setShippingDraft: (itemId, batches) => {
+      set(state => ({
+          shippingDraft: { ...state.shippingDraft, [itemId]: batches }
+      }));
+  },
+
+  initTransferOperation: async (id) => {
+      set({ loading: true, isAllocationDone: false, shippingDraft: {} });
+      try {
+          // 1. Fetch Transfer Detail
+          const transferData = await transferService.getTransferDetail(id);
+          if (!transferData) throw new Error('Transfer not found');
+          
+          set({ currentTransfer: transferData });
+
+          // 2. Fetch Batches for ALL items
+          const batchMap = await transferService.fetchBatchesForTransfer(
+              transferData.items.map(i => ({ product_id: i.product_id })),
+              transferData.source_warehouse_id
+          );
+
+          // 3. Auto Allocate (FEFO)
+          const newDraft: Record<number, any[]> = {};
+          
+          transferData.items.forEach(item => {
+             const availableBatches = batchMap[item.product_id] || [];
+             // Sort by expiry (already sorted by RPC usually, but ensure here if needed)
+             availableBatches.sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
+             
+             let remainingNeeded = item.quantity_requested;
+             const pickedList: any[] = [];
+
+             for (const batch of availableBatches) {
+                 if (remainingNeeded <= 0) break;
+                 
+                 const take = Math.min(batch.quantity, remainingNeeded); // batch.quantity is available qty
+                 if (take > 0) {
+                     pickedList.push({ ...batch, quantity_picked: take });
+                     remainingNeeded -= take;
+                 }
+             }
+             newDraft[item.id] = pickedList;
+          });
+
+          set({ shippingDraft: newDraft, isAllocationDone: true });
+      } catch (error: any) {
+          console.error('Error init operation:', error);
+          message.error('Lỗi khởi tạo dữ liệu xuất kho');
+      } finally {
+          set({ loading: false });
+      }
+  },
+
+  handleBarcodeScan: (code) => {
+      const { currentTransfer, shippingDraft } = get();
+      if (!currentTransfer) return;
+
+      // 1. Identify Item
+      // Assuming code can be SKU or Barcode (mapped to SKU in this simple logic)
+      // We look for an item with matching SKU
+      const targetItem = currentTransfer.items.find(i => i.sku === code);
+      
+      if (!targetItem) {
+          message.warning(`Không tìm thấy sản phẩm với mã "${code}" trong phiếu này`);
+          return;
+      }
+
+      set({ scannedCode: code }); // Just for UI highlight
+
+      // 2. Increment Logic
+      // Find the first available batch in draft (FEFO) or just increment the first one if already picked?
+      // Smart Scan: If we have batches picked, increment the first one that has availability.
+      // If we need to pick a new batch, that's complex without the full batch list in memory.
+      // Simplified: Just increment the first picked batch for that item.
+      
+      const currentPicked = shippingDraft[targetItem.id] || [];
+      if (currentPicked.length > 0) {
+          // Clone to avoid mutation
+          const newPicked = currentPicked.map((b, index) => {
+              if (index === 0) {
+                  // Increment first batch (Simplified) - Real logic needs to check max availability
+                   // For now, let's just warn if we can't easily auto-increment validly?
+                   // Or just increment and let user fix if it exceeds available?
+                   // Better: Check max avail of this batch
+                   const max = b.quantity; // total avail of this batch
+                   if (b.quantity_picked < max) {
+                        message.success(`Đã quét "${targetItem.product_name}" (+1)`);
+                        return { ...b, quantity_picked: b.quantity_picked + 1 };
+                   } else {
+                        message.warning(`Lô ${b.batch_code} đã hết tồn kho khả dụng!`);
+                   }
+              }
+              return b;
+          });
+          
+          set(state => ({
+              shippingDraft: { ...state.shippingDraft, [targetItem.id]: newPicked }
+          }));
+      } else {
+          message.info(`Sản phẩm "${targetItem.product_name}" chưa chọn lô. Vui lòng chọn lô trước.`);
+      }
+  },
+
+  updateDraftItem: (itemId, batchId, quantity) => {
+     set(state => {
+         const currentList = state.shippingDraft[itemId] || [];
+         const newList = currentList.map(b => {
+             if (b.id === batchId) {
+                 return { ...b, quantity_picked: quantity };
+             }
+             return b;
+         });
+         return {
+             shippingDraft: { ...state.shippingDraft, [itemId]: newList }
+         };
+     });
+  },
+
+  submitTransferShipment: async () => {
+      const { currentTransfer, shippingDraft } = get();
+      if (!currentTransfer) return false;
+
+      set({ loading: true });
+      try {
+          // Transform draft to RPC format
+          const itemsPayload: { transfer_item_id: number; batch_id: number; quantity: number }[] = [];
+          
+          Object.entries(shippingDraft).forEach(([itemId, batches]) => {
+              batches.forEach(batch => {
+                  itemsPayload.push({
+                      transfer_item_id: Number(itemId),
+                      batch_id: batch.id,
+                      quantity: batch.quantity_picked // Assuming local batch object has this field
+                  });
+              });
+          });
+
+          if (itemsPayload.length === 0) {
+              message.warning('Chưa có sản phẩm nào được chọn để xuất kho');
+              return false;
+          }
+
+          await transferService.submitShipping(currentTransfer.id, itemsPayload);
+          message.success('Đã xuất kho thành công!');
+          return true;
+      } catch (error: any) {
+          console.error('Error submitting shipment:', error);
+          message.error(error.message || 'Lỗi xuất kho');
+          return false;
+      } finally {
+          set({ loading: false });
+      }
+  },
+
+  resetDetail: () => set({ currentTransfer: null, shippingDraft: {}, isAllocationDone: false, scannedCode: '' }),
+}));

@@ -53,7 +53,7 @@ const B2BOrderListPage = () => {
   );
 
   return (
-    <div style={{ padding: 8, background: "#f0f2f5", minHeight: "100vh" }}>
+    <div style={{ padding: 8, background: "#EBF4DD", minHeight: "100vh" }}>
       {/* 1. Header Chỉ số */}
       <StatHeader items={statItems} loading={tableProps.loading} />
 

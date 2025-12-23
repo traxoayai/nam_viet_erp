@@ -1,3 +1,4 @@
+// src/pages/inventory/outbound/WarehouseOutboundPage.tsx
 import {
   ArrowRight,
   CheckCircle,

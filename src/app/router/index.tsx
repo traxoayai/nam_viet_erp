@@ -47,6 +47,9 @@ import WarehouseListPage from "@/pages/settings/WarehouseListPage";
 import BlankLayout from "@/shared/ui/layouts/BlankLayout";
 import MainLayout from "@/shared/ui/layouts/MainLayout";
 import OnboardingLayout from "@/shared/ui/layouts/OnboardingLayout";
+import TransferListPage from "@/pages/inventory/transfer/TransferListPage";
+import TransferDetailPage from "@/pages/inventory/transfer/TransferDetailPage";
+
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
 const PagePlaceholder = ({ title }: { title: string }) => (
   <div style={{ padding: 20 }}>
@@ -186,8 +189,12 @@ const routes: RouteObject[] = [
           },
           {
             path: "inventory/transfer",
-            element: <PagePlaceholder title="Chuyển kho" />,
+            element: <TransferListPage />,
           },
+          { path:"/inventory/transfers/:id",
+            element: <TransferDetailPage />
+           },
+
           {
             path: "inventory/stocktake",
             element: <PagePlaceholder title="Kiểm hàng" />,

@@ -782,7 +782,7 @@ CREATE OR REPLACE FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", 
 ALTER FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text" DEFAULT 'normal'::"text", "p_appointment_id" "uuid" DEFAULT NULL::"uuid", "p_symptoms" "jsonb" DEFAULT '[]'::"jsonb") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid" DEFAULT NULL::"uuid", "p_priority" "text" DEFAULT 'normal'::"text", "p_symptoms" "jsonb" DEFAULT '[]'::"jsonb", "p_notes" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -791,65 +791,61 @@ CREATE OR REPLACE FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "
         v_appt_id UUID;
         v_queue_id BIGINT;
     BEGIN
-        -- 1. Tính số thứ tự tiếp theo trong ngày hôm nay
-        -- Logic: Lấy Max số queue của ngày hiện tại, nếu chưa có thì bắt đầu từ 1
-        SELECT COALESCE(MAX(queue_number), 0) + 1 
-        INTO v_queue_num
+        -- 1. Lấy số thứ tự tiếp theo trong ngày
+        SELECT COALESCE(MAX(queue_number), 0) + 1 INTO v_queue_num
         FROM public.clinical_queues
         WHERE date(created_at) = CURRENT_DATE;
 
-        -- 2. Xử lý Appointment
-        IF p_appointment_id IS NOT NULL THEN
-            -- Trường hợp A: Đã có lịch hẹn -> Cập nhật trạng thái
-            UPDATE public.appointments 
-            SET status = 'checked_in', 
-                updated_at = now()
-            WHERE id = p_appointment_id;
-            
-            v_appt_id := p_appointment_id;
-        ELSE
-            -- Trường hợp B: Khách vãng lai -> Tạo Appointment mới "tức thì"
-            INSERT INTO public.appointments (
-                customer_id, doctor_id, appointment_time, status, symptoms, service_type, note
-            ) VALUES (
-                p_customer_id, 
-                p_doctor_id, 
-                now(), 
-                'checked_in', 
-                p_symptoms, 
-                'examination', 
-                'Khách vãng lai (Check-in tại quầy)'
-            )
-            RETURNING id INTO v_appt_id;
-        END IF;
+        -- 2. Tạo Appointment "tức thì" (Status = checked_in)
+        INSERT INTO public.appointments (
+            customer_id, 
+            doctor_id, 
+            appointment_time, 
+            status, 
+            symptoms, 
+            note, 
+            service_type
+        ) VALUES (
+            p_customer_id, 
+            p_doctor_id, 
+            now(), 
+            'checked_in', 
+            p_symptoms, 
+            p_notes, 
+            'examination'
+        ) RETURNING id INTO v_appt_id;
 
-        -- 3. Tạo dòng trong hàng đợi (Queue)
+        -- 3. Đẩy vào hàng đợi
         INSERT INTO public.clinical_queues (
-            appointment_id, customer_id, doctor_id, 
-            queue_number, status, priority_level, checked_in_at
+            appointment_id, 
+            customer_id, 
+            doctor_id, 
+            queue_number, 
+            status, 
+            priority_level
         ) VALUES (
             v_appt_id, 
             p_customer_id, 
             p_doctor_id, 
             v_queue_num, 
             'waiting', 
-            p_priority::public.queue_priority, 
-            now()
-        )
-        RETURNING id INTO v_queue_id;
+            p_priority::public.queue_priority
+        ) RETURNING id INTO v_queue_id;
 
-        -- 4. Trả về kết quả
         RETURN jsonb_build_object(
-            'success', true,
-            'queue_id', v_queue_id,
-            'queue_number', v_queue_num,
-            'appointment_id', v_appt_id
+            'success', true, 
+            'queue_number', v_queue_num, 
+            'queue_id', v_queue_id
         );
     END;
     $$;
 
 
-ALTER FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_appointment_id" "uuid", "p_symptoms" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") IS 'Check-in tại quầy: Tạo lịch hẹn ngay lập tức và xếp số vào hàng đợi';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."confirm_finance_transaction"("p_id" bigint) RETURNS "void"
@@ -1061,33 +1057,42 @@ $$;
 ALTER FUNCTION "public"."confirm_transaction"("p_id" bigint) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_type" "text" DEFAULT 'examination'::"text", "p_note" "text" DEFAULT NULL::"text") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid" DEFAULT NULL::"uuid", "p_time" timestamp with time zone DEFAULT "now"(), "p_symptoms" "jsonb" DEFAULT '[]'::"jsonb", "p_note" "text" DEFAULT NULL::"text", "p_type" "text" DEFAULT 'examination'::"text", "p_status" "text" DEFAULT 'confirmed'::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
     DECLARE
         v_id UUID;
     BEGIN
+        -- Thực hiện Insert
         INSERT INTO public.appointments (
-            customer_id, doctor_id, appointment_time, symptoms, service_type, note, status
-        )
-        VALUES (
+            customer_id, 
+            doctor_id, 
+            appointment_time, 
+            symptoms, 
+            note, 
+            service_type, 
+            status -- Cột trạng thái
+        ) VALUES (
             p_customer_id, 
             p_doctor_id, 
             p_time, 
-            COALESCE(p_symptoms, '[]'::jsonb), 
-            p_type::public.appointment_service_type, 
+            p_symptoms, 
             p_note, 
-            'confirmed' -- Booking online thường coi như confirmed hoặc pending tùy logic, ở đây set confirmed
-        )
-        RETURNING id INTO v_id;
+            p_type::public.appointment_service_type, 
+            p_status::public.appointment_status -- Ép kiểu sang Enum (pending, confirmed...)
+        ) RETURNING id INTO v_id;
 
-        RETURN v_id;
+        RETURN jsonb_build_object('success', true, 'appointment_id', v_id);
     END;
     $$;
 
 
-ALTER FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_type" "text", "p_note" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_note" "text", "p_type" "text", "p_status" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_note" "text", "p_type" "text", "p_status" "text") IS 'Tạo lịch hẹn: Mặc định là confirmed, có thể truyền pending để lưu nháp';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."create_asset"("p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") RETURNS bigint
@@ -5157,6 +5162,36 @@ CREATE OR REPLACE FUNCTION "public"."sync_inventory_batch_to_total"() RETURNS "t
 ALTER FUNCTION "public"."sync_inventory_batch_to_total"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."sync_user_status_to_auth"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    BEGIN
+        -- Trường hợp 1: User được set là 'active' -> Gỡ Ban (Cho phép đăng nhập)
+        IF NEW.status = 'active' THEN
+            UPDATE auth.users
+            SET banned_until = NULL
+            WHERE id = NEW.id;
+        
+        -- Trường hợp 2: User không phải 'active' (inactive, pending...) -> Ban (Chặn đăng nhập)
+        ELSE
+            UPDATE auth.users
+            SET banned_until = (now() + interval '100 years') -- Ban 100 năm
+            WHERE id = NEW.id;
+        END IF;
+
+        RETURN NEW;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."sync_user_status_to_auth"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."sync_user_status_to_auth"() IS 'Trigger function: Đồng bộ trạng thái từ public.users sang auth.users (Ban/Unban)';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."update_asset"("p_id" bigint, "p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -5933,55 +5968,28 @@ CREATE OR REPLACE FUNCTION "public"."update_user_assignments"("p_user_id" "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 DECLARE
-  assignment JSONB;
+    assignment JSONB;
 BEGIN
-  -- 1. Xóa mọi quyền cũ của user này
-  DELETE FROM public.user_roles WHERE user_id = p_user_id;
+    -- A. Xóa tất cả phân quyền cũ của user này
+    DELETE FROM public.user_roles WHERE user_id = p_user_id;
 
-  -- 2. Thêm lại các quyền mới
-  IF p_assignments IS NOT NULL THEN
-    FOREACH assignment IN ARRAY p_assignments
-    LOOP
-      INSERT INTO public.user_roles (user_id, role_id, branch_id)
-      VALUES (
-        p_user_id,
-        (assignment->>'roleId')::UUID,
-        (assignment->>'branchId')::BIGINT
-      )
-      ;
-    END LOOP;
-  END IF;
+    -- B. Loop qua mảng và insert lại
+    IF p_assignments IS NOT NULL THEN
+        FOREACH assignment IN ARRAY p_assignments
+        LOOP
+            INSERT INTO public.user_roles (user_id, role_id, branch_id)
+            VALUES (
+                p_user_id,
+                (assignment->>'roleId')::UUID,   -- Chú ý: Key là roleId (CamelCase) khớp với Frontend
+                (assignment->>'branchId')::BIGINT -- Chú ý: Key là branchId
+            );
+        END LOOP;
+    END IF;
 END;
 $$;
 
 
 ALTER FUNCTION "public"."update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb"[]) OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb") RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    AS $$
-DECLARE
-  v_assignment JSONB;
-BEGIN
-  -- 1. Xóa tất cả phân quyền cũ của user này
-  DELETE FROM public.user_roles WHERE user_id = p_user_id;
-
-  -- 2. Loop qua mảng JSON và thêm lại các phân quyền mới
-  FOR v_assignment IN SELECT * FROM jsonb_array_elements(p_assignments)
-  LOOP
-    INSERT INTO public.user_roles (user_id, role_id, branch_id)
-    VALUES (
-      p_user_id,
-      (v_assignment->>'roleId')::UUID,
-      (v_assignment->>'branchId')::BIGINT
-    );
-  END LOOP;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_user_status"("p_user_id" "uuid", "p_status" "text") RETURNS "void"
@@ -8313,6 +8321,10 @@ CREATE OR REPLACE TRIGGER "on_updated_at" BEFORE UPDATE ON "public"."users" FOR 
 
 
 
+CREATE OR REPLACE TRIGGER "on_user_status_change" AFTER INSERT OR UPDATE OF "status" ON "public"."users" FOR EACH ROW EXECUTE FUNCTION "public"."sync_user_status_to_auth"();
+
+
+
 ALTER TABLE ONLY "public"."appointments"
     ADD CONSTRAINT "appointments_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE CASCADE;
 
@@ -9264,9 +9276,9 @@ GRANT ALL ON FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", "p_re
 
 
 
-GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_appointment_id" "uuid", "p_symptoms" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_appointment_id" "uuid", "p_symptoms" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_appointment_id" "uuid", "p_symptoms" "jsonb") TO "service_role";
+GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") TO "service_role";
 
 
 
@@ -9300,9 +9312,9 @@ GRANT ALL ON FUNCTION "public"."confirm_transaction"("p_id" bigint) TO "service_
 
 
 
-GRANT ALL ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_type" "text", "p_note" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_type" "text", "p_note" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_type" "text", "p_note" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_note" "text", "p_type" "text", "p_status" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_note" "text", "p_type" "text", "p_status" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_note" "text", "p_type" "text", "p_status" "text") TO "service_role";
 
 
 
@@ -10026,6 +10038,12 @@ GRANT ALL ON FUNCTION "public"."sync_inventory_batch_to_total"() TO "service_rol
 
 
 
+GRANT ALL ON FUNCTION "public"."sync_user_status_to_auth"() TO "anon";
+GRANT ALL ON FUNCTION "public"."sync_user_status_to_auth"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."sync_user_status_to_auth"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."update_asset"("p_id" bigint, "p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."update_asset"("p_id" bigint, "p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_asset"("p_id" bigint, "p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") TO "service_role";
@@ -10125,12 +10143,6 @@ GRANT ALL ON FUNCTION "public"."update_supplier"("p_id" bigint, "p_name" "text",
 GRANT ALL ON FUNCTION "public"."update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb"[]) TO "anon";
 GRANT ALL ON FUNCTION "public"."update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb"[]) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb"[]) TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."update_user_assignments"("p_user_id" "uuid", "p_assignments" "jsonb") TO "service_role";
 
 
 
