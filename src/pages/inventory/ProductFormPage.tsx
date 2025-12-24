@@ -72,7 +72,7 @@ const ProductFormPage: React.FC = () => {
 
   return (
     <ConfigProvider locale={viVN}>
-      <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
+      <Layout style={{ minHeight: "100vh", backgroundColor: "#efededff" }}>
         <Spin
           spinning={loading || loadingDetails}
           tip={loading ? "Đang xử lý..." : "Đang tải dữ liệu..."}
@@ -225,18 +225,29 @@ const ProductFormPage: React.FC = () => {
                 bordered={false}
                 style={{ marginBottom: 24 }}
               >
+                  {/* UNTIS & CONVERSION */}
+              <Card
+                title={
+                  <Space>
+                    <ContainerOutlined /> Đơn vị tính & Quy đổi
+                  </Space>
+                }
+                bordered={false}
+                style={{ marginBottom: 24 }}
+              >
                   <Form.List name="units">
                     {(fields, { add, remove }) => (
                       <>
                         {fields.map(({ key, name, ...restField }) => (
                           <Row key={key} gutter={16} align="middle" style={{ marginBottom: 12 }}>
+                            {/* Hidden ID để phục vụ Update */}
                             <Form.Item name={[name, 'id']} hidden><Input /></Form.Item>
                             
                             <Col span={4}>
                               <Form.Item
                                 {...restField}
                                 name={[name, 'unit_name']}
-                                rules={[{ required: true, message: 'Tên' }]}
+                                rules={[{ required: true, message: 'Nhập tên' }]}
                                 style={{ marginBottom: 0 }}
                               >
                                 <Input placeholder="Tên (Hộp, Vỉ)" />
@@ -246,10 +257,9 @@ const ProductFormPage: React.FC = () => {
                               <Form.Item
                                 {...restField}
                                 name={[name, 'unit_type']}
-                                initialValue="base"
                                 style={{ marginBottom: 0 }}
                               >
-                                <Select onChange={handleModifyCostOrMargin}>
+                                <Select onChange={handleModifyCostOrMargin} placeholder="Loại">
                                     <Option value="base">Cơ sở</Option>
                                     <Option value="retail">Bán lẻ</Option>
                                     <Option value="wholesale">Bán buôn</Option>
@@ -261,7 +271,7 @@ const ProductFormPage: React.FC = () => {
                               <Form.Item
                                 {...restField}
                                 name={[name, 'conversion_rate']}
-                                rules={[{ required: true, message: 'Rate' }]}
+                                rules={[{ required: true, message: 'Nhập tỷ lệ' }]}
                                 style={{ marginBottom: 0 }}
                               >
                                 <InputNumber 
@@ -281,8 +291,10 @@ const ProductFormPage: React.FC = () => {
                                 <InputNumber 
                                     placeholder="Giá bán" 
                                     style={{ width: '100%' }} 
+                                    min={0}
                                     formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                    parser={value => value!.replace(/\$\s?|(,*)/g, '') as any}
+                                    // [FIX]: Kiểm tra value tồn tại trước khi replace
+                                    parser={value => value ? value.replace(/\$\s?|(,*)/g, '') : '' as any}
                                     addonAfter="đ"
                                 />
                               </Form.Item>
@@ -302,13 +314,25 @@ const ProductFormPage: React.FC = () => {
                           </Row>
                         ))}
                         <Form.Item>
-                          <Button type="dashed" color="primary" onClick={() => add()} icon={<PlusOutlined />} >
+                          {/* [FIX]: Truyền giá trị mặc định vào hàm add() để tránh lỗi undefined */}
+                          <Button 
+                            type="dashed" 
+                            onClick={() => add({
+                                unit_name: "",
+                                unit_type: "wholesale", // Mặc định là bán buôn
+                                conversion_rate: 1,
+                                price: 0,
+                                barcode: ""
+                            })} 
+                            icon={<PlusOutlined />} 
+                          >
                             Thêm Đơn vị quy đổi
                           </Button>
                         </Form.Item>
                       </>
                     )}
                   </Form.List>
+              </Card>
               </Card>
 
               <Card
