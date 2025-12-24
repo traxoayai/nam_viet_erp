@@ -35,7 +35,7 @@ export const getProductDetails = async (id: number) => {
   // A. Lấy thông tin sản phẩm từ bảng products
   const { data, error } = await supabase
     .from("products")
-    .select("*")
+    .select("*, product_units(*)")
     .eq("id", id)
     .single();
 
@@ -100,97 +100,160 @@ export const getProductDetails = async (id: number) => {
     carton_dimensions: data.carton_dimensions,
 
     // Tồn kho
+    // Tồn kho
     inventorySettings: inventorySettings,
+    
+    // Units
+    units: data.product_units || []
   };
 };
 
 // 3. HÀM TẠO MỚI SẢN PHẨM (ĐÃ BỔ SUNG THAM SỐ THIẾU)
-export const addProduct = async (formValues: any) => {
-  const params = {
-    p_name: formValues.productName,
-    p_sku: formValues.sku || null,
-    p_barcode: formValues.barcode || null,
-    p_active_ingredient: formValues.tags || null,
-    p_image_url: formValues.imageUrl || null,
-    p_category_name: formValues.category || null,
-    p_manufacturer_name: formValues.manufacturer || null,
-    p_distributor_id: formValues.distributor || null,
-    p_status: "active",
+export const addProduct = async (formValues: any, inventoryPayload: any[] = []) => {
+  // 1. Construct Units Payload (Consolidate Base + Additional)
+  const unitsPayload = [];
+  
+  // A. Handle Legacy/Implicit Base Unit (if passed from form via hidden field or migration)
+  if (formValues.retailUnit) {
+      unitsPayload.push({
+          unit_name: formValues.retailUnit,
+          conversion_rate: 1,
+          unit_type: 'base',
+          price: formValues.actualCost, // Base unit price = Cost (or retail price if defined)
+          is_base: true,
+          is_direct_sale: true
+      });
+  }
+  
+  // B. Handle Units from List
+  const listUnits = (formValues.units || []).map((u: any) => ({
+      unit_name: u.unit_name,
+      conversion_rate: u.conversion_rate,
+      barcode: u.barcode || null,
+      unit_type: u.unit_type || 'wholesale',
+      price: u.price || 0,
+      is_base: u.unit_type === 'base',
+      is_direct_sale: true
+  }));
+  unitsPayload.push(...listUnits);
 
-    p_invoice_price: formValues.invoicePrice || 0,
-    p_actual_cost: formValues.actualCost || 0,
-    p_wholesale_unit: formValues.wholesaleUnit || "Hộp",
-    p_retail_unit: formValues.retailUnit || "Vỉ",
-    p_conversion_factor: formValues.conversionFactor || 1,
-    p_wholesale_margin_value: formValues.wholesaleMarginValue || 0,
-    p_wholesale_margin_type: formValues.wholesaleMarginType || "%",
-    p_retail_margin_value: formValues.retailMarginValue || 0,
-    p_retail_margin_type: formValues.retailMarginType || "%",
+  // 2. Construct Clean Product Payload
+  const productPayload = {
+    name: formValues.productName,
+    sku: formValues.sku || null,
+    barcode: formValues.barcode || null,
+    active_ingredient: formValues.tags || null,
+    image_url: formValues.imageUrl || null,
+    category_name: formValues.category || null,
+    manufacturer_name: formValues.manufacturer || null,
+    distributor_id: formValues.distributor || null,
+    status: "active",
+
+    // Financials
+    // Financials
+    // invoice_price removed from header (Prices are in units now)
+    actual_cost: formValues.actualCost || 0,
+    wholesale_margin_value: formValues.wholesaleMarginValue || 0, 
+    wholesale_margin_type: formValues.wholesaleMarginType || 'amount',
+    retail_margin_value: formValues.retailMarginValue || 0,       
+    retail_margin_type: formValues.retailMarginType || 'amount',
+    
+    // Legacy fields removed: wholesale_unit, retail_unit, conversion_factor, etc.
 
     // Logistics
-    p_items_per_carton: formValues.items_per_carton || 1,
-    p_carton_weight: formValues.carton_weight || 0,
-    p_carton_dimensions: formValues.carton_dimensions || null,
-    p_purchasing_policy: formValues.purchasing_policy || "ALLOW_LOOSE",
+    items_per_carton: formValues.items_per_carton || 1,
+    carton_weight: formValues.carton_weight || 0,
+    carton_dimensions: formValues.carton_dimensions || null,
+    purchasing_policy: formValues.purchasing_policy || "ALLOW_LOOSE",
 
-    // --- CÁC TRƯỜNG MỚI BỔ SUNG ---
-    p_description: formValues.description || null,
-    p_registration_number: formValues.registrationNumber || null,
-    p_packing_spec: formValues.packingSpec || null,
-
-    // Tồn kho
-    p_inventory_settings: formValues.inventorySettings || {},
+    // Desc
+    description: formValues.description || null,
+    registration_number: formValues.registrationNumber || null,
+    packing_spec: formValues.packingSpec || null,
+    inventory_settings: formValues.inventorySettings || {},
   };
 
-  const { data, error } = await supabase.rpc("create_product", params);
+  const { data, error } = await supabase.rpc("upsert_product_with_units", {
+    p_product_json: productPayload,
+    p_units_json: unitsPayload,
+    p_inventory_json: inventoryPayload
+  });
+
   if (error) {
-    console.error("Lỗi create_product:", error);
+    console.error("Lỗi upsert_product_with_units (Add):", error);
     throw error;
   }
   return data;
 };
 
 // 4. HÀM CẬP NHẬT SẢN PHẨM (ĐÃ BỔ SUNG THAM SỐ THIẾU)
-export const updateProduct = async (id: number, formValues: any) => {
-  const params = {
-    p_id: id,
-    p_name: formValues.productName,
-    p_sku: formValues.sku || null,
-    p_barcode: formValues.barcode || null,
-    p_active_ingredient: formValues.tags || null,
-    p_image_url: formValues.imageUrl || null,
-    p_category_name: formValues.category || null,
-    p_manufacturer_name: formValues.manufacturer || null,
-    p_distributor_id: formValues.distributor || null,
-    p_status: formValues.status || "active",
+export const updateProduct = async (id: number, formValues: any, inventoryPayload: any[] = []) => {
+  // 1. Construct Units Payload
+  const unitsPayload = [];
+  
+  if (formValues.retailUnit) {
+      unitsPayload.push({
+          unit_name: formValues.retailUnit,
+          conversion_rate: 1,
+          unit_type: 'base',
+          price: formValues.actualCost,
+          is_base: true,
+          is_direct_sale: true
+      });
+  }
 
-    p_invoice_price: formValues.invoicePrice,
-    p_actual_cost: formValues.actualCost,
-    p_wholesale_unit: formValues.wholesaleUnit,
-    p_retail_unit: formValues.retailUnit,
-    p_conversion_factor: formValues.conversionFactor,
-    p_wholesale_margin_value: formValues.wholesaleMarginValue,
-    p_wholesale_margin_type: formValues.wholesaleMarginType,
-    p_retail_margin_value: formValues.retailMarginValue,
-    p_retail_margin_type: formValues.retailMarginType,
+  const listUnits = (formValues.units || []).map((u: any) => ({
+      id: u.id,
+      unit_name: u.unit_name,
+      conversion_rate: u.conversion_rate,
+      barcode: u.barcode || null,
+      unit_type: u.unit_type || 'wholesale',
+      price: u.price || 0,
+      is_base: u.unit_type === 'base',
+      is_direct_sale: true
+  }));
+  unitsPayload.push(...listUnits);
 
+  // 2. Construct Clean Product Payload
+  const productPayload = {
+    id: id,
+    name: formValues.productName,
+    sku: formValues.sku || null,
+    barcode: formValues.barcode || null,
+    active_ingredient: formValues.tags || null,
+    image_url: formValues.imageUrl || null,
+    category_name: formValues.category || null,
+    manufacturer_name: formValues.manufacturer || null,
+    distributor_id: formValues.distributor || null,
+    status: formValues.status || "active",
+
+    // invoice_price removed
+    actual_cost: formValues.actualCost,
+    wholesale_margin_value: formValues.wholesaleMarginValue, 
+    wholesale_margin_type: formValues.wholesaleMarginType,
+    retail_margin_value: formValues.retailMarginValue,       
+    retail_margin_type: formValues.retailMarginType,
+    
     // Logistics
-    p_items_per_carton: formValues.items_per_carton,
-    p_carton_weight: formValues.carton_weight,
-    p_carton_dimensions: formValues.carton_dimensions,
-    p_purchasing_policy: formValues.purchasing_policy,
+    items_per_carton: formValues.items_per_carton,
+    carton_weight: formValues.carton_weight,
+    carton_dimensions: formValues.carton_dimensions,
+    purchasing_policy: formValues.purchasing_policy,
 
-    // --- CÁC TRƯỜNG MỚI BỔ SUNG ---
-    p_description: formValues.description || null,
-    p_registration_number: formValues.registrationNumber || null,
-    p_packing_spec: formValues.packingSpec || null,
-
-    p_inventory_settings: formValues.inventorySettings || {},
+    description: formValues.description || null,
+    registration_number: formValues.registrationNumber || null,
+    packing_spec: formValues.packingSpec || null,
+    inventory_settings: formValues.inventorySettings || {},
   };
 
-  const { error } = await supabase.rpc("update_product", params);
+  const { error } = await supabase.rpc("upsert_product_with_units", {
+    p_product_json: productPayload,
+    p_units_json: unitsPayload,
+    p_inventory_json: inventoryPayload
+  });
+
   if (error) {
-    console.error("Lỗi update_product:", error);
+    console.error("Lỗi upsert_product_with_units (Update):", error);
     throw error;
   }
   return true;
@@ -414,4 +477,21 @@ export const searchProductsForPurchase = async (keyword: string) => {
     retail_unit: p.retail_unit,
     last_price: p.latest_purchase_price, // Giá nhập lần cuối (từ CORE)
   }));
+};
+
+// [NEW] 12. HÀM LẤY TOÀN BỘ SẢN PHẨM RÚT GỌN (CHO DROPDOWN & AI MATCHING)
+export const getAllProductsLite = async () => {
+  // Lấy tối đa 5000 sản phẩm active, chỉ lấy các trường cần thiết để nhẹ payload
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, name, sku, barcode, wholesale_unit, retail_unit, actual_cost, items_per_carton")
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(5000); 
+
+  if (error) {
+    console.error("Lỗi getAllProductsLite:", error);
+    return [];
+  }
+  return data || [];
 };

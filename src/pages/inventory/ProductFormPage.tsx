@@ -8,6 +8,8 @@ import {
   CloseCircleOutlined,
   // FilePdfOutlined,
   SearchOutlined,
+  PlusOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -26,177 +28,46 @@ import {
   Affix,
   Form,
   Image,
-  App as AntApp,
   Spin,
 } from "antd";
 import viVN from "antd/locale/vi_VN";
-import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React from "react";
 
-import type { UploadFile, UploadProps } from "antd/es/upload/interface";
+
 
 import SupplierSelectModal from "@/shared/ui/common/SupplierSelectModal";
-// SỬ DỤNG SERVICE
-import {
-  addProduct,
-  updateProduct,
-  uploadProductImage,
-} from "@/features/inventory/api/productService";
-import { useProductStore } from "@/features/inventory/stores/productStore";
+import { useProductFormLogic } from "./hooks/useProductFormLogic";
 
 const { Content } = Layout;
 const { Title } = Typography;
 const { Option } = Select;
 
 const ProductFormPage: React.FC = () => {
-  const [form] = Form.useForm();
-  const navigate = useNavigate();
-  const { id } = useParams();
-  const isEditing = !!id;
-
   const {
-    warehouses,
-    fetchCommonData,
-    currentProduct,
-    getProductDetails,
+    form,
+    loading,
     loadingDetails,
-  } = useProductStore();
-  const { message: antMessage } = AntApp.useApp();
-
-  const [loading, setLoading] = useState(false);
-  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
-  const [imageUrl, setImageUrl] = useState("");
-  const [fileList, setFileList] = useState<UploadFile[]>([]);
-  const [selectedSupplierName, setSelectedSupplierName] = useState("");
-
-  useEffect(() => {
-    fetchCommonData();
-  }, []); // <--- Rỗng: Chỉ chạy 1 lần
-
-  useEffect(() => {
-    if (isEditing) {
-      getProductDetails(Number(id));
-    }
-  }, [isEditing, id, getProductDetails]);
-
-  useEffect(() => {
-    if (isEditing && currentProduct) {
-      // Fill dữ liệu vào form
-      form.setFieldsValue(currentProduct);
-
-      // Hiển thị tên NCC
-      if (currentProduct.distributor_id) {
-        const supplier = useProductStore
-          .getState()
-          .suppliers.find((s) => s.id === currentProduct.distributor_id);
-        if (supplier) setSelectedSupplierName(supplier.name);
-      }
-
-      // Hiển thị ảnh
-      if (currentProduct.image_url) {
-        setImageUrl(currentProduct.image_url);
-        setFileList([
-          {
-            uid: "-1",
-            name: "image.png",
-            status: "done",
-            url: currentProduct.image_url,
-          },
-        ]);
-      }
-
-      // Map trường active_ingredient -> tags của form (nếu chưa có)
-      if (currentProduct.active_ingredient && !form.getFieldValue("tags")) {
-        form.setFieldsValue({ tags: currentProduct.active_ingredient });
-      }
-    }
-  }, [isEditing, currentProduct, form]);
+    isEditing,
+    currentProduct,
+    imageUrl,
+    setImageUrl,
+    fileList,
+    handleUpload,
+    onUploadChange,
+    handleImageSearch,
+    isSupplierModalOpen,
+    setIsSupplierModalOpen,
+    selectedSupplierName,
+    setSelectedSupplierName,
+    warehouses,
+    onFinish,
+    handleModifyCostOrMargin,
+    navigate,
+    anchorUnitName, // Dynamic Label
+  } = useProductFormLogic();
 
   const handleCancel = () => {
     navigate("/inventory");
-  };
-
-  const onFinish = async (values: any) => {
-    setLoading(true);
-    try {
-      let finalImageUrl = imageUrl;
-      if (fileList.length > 0 && fileList[0].originFileObj) {
-        antMessage.loading({ content: "Đang tải ảnh lên...", key: "upload" });
-        finalImageUrl = await uploadProductImage(fileList[0].originFileObj);
-        antMessage.success({ content: "Tải ảnh thành công!", key: "upload" });
-      }
-
-      const finalValues = { ...values, imageUrl: finalImageUrl };
-
-      if (isEditing) {
-        await updateProduct(Number(id), finalValues);
-        antMessage.success(`Cập nhật sản phẩm thành công!`);
-      } else {
-        await addProduct(finalValues);
-        antMessage.success(`Tạo sản phẩm thành công!`);
-      }
-
-      navigate("/inventory");
-    } catch (error: any) {
-      console.error(error);
-      // Hiển thị lỗi chi tiết hơn nếu có
-      const msg = error.message || error.details || "Không thể lưu sản phẩm";
-      antMessage.error(`Lỗi: ${msg}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleImageSearch = () => {
-    const productName = form.getFieldValue("productName");
-    if (!productName) {
-      antMessage.warning("Vui lòng nhập Tên sản phẩm trước khi tìm ảnh.");
-      return;
-    }
-    const query = encodeURIComponent(`${productName} product image`);
-    window.open(`https://www.google.com/search?tbm=isch&q=${query}`, "_blank");
-  };
-
-  const handleUpload: UploadProps["customRequest"] = async ({ onSuccess }) => {
-    if (onSuccess) onSuccess("ok");
-  };
-
-  const onUploadChange: UploadProps["onChange"] = ({
-    fileList: newFileList,
-  }) => {
-    setFileList(newFileList);
-    if (newFileList.length === 0) setImageUrl("");
-  };
-
-  const calculatePrices = () => {
-    const allValues = form.getFieldsValue();
-    const actualCost = parseFloat(allValues.actualCost) || 0;
-    const conversionFactor = parseFloat(allValues.conversionFactor) || 1;
-    const wholesaleMarginValue =
-      parseFloat(allValues.wholesaleMarginValue) || 0;
-    const retailMarginValue = parseFloat(allValues.retailMarginValue) || 0;
-    const wholesaleMarginType = allValues.wholesaleMarginType || "%";
-    const retailMarginType = allValues.retailMarginType || "%";
-
-    let calculatedWholesalePrice = 0;
-    if (wholesaleMarginType === "%") {
-      calculatedWholesalePrice = actualCost * (1 + wholesaleMarginValue / 100);
-    } else {
-      calculatedWholesalePrice = actualCost + wholesaleMarginValue;
-    }
-    form.setFieldsValue({ estimatedWholesalePrice: calculatedWholesalePrice });
-
-    let calculatedRetailPrice = 0;
-    if (retailMarginType === "%") {
-      const profitPerWholesaleUnit = actualCost * (retailMarginValue / 100);
-      calculatedRetailPrice =
-        (actualCost + profitPerWholesaleUnit) / conversionFactor;
-    } else {
-      calculatedRetailPrice =
-        (actualCost + retailMarginValue) / conversionFactor;
-    }
-    const roundedRetailPrice = Math.round(calculatedRetailPrice / 100) * 100;
-    form.setFieldsValue({ estimatedRetailPrice: roundedRetailPrice });
   };
 
   return (
@@ -216,7 +87,7 @@ const ProductFormPage: React.FC = () => {
               form={form}
               layout="vertical"
               onFinish={onFinish}
-              onValuesChange={calculatePrices}
+              // onValuesChange={calculatePrices} // Removed global listener to avoid spam
             >
               <Card
                 title={
@@ -344,6 +215,102 @@ const ProductFormPage: React.FC = () => {
                 </Row>
               </Card>
 
+              {/* UNTIS & CONVERSION */}
+              <Card
+                title={
+                  <Space>
+                    <ContainerOutlined /> Đơn vị tính & Quy đổi
+                  </Space>
+                }
+                bordered={false}
+                style={{ marginBottom: 24 }}
+              >
+                  <Form.List name="units">
+                    {(fields, { add, remove }) => (
+                      <>
+                        {fields.map(({ key, name, ...restField }) => (
+                          <Row key={key} gutter={16} align="middle" style={{ marginBottom: 12 }}>
+                            <Form.Item name={[name, 'id']} hidden><Input /></Form.Item>
+                            
+                            <Col span={4}>
+                              <Form.Item
+                                {...restField}
+                                name={[name, 'unit_name']}
+                                rules={[{ required: true, message: 'Tên' }]}
+                                style={{ marginBottom: 0 }}
+                              >
+                                <Input placeholder="Tên (Hộp, Vỉ)" />
+                              </Form.Item>
+                            </Col>
+                            <Col span={4}>
+                              <Form.Item
+                                {...restField}
+                                name={[name, 'unit_type']}
+                                initialValue="base"
+                                style={{ marginBottom: 0 }}
+                              >
+                                <Select onChange={handleModifyCostOrMargin}>
+                                    <Option value="base">Cơ sở</Option>
+                                    <Option value="retail">Bán lẻ</Option>
+                                    <Option value="wholesale">Bán buôn</Option>
+                                    <Option value="logistics">Logistic</Option>
+                                </Select>
+                              </Form.Item>
+                            </Col>
+                            <Col span={3}>
+                              <Form.Item
+                                {...restField}
+                                name={[name, 'conversion_rate']}
+                                rules={[{ required: true, message: 'Rate' }]}
+                                style={{ marginBottom: 0 }}
+                              >
+                                <InputNumber 
+                                    placeholder="Rate" 
+                                    style={{ width: '100%' }} 
+                                    min={1} 
+                                    onChange={handleModifyCostOrMargin}
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col span={5}>
+                              <Form.Item
+                                {...restField}
+                                name={[name, 'price']}
+                                style={{ marginBottom: 0 }}
+                              >
+                                <InputNumber 
+                                    placeholder="Giá bán" 
+                                    style={{ width: '100%' }} 
+                                    formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                    parser={value => value!.replace(/\$\s?|(,*)/g, '') as any}
+                                    addonAfter="đ"
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col span={6}>
+                              <Form.Item
+                                {...restField}
+                                name={[name, 'barcode']}
+                                style={{ marginBottom: 0 }}
+                              >
+                                <Input placeholder="Mã vạch" prefix={<SearchOutlined />} />
+                              </Form.Item>
+                            </Col>
+                            <Col span={2}>
+                              <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />
+                            </Col>
+                          </Row>
+                        ))}
+                        <Form.Item>
+                          <Button type="dashed" color="primary" onClick={() => add()} icon={<PlusOutlined />} >
+                            Thêm Đơn vị quy đổi
+                          </Button>
+                        </Form.Item>
+                      </>
+                    )}
+                  </Form.List>
+              </Card>
+
               <Card
                 title={
                   <Space>
@@ -353,35 +320,104 @@ const ProductFormPage: React.FC = () => {
                 bordered={false}
                 style={{ marginBottom: 24 }}
               >
-                <Row gutter={24}>
-                  <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item
-                      name="wholesaleUnit"
-                      label="ĐV Bán Buôn"
-                      initialValue="Hộp"
-                    >
-                      <Input />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item
-                      name="retailUnit"
-                      label="ĐV Bán lẻ"
-                      initialValue="Vỉ"
-                    >
-                      <Input />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item
-                      name="conversionFactor"
-                      label="SL Quy đổi"
-                      initialValue={10}
-                    >
-                      <InputNumber style={{ width: "100%" }} min={1} />
+                <Row gutter={16}>
+                  {/* ROW 1: PRICING INPUTS (4 Cols) */}
+                  <Col xs={24} sm={12} md={8} lg={6}>
+                    <Form.Item name="invoicePrice" label="Giá nhập HĐ">
+                      <InputNumber
+                        style={{ width: "100%" }}
+                        formatter={(v) =>
+                          `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                        }
+                        parser={(v) => v!.replace(/đ\s?|(,*)/g, "")}
+                        addonAfter="đ"
+                      />
                     </Form.Item>
                   </Col>
 
+                  <Col xs={24} sm={12} md={8} lg={6}>
+                    <Form.Item
+                      name="actualCost"
+                      label={`Giá Vốn (theo ${anchorUnitName})*`}
+                      rules={[{ required: true }]}
+                      initialValue={0}
+                      tooltip="Nhập giá vốn của đơn vị Bán buôn (ví dụ: Hộp/Thùng). Hệ thống sẽ tự quy đổi ra giá cơ sở."
+                    >
+                      <InputNumber
+                        style={{ width: "100%" }}
+                        formatter={(v) =>
+                          `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                        }
+                        parser={(v) => v!.replace(/đ\s?|(,*)/g, "")}
+                        addonAfter="đ"
+                        onChange={handleModifyCostOrMargin}
+                      />
+                    </Form.Item>
+                  </Col>
+
+                  <Col xs={24} sm={12} md={8} lg={6}>
+                    <Form.Item label="Lãi Bán Buôn">
+                      <Input.Group compact>
+                        <Form.Item
+                          name="wholesaleMarginValue"
+                          noStyle
+                          initialValue={0}
+                        >
+                          <InputNumber 
+                            style={{ width: "calc(100% - 60px)" }} 
+                            min={0}
+                            onChange={handleModifyCostOrMargin}
+                          />
+                        </Form.Item>
+                        <Form.Item
+                          name="wholesaleMarginType"
+                          initialValue="amount"
+                          noStyle
+                        >
+                          <Select 
+                            style={{ width: "60px" }} 
+                            onChange={handleModifyCostOrMargin}
+                          >
+                            <Option value="percent">%</Option>
+                            <Option value="amount">đ</Option>
+                          </Select>
+                        </Form.Item>
+                      </Input.Group>
+                    </Form.Item>
+                  </Col>
+
+                  <Col xs={24} sm={12} md={8} lg={6}>
+                     <Form.Item label="Lãi Bán Lẻ">
+                      <Input.Group compact>
+                        <Form.Item
+                          name="retailMarginValue"
+                          noStyle
+                          initialValue={0}
+                        >
+                          <InputNumber 
+                            style={{ width: "calc(100% - 60px)" }} 
+                            min={0}
+                            onChange={handleModifyCostOrMargin}
+                          />
+                        </Form.Item>
+                        <Form.Item
+                          name="retailMarginType"
+                          initialValue="amount"
+                          noStyle
+                        >
+                          <Select 
+                            style={{ width: "60px" }}
+                            onChange={handleModifyCostOrMargin}
+                          >
+                            <Option value="percent">%</Option>
+                            <Option value="amount">đ</Option>
+                          </Select>
+                        </Form.Item>
+                      </Input.Group>
+                    </Form.Item>
+                  </Col>
+
+                  {/* ROW 2: LOGISTICS */}
                   <Col span={24}>
                     <Divider orientation="left" plain>
                       <Space>
@@ -407,7 +443,6 @@ const ProductFormPage: React.FC = () => {
                         formatter={(value) =>
                           `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                         }
-                        // --- SỬA LỖI TẠI ĐÂY: Thêm 'as any' ---
                         parser={(value) =>
                           value?.replace(/\$\s?|(,*)/g, "") as any
                         }
@@ -451,124 +486,6 @@ const ProductFormPage: React.FC = () => {
                       <Input placeholder="30x40x50 cm" />
                     </Form.Item>
                   </Col>
-
-                  <Col span={24}>
-                    <Divider orientation="left" plain>
-                      Giá Vốn & Lợi Nhuận
-                    </Divider>
-                  </Col>
-                  <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item name="invoicePrice" label="Giá nhập HĐ">
-                      <InputNumber
-                        style={{ width: "100%" }}
-                        formatter={(v) =>
-                          `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                        }
-                        parser={(v) => v!.replace(/đ\s?|(,*)/g, "")}
-                        addonAfter="đ"
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item
-                      name="actualCost"
-                      label="Giá Vốn Thực Tế*"
-                      rules={[{ required: true }]}
-                      initialValue={0}
-                    >
-                      <InputNumber
-                        style={{ width: "100%" }}
-                        formatter={(v) =>
-                          `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                        }
-                        parser={(v) => v!.replace(/đ\s?|(,*)/g, "")}
-                        addonAfter="đ"
-                      />
-                    </Form.Item>
-                  </Col>
-
-                  <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item label="Lãi Bán Buôn">
-                      <Input.Group compact>
-                        <Form.Item
-                          name="wholesaleMarginValue"
-                          noStyle
-                          initialValue={0}
-                        >
-                          <InputNumber style={{ width: "calc(100% - 60px)" }} />
-                        </Form.Item>
-                        <Form.Item
-                          name="wholesaleMarginType"
-                          initialValue="%"
-                          noStyle
-                        >
-                          <Select style={{ width: "60px" }}>
-                            <Option value="%">%</Option>
-                            <Option value="đ">đ</Option>
-                          </Select>
-                        </Form.Item>
-                      </Input.Group>
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item label="Lãi Bán Lẻ">
-                      <Input.Group compact>
-                        <Form.Item
-                          name="retailMarginValue"
-                          noStyle
-                          initialValue={0}
-                        >
-                          <InputNumber style={{ width: "calc(100% - 60px)" }} />
-                        </Form.Item>
-                        <Form.Item
-                          name="retailMarginType"
-                          initialValue="%"
-                          noStyle
-                        >
-                          <Select style={{ width: "60px" }}>
-                            <Option value="%">%</Option>
-                            <Option value="đ">đ</Option>
-                          </Select>
-                        </Form.Item>
-                      </Input.Group>
-                    </Form.Item>
-                  </Col>
-
-                  <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item
-                      name="estimatedWholesalePrice"
-                      label="Giá Bán Buôn"
-                    >
-                      <InputNumber
-                        style={{
-                          width: "100%",
-                          fontWeight: "bold",
-                          background: "#f0f2f5",
-                        }}
-                        formatter={(v) =>
-                          `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                        }
-                        readOnly
-                        addonAfter="đ"
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} sm={12} md={8} lg={4}>
-                    <Form.Item name="estimatedRetailPrice" label="Giá Bán Lẻ">
-                      <InputNumber
-                        style={{
-                          width: "100%",
-                          fontWeight: "bold",
-                          background: "#f0f2f5",
-                        }}
-                        formatter={(v) =>
-                          `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                        }
-                        readOnly
-                        addonAfter="đ"
-                      />
-                    </Form.Item>
-                  </Col>
                 </Row>
               </Card>
 
@@ -593,7 +510,7 @@ const ProductFormPage: React.FC = () => {
                           <Col span={12}>
                             <Form.Item
                               name={["inventorySettings", wh.key, "min"]}
-                              label="Tồn Min"
+                              label={`Tồn Min (${anchorUnitName})`}
                               initialValue={0}
                             >
                               <InputNumber style={{ width: "100%" }} min={0} />
@@ -602,7 +519,7 @@ const ProductFormPage: React.FC = () => {
                           <Col span={12}>
                             <Form.Item
                               name={["inventorySettings", wh.key, "max"]}
-                              label="Tồn Max"
+                              label={`Tồn Max (${anchorUnitName})`}
                               initialValue={0}
                             >
                               <InputNumber style={{ width: "100%" }} min={0} />

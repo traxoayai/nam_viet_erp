@@ -1,3 +1,4 @@
+// src/features/inventory/stores/useTransferStore.ts
 import { create } from 'zustand';
 import { transferService } from '../api/transferService';
 import { TransferMaster, TransferDetail } from '../types/transfer';
@@ -14,9 +15,12 @@ interface TransferState {
   getDetail: (id: number) => Promise<void>;
   updateStatus: (id: number, status: string) => Promise<void>;
   approveRequest: (id: number, items: { id: number; qty_approved: number }[]) => Promise<boolean>;
+  removeTransferItem: (itemId: number) => Promise<boolean>;
   cancelRequest: (id: number, reason: string) => Promise<boolean>;
+  deleteRequest: (id: number) => Promise<boolean>;
   
   shippingDraft: Record<number, any[]>; // itemId -> picked batches
+  availableBatchesMap: Record<number, any[]>; // productId -> all available batches
   scannedCode: string;
   isAllocationDone: boolean;
 
@@ -33,6 +37,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
   transfers: [],
   currentTransfer: null,
   shippingDraft: {},
+  availableBatchesMap: {},
   scannedCode: '',
   isAllocationDone: false,
   loading: false,
@@ -133,6 +138,52 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     }
   },
 
+  deleteRequest: async (id) => {
+    set({ loading: true });
+    try {
+        await transferService.deleteTransfer(id);
+        message.success('Đã xóa phiếu điều chuyển.');
+        return true;
+    } catch (error: any) {
+        console.error('Error deleting transfer:', error);
+        message.error(error.message || 'Lỗi xóa phiếu');
+        return false;
+    } finally {
+        set({ loading: false });
+    }
+  },
+
+  removeTransferItem: async (itemId) => {
+      set({ loading: true });
+      try {
+          await transferService.deleteTransferItem(itemId);
+          
+          // Update State
+          set(state => {
+              if (!state.currentTransfer) return {};
+              
+              const newItems = state.currentTransfer.items.filter(i => i.id !== itemId);
+              // Clean draft
+              const newDraft = { ...state.shippingDraft };
+              delete newDraft[itemId];
+              
+              return {
+                  currentTransfer: { ...state.currentTransfer, items: newItems },
+                  shippingDraft: newDraft
+              };
+          });
+
+          message.success('Đã xóa sản phẩm khỏi phiếu');
+          return true;
+      } catch (error: any) {
+          console.error('Error removing item:', error);
+          message.error(error.message || 'Lỗi xóa sản phẩm');
+          return false;
+      } finally {
+          set({ loading: false });
+      }
+  },
+
   loadAvailableBatches: async (productId) => {
       const current = get().currentTransfer;
       if (!current) return [];
@@ -165,6 +216,8 @@ export const useTransferStore = create<TransferState>((set, get) => ({
               transferData.items.map(i => ({ product_id: i.product_id })),
               transferData.source_warehouse_id
           );
+
+          set({ availableBatchesMap: batchMap });
 
           // 3. Auto Allocate (FEFO)
           const newDraft: Record<number, any[]> = {};
@@ -203,9 +256,12 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       if (!currentTransfer) return;
 
       // 1. Identify Item
-      // Assuming code can be SKU or Barcode (mapped to SKU in this simple logic)
-      // We look for an item with matching SKU
-      const targetItem = currentTransfer.items.find(i => i.sku === code);
+      // Check both SKU and Barcode (trim whitespaces to be safe)
+      const cleanCode = code.trim();
+      const targetItem = currentTransfer.items.find(i => 
+          (i.sku && i.sku.trim() === cleanCode) || 
+          (i.barcode && i.barcode.trim() === cleanCode)
+      );
       
       if (!targetItem) {
           message.warning(`Không tìm thấy sản phẩm với mã "${code}" trong phiếu này`);
@@ -221,14 +277,14 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       // Simplified: Just increment the first picked batch for that item.
       
       const currentPicked = shippingDraft[targetItem.id] || [];
+      
+      // CASE 1: Already has picked batches -> Increment the first one
       if (currentPicked.length > 0) {
           // Clone to avoid mutation
           const newPicked = currentPicked.map((b, index) => {
               if (index === 0) {
                   // Increment first batch (Simplified) - Real logic needs to check max availability
-                   // For now, let's just warn if we can't easily auto-increment validly?
-                   // Or just increment and let user fix if it exceeds available?
-                   // Better: Check max avail of this batch
+                   // Check max avail of this batch
                    const max = b.quantity; // total avail of this batch
                    if (b.quantity_picked < max) {
                         message.success(`Đã quét "${targetItem.product_name}" (+1)`);
@@ -243,20 +299,63 @@ export const useTransferStore = create<TransferState>((set, get) => ({
           set(state => ({
               shippingDraft: { ...state.shippingDraft, [targetItem.id]: newPicked }
           }));
-      } else {
-          message.info(`Sản phẩm "${targetItem.product_name}" chưa chọn lô. Vui lòng chọn lô trước.`);
+      } 
+      // CASE 2: No batches picked yet -> Auto pick first available batch (FEFO)
+      else {
+          const available = get().availableBatchesMap[targetItem.product_id] || [];
+          
+          if (available.length === 0) {
+             message.error(`Sản phẩm "${targetItem.product_name}" hiện đã hết hàng tồn kho!`);
+             return;
+          }
+
+          // Pick first available (Available list is usually sorted by expiry ASC from backend/init)
+          const firstBatch = available[0];
+          
+          message.success(`Đã quét "${targetItem.product_name}" (+1) - Tự động chọn lô ${firstBatch.batch_code}`);
+          
+          set(state => ({
+              shippingDraft: { 
+                  ...state.shippingDraft, 
+                  [targetItem.id]: [{ ...firstBatch, quantity_picked: 1 }] 
+              }
+          }));
       }
   },
 
   updateDraftItem: (itemId, batchId, quantity) => {
      set(state => {
          const currentList = state.shippingDraft[itemId] || [];
+         
+         // If list is empty (no batch selected yet), try to auto-pick first available logic
+         if (currentList.length === 0) {
+             const item = state.currentTransfer?.items.find(i => i.id === itemId);
+             const available = item ? (state.availableBatchesMap[item.product_id] || []) : [];
+             
+             // Sort by expiry just in case
+             // available.sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
+             
+             if (available.length > 0) {
+                 const firstBatch = available[0];
+                 // Initialize with first batch
+                 return {
+                     shippingDraft: { 
+                         ...state.shippingDraft, 
+                         [itemId]: [{ ...firstBatch, quantity_picked: quantity }] 
+                     }
+                 };
+             }
+             return {}; // Cannot pick if no batches
+         }
+
          const newList = currentList.map(b => {
-             if (b.id === batchId) {
+             // If batchId is valid match OR if batchId is -1 (sentinel) and it's the first batch
+             if (b.id === batchId || (batchId === -1 && b === currentList[0])) {
                  return { ...b, quantity_picked: quantity };
              }
              return b;
          });
+         
          return {
              shippingDraft: { ...state.shippingDraft, [itemId]: newList }
          };

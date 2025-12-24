@@ -1125,6 +1125,174 @@ export type Database = {
           },
         ]
       }
+      inventory_transfer_batch_items: {
+        Row: {
+          batch_id: number
+          created_at: string | null
+          id: number
+          quantity: number
+          transfer_item_id: number
+        }
+        Insert: {
+          batch_id: number
+          created_at?: string | null
+          id?: number
+          quantity: number
+          transfer_item_id: number
+        }
+        Update: {
+          batch_id?: number
+          created_at?: string | null
+          id?: number
+          quantity?: number
+          transfer_item_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_transfer_batch_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transfer_batch_items_transfer_item_id_fkey"
+            columns: ["transfer_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_transfer_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_transfer_items: {
+        Row: {
+          conversion_factor: number | null
+          created_at: string | null
+          id: number
+          product_id: number
+          qty_approved: number | null
+          qty_received: number | null
+          qty_requested: number | null
+          qty_shipped: number | null
+          transfer_id: number
+          unit: string | null
+        }
+        Insert: {
+          conversion_factor?: number | null
+          created_at?: string | null
+          id?: number
+          product_id: number
+          qty_approved?: number | null
+          qty_received?: number | null
+          qty_requested?: number | null
+          qty_shipped?: number | null
+          transfer_id: number
+          unit?: string | null
+        }
+        Update: {
+          conversion_factor?: number | null
+          created_at?: string | null
+          id?: number
+          product_id?: number
+          qty_approved?: number | null
+          qty_received?: number | null
+          qty_requested?: number | null
+          qty_shipped?: number | null
+          transfer_id?: number
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_transfer_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transfer_items_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_transfers: {
+        Row: {
+          carrier_contact: string | null
+          carrier_name: string | null
+          carrier_phone: string | null
+          code: string
+          created_at: string | null
+          created_by: string | null
+          dest_warehouse_id: number
+          expected_arrival_at: string | null
+          id: number
+          is_urgent: boolean | null
+          note: string | null
+          packages_received: number | null
+          packages_sent: number | null
+          source_warehouse_id: number
+          status: string
+          updated_at: string | null
+          urgency_approved: boolean | null
+        }
+        Insert: {
+          carrier_contact?: string | null
+          carrier_name?: string | null
+          carrier_phone?: string | null
+          code: string
+          created_at?: string | null
+          created_by?: string | null
+          dest_warehouse_id: number
+          expected_arrival_at?: string | null
+          id?: number
+          is_urgent?: boolean | null
+          note?: string | null
+          packages_received?: number | null
+          packages_sent?: number | null
+          source_warehouse_id: number
+          status?: string
+          updated_at?: string | null
+          urgency_approved?: boolean | null
+        }
+        Update: {
+          carrier_contact?: string | null
+          carrier_name?: string | null
+          carrier_phone?: string | null
+          code?: string
+          created_at?: string | null
+          created_by?: string | null
+          dest_warehouse_id?: number
+          expected_arrival_at?: string | null
+          id?: number
+          is_urgent?: boolean | null
+          note?: string | null
+          packages_received?: number | null
+          packages_sent?: number | null
+          source_warehouse_id?: number
+          status?: string
+          updated_at?: string | null
+          urgency_approved?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_transfers_dest_warehouse_id_fkey"
+            columns: ["dest_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transfers_source_warehouse_id_fkey"
+            columns: ["source_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string | null
@@ -1447,6 +1615,7 @@ export type Database = {
           product_id: number
           shelf_location: string | null
           stock_quantity: number
+          updated_at: string | null
           warehouse_id: number
         }
         Insert: {
@@ -1456,6 +1625,7 @@ export type Database = {
           product_id: number
           shelf_location?: string | null
           stock_quantity?: number
+          updated_at?: string | null
           warehouse_id: number
         }
         Update: {
@@ -1465,6 +1635,7 @@ export type Database = {
           product_id?: number
           shelf_location?: string | null
           stock_quantity?: number
+          updated_at?: string | null
           warehouse_id?: number
         }
         Relationships: [
@@ -1492,10 +1663,12 @@ export type Database = {
           id: number
           is_base: boolean | null
           is_direct_sale: boolean | null
+          price: number | null
           price_cost: number | null
           price_sell: number | null
           product_id: number | null
           unit_name: string
+          unit_type: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1505,10 +1678,12 @@ export type Database = {
           id?: number
           is_base?: boolean | null
           is_direct_sale?: boolean | null
+          price?: number | null
           price_cost?: number | null
           price_sell?: number | null
           product_id?: number | null
           unit_name: string
+          unit_type?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1518,10 +1693,12 @@ export type Database = {
           id?: number
           is_base?: boolean | null
           is_direct_sale?: boolean | null
+          price?: number | null
           price_cost?: number | null
           price_sell?: number | null
           product_id?: number | null
           unit_name?: string
+          unit_type?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1556,6 +1733,7 @@ export type Database = {
           packing_spec: string | null
           purchasing_policy: string | null
           registration_number: string | null
+          retail_margin_rate: number | null
           retail_margin_type: string | null
           retail_margin_value: number | null
           retail_unit: string | null
@@ -1565,6 +1743,7 @@ export type Database = {
             | Database["public"]["Enums"]["stock_management_type"]
             | null
           updated_at: string | null
+          wholesale_margin_rate: number | null
           wholesale_margin_type: string | null
           wholesale_margin_value: number | null
           wholesale_unit: string | null
@@ -1590,6 +1769,7 @@ export type Database = {
           packing_spec?: string | null
           purchasing_policy?: string | null
           registration_number?: string | null
+          retail_margin_rate?: number | null
           retail_margin_type?: string | null
           retail_margin_value?: number | null
           retail_unit?: string | null
@@ -1599,6 +1779,7 @@ export type Database = {
             | Database["public"]["Enums"]["stock_management_type"]
             | null
           updated_at?: string | null
+          wholesale_margin_rate?: number | null
           wholesale_margin_type?: string | null
           wholesale_margin_value?: number | null
           wholesale_unit?: string | null
@@ -1624,6 +1805,7 @@ export type Database = {
           packing_spec?: string | null
           purchasing_policy?: string | null
           registration_number?: string | null
+          retail_margin_rate?: number | null
           retail_margin_type?: string | null
           retail_margin_value?: number | null
           retail_unit?: string | null
@@ -1633,6 +1815,7 @@ export type Database = {
             | Database["public"]["Enums"]["stock_management_type"]
             | null
           updated_at?: string | null
+          wholesale_margin_rate?: number | null
           wholesale_margin_type?: string | null
           wholesale_margin_value?: number | null
           wholesale_unit?: string | null
@@ -2614,12 +2797,13 @@ export type Database = {
       confirm_transaction: { Args: { p_id: number }; Returns: boolean }
       create_appointment_booking: {
         Args: {
-          p_appointment_time?: string
           p_customer_id: number
-          p_description?: string
           p_doctor_id?: string
-          p_notes?: string
+          p_note?: string
+          p_status?: string
           p_symptoms?: Json
+          p_time?: string
+          p_type?: string
         }
         Returns: Json
       }
@@ -2630,6 +2814,10 @@ export type Database = {
           p_maintenance_plans: Json
         }
         Returns: number
+      }
+      create_auto_replenishment_request: {
+        Args: { p_dest_warehouse_id: number; p_note?: string }
+        Returns: Json
       }
       create_customer_b2b: {
         Args: { p_contacts: Json[]; p_customer_data: Json }
@@ -3223,6 +3411,21 @@ export type Database = {
         }
       }
       get_service_package_details: { Args: { p_id: number }; Returns: Json }
+      get_mapped_product: {
+        Args: {
+          p_tax_code: string
+          p_product_name: string
+          p_vendor_unit: string
+        }
+        Returns: {
+          internal_product_id: number
+          internal_unit: string
+        }[]
+      }
+      process_vat_invoice_entry: {
+        Args: { p_invoice_id: number };
+        Returns: void;
+      };
       get_service_packages_list: {
         Args: {
           p_page_num: number
@@ -3563,6 +3766,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      submit_transfer_shipping: {
+        Args: { p_batch_items: Json; p_transfer_id: number }
+        Returns: Json
+      }
       update_asset: {
         Args: {
           p_asset_data: Json
@@ -3735,15 +3942,10 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_user_assignments:
-        | {
-            Args: { p_assignments: Json; p_user_id: string }
-            Returns: undefined
-          }
-        | {
-            Args: { p_assignments: Json[]; p_user_id: string }
-            Returns: undefined
-          }
+      update_user_assignments: {
+        Args: { p_assignments: Json[]; p_user_id: string }
+        Returns: undefined
+      }
       update_user_status: {
         Args: { p_status: string; p_user_id: string }
         Returns: undefined
@@ -3751,6 +3953,14 @@ export type Database = {
       update_vaccination_template: {
         Args: { p_data: Json; p_id: number; p_items: Json }
         Returns: boolean
+      }
+      upsert_product_with_units: {
+        Args: {
+          p_inventory_json?: Json
+          p_product_json: Json
+          p_units_json: Json
+        }
+        Returns: Json
       }
       verify_promotion_code: {
         Args: { p_code: string; p_customer_id: number; p_order_value: number }

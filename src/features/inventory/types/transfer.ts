@@ -32,6 +32,7 @@ export interface TransferItem {
     product_name?: string;
     sku?: string;
     uom?: string;
+    barcode?: string;
 }
 
 export interface TransferBatchItem {

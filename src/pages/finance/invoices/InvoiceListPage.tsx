@@ -10,6 +10,7 @@ import {
   ScanOutlined,
   DollarCircleOutlined,
   DownloadOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -35,6 +36,7 @@ import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx"; // Nhớ cài: npm install xlsx
 
 import InvoiceUploadModal from "./InvoiceUploadModal";
+import { InvoiceXmlUpload } from "../../../features/finance/components/invoices/InvoiceXmlUpload";
 
 import { invoiceService } from "@/features/finance/api/invoiceService";
 
@@ -68,6 +70,7 @@ const InvoiceListPage = () => {
   });
   const [filters, setFilters] = useState<any>({});
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isXmlUploadOpen, setIsXmlUploadOpen] = useState(false);
   const [stats, setStats] = useState({ total: 0, pending: 0, amount: 0 });
 
   useEffect(() => {
@@ -228,10 +231,18 @@ const InvoiceListPage = () => {
             <Button
               type="primary"
               icon={<CloudUploadOutlined />}
-              style={{ width: "100%", height: "100%", fontSize: 16 }}
+              style={{ width: "100%", fontSize: 16 }}
               onClick={() => setIsUploadOpen(true)}
             >
-              Tải Hóa Đơn Mới (AI Scan)
+              Scan Ảnh (AI Gemini)
+            </Button>
+            <Button
+              type="primary"
+              icon={<FileTextOutlined />}
+              style={{ width: "100%", marginTop: 8, fontSize: 16 }}
+              onClick={() => setIsXmlUploadOpen(true)}
+            >
+              Nhập XML (Chuẩn Thuế)
             </Button>
           </Col>
         </Row>
@@ -309,6 +320,10 @@ const InvoiceListPage = () => {
             setIsUploadOpen(false);
             fetchData();
           }}
+        />
+        <InvoiceXmlUpload 
+            open={isXmlUploadOpen} 
+            onCancel={() => setIsXmlUploadOpen(false)} 
         />
       </Content>
     </Layout>

@@ -1,3 +1,4 @@
+// src/features/inventory/api/transferService.ts
 import { supabase } from '@/shared/lib/supabaseClient';
 import { TransferMaster, TransferDetail, TransferStatus } from '../types/transfer';
 
@@ -88,7 +89,7 @@ export const transferService = {
             .from('inventory_transfer_items')
             .select(`
                 *,
-                product:product_id(name, sku, wholesale_unit)
+                product:product_id(name, sku, wholesale_unit, barcode)
             `)
             .eq('transfer_id', id);
 
@@ -113,7 +114,8 @@ export const transferService = {
             // Product joins
             product_name: item.product?.name,
             sku: item.product?.sku,
-            uom: item.unit // The unit saved in transfer_items IS the wholesale unit
+            uom: item.unit, // The unit saved in transfer_items IS the wholesale unit
+            barcode: item.product?.barcode
         }));
 
         return {
@@ -188,6 +190,32 @@ export const transferService = {
                 updated_at: new Date().toISOString() 
             })
             .eq('id', id);
+
+        if (error) throw error;
+        return true;
+    },
+
+    /**
+     * Delete Transfer (Hard Delete)
+     */
+     deleteTransfer: async (id: number) => {
+        const { error } = await supabase
+            .from('inventory_transfers')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        return true;
+    },
+
+    /**
+     * Delete Transfer Item
+     */
+    deleteTransferItem: async (itemId: number) => {
+        const { error } = await supabase
+            .from('inventory_transfer_items')
+            .delete()
+            .eq('id', itemId);
 
         if (error) throw error;
         return true;

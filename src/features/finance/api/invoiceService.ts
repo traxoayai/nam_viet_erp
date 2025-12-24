@@ -115,17 +115,100 @@ export const invoiceService = {
     return true;
   },
 
-  // 5. Xác nhận Hóa đơn
-  async verifyInvoice(id: number, payload: any) {
-    const { error } = await supabase
+  // 1. Hàm gọi VAT Engine
+  async processVatEntry(invoiceId: number) {
+    const { error } = await supabase.rpc("process_vat_invoice_entry", {
+      p_invoice_id: invoiceId
+    });
+    if (error) console.error("⚠️ Lỗi nhập kho VAT:", error);
+  },
+
+  // 3. Hàm Tạo Mới (Insert)
+  async createInvoice(payload: any) {
+    const { data, error } = await supabase
       .from("finance_invoices")
-      .update({
-        ...payload,
-        status: "verified",
-      })
-      .eq("id", id);
+      .insert([{ 
+          ...payload, 
+          status: "verified", 
+          created_at: new Date().toISOString() 
+      }])
+      .select()
+      .single(); // Insert luôn trả về 1 dòng nên dùng single() ok
 
     if (error) throw error;
+
+    // Kích hoạt nhập kho VAT
+    if (data && data.id) await this.processVatEntry(data.id);
+    
+    return data;
+  },
+
+  // 4. Hàm Cập Nhật (Update) - FIX LỖI PGRST116 TẠI ĐÂY
+  async verifyInvoice(id: number, payload: any) {
+    const { data, error } = await supabase
+      .from("finance_invoices")
+      .update({ 
+          ...payload, 
+          status: "verified" 
+      })
+      .eq("id", id)
+      .select()
+      .maybeSingle(); // <-- DÙNG MAYBESINGLE ĐỂ TRÁNH CRASH NẾU KHÔNG TÌM THẤY
+
+    if (error) throw error;
+    
+    if (!data) throw new Error("Không tìm thấy hóa đơn để cập nhật (ID sai hoặc không có quyền).");
+
+    // Kích hoạt nhập kho VAT
+    if (data && data.id) await this.processVatEntry(data.id);
+
     return true;
   },
+
+  // [NEW] Kiểm tra trùng lặp
+  async checkInvoiceExists(taxCode: string, symbol: string, number: string) {
+    const { data, error } = await supabase.rpc("check_invoice_exists", {
+      p_tax_code: taxCode,
+      p_symbol: symbol,
+      p_number: number,
+    });
+    if (error) throw error;
+    return data as boolean; // True nếu đã tồn tại
+  },
+
+  // 2. Hàm Lấy Mapping (Sửa lại để tránh lỗi null unit)
+  async getMappedProduct(taxCode: string, productName: string, vendorUnit: string) {
+    const { data, error } = await supabase.rpc("get_mapped_product", {
+      p_tax_code: taxCode,
+      p_product_name: productName,
+      p_vendor_unit: vendorUnit || "" // <-- QUAN TRỌNG: Tránh gửi null/undefined
+    });
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+        return {
+            productId: data[0].internal_product_id,
+            unit: data[0].internal_unit
+        };
+    }
+    return null;
+  },
+
+  // [UPDATED] Lưu mapping mới (Có thêm Unit)
+  async saveProductMapping(taxCode: string, productName: string, vendorUnit: string, internalId: number, internalUnit: string) {
+      const { error } = await supabase
+        .from('vendor_product_mappings')
+        .upsert(
+            { 
+                vendor_tax_code: taxCode, 
+                vendor_product_name: productName,
+                vendor_unit: vendorUnit,    // <-- Mới thêm
+                internal_product_id: internalId,
+                internal_unit: internalUnit, // <-- Mới thêm
+                last_used_at: new Date().toISOString()
+            },
+            { onConflict: 'vendor_tax_code, vendor_product_name, vendor_unit' } // <-- Constraint mới
+        );
+      if (error) console.error("Auto-learn mapping failed:", error); 
+  }
 };

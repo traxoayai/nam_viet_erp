@@ -55,28 +55,29 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
   },
 
   fetchCommonData: async () => {
-    if (get().warehouses.length > 0) return;
+    // Chỉ tải nếu chưa có dữ liệu (hoặc force tải lại nếu cần)
+    if (get().products.length > 0 && get().suppliers.length > 0) return;
+
     try {
       const defaultPage = 1;
       const largePageSize = 99999;
       const defaultFilters = {};
 
-      const [warehousesResult, suppliersResult] = await Promise.all([
-        warehouseService.getWarehouses(
-          defaultFilters,
-          defaultPage,
-          largePageSize
-        ),
+      // Gọi song song 3 API: Kho, NCC, và Sản Phẩm (Lite)
+      const [warehousesResult, suppliersResult, productsResult] = await Promise.all([
+        warehouseService.getWarehouses(defaultFilters, defaultPage, largePageSize),
         supplierService.getSuppliers(),
+        productService.getAllProductsLite(), // <-- GỌI HÀM MỚI
       ]);
 
       set({
         warehouses: warehousesResult.data,
         suppliers: suppliersResult,
+        products: productsResult as any, // <-- LƯU VÀO STORE (chap nhan thieu field)
       });
     } catch (error) {
-      console.error("Lỗi khi tải dữ liệu chung (kho, ncc):", error);
-      set({ warehouses: [], suppliers: [] });
+      console.error("Lỗi khi tải dữ liệu chung:", error);
+      // Không reset mảng về rỗng để tránh nhấp nháy UI nếu lỗi mạng tạm thời
     }
   },
 

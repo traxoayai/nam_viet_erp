@@ -1,3 +1,4 @@
+// src/pages/inventory/transfer/TransferDetailPage.tsx  
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -13,7 +14,8 @@ import {
   Input,
   InputNumber,
   Row,
-  Col
+  Col,
+  Popconfirm
 } from 'antd';
 import { 
   ArrowLeftOutlined, 
@@ -22,11 +24,15 @@ import {
   PrinterOutlined,
   BarcodeOutlined,
   CheckCircleOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTransferStore } from '@/features/inventory/stores/useTransferStore';
 import { TransferItem } from '@/features/inventory/types/transfer';
+
+import { printHTML } from '@/shared/utils/printUtils';
+import { generateTransferHTML } from '@/shared/templates/transferTemplate';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -39,13 +45,14 @@ const TransferDetailPage: React.FC = () => {
     loading, 
     isAllocationDone, 
     shippingDraft,
-    scannedCode,
     initTransferOperation, 
     handleBarcodeScan,
     updateDraftItem,
     submitTransferShipment,
     updateStatus,
-    cancelRequest
+    cancelRequest,
+    deleteRequest,
+    removeTransferItem
   } = useTransferStore();
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -61,24 +68,24 @@ const TransferDetailPage: React.FC = () => {
     }
   }, [id, initTransferOperation]);
 
-  // Focus barcode input on mount and keep focus logic could be added here
+  // Focus barcode input on mount
   useEffect(() => {
-      // Small timeout to ensure render
       setTimeout(() => barcodeInputRef.current?.focus(), 500);
-  }, [loading]);
-
-  // Sync scannedCode from store to input clear
-  useEffect(() => {
-     if (scannedCode) {
-         setBarcodeInput(''); // Clear input after successful scan
-     }
-  }, [scannedCode]);
+  }, []);
 
   // --- ACTIONS ---
 
   const onScan = () => {
       if (!barcodeInput.trim()) return;
       handleBarcodeScan(barcodeInput.trim());
+      setBarcodeInput(''); // Clear immediately
+      barcodeInputRef.current?.focus();
+  };
+
+  const handlePrint = () => {
+      if (!currentTransfer) return;
+      const html = generateTransferHTML(currentTransfer);
+      printHTML(html);
   };
 
   const handleCancelSubmit = async () => {
@@ -94,6 +101,21 @@ const TransferDetailPage: React.FC = () => {
           setCancelReason('');
           navigate('/inventory/transfer');
       }
+  };
+
+  const handleDelete = () => {
+      Modal.confirm({
+          title: 'Xóa phiếu chuyển kho',
+          content: 'Hành động này sẽ xóa hoàn toàn phiếu khỏi hệ thống. Bạn có chắc không?',
+          okText: 'Xóa vĩnh viễn',
+          okButtonProps: { danger: true },
+          onOk: async () => {
+              if (currentTransfer) {
+                const success = await deleteRequest(currentTransfer.id);
+                if (success) navigate('/inventory/transfer');
+              }
+          }
+      });
   };
 
   const handleSubmitOutbound = () => {
@@ -147,7 +169,7 @@ const TransferDetailPage: React.FC = () => {
       return (
           <Space direction="vertical" style={{ width: '100%' }}>
               <Tag color="blue">{primaryBatch.batch_code}</Tag>
-              <Text type="secondary" style={{ fontSize: 10 }}>HSD: {dayjs(primaryBatch.expiry_date).format('DD/MM/YY')}</Text>
+              <Text color="#213448" style={{ fontSize: 14 }}>HSD: {dayjs(primaryBatch.expiry_date).format('DD/MM/YY')}</Text>
           </Space>
       );
   };
@@ -164,10 +186,9 @@ const TransferDetailPage: React.FC = () => {
       
       const onQtyChange = (val: number | null) => {
           if (val === null) return;
-          // Apply diff to primary batch
-          if (pickedBatches.length > 0) {
-              updateDraftItem(item.id, pickedBatches[0].id, val);
-          }
+          // Apply diff to primary batch OR auto-pick (pass -1)
+          const currentBatchId = pickedBatches.length > 0 ? pickedBatches[0].id : -1;
+          updateDraftItem(item.id, currentBatchId, val);
       };
 
       return (
@@ -216,6 +237,23 @@ const TransferDetailPage: React.FC = () => {
       key: 'batch',
       width: 200,
       render: (_: any, record: TransferItem) => isPending ? renderBatchSelector(record) : <Text type="secondary">{record.quantity_shipped ? 'Đã xuất' : '---'}</Text>
+    },
+    {
+      title: '',
+      key: 'action',
+      width: 50,
+      render: (_: any, record: TransferItem) => isPending && (
+        <Popconfirm
+            title="Xóa sản phẩm này?"
+            description="Bạn có chắc chắn muốn xóa sản phẩm này khỏi phiếu không?"
+            onConfirm={() => removeTransferItem(record.id)}
+            okText="Xóa"
+            cancelText="Hủy"
+            okButtonProps={{ danger: true }}
+        >
+            <Button type="text" danger icon={<DeleteOutlined />} />
+        </Popconfirm>
+      )
     }
   ];
 
@@ -269,6 +307,9 @@ const TransferDetailPage: React.FC = () => {
                     <Button danger icon={<StopOutlined />} onClick={() => setCancelModalOpen(true)}>
                         Hủy phiếu
                     </Button>
+                    <Button danger type="dashed" icon={<DeleteOutlined />} onClick={handleDelete}>
+                        Xóa phiếu
+                    </Button>
                     <Button 
                         type="primary" 
                         icon={<ExportOutlined />} 
@@ -284,7 +325,7 @@ const TransferDetailPage: React.FC = () => {
                     Xác nhận Nhập kho
                 </Button>
             )}
-            <Button icon={<PrinterOutlined />}>In phiếu</Button>
+            <Button icon={<PrinterOutlined />} onClick={handlePrint}>In phiếu</Button>
         </Space>
       </div>
 

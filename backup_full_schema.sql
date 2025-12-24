@@ -1174,6 +1174,134 @@ $$;
 ALTER FUNCTION "public"."create_asset"("p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."create_auto_replenishment_request"("p_dest_warehouse_id" bigint, "p_note" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_source_warehouse_id BIGINT;
+        v_transfer_id BIGINT;
+        v_item_count INTEGER := 0;
+        v_code TEXT;
+        v_final_note TEXT;
+    BEGIN
+        -- 1. Xác định kho nguồn
+        SELECT id INTO v_source_warehouse_id 
+        FROM public.warehouses 
+        WHERE key = 'b2b' OR type = 'central' 
+        LIMIT 1;
+
+        IF v_source_warehouse_id IS NULL THEN
+            RAISE EXCEPTION 'Không tìm thấy Kho Tổng (Source Warehouse).';
+        END IF;
+
+        IF v_source_warehouse_id = p_dest_warehouse_id THEN
+            RAISE EXCEPTION 'Kho nguồn và kho đích trùng nhau.';
+        END IF;
+
+        -- 2. Tạo Mã phiếu tạm
+        v_code := 'TRF-' || to_char(now(), 'YYMMDD') || '-' || floor(random() * 10000)::text;
+
+        -- 3. [CRITICAL LOGIC CHANGE]
+        CREATE TEMP TABLE temp_replenish_items AS
+        SELECT 
+            pi.product_id,
+            
+            -- Ưu tiên theo thứ tự: Wholesale Unit -> Largest Unit -> Base Unit -> N/A
+            COALESCE(target_unit.unit_name, largest_unit.unit_name, base_unit.unit_name, 'N/A') AS unit,
+            
+            COALESCE(target_unit.conversion_rate, largest_unit.conversion_rate, 1) AS conversion_factor,
+            
+            -- Công thức: (Max - Current) / Conversion_Factor_Of_Wholesale
+            FLOOR(
+                (pi.max_stock - pi.stock_quantity)::NUMERIC / 
+                COALESCE(NULLIF(target_unit.conversion_rate, 0), NULLIF(largest_unit.conversion_rate, 0), 1)
+            ) AS qty_needed
+            
+        FROM public.product_inventory pi
+        JOIN public.products p ON pi.product_id = p.id
+        
+        -- A. Tìm Đơn vị Bán buôn (Ưu tiên số 1)
+        LEFT JOIN LATERAL (
+            SELECT unit_name, conversion_rate
+            FROM public.product_units pu
+            WHERE pu.product_id = pi.product_id
+            AND pu.unit_type = 'wholesale' -- [KEY CHANGE] Chỉ tìm loại Wholesale
+            LIMIT 1
+        ) target_unit ON TRUE
+        
+        -- B. Tìm Đơn vị Lớn nhất (Dự phòng nếu chưa cấu hình Wholesale)
+        LEFT JOIN LATERAL (
+            SELECT unit_name, conversion_rate
+            FROM public.product_units pu
+            WHERE pu.product_id = pi.product_id
+            ORDER BY pu.conversion_rate DESC
+            LIMIT 1
+        ) largest_unit ON TRUE
+
+        -- C. Tìm Đơn vị Cơ sở (Dự phòng cuối cùng)
+        LEFT JOIN LATERAL (
+            SELECT unit_name
+            FROM public.product_units pu_base
+            WHERE pu_base.product_id = pi.product_id 
+            AND pu_base.unit_type = 'base'
+            LIMIT 1
+        ) base_unit ON TRUE
+        
+        WHERE pi.warehouse_id = p_dest_warehouse_id
+          AND pi.max_stock > 0
+          AND p.status = 'active';
+
+        -- Lọc bỏ dòng qty <= 0
+        DELETE FROM temp_replenish_items WHERE qty_needed <= 0;
+
+        GET DIAGNOSTICS v_item_count = ROW_COUNT;
+
+        -- Thoát nếu không có item
+        IF v_item_count = 0 THEN
+            DROP TABLE temp_replenish_items;
+            RETURN jsonb_build_object('success', false, 'message', 'Kho đã đủ hàng (theo đơn vị bán buôn), không cần bù.');
+        END IF;
+
+        -- 4. Xử lý Ghi chú
+        v_final_note := 'Yêu cầu bù kho (Ưu tiên đơn vị Bán buôn)';
+        IF p_note IS NOT NULL AND TRIM(p_note) <> '' THEN
+            v_final_note := v_final_note || '. ' || p_note;
+        END IF;
+
+        -- 5. Tạo Header
+        INSERT INTO public.inventory_transfers (
+            code, source_warehouse_id, dest_warehouse_id, status, created_by, note, is_urgent
+        ) VALUES (
+            v_code, v_source_warehouse_id, p_dest_warehouse_id, 'pending', auth.uid(), v_final_note, false
+        ) RETURNING id INTO v_transfer_id;
+
+        -- 6. Insert Items
+        INSERT INTO public.inventory_transfer_items (
+            transfer_id, product_id, unit, conversion_factor, qty_requested, qty_approved
+        )
+        SELECT v_transfer_id, product_id, unit, conversion_factor, qty_needed, qty_needed
+        FROM temp_replenish_items;
+
+        DROP TABLE temp_replenish_items;
+
+        RETURN jsonb_build_object(
+            'success', true, 
+            'transfer_id', v_transfer_id, 
+            'item_count', v_item_count, 
+            'message', 'Đã tạo phiếu yêu cầu (Tính theo đơn vị Wholesale).'
+        );
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."create_auto_replenishment_request"("p_dest_warehouse_id" bigint, "p_note" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."create_auto_replenishment_request"("p_dest_warehouse_id" bigint, "p_note" "text") IS 'V3.2: Bù kho tự động (Ưu tiên unit_type = wholesale)';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."create_customer_b2b"("p_customer_data" "jsonb", "p_contacts" "jsonb"[]) RETURNS bigint
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -5130,6 +5258,116 @@ $$;
 ALTER FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."submit_transfer_shipping"("p_transfer_id" bigint, "p_batch_items" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_transfer_record RECORD;
+        v_item JSONB;
+        v_item_record RECORD;
+        
+        v_qty_wholesale NUMERIC;
+        v_qty_base INTEGER;
+        
+        v_batch_id BIGINT;
+        v_transfer_item_id BIGINT;
+        v_source_warehouse_id BIGINT;
+        v_current_stock INTEGER;
+    BEGIN
+        -- 1. Validate Header & Lock Row
+        SELECT * INTO v_transfer_record 
+        FROM public.inventory_transfers 
+        WHERE id = p_transfer_id 
+        FOR UPDATE; -- Khóa dòng phiếu chuyển
+
+        IF v_transfer_record IS NULL THEN
+            RAISE EXCEPTION 'Không tìm thấy phiếu chuyển kho ID %', p_transfer_id;
+        END IF;
+
+        IF v_transfer_record.status NOT IN ('pending', 'approved') THEN
+            RAISE EXCEPTION 'Phiếu chuyển kho không ở trạng thái chờ xuất (Status hiện tại: %)', v_transfer_record.status;
+        END IF;
+
+        v_source_warehouse_id := v_transfer_record.source_warehouse_id;
+
+        -- 2. Loop xử lý từng dòng Batch
+        FOR v_item IN SELECT * FROM jsonb_array_elements(p_batch_items)
+        LOOP
+            v_transfer_item_id := (v_item->>'transfer_item_id')::BIGINT;
+            v_batch_id := (v_item->>'batch_id')::BIGINT;
+            v_qty_wholesale := (v_item->>'quantity')::NUMERIC; -- Số lượng Sỉ (VD: 5 Thùng)
+
+            IF v_qty_wholesale <= 0 THEN
+                CONTINUE; -- Bỏ qua nếu số lượng = 0
+            END IF;
+
+            -- Lấy thông tin Item để biết hệ số quy đổi
+            SELECT * INTO v_item_record
+            FROM public.inventory_transfer_items
+            WHERE id = v_transfer_item_id;
+
+            IF v_item_record IS NULL THEN
+                RAISE EXCEPTION 'Không tìm thấy dòng chi tiết ID %', v_transfer_item_id;
+            END IF;
+
+            -- A. Tính toán quy đổi ra Base Unit
+            v_qty_base := (v_qty_wholesale * v_item_record.conversion_factor)::INTEGER;
+
+            -- B. Trừ kho (Inventory Batches) tại Kho Nguồn
+            UPDATE public.inventory_batches
+            SET quantity = quantity - v_qty_base,
+                updated_at = NOW()
+            WHERE warehouse_id = v_source_warehouse_id
+              AND batch_id = v_batch_id
+              AND product_id = v_item_record.product_id
+            RETURNING quantity INTO v_current_stock;
+
+            -- Kiểm tra nếu không tìm thấy lô hoặc âm kho
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'Lô hàng ID % không tồn tại trong kho nguồn (Product ID %)', v_batch_id, v_item_record.product_id;
+            END IF;
+
+            IF v_current_stock < 0 THEN
+                RAISE EXCEPTION 'Kho không đủ hàng để xuất. Sản phẩm ID %, Lô ID % bị âm.', v_item_record.product_id, v_batch_id;
+            END IF;
+
+            -- C. Ghi nhận Batch vào bảng Tracking (inventory_transfer_batch_items)
+            -- Bảng này lưu số lượng thực tế (Base Unit) đã lấy từ lô nào
+            INSERT INTO public.inventory_transfer_batch_items (
+                transfer_item_id, batch_id, quantity
+            ) VALUES (
+                v_transfer_item_id, v_batch_id, v_qty_base
+            );
+
+            -- D. Cập nhật tiến độ vào bảng Item (Số lượng Sỉ)
+            UPDATE public.inventory_transfer_items
+            SET qty_shipped = COALESCE(qty_shipped, 0) + v_qty_wholesale
+            WHERE id = v_transfer_item_id;
+
+        END LOOP;
+
+        -- 3. Cập nhật trạng thái Header -> SHIPPING
+        UPDATE public.inventory_transfers
+        SET status = 'shipping',
+            updated_at = NOW()
+        WHERE id = p_transfer_id;
+
+        RETURN jsonb_build_object(
+            'success', true, 
+            'message', 'Đã xác nhận xuất kho. Phiếu chuyển sang trạng thái Đang vận chuyển.'
+        );
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."submit_transfer_shipping"("p_transfer_id" bigint, "p_batch_items" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."submit_transfer_shipping"("p_transfer_id" bigint, "p_batch_items" "jsonb") IS 'Xử lý xuất kho chuyển hàng: Trừ tồn kho (Base Unit) và cập nhật trạng thái Shipping';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."sync_inventory_batch_to_total"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -6044,6 +6282,118 @@ $$;
 ALTER FUNCTION "public"."update_vaccination_template"("p_id" bigint, "p_data" "jsonb", "p_items" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_inventory_json" "jsonb" DEFAULT '[]'::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_product_id BIGINT;
+        v_input_id BIGINT;
+    BEGIN
+        v_input_id := (p_product_json->>'id')::BIGINT;
+
+        -- A. XỬ LÝ BẢNG PRODUCTS (Header)
+        IF v_input_id IS NOT NULL THEN
+            UPDATE public.products
+            SET
+                name = COALESCE(p_product_json->>'name', name),
+                sku = p_product_json->>'sku',
+                barcode = p_product_json->>'barcode',
+                image_url = p_product_json->>'image_url',
+                description = p_product_json->>'description',
+                actual_cost = COALESCE((p_product_json->>'actual_cost')::NUMERIC, 0),
+                wholesale_margin_value = COALESCE((p_product_json->>'wholesale_margin_value')::NUMERIC, 0),
+                retail_margin_value    = COALESCE((p_product_json->>'retail_margin_value')::NUMERIC, 0),
+                wholesale_margin_type  = COALESCE(p_product_json->>'wholesale_margin_type', 'amount'),
+                retail_margin_type     = COALESCE(p_product_json->>'retail_margin_type', 'amount'),
+                status = COALESCE(p_product_json->>'status', 'active'),
+                updated_at = NOW()
+            WHERE id = v_input_id
+            RETURNING id INTO v_product_id;
+
+            IF v_product_id IS NULL THEN
+                RAISE EXCEPTION 'Sản phẩm ID % không tồn tại để cập nhật.', v_input_id;
+            END IF;
+        ELSE
+            INSERT INTO public.products (
+                name, sku, barcode, image_url, description, 
+                actual_cost, 
+                wholesale_margin_value, wholesale_margin_type,
+                retail_margin_value, retail_margin_type,
+                status
+            )
+            VALUES (
+                p_product_json->>'name',
+                p_product_json->>'sku',
+                p_product_json->>'barcode',
+                p_product_json->>'image_url',
+                p_product_json->>'description',
+                COALESCE((p_product_json->>'actual_cost')::NUMERIC, 0),
+                COALESCE((p_product_json->>'wholesale_margin_value')::NUMERIC, 0),
+                COALESCE(p_product_json->>'wholesale_margin_type', 'amount'),
+                COALESCE((p_product_json->>'retail_margin_value')::NUMERIC, 0),
+                COALESCE(p_product_json->>'retail_margin_type', 'amount'),
+                COALESCE(p_product_json->>'status', 'active')
+            )
+            RETURNING id INTO v_product_id;
+        END IF;
+
+        -- B. XỬ LÝ BẢNG PRODUCT_UNITS
+        DELETE FROM public.product_units WHERE product_id = v_product_id;
+        IF jsonb_array_length(p_units_json) > 0 THEN
+            INSERT INTO public.product_units (
+                product_id, unit_name, conversion_rate, barcode, price, unit_type
+            )
+            SELECT
+                v_product_id,
+                x.unit_name,
+                COALESCE(x.conversion_rate, 1),
+                x.barcode,
+                COALESCE(x.price, 0),
+                COALESCE(x.unit_type, 'retail')
+            FROM jsonb_to_recordset(p_units_json) AS x(
+                unit_name TEXT, conversion_rate NUMERIC, barcode TEXT, price NUMERIC, unit_type TEXT
+            );
+        END IF;
+
+        -- C. XỬ LÝ BẢNG PRODUCT_INVENTORY (Có cột updated_at mới)
+        IF jsonb_array_length(p_inventory_json) > 0 THEN
+            INSERT INTO public.product_inventory (
+                product_id, warehouse_id, min_stock, max_stock, stock_quantity
+            )
+            SELECT
+                v_product_id,
+                (x.warehouse_id)::BIGINT,
+                COALESCE((x.min_stock)::INTEGER, 0),
+                COALESCE((x.max_stock)::INTEGER, 0),
+                0
+            FROM jsonb_to_recordset(p_inventory_json) AS x(
+                warehouse_id BIGINT, min_stock INTEGER, max_stock INTEGER
+            )
+            ON CONFLICT (product_id, warehouse_id) 
+            DO UPDATE SET
+                min_stock = EXCLUDED.min_stock,
+                max_stock = EXCLUDED.max_stock,
+                updated_at = NOW() -- [FIXED] Bây giờ đã có cột này
+            ;
+        END IF;
+
+        RETURN jsonb_build_object(
+            'success', true, 
+            'product_id', v_product_id,
+            'message', 'Lưu sản phẩm hoàn tất (Fixed Inventory Timestamp).'
+        );
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_inventory_json" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_inventory_json" "jsonb") IS 'V3.1: Upsert Product (Fixed product_inventory schema)';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."verify_promotion_code"("p_code" "text", "p_customer_id" bigint, "p_order_value" numeric) RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -6747,6 +7097,105 @@ ALTER TABLE "public"."inventory_receipts" ALTER COLUMN "id" ADD GENERATED BY DEF
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."inventory_transfer_batch_items" (
+    "id" bigint NOT NULL,
+    "transfer_item_id" bigint NOT NULL,
+    "batch_id" bigint NOT NULL,
+    "quantity" integer NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."inventory_transfer_batch_items" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."inventory_transfer_batch_items" IS 'Chi tiết Lô hàng được chỉ định để xuất kho (FEFO)';
+
+
+
+ALTER TABLE "public"."inventory_transfer_batch_items" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."inventory_transfer_batch_items_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."inventory_transfer_items" (
+    "id" bigint NOT NULL,
+    "transfer_id" bigint NOT NULL,
+    "product_id" bigint NOT NULL,
+    "unit" "text",
+    "conversion_factor" integer DEFAULT 1,
+    "qty_requested" numeric DEFAULT 0,
+    "qty_approved" numeric DEFAULT 0,
+    "qty_shipped" numeric DEFAULT 0,
+    "qty_received" numeric DEFAULT 0,
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."inventory_transfer_items" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."inventory_transfer_items" IS 'Chi tiết sản phẩm cần chuyển (Chưa định danh Lô)';
+
+
+
+ALTER TABLE "public"."inventory_transfer_items" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."inventory_transfer_items_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."inventory_transfers" (
+    "id" bigint NOT NULL,
+    "code" "text" NOT NULL,
+    "source_warehouse_id" bigint NOT NULL,
+    "dest_warehouse_id" bigint NOT NULL,
+    "status" "text" DEFAULT 'pending'::"text" NOT NULL,
+    "created_by" "uuid",
+    "note" "text",
+    "carrier_name" "text",
+    "carrier_contact" "text",
+    "carrier_phone" "text",
+    "expected_arrival_at" timestamp with time zone,
+    "is_urgent" boolean DEFAULT false,
+    "urgency_approved" boolean DEFAULT false,
+    "packages_sent" integer DEFAULT 0,
+    "packages_received" integer DEFAULT 0,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "inventory_transfers_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'approved'::"text", 'shipping'::"text", 'completed'::"text", 'cancelled'::"text"])))
+);
+
+
+ALTER TABLE "public"."inventory_transfers" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."inventory_transfers" IS 'Phiếu chuyển kho (Header)';
+
+
+
+ALTER TABLE "public"."inventory_transfers" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."inventory_transfers_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."notifications" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "user_id" "uuid" NOT NULL,
@@ -6891,11 +7340,16 @@ CREATE TABLE IF NOT EXISTS "public"."product_inventory" (
     "stock_quantity" integer DEFAULT 0 NOT NULL,
     "min_stock" integer DEFAULT 0,
     "max_stock" integer DEFAULT 0,
-    "shelf_location" "text" DEFAULT 'Chưa xếp'::"text"
+    "shelf_location" "text" DEFAULT 'Chưa xếp'::"text",
+    "updated_at" timestamp with time zone DEFAULT "now"()
 );
 
 
 ALTER TABLE "public"."product_inventory" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."product_inventory"."updated_at" IS 'Thời gian cập nhật tồn kho hoặc cấu hình Min/Max';
+
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."product_inventory_id_seq"
@@ -6924,11 +7378,18 @@ CREATE TABLE IF NOT EXISTS "public"."product_units" (
     "price_cost" numeric DEFAULT 0,
     "price_sell" numeric DEFAULT 0,
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "unit_type" "text" DEFAULT 'retail'::"text",
+    "price" numeric DEFAULT 0,
+    CONSTRAINT "chk_unit_type" CHECK (("unit_type" = ANY (ARRAY['base'::"text", 'retail'::"text", 'wholesale'::"text", 'logistics'::"text"])))
 );
 
 
 ALTER TABLE "public"."product_units" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."product_units"."price" IS 'Giá bán ra áp dụng cho đơn vị này';
+
 
 
 ALTER TABLE "public"."product_units" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
@@ -6973,6 +7434,8 @@ CREATE TABLE IF NOT EXISTS "public"."products" (
     "registration_number" "text",
     "packing_spec" "text",
     "stock_management_type" "public"."stock_management_type" DEFAULT 'lot_date'::"public"."stock_management_type",
+    "wholesale_margin_rate" numeric DEFAULT 0,
+    "retail_margin_rate" numeric DEFAULT 0,
     CONSTRAINT "products_items_per_carton_check" CHECK (("items_per_carton" > 0)),
     CONSTRAINT "products_purchasing_policy_check" CHECK (("purchasing_policy" = ANY (ARRAY['ALLOW_LOOSE'::"text", 'FULL_CARTON_ONLY'::"text"])))
 );
@@ -7738,6 +8201,26 @@ ALTER TABLE ONLY "public"."inventory_receipts"
 
 
 
+ALTER TABLE ONLY "public"."inventory_transfer_batch_items"
+    ADD CONSTRAINT "inventory_transfer_batch_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfer_items"
+    ADD CONSTRAINT "inventory_transfer_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfers"
+    ADD CONSTRAINT "inventory_transfers_code_key" UNIQUE ("code");
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfers"
+    ADD CONSTRAINT "inventory_transfers_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."notifications"
     ADD CONSTRAINT "notifications_pkey" PRIMARY KEY ("id");
 
@@ -7935,6 +8418,11 @@ ALTER TABLE ONLY "public"."inventory_batches"
 
 ALTER TABLE ONLY "public"."customer_b2b_contacts"
     ADD CONSTRAINT "unique_customer_contact_phone" UNIQUE ("customer_b2b_id", "phone");
+
+
+
+ALTER TABLE ONLY "public"."product_inventory"
+    ADD CONSTRAINT "unique_product_warehouse" UNIQUE ("product_id", "warehouse_id");
 
 
 
@@ -8237,6 +8725,14 @@ CREATE INDEX "idx_templates_name" ON "public"."prescription_templates" USING "bt
 
 
 
+CREATE INDEX "idx_transfer_batch_items_item_id" ON "public"."inventory_transfer_batch_items" USING "btree" ("transfer_item_id");
+
+
+
+CREATE INDEX "idx_transfer_items_transfer_id" ON "public"."inventory_transfer_items" USING "btree" ("transfer_id");
+
+
+
 CREATE INDEX "idx_users_name_trgm" ON "public"."users" USING "gin" ("full_name" "public"."gin_trgm_ops");
 
 
@@ -8482,6 +8978,41 @@ ALTER TABLE ONLY "public"."inventory_receipts"
 
 ALTER TABLE ONLY "public"."inventory_receipts"
     ADD CONSTRAINT "inventory_receipts_warehouse_id_fkey" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouses"("id");
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfer_batch_items"
+    ADD CONSTRAINT "inventory_transfer_batch_items_batch_id_fkey" FOREIGN KEY ("batch_id") REFERENCES "public"."batches"("id");
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfer_batch_items"
+    ADD CONSTRAINT "inventory_transfer_batch_items_transfer_item_id_fkey" FOREIGN KEY ("transfer_item_id") REFERENCES "public"."inventory_transfer_items"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfer_items"
+    ADD CONSTRAINT "inventory_transfer_items_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id");
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfer_items"
+    ADD CONSTRAINT "inventory_transfer_items_transfer_id_fkey" FOREIGN KEY ("transfer_id") REFERENCES "public"."inventory_transfers"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfers"
+    ADD CONSTRAINT "inventory_transfers_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfers"
+    ADD CONSTRAINT "inventory_transfers_dest_warehouse_id_fkey" FOREIGN KEY ("dest_warehouse_id") REFERENCES "public"."warehouses"("id");
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfers"
+    ADD CONSTRAINT "inventory_transfers_source_warehouse_id_fkey" FOREIGN KEY ("source_warehouse_id") REFERENCES "public"."warehouses"("id");
 
 
 
@@ -8812,6 +9343,18 @@ CREATE POLICY "Enable all for authenticated" ON "public"."inventory_batches" TO 
 
 
 
+CREATE POLICY "Enable all for authenticated" ON "public"."inventory_transfer_batch_items" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Enable all for authenticated" ON "public"."inventory_transfer_items" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Enable all for authenticated" ON "public"."inventory_transfers" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Enable all for authenticated" ON "public"."order_items" TO "authenticated" USING (true);
 
 
@@ -8955,6 +9498,15 @@ ALTER TABLE "public"."inventory_receipt_items" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."inventory_receipts" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."inventory_transfer_batch_items" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."inventory_transfer_items" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."inventory_transfers" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."notifications" ENABLE ROW LEVEL SECURITY;
@@ -9321,6 +9873,12 @@ GRANT ALL ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigi
 GRANT ALL ON FUNCTION "public"."create_asset"("p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_asset"("p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_asset"("p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."create_auto_replenishment_request"("p_dest_warehouse_id" bigint, "p_note" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_auto_replenishment_request"("p_dest_warehouse_id" bigint, "p_note" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_auto_replenishment_request"("p_dest_warehouse_id" bigint, "p_note" "text") TO "service_role";
 
 
 
@@ -10032,6 +10590,12 @@ GRANT ALL ON FUNCTION "public"."strict_word_similarity_op"("text", "text") TO "s
 
 
 
+GRANT ALL ON FUNCTION "public"."submit_transfer_shipping"("p_transfer_id" bigint, "p_batch_items" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."submit_transfer_shipping"("p_transfer_id" bigint, "p_batch_items" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."submit_transfer_shipping"("p_transfer_id" bigint, "p_batch_items" "jsonb") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."sync_inventory_batch_to_total"() TO "anon";
 GRANT ALL ON FUNCTION "public"."sync_inventory_batch_to_total"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."sync_inventory_batch_to_total"() TO "service_role";
@@ -10155,6 +10719,12 @@ GRANT ALL ON FUNCTION "public"."update_user_status"("p_user_id" "uuid", "p_statu
 GRANT ALL ON FUNCTION "public"."update_vaccination_template"("p_id" bigint, "p_data" "jsonb", "p_items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."update_vaccination_template"("p_id" bigint, "p_data" "jsonb", "p_items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_vaccination_template"("p_id" bigint, "p_data" "jsonb", "p_items" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_inventory_json" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_inventory_json" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_inventory_json" "jsonb") TO "service_role";
 
 
 
@@ -10451,6 +11021,42 @@ GRANT ALL ON TABLE "public"."inventory_receipts" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."inventory_receipts_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."inventory_receipts_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."inventory_receipts_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."inventory_transfer_batch_items" TO "anon";
+GRANT ALL ON TABLE "public"."inventory_transfer_batch_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."inventory_transfer_batch_items" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."inventory_transfer_batch_items_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."inventory_transfer_batch_items_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."inventory_transfer_batch_items_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."inventory_transfer_items" TO "anon";
+GRANT ALL ON TABLE "public"."inventory_transfer_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."inventory_transfer_items" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."inventory_transfer_items_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."inventory_transfer_items_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."inventory_transfer_items_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."inventory_transfers" TO "anon";
+GRANT ALL ON TABLE "public"."inventory_transfers" TO "authenticated";
+GRANT ALL ON TABLE "public"."inventory_transfers" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."inventory_transfers_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."inventory_transfers_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."inventory_transfers_id_seq" TO "service_role";
 
 
 

@@ -6,6 +6,18 @@ export interface Supplier {
   name: string;
 }
 
+export interface ProductUnit {
+  id?: number;
+  unit_name: string;
+  conversion_rate: number;
+  is_base: boolean;
+  is_direct_sale: boolean;
+  barcode?: string;
+  // V2 Fields
+  unit_type?: "base" | "retail" | "wholesale" | "logistics";
+  price?: number;
+}
+
 export interface Product {
   key: string;
   id: number;
@@ -37,10 +49,13 @@ export interface Product {
   retail_unit?: string;
   conversion_factor?: number;
   wholesale_margin_value?: number;
-  wholesale_margin_type?: "%" | "đ";
+  wholesale_margin_type?: "percent" | "amount";
   retail_margin_value?: number;
-  retail_margin_type?: "%" | "đ";
+  retail_margin_type?: "percent" | "amount";
   inventory_settings?: any;
+  
+  // Multi-unit V2
+  units?: ProductUnit[];
 }
 
 export interface ProductFilters {
