@@ -122,28 +122,38 @@ export const useInvoiceVerifyLogic = () => {
           }
       }
 
-      // 3. CHUẨN BỊ PAYLOAD
+      // 3. CHUẨN BỊ PAYLOAD (CẬP NHẬT MỚI)
       const totals = calculateTotal(values.items);
       const xmlFileUrl = isXmlSource ? routerState?.xmlData?.fileUrl : null;
+      
+      // [FIX] Lấy thông tin Raw từ XML Header
+      const xmlHeader = isXmlSource ? routerState?.xmlData?.header : {};
 
       const payload = {
         invoice_number: values.invoice_number || "Unknown",
         invoice_symbol: values.invoice_symbol || "",
         invoice_date: values.invoice_date ? dayjs(values.invoice_date).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
         supplier_id: safeSupplierId,
-        // [FIX HERE]
+        
         file_url: isXmlSource ? (xmlFileUrl || "no_file_uploaded_error") : undefined,
+        
+        // [NEW] Bổ sung các trường Raw để hiển thị ngoài danh sách
+        supplier_name_raw: xmlHeader.supplier_name || null,
+        supplier_tax_code: xmlHeader.supplier_tax_code || null,
+        supplier_address_raw: xmlHeader.supplier_address || null,
+        parsed_data: isXmlSource ? routerState?.xmlData : null, // Lưu lại toàn bộ cục JSON XML để sau này debug
+        
         total_amount_pre_tax: totals.totalPreTax,
         tax_amount: totals.totalTax,
         total_amount_post_tax: totals.final,
+        
         items_json: values.items.map((item: any) => {
              let pId = item.product_id ? Number(item.product_id) : null;
-             if (typeof pId === 'number' && isNaN(pId)) {
-                 pId = null;
-             }
+             if (typeof pId === 'number' && isNaN(pId)) pId = null;
+             
              return {
                 ...item,
-                product_id: pId, // Đảm bảo số hoặc null
+                product_id: pId,
                 internal_unit: item.internal_unit || null,
                 expiry_date: item.expiry_date ? dayjs(item.expiry_date).format("YYYY-MM-DD") : null,
             };

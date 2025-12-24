@@ -63,12 +63,12 @@ export const useXmlInvoice = () => {
       );
 
       if (isExist) {
-        notification.error({
-          message: "Cảnh báo trùng lặp!",
-          description: `Hóa đơn ${header.invoice_number} đã tồn tại.`,
-          duration: 5,
+        // [FIX] Chỉ cảnh báo, KHÔNG return null để chặn nữa
+        notification.warning({
+          message: "Phát hiện trùng lặp!",
+          description: `Hóa đơn số ${header.invoice_number} đã tồn tại trong hệ thống. Bạn vẫn có thể tiếp tục nhập liệu.`,
+          duration: 6,
         });
-        return null;
       }
 
       // 4. Mapping (FIX LỖI MAPPING)
