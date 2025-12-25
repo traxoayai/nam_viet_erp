@@ -49,6 +49,8 @@ import MainLayout from "@/shared/ui/layouts/MainLayout";
 import OnboardingLayout from "@/shared/ui/layouts/OnboardingLayout";
 import TransferListPage from "@/pages/inventory/transfer/TransferListPage";
 import TransferDetailPage from "@/pages/inventory/transfer/TransferDetailPage";
+import CustomerSegmentsPage from "@/pages/crm/CustomerSegmentsPage";
+//import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
 const PagePlaceholder = ({ title }: { title: string }) => (
@@ -292,8 +294,9 @@ const routes: RouteObject[] = [
           },
           {
             path: "marketing/tools/segmentation",
-            element: <PagePlaceholder title="Trình tạo Phân khúc KH" />,
+            element: <CustomerSegmentsPage />,
           },
+          
           {
             path: "marketing/tools/library",
             element: <PagePlaceholder title="Thư viện Nội dung" />,

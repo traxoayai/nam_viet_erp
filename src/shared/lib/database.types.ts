@@ -433,6 +433,68 @@ export type Database = {
           },
         ]
       }
+      customer_segments: {
+        Row: {
+          id: number;
+          name: string;
+          description: string | null;
+          type: 'static' | 'dynamic';
+          criteria: Json | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          name: string;
+          description?: string | null;
+          type: 'static' | 'dynamic';
+          criteria?: Json | null;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          description?: string | null;
+          type?: 'static' | 'dynamic';
+          criteria?: Json | null;
+          is_active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      }
+      customer_segment_members: {
+        Row: {
+          id: number;
+          segment_id: number;
+          customer_id: number;
+          added_at: string;
+        };
+        Insert: {
+          segment_id: number;
+          customer_id: number;
+          added_at?: string;
+        };
+        Update: {
+          segment_id?: number;
+          customer_id?: number;
+          added_at?: string;
+        };
+        Relationships: [
+           {
+             foreignKeyName: "customer_segment_members_segment_id_fkey";
+             columns: ["segment_id"];
+             isOneToOne: false;
+             referencedRelation: "customer_segments";
+             referencedColumns: ["id"];
+           },
+           {
+             foreignKeyName: "customer_segment_members_customer_id_fkey";
+             columns: ["customer_id"];
+             isOneToOne: false;
+             referencedRelation: "customers";
+             referencedColumns: ["id"];
+           }
+        ];
+      }
       customer_b2b_contacts: {
         Row: {
           created_at: string | null
@@ -3676,6 +3738,10 @@ export type Database = {
       reactivate_shipping_partner: {
         Args: { p_id: number }
         Returns: undefined
+      }
+      refresh_segment_members: {
+        Args: { p_segment_id: number };
+        Returns: void;
       }
       save_outbound_progress: {
         Args: { p_items: Json; p_order_id: string }
