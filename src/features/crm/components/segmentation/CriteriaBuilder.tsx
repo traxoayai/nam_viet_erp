@@ -63,6 +63,19 @@ export const CriteriaBuilder: React.FC<CriteriaBuilderProps> = ({ value = {}, on
             />
           </Form.Item>
         </Col>
+
+        {/* [NEW] Lọc theo thời gian mua hàng */}
+        <Col span={12}>
+          <Form.Item label="Không mua hàng trong (tháng)">
+            <InputNumber 
+                style={{ width: "100%" }} 
+                placeholder="Ví dụ: 3 (tháng)" 
+                min={1}
+                value={value.last_purchase_months} 
+                onChange={(v) => updateCriteria("last_purchase_months", v)}
+            />
+          </Form.Item>
+        </Col>
       </Row>
     </Card>
   );

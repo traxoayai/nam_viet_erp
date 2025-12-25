@@ -10,6 +10,9 @@ export interface SegmentCriteria {
   min_age?: number;
   max_age?: number;
   min_loyalty?: number;
+  
+  // [NEW] Số tháng chưa quay lại mua hàng
+  last_purchase_months?: number; 
 }
 
 // Payload tạo mới
