@@ -433,6 +433,33 @@ export type Database = {
           },
         ]
       }
+      customer_vouchers: {
+        Row: {
+          id: number;
+          customer_id: number;
+          promotion_id: string; // UUID
+          code: string;         // Mã voucher hiển thị
+          status: 'active' | 'used' | 'expired';
+          used_at: string | null;
+          created_at: string;
+          usage_remaining: number | null; // null = vô hạn
+        };
+        Insert: {
+          customer_id: number;
+          promotion_id: string;
+          code: string;
+          status?: 'active' | 'used' | 'expired';
+          used_at?: string | null;
+          created_at?: string;
+          usage_remaining?: number | null;
+        };
+        Update: {
+          status?: 'active' | 'used' | 'expired';
+          used_at?: string | null;
+          usage_remaining?: number | null;
+        };
+        Relationships: [];
+      }
       customer_segments: {
         Row: {
           id: number;
@@ -1930,6 +1957,22 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      promotion_targets: {
+        Row: {
+          id: number;
+          promotion_id: string; // UUID
+          target_type: 'segment' | 'branch' | 'customer';
+          target_id: number;    // ID của Segment/Branch/Customer
+          created_at: string;
+        };
+        Insert: {
+          promotion_id: string;
+          target_type: 'segment' | 'branch' | 'customer';
+          target_id: number;
+          created_at?: string;
+        };
+        Relationships: [];
       }
       promotions: {
         Row: {
@@ -3738,6 +3781,13 @@ export type Database = {
       reactivate_shipping_partner: {
         Args: { p_id: number }
         Returns: undefined
+      }
+      distribute_voucher_to_segment: {
+        Args: {
+          p_promotion_id: string;
+          p_segment_id: number;
+        };
+        Returns: number;
       }
       refresh_segment_members: {
         Args: { p_segment_id: number };

@@ -50,6 +50,7 @@ import OnboardingLayout from "@/shared/ui/layouts/OnboardingLayout";
 import TransferListPage from "@/pages/inventory/transfer/TransferListPage";
 import TransferDetailPage from "@/pages/inventory/transfer/TransferDetailPage";
 import CustomerSegmentsPage from "@/pages/crm/CustomerSegmentsPage";
+import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -295,6 +296,11 @@ const routes: RouteObject[] = [
           {
             path: "marketing/tools/segmentation",
             element: <CustomerSegmentsPage />,
+          },
+          
+          {
+            path: "marketing/tools/distribution", 
+            element: <VoucherDistributionPage />,
           },
           
           {

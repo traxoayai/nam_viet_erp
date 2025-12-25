@@ -308,17 +308,24 @@ const finalMenuItems: MenuItem[] = [
     ),
     getItem("Công cụ Marketing", "marketing-tools", <ToolOutlined />, [
       getItem(
-        <Link to="/marketing/tools/segmentation">Trình tạo Phân khúc KH</Link>,
+        <Link to="/marketing/tools/segmentation">Tạo Phân khúc KH</Link>,
         "/marketing/tools/segmentation"
       ),
+      getItem(
+        <Link to="/marketing/tools/promo">Tạo Voucher & QR Code</Link>,
+        "/marketing/tools/promo"
+      ),
+           
+      getItem(
+        <Link to="/marketing/tools/distribution">Phân Phối Voucher</Link>,
+        "/marketing/tools/distribution"
+      ),
+      
       getItem(
         <Link to="/marketing/tools/library">Thư viện Nội dung</Link>,
         "/marketing/tools/library"
       ),
-      getItem(
-        <Link to="/marketing/tools/promo">Mã Giảm giá & QR Code</Link>,
-        "/marketing/tools/promo"
-      ),
+      
     ]),
     getItem(
       <Link to="/marketing/chatbot">Quản lý Chatbot AI</Link>,
@@ -583,8 +590,8 @@ const MainLayout: React.FC = () => {
           width={280}
           collapsedWidth={55}
           style={{
-            background: "#fff",
-            borderRight: "1px solid #e8e8e8",
+            background: "#d7d7d7ff",
+            borderRight: "1px solid #c0c0c0ff",
             position: "fixed",
             left: 0,
             top: 0,
