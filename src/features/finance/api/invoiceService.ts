@@ -42,7 +42,7 @@ export const invoiceService = {
     if (error) {
       console.error("Edge Function Error Detail:", error);
 
-      // --- CẬP NHẬT MỚI: Xử lý lỗi 409 (Trùng lặp) từ CORE ---
+      // --- CẬP NHẬT MỚI: Xử lý lỗi 409 (Trùng lặp) ---
       // Supabase Functions trả về lỗi trong object `error` hoặc `context`
       // CORE trả về JSON { success: false, error: "..." } nên ta ưu tiên lấy message đó
 
@@ -105,14 +105,40 @@ export const invoiceService = {
     return { data: data || [], total: count || 0 };
   },
 
-  // 4. Xóa hóa đơn
+  // 4. Xóa hóa đơn (An toàn: Trừ kho VAT trước)
   async deleteInvoice(id: number) {
-    const { error } = await supabase
-      .from("finance_invoices")
-      .delete()
-      .eq("id", id);
-    if (error) throw error;
-    return true;
+    try {
+        // Bước 1: Gọi RPC để trừ kho VAT (Reverse Entry)
+        const { error: rpcError } = await supabase.rpc("reverse_vat_invoice_entry", {
+          p_invoice_id: id
+        });
+        
+        if (rpcError) {
+            console.error("Lỗi RPC Reverse:", rpcError);
+            
+            // Phân tích lỗi từ Database trả về để báo user
+            if (rpcError.message.includes("violates check constraint")) {
+                throw new Error("Không thể xóa hóa đơn này vì hàng đã được xuất bán (Tồn kho VAT không đủ để trừ). Vui lòng kiểm tra lại các phiếu xuất.");
+            }
+            
+            throw rpcError; 
+        }
+
+        // Bước 2: Sau khi trừ kho thành công, mới xóa record hóa đơn
+        const { error: deleteError } = await supabase
+          .from("finance_invoices")
+          .delete()
+          .eq("id", id);
+
+        if (deleteError) throw deleteError;
+        
+        return true;
+
+    } catch (error: any) {
+        console.error("Delete Invoice Failed:", error);
+        // Ném lỗi tiếp để UI (InvoiceListPage) bắt được và hiện message.error
+        throw error;
+    }
   },
 
   // 1. Hàm gọi VAT Engine

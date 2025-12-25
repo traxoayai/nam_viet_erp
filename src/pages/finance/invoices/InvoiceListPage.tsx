@@ -107,7 +107,7 @@ const InvoiceListPage = () => {
       message.success("Đã xóa hóa đơn");
       fetchData();
     } catch (error) {
-      message.error("Xóa thất bại");
+      message.error("Xóa thất bại - Có thể không đủ số lượng để xóa - Vui lòng liên hệ ADMIN để biết thêm chi tiết");
     }
   };
 
@@ -204,7 +204,7 @@ const InvoiceListPage = () => {
   return (
     <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
       <Content
-        style={{ padding: 24, maxWidth: 1400, margin: "0 auto", width: "100%" }}
+        style={{ padding: 24, maxWidth: 1900, margin: "0 auto", width: "100%" }}
       >
         <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={8}>
