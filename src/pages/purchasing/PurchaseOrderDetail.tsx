@@ -12,7 +12,7 @@ import POProductTable from "./components/POProductTable";
 import { usePurchaseOrderLogic } from "./hooks/usePurchaseOrderLogic";
 
 import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect";
-import { searchProductsForPurchase } from "@/features/inventory/api/productService";
+import { searchProductsForPurchase } from "@/features/product/api/productService";
 //import { POItem } from "@/types/purchaseOrderTypes";
 
 const { Content } = Layout;

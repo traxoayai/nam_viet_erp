@@ -1,14 +1,14 @@
-// src/stores/productStore.ts
+// src/features/product/stores/productStore.ts
 import { create } from "zustand";
 
-import { supabase } from "@/shared/lib/supabaseClient"; // <-- MỚI: Import để gọi RPC
-import * as productService from "@/features/inventory/api/productService";
+import { supabase } from "@/shared/lib/supabaseClient";
+import * as productService from "@/features/product/api/productService";
 import * as supplierService from "@/features/purchasing/api/supplierService";
 import * as warehouseService from "@/features/inventory/api/warehouseService";
 import {
   ProductStoreState,
   ProductFilters,
-} from "@/features/inventory/types/product";
+} from "@/features/product/types/product.types";
 
 export const useProductStore = create<ProductStoreState>((set, get) => ({
   // Dữ liệu
@@ -63,17 +63,16 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
       const largePageSize = 99999;
       const defaultFilters = {};
 
-      // Gọi song song 3 API: Kho, NCC, và Sản Phẩm (Lite)
-      const [warehousesResult, suppliersResult, productsResult] = await Promise.all([
+      // Gọi song song 2 API: Kho và NCC
+      const [warehousesResult, suppliersResult] = await Promise.all([
         warehouseService.getWarehouses(defaultFilters, defaultPage, largePageSize),
         supplierService.getSuppliers(),
-        productService.getAllProductsLite(), // <-- GỌI HÀM MỚI
       ]);
 
       set({
         warehouses: warehousesResult.data,
         suppliers: suppliersResult,
-        products: productsResult as any, // <-- LƯU VÀO STORE (chap nhan thieu field)
+        // products: productsResult as any, // REMOVED: Conflict with fetchProducts
       });
     } catch (error) {
       console.error("Lỗi khi tải dữ liệu chung:", error);
@@ -140,9 +139,60 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
 
   deleteProducts: async (ids: React.Key[]) => {
     set({ loading: true });
-    await productService.deleteProducts(ids);
+    await productService.deleteProducts(ids); // Soft Delete
     await get().fetchProducts();
     set({ loading: false });
+  },
+
+  checkAndDeleteProducts: async (ids: React.Key[]) => {
+    set({ loading: true });
+    try {
+      // 1. Check Dependencies
+      const dependencies = await productService.checkDependencies(ids);
+      
+      if (dependencies && dependencies.length > 0) {
+        set({ loading: false });
+        return { success: false, dependencies };
+      }
+
+      // 2. Safe to Delete
+      await productService.deleteProducts(ids);
+      await get().fetchProducts();
+      
+      set({ loading: false });
+      return { success: true };
+    } catch (error) {
+      console.error("Delete Error:", error);
+      set({ loading: false });
+      throw error;
+    }
+  },
+
+  checkAndUpdateStatus: async (ids: React.Key[], status: "active" | "inactive") => {
+    set({ loading: true });
+    try {
+      // Logic requirement: If status === 'active', update directly.
+      // If status === 'inactive', check dependencies first.
+      
+      if (status === 'inactive') {
+        const dependencies = await productService.checkDependencies(ids);
+        if (dependencies && dependencies.length > 0) {
+          set({ loading: false });
+          return { success: false, dependencies };
+        }
+      }
+
+      // Safe to Update
+      await productService.updateProductsStatus(ids, status);
+      await get().fetchProducts();
+      
+      set({ loading: false });
+      return { success: true };
+    } catch (error) {
+      console.error("Update Parameters Error:", error);
+      set({ loading: false });
+      throw error;
+    }
   },
 
   exportToExcel: async () => {

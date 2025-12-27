@@ -6,7 +6,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { supabase } from "@/shared/lib/supabaseClient";
 import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
-import { useProductStore } from "@/features/inventory/stores/productStore";
+import { useProductStore } from "@/features/product/stores/productStore";
 // Import Interface từ file Type chung để tránh lỗi vòng lặp
 import { POItem } from "@/features/purchasing/types/purchaseOrderTypes";
 

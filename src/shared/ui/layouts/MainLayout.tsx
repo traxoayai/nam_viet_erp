@@ -537,7 +537,7 @@ const MainLayout: React.FC = () => {
           alignItems: "center",
           justifyContent: "center",
           padding: "0 10px",
-          borderBottom: "1px solid #f0f0f0",
+          borderBottom: "1px solid #ffffffff",
         }}
       >
         <img
@@ -587,10 +587,10 @@ const MainLayout: React.FC = () => {
           trigger={null}
           collapsible
           collapsed={collapsed}
-          width={280}
+          width={290}
           collapsedWidth={55}
           style={{
-            background: "#d7d7d7ff",
+            background: "#ffffffff",
             borderRight: "1px solid #c0c0c0ff",
             position: "fixed",
             left: 0,

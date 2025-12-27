@@ -9,7 +9,7 @@ import { Select, Spin, Avatar, Typography, Empty, Tag } from "antd";
 import React, { useState, useEffect } from "react";
 
 import { useDebounce } from "@/shared/hooks/useDebounce";
-import { searchProductsForDropdown } from "@/features/inventory/api/productService";
+import { searchProductsForDropdown } from "@/features/product/api/productService";
 
 const { Text } = Typography;
 

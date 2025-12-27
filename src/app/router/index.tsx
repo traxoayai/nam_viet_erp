@@ -51,6 +51,7 @@ import TransferListPage from "@/pages/inventory/transfer/TransferListPage";
 import TransferDetailPage from "@/pages/inventory/transfer/TransferDetailPage";
 import CustomerSegmentsPage from "@/pages/crm/CustomerSegmentsPage";
 import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
+import PosPage from "@/pages/pos/PosPage";
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -505,7 +506,7 @@ const routes: RouteObject[] = [
         children: [
           {
             path: "pos",
-            element: <PagePlaceholder title="TRANG BÁN HÀNG POS" />,
+            element: <PosPage />,
           },
         ],
       },

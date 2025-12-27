@@ -1,4 +1,4 @@
-// src/services/servicePackageService.ts
+// src/features/marketing/api/servicePackageService.ts
 import type {
   ServicePackageInput,
   ServicePackageItemInput,
@@ -73,11 +73,31 @@ export const servicePackageService = {
   },
 
   // 6. Xóa (Cần thêm RPC delete nếu chưa có, hoặc dùng update status)
-  // Tạm thời dùng update status
-  async deletePackage(id: number) {
-    console.warn("Chưa có RPC delete_service_package, tạm thời bỏ qua ID:", id);
-    // Sếp có thể thêm RPC xóa thật sau:
-    // const { error } = await supabase.rpc('delete_service_package', { p_id: id });
+  // 6. Xóa Gói (Soft Delete thông qua RPC)
+  async deletePackage(ids: number[]) {
+    // Gọi RPC delete_service_packages của Core
+    const { error } = await supabase.rpc("delete_service_packages", {
+      p_ids: ids,
+    });
+
+    if (error) {
+      console.error("Lỗi RPC delete_service_packages:", error);
+      throw error;
+    }
+    return true;
+  },
+
+  // 7. Cập nhật trạng thái hàng loạt (Active/Inactive)
+  async updatePackagesStatus(ids: number[], status: "active" | "inactive") {
+    const { error } = await supabase
+      .from("service_packages")
+      .update({ status: status })
+      .in("id", ids);
+
+    if (error) {
+      console.error("Lỗi cập nhật trạng thái gói:", error);
+      throw error;
+    }
     return true;
   },
 };

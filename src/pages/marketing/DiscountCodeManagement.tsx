@@ -39,7 +39,7 @@ import { useState, useEffect } from "react";
 
 // Import Store & Components
 import DebounceCustomerSelect from "@/shared/ui/common/DebounceCustomerSelect";
-import { useProductStore } from "@/features/inventory/stores/productStore";
+import { useProductStore } from "@/features/product/stores/productStore";
 import {
   usePromotionStore,
   Promotion,

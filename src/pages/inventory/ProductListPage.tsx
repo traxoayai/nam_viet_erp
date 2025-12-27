@@ -1,4 +1,4 @@
-// src/pages/inventory/ProductListPage.tsx
+// src/pages/inventory/transfer/ProductListPage.tsx
 import {
   SearchOutlined,
   PlusOutlined,
@@ -32,16 +32,17 @@ import {
   Upload,
   Spin,
 } from "antd";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 
 import type { TableProps, UploadProps } from "antd";
 
 import { useDebounce } from "@/shared/hooks/useDebounce";
-import * as productService from "@/features/inventory/api/productService";
-import { useProductStore } from "@/features/inventory/stores/productStore";
-import { Product } from "@/features/inventory/types/product";
+// import * as productService from "@/features/product/api/productService";
+import * as productExcelManager from "@/features/product/utils/productExcelManager"; // Import Manager
+import { useProductStore } from "@/features/product/stores/productStore";
+import { Product } from "@/features/product/types/product.types";
 
 const { Title, Text } = Typography;
 
@@ -51,7 +52,7 @@ const ProductListPage = () => {
 
   const {
     // Lấy danh sách kho dynamic từ store
-    warehouses: availableWarehouses,
+    // warehouses: availableWarehouses, // Unused
     products,
     loading,
     page,
@@ -61,8 +62,9 @@ const ProductListPage = () => {
     fetchCommonData,
     setFilters,
     setPage,
-    updateStatus,
-    deleteProducts,
+    // updateStatus, // Unused
+    checkAndUpdateStatus, // [NEW]
+    checkAndDeleteProducts,
     exportToExcel,
   } = useProductStore();
 
@@ -94,6 +96,27 @@ const ProductListPage = () => {
 
   const hasSelected = selectedRowKeys.length > 0;
 
+  // Helper: Show Dependency Warning
+  const showDependencyWarning = (dependencies: any[], action: string) => {
+    antModal.warning({
+      title: `Không thể ${action} sản phẩm đang sử dụng`,
+      width: 600,
+      content: (
+          <div>
+              <p>Các sản phẩm sau đang được sử dụng trong Gói khám hoặc Hóa đơn:</p>
+              <ul>
+                  {dependencies.map((dep, idx) => (
+                      <li key={idx}>
+                          <b>{dep.product_name}</b> - {dep.reason} (Ref: {dep.ref_source})
+                      </li>
+                  ))}
+              </ul>
+              <p>Vui lòng gỡ bỏ liên kết trước khi thực hiện.</p>
+          </div>
+      )
+    });
+  };
+
   const handleToggleStatus = (record: Product) => {
     const newStatus = record.status === "active" ? "inactive" : "active";
     const actionText =
@@ -105,9 +128,17 @@ const ProductListPage = () => {
       okText: "Xác nhận",
       cancelText: "Hủy",
       onOk: async () => {
-        await updateStatus([record.id], newStatus);
-        antMessage.success(`Đã ${actionText.toLowerCase()} sản phẩm.`);
-        setSelectedRowKeys([]);
+        try {
+          const result = await checkAndUpdateStatus([record.id], newStatus);
+          if (result.success) {
+            antMessage.success(`Đã ${actionText.toLowerCase()} sản phẩm.`);
+            setSelectedRowKeys([]);
+          } else {
+             showDependencyWarning(result.dependencies || [], actionText.toLowerCase());
+          }
+        } catch (err: any) {
+            antMessage.error("Lỗi cập nhật: " + err.message);
+        }
       },
     });
   };
@@ -120,11 +151,19 @@ const ProductListPage = () => {
       okText: "Xác nhận",
       cancelText: "Hủy",
       onOk: async () => {
-        await updateStatus(selectedRowKeys, status);
-        antMessage.success(
-          `Đã ${actionText.toLowerCase()} ${selectedRowKeys.length} sản phẩm.`
-        );
-        setSelectedRowKeys([]);
+        try {
+           const result = await checkAndUpdateStatus(selectedRowKeys, status);
+           if (result.success) {
+             antMessage.success(
+               `Đã ${actionText.toLowerCase()} ${selectedRowKeys.length} sản phẩm.`
+             );
+             setSelectedRowKeys([]);
+           } else {
+              showDependencyWarning(result.dependencies || [], actionText.toLowerCase());
+           }
+        } catch (err: any) {
+             antMessage.error("Lỗi cập nhật: " + err.message);
+        }
       },
     });
   };
@@ -133,15 +172,31 @@ const ProductListPage = () => {
     antModal.confirm({
       title: `Xác nhận XÓA SẢN PHẨM`,
       content: `HÀNH ĐỘNG NÀY KHÔNG THỂ PHỤC HỒI. Bạn có chắc muốn XÓA VĨNH VIỄN ${selectedRowKeys.length} sản phẩm đã chọn?`,
-      okText: "Xóa vĩnh viễn",
+      okText: "Kiểm tra & Xóa",
       cancelText: "Hủy",
       okType: "danger",
       onOk: async () => {
-        await deleteProducts(selectedRowKeys);
-        antMessage.success(`Đã xóa ${selectedRowKeys.length} sản phẩm.`);
-        setSelectedRowKeys([]);
+        try {
+            const result = await checkAndDeleteProducts(selectedRowKeys);
+            
+            if (result.success) {
+                antMessage.success(`Đã xóa ${selectedRowKeys.length} sản phẩm thành công.`);
+                setSelectedRowKeys([]);
+            } else {
+                // Show Warning Dependencies
+                showDependencyWarning(result.dependencies || [], "xóa");
+            }
+        } catch (err: any) {
+            antMessage.error("Lỗi xóa sản phẩm: " + err.message);
+        }
       },
     });
+  };
+
+  // Nút Xuất Excel: Cho user chọn Template hoặc Xuất Dữ liệu
+  const handleDownloadTemplate = () => {
+       productExcelManager.downloadTemplate();
+       antMessage.success("Đã tải xuống file mẫu nhập liệu.");
   };
 
   const handleExportExcel = async () => {
@@ -186,15 +241,16 @@ const ProductListPage = () => {
     customRequest: async ({ file, onSuccess, onError }) => {
       setIsImporting(true);
       antMessage.loading({
-        content: "Đang xử lý file Excel...",
+        content: "Đang xử lý file Excel V2...",
         key: "import",
       });
       try {
-        await productService.importProducts(file as File);
+        // [UPDATE] Sử dụng Manager V2 thay vì Service cũ
+        const count = await productExcelManager.importProductsFromExcel(file as File);
 
         if (onSuccess) onSuccess("ok");
         antMessage.success({
-          content: "Import thành công! Đang tải lại danh sách.",
+          content: `Import thành công ${count} sản phẩm! Đang tải lại danh sách.`,
           key: "import",
         });
         fetchProducts(); // Tải lại danh sách sau khi import
@@ -210,25 +266,15 @@ const ProductListPage = () => {
     },
   }; // --- TẠO CỘT TỒN KHO ĐỘNG ---
 
-  const inventoryColumns = useMemo(
-    () =>
-      availableWarehouses.map((wh) => ({
-        title: `Tồn ${wh.name} (${wh.type === "b2b" ? "Thùng" : "Hộp"})`, // SỬA LỖI: Cần dùng key của kho để truy vấn cột động
-        dataIndex: `inventory_${wh.key}`,
-        key: `inventory_${wh.key}`,
-        align: "center" as const,
-        width: 120,
-        render: (stock: number) => (
-          <Text
-            style={{ fontWeight: 500, color: stock > 0 ? "#333" : "#bfbfbf" }}
-          >
-            {stock}         
-          </Text>
-        ),
-      })),
-    [availableWarehouses]
-  ); // Cấu hình cột (ĐÃ CẬP NHẬT HÀNH ĐỘNG)
 
+  // inventoryColumns unused if we are using static columns for now, or keep if we want to mix.
+  // The user requirement said: "Update Table Columns... Note: The RPC returns total_stock (Sum). If you want to show per-warehouse stock... show total_stock."
+  // So I removed `...inventoryColumns` from usage. I should remove the definition too.
+  
+  // REMOVED inventoryColumns usage to follow "Standardize" request.
+  
+
+  // Cấu hình cột (ĐÃ CẬP NHẬT HÀNH ĐỘNG)
   const columns: TableProps<Product>["columns"] = [
     {
       title: "Ảnh",
@@ -252,17 +298,51 @@ const ProductListPage = () => {
       render: (text: string, record: Product) => (
         <div>
           <Text strong style={{ color: "#003a78" }}>
-            {text}         
+            {text}
           </Text>
-          <br />         <Text type="secondary">SKU: {record.sku}</Text>
-          <br />         
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {record.category_name} | {record.manufacturer_name}       
-          </Text>
+          <br />
+          <Text type="secondary">SKU: {record.sku}</Text>
+          <br />
+          <Tag color="cyan" style={{ fontSize: 10, marginTop: 4 }}>
+             {record.active_ingredient || record.category_name} 
+          </Tag>
         </div>
       ),
-    }, // THAY THẾ: Sử dụng mảng cột tồn kho động đã tính toán
-    ...inventoryColumns,
+    },
+    {
+      title: "Đơn vị Cơ bản",
+      dataIndex: "base_unit",
+      key: "base_unit",
+      width: 100,
+      align: "center",
+      // Nếu RPC trả 'base_unit' thì dùng, nếu ko map từ legacy data
+      render: (text: string, record: any) => record.retail_unit || text || "-",
+    },
+    {
+      title: "Giá Bán Lẻ",
+      dataIndex: "retail_price",
+      key: "retail_price",
+      width: 120,
+      align: "right",
+      render: (val: number, record: any) => 
+        (val || record.estimatedRetailPrice) 
+        ? new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val || record.estimatedRetailPrice)
+        : "-",
+    },
+    {
+        title: "Tổng Kho",
+        dataIndex: "total_stock",
+        key: "total_stock",
+        width: 100,
+        align: "center",
+        // Fallback vào logic cũ nếu cần, hoặc dùng field RPC
+        render: (val: number, _record: any) => {
+            if (val !== undefined) return <b>{val}</b>;
+            // Tạm thời hiển thị sum nếu RPC chưa update
+            // let sum = 0; if(record.inventory_b2b) sum+=record.inventory_b2b; ...
+            return "-";
+        }
+    },
     {
       title: "Trạng thái",
       dataIndex: "status",
@@ -271,7 +351,7 @@ const ProductListPage = () => {
       align: "center" as const,
       render: (status: string) => (
         <Tag color={status === "active" ? "green" : "red"}>
-          {status === "active" ? "Đang kinh doanh" : "Ngừng kinh doanh"}       
+          {status === "active" ? "Đang kinh doanh" : "Ngừng kinh doanh"}
         </Tag>
       ),
     },
@@ -349,13 +429,20 @@ const ProductListPage = () => {
           <Col>
             <Space>
               <Upload {...uploadProps}>
-                <Button icon={<UploadOutlined />} loading={isImporting}>
-                  Nhập Excel                
-                </Button>
+                <Dropdown menu={{
+                    items: [
+                        { key: 'import_file', label: 'Tải lên file Excel', icon: <UploadOutlined /> },
+                        { key: 'download_template', label: 'Tải file mẫu', icon: <DownloadOutlined />, onClick: handleDownloadTemplate }
+                    ]
+                }}>
+                    <Button icon={<UploadOutlined />} loading={isImporting}>
+                         Nhập Excel <DownOutlined />
+                    </Button>
+                </Dropdown>
               </Upload>
 
               <Button icon={<DownloadOutlined />} onClick={handleExportExcel}>
-                Xuất Excel              
+                Xuất DS
               </Button>
 
               <Button
@@ -462,7 +549,7 @@ const ProductListPage = () => {
           dataSource={products}
           loading={loading}
           bordered
-          rowKey="key"
+          rowKey="id" // FIX: Use ID instead of key
           scroll={{ x: "max-content" }}
           pagination={{
             current: page,

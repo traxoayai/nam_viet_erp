@@ -4,7 +4,7 @@ import { App, Form } from "antd";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import dayjs from "dayjs";
 import { invoiceService } from "../api/invoiceService";
-import { useProductStore } from "@/features/inventory/stores/productStore";
+import { useProductStore } from "@/features/product/stores/productStore";
 
 export const useInvoiceVerifyLogic = () => {
   const { message } = App.useApp();

@@ -1,4 +1,4 @@
-// src/types/product.ts
+// src/features/product/types/product.types.ts
 import { Warehouse } from "@/features/inventory/types/warehouse";
 
 export interface Supplier {
@@ -26,8 +26,9 @@ export interface Product {
   image_url: string;
   category_name: string;
   manufacturer_name: string;
+  active_ingredient?: string; // [NEW]
   distributor_id?: number; // Thêm trường này để map với Form
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "deleted"; // Added 'deleted'
 
   // Tồn kho hiển thị
   inventory_b2b: number;
@@ -99,6 +100,8 @@ export interface ProductStoreState {
     status: "active" | "inactive"
   ) => Promise<void>;
   deleteProducts: (ids: React.Key[]) => Promise<void>;
+  checkAndDeleteProducts: (ids: React.Key[]) => Promise<{ success: boolean; dependencies?: any[] }>;
+  checkAndUpdateStatus: (ids: React.Key[], status: "active" | "inactive") => Promise<{ success: boolean; dependencies?: any[] }>; // [NEW]
   exportToExcel: () => Promise<any[]>;
 
   // Hàm tải danh mục

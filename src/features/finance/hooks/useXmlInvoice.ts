@@ -3,7 +3,7 @@ import { useState } from "react";
 import { App } from "antd";
 import { parseInvoiceXML, ParsedInvoiceItem } from "../utils/xmlParser";
 import { invoiceService } from "../api/invoiceService";
-import { useProductStore } from "@/features/inventory/stores/productStore"; 
+import { useProductStore } from "@/features/product/stores/productStore"; 
 
 export interface MappedInvoiceItem extends ParsedInvoiceItem {
   internal_product_id: number | null;

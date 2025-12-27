@@ -3,12 +3,12 @@ import { useState, useEffect, useCallback } from "react";
 import { Form, App as AntApp } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import type { UploadFile, UploadProps } from "antd/es/upload/interface";
-import { useProductStore } from "@/features/inventory/stores/productStore";
+import { useProductStore } from "@/features/product/stores/productStore";
 import {
   addProduct,
   updateProduct,
   uploadProductImage,
-} from "@/features/inventory/api/productService";
+} from "@/features/product/api/productService";
 
 export const useProductFormLogic = () => {
   const [form] = Form.useForm();

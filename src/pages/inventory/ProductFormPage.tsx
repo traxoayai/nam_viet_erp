@@ -1,3 +1,5 @@
+// src/pages/inventory/transfer/ProductFormPage.tsx
+
 import {
   UploadOutlined,
   InfoCircleOutlined,

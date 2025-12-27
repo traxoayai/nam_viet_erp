@@ -1,9 +1,9 @@
-// src/services/productService.ts
+// src/features/product/api/productService.ts
 import { v4 as uuidv4 } from "uuid";
 import * as XLSX from "xlsx";
 
 import { supabase } from "@/shared/lib/supabaseClient";
-import { ProductFilters } from "@/features/inventory/types/product";
+import { ProductFilters } from "@/features/product/types/product.types";
 
 interface FetchParams {
   filters: ProductFilters;
@@ -12,22 +12,27 @@ interface FetchParams {
 }
 
 // 1. HÀM ĐỌC DANH SÁCH
+// 1. HÀM ĐỌC DANH SÁCH (SMART SEARCH V2)
 export const getProducts = async ({ filters, page, pageSize }: FetchParams) => {
-  const { data, error } = await supabase.rpc("get_products_list", {
-    search_query: filters.search_query || null,
-    category_filter: filters.category_filter || null,
-    manufacturer_filter: filters.manufacturer_filter || null,
-    status_filter: filters.status_filter || null,
-    page_num: page,
-    page_size: pageSize,
+  const { data, error } = await supabase.rpc("search_products_v2", {
+    p_keyword: filters.search_query || null,
+    p_category: filters.category_filter || null,
+    p_manufacturer: filters.manufacturer_filter || null,
+    p_status: filters.status_filter || null,
+    p_limit: pageSize,
+    p_offset: (page - 1) * pageSize,
   });
 
   if (error) {
-    console.error("Lỗi RPC get_products_list:", error);
+    console.error("Lỗi RPC search_products_v2:", error);
     throw error;
   }
-  const totalCount = data && data.length > 0 ? data[0].total_count : 0;
-  return { data: data || [], totalCount };
+
+  // search_products_v2 trả về { data: [...], total_count: number }
+  return { 
+    data: data?.data || [], 
+    totalCount: data?.total_count || 0 
+  };
 };
 
 // 2. HÀM ĐỌC CHI TIẾT
@@ -264,10 +269,11 @@ export const updateProductsStatus = async (
   ids: React.Key[],
   status: "active" | "inactive"
 ) => {
-  const { error } = await supabase.rpc("update_product_status", {
-    p_ids: ids as number[],
-    p_status: status,
-  });
+  const { error } = await supabase
+    .from("products")
+    .update({ status: status })
+    .in("id", ids);
+
   if (error) {
     console.error("Lỗi khi cập nhật trạng thái:", error);
     throw error;
@@ -275,13 +281,32 @@ export const updateProductsStatus = async (
   return true;
 };
 
-// 6. HÀM XÓA SẢN PHẨM (HÀNG LOẠT)
-export const deleteProducts = async (ids: React.Key[]) => {
-  const { error } = await supabase.rpc("delete_products", {
-    p_ids: ids as number[],
+// 6. CHECK DEPENDENCIES (Safe Delete Check)
+export const checkDependencies = async (ids: React.Key[]) => {
+  const { data, error } = await supabase.rpc("check_product_dependencies", {
+    p_product_ids: ids as number[],
   });
+
   if (error) {
-    console.error("Lỗi khi xóa sản phẩm:", error);
+    console.error("Lỗi check_product_dependencies:", error);
+    throw error;
+  }
+  return data || [];
+};
+
+// 7. HÀM XÓA SẢN PHẨM (SOFT DELETE)
+export const deleteProducts = async (ids: React.Key[]) => {
+  // Thay vì gọi RPC delete_products (Hard Delete), ta dùng Soft Delete
+  // Update status = 'deleted'. Nếu DB có trigger hoặc column deleted_at thì càng tốt.
+  // Ở đây ta set status='deleted' để ẩn khỏi danh sách mặc định.
+  
+  const { error } = await supabase
+    .from("products")
+    .update({ status: "deleted" })
+    .in("id", ids);
+
+  if (error) {
+    console.error("Lỗi khi xóa sản phẩm (Soft Delete):", error);
     throw error;
   }
   return true;
@@ -294,6 +319,9 @@ export const exportProducts = async (filters: ProductFilters) => {
     category_filter: filters.category_filter || null,
     manufacturer_filter: filters.manufacturer_filter || null,
     status_filter: filters.status_filter || null,
+    // Note: export_products_list logic in DB might need check if it filters 'deleted'
+    // Usually status_filter defaults to null which might include all? 
+    // Ideally the RPC should match the get_products_list logic.
   });
 
   if (error) {

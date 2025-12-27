@@ -12,6 +12,8 @@ import {
   HomeOutlined,
   AccountBookOutlined,
   ClockCircleOutlined,
+  CheckCircleOutlined,
+  StopOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -37,6 +39,8 @@ import {
   Empty,
   Tooltip,
   Badge,
+  // Dropdown, // Unused
+  Alert,
 } from "antd";
 import viVN from "antd/locale/vi_VN";
 import dayjs from "dayjs";
@@ -87,6 +91,8 @@ const ServicePackagePage: React.FC = () => {
     deletePackage,
     showForm,
     showList,
+    deletePackages, // [NEW] - Bulk Delete
+    updateStatus, // [NEW] - Bulk Update Status
   } = useServicePackageStore();
 
   // Lấy danh sách Kho thật từ Store Warehouse
@@ -101,6 +107,7 @@ const ServicePackagePage: React.FC = () => {
   );
 
   // Load danh sách Gói & Kho khi trang được mount
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]); // [NEW] State cho rowSelection
   useEffect(() => {
     fetchPackages({
       search_query: searchKeyword,
@@ -320,7 +327,7 @@ const ServicePackagePage: React.FC = () => {
       <Content
         style={{
           padding: "24px",
-          maxWidth: 1200,
+          maxWidth: 1800,
           margin: "0 auto",
           width: "100%",
         }}
@@ -384,12 +391,65 @@ const ServicePackagePage: React.FC = () => {
             </Row>
           </div>
 
+          {/* [NEW] Thanh Hành động Hàng loạt */}
+          {selectedRowKeys.length > 0 && (
+            <Alert
+              message={`${selectedRowKeys.length} gói dịch vụ được chọn`}
+              type="info"
+              showIcon
+              style={{ margin: "0 24px 16px" }}
+              action={
+                <Space>
+                  <Button
+                    size="small"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => {
+                        updateStatus(selectedRowKeys as number[], "active");
+                        setSelectedRowKeys([]);
+                    }}
+                  >
+                    Kích hoạt
+                  </Button>
+                  <Button
+                    size="small"
+                    icon={<StopOutlined />}
+                    danger
+                    onClick={() => {
+                        updateStatus(selectedRowKeys as number[], "inactive");
+                        setSelectedRowKeys([]);
+                    }}
+                  >
+                    Ngừng kinh doanh
+                  </Button>
+                  <Popconfirm
+                    title="Xóa các gói đã chọn?"
+                    description="Hành động này không thể hoàn tác!"
+                    onConfirm={() => {
+                        deletePackages(selectedRowKeys as number[]);
+                        setSelectedRowKeys([]);
+                    }}
+                    okText="Xóa vĩnh viễn"
+                    okType="danger"
+                  >
+                    <Button size="small" type="primary" danger icon={<DeleteOutlined />}>
+                      Xóa ({selectedRowKeys.length})
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              }
+            />
+          )}
+
           <Table
             dataSource={packages}
             columns={columns}
             loading={loading}
             pagination={{ pageSize: 10, total: totalCount }}
             rowKey="id"
+            rowSelection={{
+              selectedRowKeys,
+              onChange: setSelectedRowKeys,
+            }} // [NEW] Enable selection
           />
         </Card>
       </Content>

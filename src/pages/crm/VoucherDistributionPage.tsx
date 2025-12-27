@@ -23,7 +23,7 @@ const VoucherDistributionPage = () => {
 
   return (
     <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
-      <Content style={{ padding: 24, maxWidth: 1200, margin: "0 auto", width: "100%" }}>
+      <Content style={{ padding: 12, maxWidth: 1800, margin: "0 auto", width: "100%" }}>
         
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <Title level={2}><GiftOutlined /> Phân Phối Voucher</Title>
