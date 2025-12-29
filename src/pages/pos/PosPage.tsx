@@ -63,7 +63,7 @@ const PosPage = () => {
         </Content>
 
         {/* === CỘT PHẢI: KHÁCH & THANH TOÁN (35%) === */}
-        <Sider width={400} theme="light" style={{ borderLeft: '1px solid #d9d9d9', display: 'flex', flexDirection: 'column' }}>
+        <Sider width={700} theme="light" style={{ borderLeft: '0px solid #d9d9d9', display: 'flex', flexDirection: 'column' }}>
            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: 12 }}>
               
               {/* 1. KHÁCH HÀNG */}
@@ -80,7 +80,7 @@ const PosPage = () => {
                         <Button type="link" size="small" onClick={() => setCustomer(null)} style={{ padding: 0, marginTop: 4 }}>Bỏ chọn</Button>
                      </div>
                  ) : (
-                     <Button block type="dashed" onClick={mockSelectCustomer}>+ Chọn Khách (Test)</Button>
+                     <Button type="dashed" onClick={mockSelectCustomer}>+ Chọn Khách (Test)</Button>
                  )}
               </Card>
 
@@ -127,13 +127,13 @@ const PosPage = () => {
                            </Button>
                        </Col>
                        
-                       <Col span={16}>
+                       <Col span={12}>
                           <Button type="primary" block size="large" icon={<WalletOutlined />} style={{ height: 50, background: '#fa8c16' }}>
                              TIỀN MẶT (F9)
                           </Button>
                        </Col>
-                       <Col span={8}>
-                          <Button block size="large" icon={<QrcodeOutlined />} style={{ height: 50 }} />
+                       <Col span={12}>
+                          <Button block size="large" icon={<QrcodeOutlined />} style={{ height: 50, background: '#b5b7ffff' }} >CK (F10)</Button>
                        </Col>
                     </Row>
                  </div>

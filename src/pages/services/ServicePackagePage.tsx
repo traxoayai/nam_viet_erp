@@ -291,9 +291,9 @@ const ServicePackagePage: React.FC = () => {
         width: 120,
         render: (st: string) =>
           st === "active" ? (
-            <Badge status="success" text="Hiệu lực" />
+            <Badge status="success" text="Đang KD" />
           ) : (
-            <Badge status="default" text="Ẩn" />
+            <Badge status="default" text="Ngừng KD" />
           ),
       },
       {

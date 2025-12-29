@@ -732,7 +732,7 @@ const MainLayout: React.FC = () => {
         </Header>
 
         <Content
-          style={{ margin: 0, overflow: "initial", background: "#f0f2f5" }}
+          style={{ margin: 0, overflow: "initial", background: "#efeded" }}
         >
           {/* Container chính: Trên mobile padding nhỏ (8px), Desktop padding lớn (24px) */}
           <div

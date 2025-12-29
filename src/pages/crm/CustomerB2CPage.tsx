@@ -147,9 +147,9 @@ const CustomerB2CPage: React.FC = () => {
     reactivateCustomer,
     exportToExcel,
     importCustomers,
-    page, // <-- THÊM DÒNG NÀY
-    pageSize, // <-- THÊM DÒNG NÀY
-    setPage, // <-- THÊM DÒNG NÀY
+    page, 
+    pageSize, 
+    setPage, 
     showListView,
     showFormView,
   } = useCustomerB2CStore(); // State cục bộ
@@ -267,8 +267,8 @@ const CustomerB2CPage: React.FC = () => {
         cccd: values.cccd,
         cccd_issue_date: values.cccd_issue_date?.format("YYYY-MM-DD") || null,
         avatar_url: finalAvatarUrl,
-        cccd_front_url: null, // Sẽ nâng cấp sau
-        cccd_back_url: null, // Sẽ nâng cấp sau
+        cccd_front_url: null, 
+        cccd_back_url: null,
         occupation: values.occupation,
         lifestyle_habits: values.lifestyle_habits,
         allergies: values.allergies,
@@ -330,7 +330,7 @@ const CustomerB2CPage: React.FC = () => {
       key: "export",
     });
     try {
-      const dataToExport = await exportToExcel(); // Gọi từ store
+      const dataToExport = await exportToExcel();
 
       if (dataToExport.length === 0) {
         antMessage.info({
@@ -430,7 +430,7 @@ const CustomerB2CPage: React.FC = () => {
         render: (text: string) => <Text>{text}</Text>,
       },
       {
-        title: "Hạng loại",
+        title: "Phân loại",
         dataIndex: "type",
         key: "type",
         width: 180,
@@ -591,7 +591,7 @@ const CustomerB2CPage: React.FC = () => {
 
               <Col flex="200px">
                 <Select
-                  placeholder="Lọc theo Hạng loại"
+                  placeholder="Lọc theo Phân loại"
                   allowClear
                   style={{ width: "100%" }}
                   onChange={(val) => fetchCustomers({ type_filter: val })}

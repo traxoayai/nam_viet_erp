@@ -13,6 +13,13 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 
+CREATE EXTENSION IF NOT EXISTS "pg_cron" WITH SCHEMA "pg_catalog";
+
+
+
+
+
+
 COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
@@ -845,6 +852,99 @@ ALTER FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id"
 
 
 COMMENT ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") IS 'Check-in tại quầy: Tạo lịch hẹn ngay lập tức và xếp số vào hàng đợi';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."check_invoice_exists"("p_tax_code" "text", "p_symbol" "text", "p_number" "text") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    BEGIN
+        -- Trả về True nếu tìm thấy hóa đơn trùng mà chưa bị reject
+        RETURN EXISTS (
+            SELECT 1 
+            FROM public.finance_invoices
+            WHERE supplier_tax_code = p_tax_code
+              AND invoice_symbol = p_symbol
+              AND invoice_number = p_number
+              AND status != 'rejected'
+        );
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."check_invoice_exists"("p_tax_code" "text", "p_symbol" "text", "p_number" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."check_invoice_exists"("p_tax_code" "text", "p_symbol" "text", "p_number" "text") IS 'Kiểm tra xem hóa đơn đã tồn tại trong hệ thống chưa (Bỏ qua Rejected)';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."check_product_dependencies"("p_product_ids" bigint[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_result JSONB;
+    BEGIN
+        SELECT jsonb_agg(
+            jsonb_build_object(
+                'product_id', p.id,
+                'product_name', p.name,
+                'package_names', used_packages.names
+            )
+        ) INTO v_result
+        FROM public.products p
+        JOIN (
+            -- [FIXED] Sửa spi.product_id -> spi.item_id
+            SELECT 
+                spi.item_id, 
+                array_agg(DISTINCT sp.name) as names
+            FROM public.service_package_items spi
+            JOIN public.service_packages sp ON spi.package_id = sp.id
+            
+            -- [FIXED] WHERE clause
+            WHERE spi.item_id = ANY(p_product_ids)
+            
+            -- [FIXED] GROUP BY clause
+            GROUP BY spi.item_id
+            
+        ) used_packages ON p.id = used_packages.item_id; -- [FIXED] JOIN condition
+
+        -- Nếu không có ràng buộc nào, trả về mảng rỗng thay vì NULL
+        RETURN COALESCE(v_result, '[]'::JSONB);
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."check_product_dependencies"("p_product_ids" bigint[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."check_product_dependencies"("p_product_ids" bigint[]) IS 'Check Ràng buộc (Fixed: item_id column)';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."check_vat_availability"("p_product_id" bigint, "p_vat_rate" numeric, "p_qty_requested" numeric) RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_balance NUMERIC;
+    BEGIN
+        SELECT quantity_balance INTO v_balance
+        FROM public.vat_inventory_ledger
+        WHERE product_id = p_product_id AND vat_rate = p_vat_rate;
+        
+        -- Nếu không tìm thấy dòng nào -> Tồn = 0 -> Trả về False (nếu request > 0)
+        RETURN COALESCE(v_balance, 0) >= p_qty_requested;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."check_vat_availability"("p_product_id" bigint, "p_vat_rate" numeric, "p_qty_requested" numeric) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."check_vat_availability"("p_product_id" bigint, "p_vat_rate" numeric, "p_qty_requested" numeric) IS 'Kiểm tra khả năng đáp ứng xuất hóa đơn VAT (tránh âm kho)';
 
 
 
@@ -2481,6 +2581,31 @@ $$;
 ALTER FUNCTION "public"."delete_purchase_order"("p_id" bigint) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."delete_service_packages"("p_ids" bigint[]) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    BEGIN
+        -- Cập nhật trạng thái sang 'deleted' cho các ID nằm trong danh sách
+        UPDATE public.service_packages
+        SET 
+            status = 'deleted',
+            updated_at = NOW()
+        WHERE id = ANY(p_ids);
+        
+        -- (Optional) Có thể xóa mềm luôn các items con trong service_package_items nếu cần,
+        -- nhưng thường giữ nguyên để truy vết lịch sử gói lúc xóa gồm những gì.
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."delete_service_packages"("p_ids" bigint[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."delete_service_packages"("p_ids" bigint[]) IS 'Xóa mềm gói dịch vụ (Chuyển status sang deleted)';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."delete_shipping_partner"("p_id" bigint) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -2517,6 +2642,58 @@ $$;
 
 
 ALTER FUNCTION "public"."delete_vaccination_template"("p_id" bigint) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."distribute_voucher_to_segment"("p_promotion_id" "uuid", "p_segment_id" bigint) RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+    DECLARE
+        v_count INT;
+        v_promo_code TEXT;
+    BEGIN
+        -- 1. Lấy mã hiển thị (code) từ bảng gốc
+        SELECT code INTO v_promo_code FROM public.promotions WHERE id = p_promotion_id;
+        
+        IF v_promo_code IS NULL THEN
+            RAISE EXCEPTION 'Không tìm thấy chương trình khuyến mãi ID %', p_promotion_id;
+        END IF;
+
+        -- 2. Thực hiện phát tặng (Insert Bulk)
+        WITH inserted AS (
+            INSERT INTO public.customer_vouchers (customer_id, promotion_id, code, status, usage_remaining)
+            SELECT 
+                m.customer_id, 
+                p_promotion_id, 
+                v_promo_code, 
+                'active',
+                1 -- Tặng 1 vé
+            FROM public.customer_segment_members m
+            WHERE m.segment_id = p_segment_id
+            -- Điều kiện loại trừ: Không tặng nếu khách đã có voucher này rồi (tránh spam)
+            AND NOT EXISTS (
+                SELECT 1 FROM public.customer_vouchers cv 
+                WHERE cv.customer_id = m.customer_id 
+                AND cv.promotion_id = p_promotion_id
+            )
+            RETURNING id
+        )
+        SELECT COUNT(*) INTO v_count FROM inserted;
+
+        -- 3. Ghi nhận vào bảng Target (để UI hiển thị là nhóm này đã được chọn)
+        INSERT INTO public.promotion_targets (promotion_id, target_type, target_id)
+        VALUES (p_promotion_id, 'segment', p_segment_id)
+        ON CONFLICT DO NOTHING;
+
+        RETURN v_count;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."distribute_voucher_to_segment"("p_promotion_id" "uuid", "p_segment_id" bigint) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."distribute_voucher_to_segment"("p_promotion_id" "uuid", "p_segment_id" bigint) IS 'Engine phát voucher hàng loạt cho thành viên thuộc phân khúc';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."export_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text") RETURNS TABLE("id" bigint, "customer_code" "text", "name" "text", "phone" "text", "email" "text", "tax_code" "text", "contact_person_name" "text", "contact_person_phone" "text", "vat_address" "text", "shipping_address" "text", "sales_staff_name" "text", "debt_limit" numeric, "payment_term" integer, "ranking" "text", "status" "public"."account_status", "loyalty_points" integer)
@@ -3279,6 +3456,40 @@ ALTER FUNCTION "public"."get_inbound_detail"("p_po_id" bigint) OWNER TO "postgre
 
 
 COMMENT ON FUNCTION "public"."get_inbound_detail"("p_po_id" bigint) IS 'V1.1: Chi tiết nhập kho với thông tin Logistics';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."get_mapped_product"("p_tax_code" "text", "p_product_name" "text", "p_vendor_unit" "text" DEFAULT NULL::"text") RETURNS TABLE("internal_product_id" bigint, "internal_unit" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    BEGIN
+        RETURN QUERY
+        SELECT m.internal_product_id, m.internal_unit
+        FROM public.vendor_product_mappings m
+        WHERE m.vendor_tax_code = p_tax_code 
+          AND m.vendor_product_name = p_product_name
+          -- Logic so sánh đơn vị:
+          -- 1. Nếu input có đơn vị -> tìm match chính xác (case-insensitive)
+          -- 2. Nếu input NULL -> chấp nhận tất cả (để Client tự xử lý hoặc lấy dòng mới nhất)
+          AND (
+              (p_vendor_unit IS NOT NULL AND LOWER(m.vendor_unit) = LOWER(p_vendor_unit))
+              OR 
+              (p_vendor_unit IS NULL)
+          )
+        ORDER BY m.last_used_at DESC -- Ưu tiên mapping mới dùng gần đây
+        LIMIT 1; 
+        
+        -- Lưu ý: Hàm SELECT này không thực hiện UPDATE last_used_at để tối ưu performance đọc.
+        -- Việc update usage nên tách ra 1 RPC khác hoặc thực hiện ở tầng application nếu cần thiết.
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."get_mapped_product"("p_tax_code" "text", "p_product_name" "text", "p_vendor_unit" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."get_mapped_product"("p_tax_code" "text", "p_product_name" "text", "p_vendor_unit" "text") IS 'Lấy mapping sản phẩm có hỗ trợ đơn vị tính (Unit)';
 
 
 
@@ -4379,6 +4590,55 @@ $$;
 ALTER FUNCTION "public"."get_vaccination_templates"("p_search" "text", "p_status" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_valid_vouchers_for_checkout"("p_customer_id" bigint, "p_cart_total" numeric DEFAULT 0) RETURNS TABLE("voucher_id" bigint, "code" "text", "promo_name" "text", "discount_type" "text", "discount_value" numeric, "max_discount" numeric, "min_order_value" numeric, "is_eligible" boolean, "ineligibility_reason" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    BEGIN
+        RETURN QUERY
+        SELECT 
+            cv.id AS voucher_id,
+            cv.code,
+            p.name AS promo_name,
+            p.discount_type,
+            p.discount_value,
+            p.max_discount_value AS max_discount, -- Giả định bảng promotions có cột này
+            COALESCE(p.min_order_value, 0) AS min_order_value,
+            
+            -- Logic kiểm tra điều kiện (Eligible)
+            CASE 
+                -- Nếu tổng đơn nhỏ hơn mức tối thiểu -> False
+                WHEN COALESCE(p.min_order_value, 0) > p_cart_total THEN FALSE
+                ELSE TRUE
+            END AS is_eligible,
+            
+            -- Tạo câu thông báo lý do (Human readable)
+            CASE 
+                WHEN COALESCE(p.min_order_value, 0) > p_cart_total THEN 
+                    format('Đơn hàng cần tối thiểu %s đ', to_char(p.min_order_value, 'FM999,999,999'))
+                ELSE NULL
+            END AS ineligibility_reason
+
+        FROM public.customer_vouchers cv
+        JOIN public.promotions p ON cv.promotion_id = p.id
+        WHERE 
+            cv.customer_id = p_customer_id
+            AND cv.status = 'active'
+            AND (cv.usage_remaining IS NULL OR cv.usage_remaining > 0) -- Còn lượt dùng
+            AND p.status = 'active' -- Chương trình còn chạy
+            AND (p.valid_to IS NULL OR p.valid_to >= NOW()) -- Chưa hết hạn
+            AND (p.valid_from <= NOW()); -- Đã bắt đầu
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."get_valid_vouchers_for_checkout"("p_customer_id" bigint, "p_cart_total" numeric) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."get_valid_vouchers_for_checkout"("p_customer_id" bigint, "p_cart_total" numeric) IS 'API POS: Lấy danh sách Voucher trong ví khách và kiểm tra điều kiện Cart Total';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."get_warehouse_inbound_tasks"("p_warehouse_id" bigint, "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_search" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_date_from" "date" DEFAULT NULL::"date", "p_date_to" "date" DEFAULT NULL::"date") RETURNS TABLE("task_id" bigint, "code" "text", "supplier_name" "text", "created_at" timestamp with time zone, "expected_delivery_date" timestamp with time zone, "expected_delivery_time" timestamp with time zone, "item_count" bigint, "progress_percent" numeric, "status" "text", "total_packages" integer, "carrier_name" "text", "carrier_contact" "text", "carrier_phone" "text", "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -4713,6 +4973,92 @@ COMMENT ON FUNCTION "public"."handover_to_shipping"("p_order_id" "uuid") IS 'V5:
 
 
 
+CREATE OR REPLACE FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") RETURNS bigint
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_product_id BIGINT;
+    v_unit JSONB;
+BEGIN
+    -- 1. INSERT PRODUCT (Bảng Gốc)
+    INSERT INTO public.products (
+        name,
+        manufacturer_name, -- Đã sửa theo schema v2
+        registration_number,
+        barcode, -- Barcode chính của sản phẩm
+        active_ingredient, -- Chỉ lấy tên hoạt chất chính đầu tiên để display nhanh
+        usage_instructions, -- JSON HDSD
+        status,
+        created_at
+    )
+    VALUES (
+        p_data->>'product_name',
+        p_data->>'manufacturer_name',
+        p_data->>'registration_number',
+        p_data->>'barcode',
+        (p_data->'active_ingredients'->0->>'name'), -- Lấy hoạt chất đầu tiên làm đại diện
+        p_data->'usage_instructions',
+        'active',
+        NOW()
+    )
+    RETURNING id INTO v_product_id;
+
+    -- 2. INSERT UNITS (Bảng Đơn vị)
+    FOR v_unit IN SELECT * FROM jsonb_array_elements(p_data->'units')
+    LOOP
+        INSERT INTO public.product_units (
+            product_id,
+            unit_name,
+            unit_type,
+            conversion_rate,
+            is_base_unit,
+            price, -- Giá gợi ý từ AI
+            barcode -- Barcode riêng của đơn vị này (nếu có)
+        )
+        VALUES (
+            v_product_id,
+            v_unit->>'unit_name',
+            v_unit->>'unit_type',
+            (v_unit->>'conversion_rate')::NUMERIC,
+            (v_unit->>'is_base')::BOOLEAN,
+            COALESCE((v_unit->>'price')::NUMERIC, 0),
+            v_unit->>'barcode'
+        );
+    END LOOP;
+
+    -- 3. INSERT CONTENT & SEO (Bảng Marketing)
+    INSERT INTO public.product_contents (
+        product_id,
+        channel,
+        short_description,
+        description_html, -- Nội dung HTML
+        seo_title,
+        seo_description,
+        seo_keywords,
+        is_ai_generated,
+        is_published
+    )
+    VALUES (
+        v_product_id,
+        'website', -- Mặc định
+        p_data->'marketing_content'->>'short_description',
+        p_data->'marketing_content'->>'full_description_html',
+        p_data->'marketing_content'->>'seo_title',
+        p_data->'marketing_content'->>'seo_description',
+        -- Chuyển JSON Array thành Text Array cho Postgres
+        (SELECT array_agg(x) FROM jsonb_array_elements_text(p_data->'marketing_content'->'seo_keywords') t(x)),
+        TRUE,
+        TRUE
+    );
+
+    RETURN v_product_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -4868,6 +5214,87 @@ COMMENT ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_ware
 
 
 
+CREATE OR REPLACE FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_invoice_record RECORD;
+        v_item JSONB;
+        v_product_id BIGINT;
+        v_unit_name TEXT;
+        v_qty_input NUMERIC;
+        v_vat_rate NUMERIC;
+        v_unit_price NUMERIC; -- [NEW]
+        
+        v_conversion_rate NUMERIC;
+        v_qty_base NUMERIC;
+        v_total_value NUMERIC; -- [NEW]
+        v_base_unit_name TEXT;
+    BEGIN
+        SELECT * INTO v_invoice_record FROM public.finance_invoices WHERE id = p_invoice_id;
+        IF NOT FOUND THEN RAISE EXCEPTION 'Hóa đơn ID % không tồn tại', p_invoice_id; END IF;
+
+        -- Chỉ nhập kho nếu status hợp lệ (Logic tùy frontend, ở đây ta cứ xử lý nếu được gọi)
+        
+        FOR v_item IN SELECT * FROM jsonb_array_elements(v_invoice_record.items_json)
+        LOOP
+            v_product_id := (v_item->>'product_id')::BIGINT;
+            v_unit_name := v_item->>'internal_unit';
+            v_qty_input := COALESCE((v_item->>'quantity')::NUMERIC, 0);
+            v_vat_rate := COALESCE((v_item->>'vat_rate')::NUMERIC, 0);
+            v_unit_price := COALESCE((v_item->>'unit_price')::NUMERIC, 0); -- Lấy đơn giá
+
+            IF v_product_id IS NOT NULL AND v_qty_input > 0 THEN
+                
+                -- [LOGIC QUY ĐỔI]
+                v_conversion_rate := NULL; -- Reset
+
+                SELECT conversion_rate INTO v_conversion_rate 
+                FROM public.product_units
+                WHERE product_id = v_product_id AND LOWER(unit_name) = LOWER(v_unit_name) 
+                LIMIT 1;
+
+                IF v_conversion_rate IS NULL THEN
+                     SELECT unit_name INTO v_base_unit_name 
+                     FROM public.product_units 
+                     WHERE product_id = v_product_id AND unit_type = 'base' 
+                     LIMIT 1;
+                     
+                     IF LOWER(v_base_unit_name) = LOWER(v_unit_name) THEN 
+                        v_conversion_rate := 1; 
+                     END IF;
+                END IF;
+
+                -- Tính toán
+                v_qty_base := v_qty_input * COALESCE(v_conversion_rate, 1);
+                v_total_value := v_qty_input * v_unit_price; -- Tổng giá trị = Số lượng nhập * Đơn giá nhập
+
+                -- [UPSERT CỘNG KHO]
+                INSERT INTO public.vat_inventory_ledger (
+                    product_id, vat_rate, quantity_balance, total_value_balance, updated_at
+                )
+                VALUES (
+                    v_product_id, v_vat_rate, v_qty_base, v_total_value, NOW()
+                )
+                ON CONFLICT (product_id, vat_rate) 
+                DO UPDATE SET 
+                    quantity_balance = vat_inventory_ledger.quantity_balance + EXCLUDED.quantity_balance,
+                    total_value_balance = vat_inventory_ledger.total_value_balance + EXCLUDED.total_value_balance, -- Cộng dồn giá trị
+                    updated_at = NOW();
+            END IF;
+        END LOOP;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) IS 'Nhập kho VAT: Cộng số lượng Base và Tổng giá trị tiền';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."reactivate_customer_b2b"("p_id" bigint) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -4908,6 +5335,183 @@ $$;
 
 
 ALTER FUNCTION "public"."reactivate_shipping_partner"("p_id" bigint) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+    DECLARE
+        v_segment RECORD;
+        v_criteria JSONB;
+        v_sql TEXT;
+    BEGIN
+        -- A. Lấy thông tin phân khúc
+        SELECT * INTO v_segment FROM public.customer_segments WHERE id = p_segment_id;
+        
+        -- Chỉ xử lý nếu tìm thấy và là nhóm 'dynamic'
+        IF NOT FOUND OR v_segment.type = 'static' THEN 
+            RETURN; 
+        END IF;
+
+        v_criteria := v_segment.criteria;
+
+        -- B. Xây dựng câu Query động
+        -- Khởi tạo câu Select cơ bản
+        v_sql := format('SELECT %L::BIGINT, id FROM public.customers WHERE status = ''active'' ', p_segment_id);
+
+        -- =================================================================
+        -- C. CÁC TIÊU CHÍ LỌC (LOGIC CŨ & MỚI)
+        -- =================================================================
+
+        -- 1. Giới tính (Gender)
+        IF v_criteria ? 'gender' THEN
+            v_sql := v_sql || format(' AND gender = %L', v_criteria->>'gender');
+        END IF;
+
+        -- 2. Điểm tích lũy (Loyalty Points)
+        IF v_criteria ? 'min_loyalty' THEN
+            v_sql := v_sql || format(' AND loyalty_points >= %s', (v_criteria->>'min_loyalty')::int);
+        END IF;
+
+        -- 3. Tháng sinh nhật (Birthday)
+        IF v_criteria ? 'birthday_month' THEN
+            IF (v_criteria->>'birthday_month') = 'current' THEN
+                v_sql := v_sql || ' AND EXTRACT(MONTH FROM dob::date) = EXTRACT(MONTH FROM CURRENT_DATE)';
+            ELSE
+                v_sql := v_sql || format(' AND EXTRACT(MONTH FROM dob::date) = %s', (v_criteria->>'birthday_month')::int);
+            END IF;
+        END IF;
+
+        -- 4. Độ tuổi (Age)
+        IF v_criteria ? 'min_age' THEN
+            v_sql := v_sql || format(' AND EXTRACT(YEAR FROM age(dob::date)) >= %s', (v_criteria->>'min_age')::int);
+        END IF;
+        IF v_criteria ? 'max_age' THEN
+            v_sql := v_sql || format(' AND EXTRACT(YEAR FROM age(dob::date)) <= %s', (v_criteria->>'max_age')::int);
+        END IF;
+
+        -- 5. [NEW] THỜI GIAN MUA HÀNG (RECENCY) - Mệnh Lệnh 43
+        -- Ý nghĩa: Tìm khách hàng ĐÃ LÂU KHÔNG MUA (để chăm sóc lại)
+        -- Logic: (Chưa từng mua) HOẶC (Lần mua cuối < Hiện tại - X tháng)
+        IF v_criteria ? 'last_purchase_months' THEN
+            v_sql := v_sql || format(
+                ' AND (last_purchase_at IS NULL OR last_purchase_at < (NOW() - INTERVAL ''%s months''))', 
+                (v_criteria->>'last_purchase_months')::int
+            );
+        END IF;
+
+        -- =================================================================
+        -- D. THỰC THI (EXECUTE)
+        -- =================================================================
+        
+        -- Bước 1: Xóa thành viên cũ để làm mới
+        DELETE FROM public.customer_segment_members WHERE segment_id = p_segment_id;
+
+        -- Bước 2: Insert danh sách mới
+        EXECUTE format('INSERT INTO public.customer_segment_members (segment_id, customer_id) %s', v_sql);
+
+        -- Bước 3: Cập nhật thời gian chạy
+        UPDATE public.customer_segments SET updated_at = NOW() WHERE id = p_segment_id;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) IS 'Engine phân khúc khách hàng (Updated: Recency Logic)';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."reverse_vat_invoice_entry"("p_invoice_id" bigint) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_invoice_record RECORD;
+        v_item JSONB;
+        v_product_id BIGINT;
+        v_unit_name TEXT;
+        v_qty_input NUMERIC;
+        v_vat_rate NUMERIC;
+        v_unit_price NUMERIC;
+        
+        -- Biến tính toán
+        v_conversion_rate NUMERIC;
+        v_qty_base NUMERIC;
+        v_total_value NUMERIC;
+        v_base_unit_name TEXT;
+    BEGIN
+        -- A. Lấy thông tin hóa đơn
+        SELECT * INTO v_invoice_record FROM public.finance_invoices WHERE id = p_invoice_id;
+        
+        -- Nếu không tìm thấy hóa đơn, dừng luôn (không lỗi)
+        IF NOT FOUND THEN RETURN; END IF;
+
+        -- B. Chỉ thực hiện Trừ kho nếu hóa đơn đang ở trạng thái đã ghi sổ (ví dụ: 'verified' hoặc 'approved')
+        -- Nếu hóa đơn đang 'pending' (chưa nhập kho) mà bị xóa thì không cần trừ.
+        IF v_invoice_record.status <> 'verified' AND v_invoice_record.status <> 'approved' THEN 
+            RETURN; 
+        END IF;
+
+        -- C. Duyệt từng dòng hàng để trừ ngược lại
+        FOR v_item IN SELECT * FROM jsonb_array_elements(v_invoice_record.items_json)
+        LOOP
+            v_product_id := (v_item->>'product_id')::BIGINT;
+            v_unit_name := v_item->>'internal_unit';
+            v_qty_input := COALESCE((v_item->>'quantity')::NUMERIC, 0);
+            v_vat_rate := COALESCE((v_item->>'vat_rate')::NUMERIC, 0);
+            v_unit_price := COALESCE((v_item->>'unit_price')::NUMERIC, 0);
+
+            IF v_product_id IS NOT NULL AND v_qty_input > 0 THEN
+                
+                -- [LOGIC TÌM TỶ LỆ QUY ĐỔI - CONSISTENT WITH PROCESS FUNCTION]
+                v_conversion_rate := NULL; -- Reset về NULL quan trọng
+
+                -- C1. Tìm trong product_units
+                SELECT conversion_rate INTO v_conversion_rate 
+                FROM public.product_units
+                WHERE product_id = v_product_id AND LOWER(unit_name) = LOWER(v_unit_name) 
+                LIMIT 1;
+
+                -- C2. Fallback Base Unit
+                IF v_conversion_rate IS NULL THEN
+                     SELECT unit_name INTO v_base_unit_name 
+                     FROM public.product_units 
+                     WHERE product_id = v_product_id AND unit_type = 'base' 
+                     LIMIT 1;
+                     
+                     IF LOWER(v_base_unit_name) = LOWER(v_unit_name) THEN 
+                        v_conversion_rate := 1; 
+                     END IF;
+                END IF;
+
+                -- Tính toán lượng cần trừ
+                v_qty_base := v_qty_input * COALESCE(v_conversion_rate, 1);
+                v_total_value := v_qty_input * v_unit_price;
+
+                -- D. UPDATE TRỪ KHO (Giảm số lượng và giá trị)
+                UPDATE public.vat_inventory_ledger
+                SET 
+                    quantity_balance = quantity_balance - v_qty_base,
+                    total_value_balance = total_value_balance - v_total_value,
+                    updated_at = NOW()
+                WHERE product_id = v_product_id AND vat_rate = v_vat_rate;
+                
+                -- Lưu ý: Nếu phép trừ này làm quantity_balance < 0, 
+                -- DB sẽ throw lỗi vi phạm CHECK Constraint (quantity_balance >= 0).
+                -- Điều này là ĐÚNG để bảo vệ dữ liệu (Không thể xóa hóa đơn nhập nếu hàng đã bị xuất bán).
+            END IF;
+        END LOOP;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."reverse_vat_invoice_entry"("p_invoice_id" bigint) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."reverse_vat_invoice_entry"("p_invoice_id" bigint) IS 'Hoàn tác nhập kho VAT (Trừ kho) khi xóa/hủy hóa đơn';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."save_outbound_progress"("p_order_id" "uuid", "p_items" "jsonb") RETURNS "jsonb"
@@ -5258,6 +5862,195 @@ $$;
 ALTER FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer DEFAULT 20) RETURNS TABLE("id" bigint, "name" "text", "sku" "text", "retail_price" numeric, "image_url" "text", "unit" "text", "stock_quantity" integer, "location_cabinet" "text", "location_row" "text", "location_slot" "text", "usage_instructions" "jsonb", "similarity_score" real)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    BEGIN
+        RETURN QUERY
+        SELECT 
+            p.id,
+            p.name,
+            p.sku,
+            
+            -- Lấy giá bán lẻ từ bảng Unit (nếu có set giá riêng) hoặc giá gốc
+            COALESCE(u_retail.price, 0) AS retail_price, -- Cần đảm bảo logic giá
+            p.image_url,
+            
+            -- Lấy tên đơn vị Retail. Nếu không có set 'retail' thì lấy 'base' làm fallback
+            COALESCE(u_retail.unit_name, u_base.unit_name, 'N/A') AS unit,
+            
+            -- Lấy tồn kho (ép kiểu về int cho an toàn)
+            COALESCE(inv.stock_quantity, 0)::INTEGER AS stock_quantity,
+            
+            -- Vị trí
+            inv.location_cabinet,
+            inv.location_row,
+            inv.location_slot,
+            
+            -- HDSD
+            p.usage_instructions,
+            
+            -- Tính điểm tương đồng (Similarity Score)
+            similarity(p.name, p_keyword)::REAL AS similarity_score
+
+        FROM public.products p
+        
+        -- 1. JOIN ĐỂ LẤY ĐƠN VỊ BÁN LẺ (Ưu tiên type='retail')
+        LEFT JOIN public.product_units u_retail 
+            ON p.id = u_retail.product_id AND u_retail.unit_type = 'retail'
+            
+        -- 2. JOIN ĐỂ LẤY ĐƠN VỊ CƠ SỞ (Dự phòng nếu chưa cấu hình retail)
+        LEFT JOIN public.product_units u_base 
+            ON p.id = u_base.product_id AND u_base.unit_type = 'base'
+
+        -- 3. JOIN ĐỂ LẤY TỒN KHO & VỊ TRÍ TẠI CHI NHÁNH
+        LEFT JOIN public.product_inventory inv 
+            ON p.id = inv.product_id AND inv.warehouse_id = p_warehouse_id
+
+        WHERE 
+            p.status = 'active'
+            AND (
+                -- Logic tìm kiếm thông minh:
+                -- 1. Trigram Similarity (Tìm gần đúng, sai chính tả, viết tắt)
+                p.name % p_keyword 
+                OR
+                -- 2. ILIKE phân mảnh (Tìm "effe" và "150" xuất hiện bất kỳ đâu trong tên)
+                -- (Đây là cách fix cho trường hợp "effe 150" tìm ra "Efferagal 150mg")
+                p.name ILIKE '%' || REPLACE(p_keyword, ' ', '%') || '%'
+                OR
+                -- 3. Tìm theo SKU
+                p.sku ILIKE p_keyword || '%'
+            )
+            
+        -- Sắp xếp: Ưu tiên giống nhất -> Ưu tiên hàng có sẵn trong kho
+        ORDER BY 
+            similarity(p.name, p_keyword) DESC,
+            inv.stock_quantity DESC NULLS LAST
+            
+        LIMIT p_limit;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) IS 'Tìm kiếm POS: Hỗ trợ viết tắt (effe 150), trả về Unit Retail, Vị trí và HDSD';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_v2"("p_keyword" "text" DEFAULT NULL::"text", "p_category" "text" DEFAULT NULL::"text", "p_manufacturer" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 20, "p_offset" integer DEFAULT 0) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $_$
+    DECLARE
+        v_sql TEXT;
+        v_term TEXT;
+        v_search_arr TEXT[];
+        v_result JSONB;
+        v_where_clauses TEXT[] := ARRAY['1=1']; -- Mặc định luôn đúng
+    BEGIN
+        -- 1. XÂY DỰNG MỆNH ĐỀ WHERE ĐỘNG
+        
+        -- Filter: Status
+        IF p_status IS NOT NULL THEN
+            v_where_clauses := array_append(v_where_clauses, format('p.status = %L', p_status));
+        ELSE
+            v_where_clauses := array_append(v_where_clauses, 'p.status != ''deleted''');
+        END IF;
+
+        -- Filter: Manufacturer (FIXED COLUMN NAME) 🔧
+        IF p_manufacturer IS NOT NULL AND p_manufacturer != '' THEN
+            -- Sửa p.manufacturer -> p.manufacturer_name
+            v_where_clauses := array_append(v_where_clauses, format('p.manufacturer_name = %L', p_manufacturer));
+        END IF;
+
+        -- Filter: KEYWORD (SMART SPLIT LOGIC)
+        IF p_keyword IS NOT NULL AND TRIM(p_keyword) != '' THEN
+            v_search_arr := string_to_array(TRIM(p_keyword), ' ');
+            
+            FOREACH v_term IN ARRAY v_search_arr
+            LOOP
+                IF TRIM(v_term) != '' THEN
+                    v_where_clauses := array_append(v_where_clauses, format(
+                        '(p.name ILIKE %1$L OR p.sku ILIKE %1$L OR COALESCE(p.barcode, '''') ILIKE %1$L OR COALESCE(p.active_ingredient, '''') ILIKE %1$L)', 
+                        '%' || TRIM(v_term) || '%'
+                    ));
+                END IF;
+            END LOOP;
+        END IF;
+
+        -- 2. TỔNG HỢP SQL (FIXED SELECT LIST) 🔧
+        v_sql := format(
+            'SELECT jsonb_build_object(
+                ''data'', COALESCE(jsonb_agg(t.*), ''[]''),
+                ''total_count'', COALESCE(MAX(t.full_count), 0)
+            )
+            FROM (
+                SELECT 
+                    p.id, 
+                    p.name, 
+                    p.sku, 
+                    p.image_url, 
+                    p.status, 
+                    
+                    -- [FIXED] Sửa p.manufacturer -> p.manufacturer_name
+                    -- Alias về "manufacturer" để Frontend không bị đổi key (nếu đang dùng key cũ)
+                    p.manufacturer_name AS manufacturer, 
+                    
+                    p.active_ingredient,
+                    
+                    -- Subquery: Base Unit
+                    COALESCE((
+                        SELECT unit_name 
+                        FROM public.product_units 
+                        WHERE product_id = p.id AND unit_type = ''base'' 
+                        LIMIT 1
+                    ), ''N/A'') as base_unit,
+                    
+                    -- Subquery: Retail Price
+                    COALESCE((
+                        SELECT price 
+                        FROM public.product_units 
+                        WHERE product_id = p.id AND unit_type = ''retail'' 
+                        LIMIT 1
+                    ), 0) as retail_price,
+
+                    -- Subquery: Total Stock
+                    COALESCE((
+                        SELECT SUM(stock_quantity) 
+                        FROM public.product_inventory 
+                        WHERE product_id = p.id
+                    ), 0)::INT as total_stock,
+
+                    COUNT(*) OVER() as full_count
+
+                FROM public.products p
+                WHERE %s
+                ORDER BY p.created_at DESC
+                LIMIT %s OFFSET %s
+            ) t',
+            array_to_string(v_where_clauses, ' AND '),
+            p_limit,
+            p_offset
+        );
+
+        -- 3. THỰC THI
+        EXECUTE v_sql INTO v_result;
+
+        RETURN v_result;
+    END;
+    $_$;
+
+
+ALTER FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "text", "p_manufacturer" "text", "p_status" "text", "p_limit" integer, "p_offset" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "text", "p_manufacturer" "text", "p_status" "text", "p_limit" integer, "p_offset" integer) IS 'Tìm kiếm SP V2 (Fixed: manufacturer_name column)';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."submit_transfer_shipping"("p_transfer_id" bigint, "p_batch_items" "jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -5428,6 +6221,27 @@ ALTER FUNCTION "public"."sync_user_status_to_auth"() OWNER TO "postgres";
 
 COMMENT ON FUNCTION "public"."sync_user_status_to_auth"() IS 'Trigger function: Đồng bộ trạng thái từ public.users sang auth.users (Ban/Unban)';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."trigger_refresh_on_criteria_change"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+    BEGIN
+        -- Chỉ chạy logic nếu loại là 'dynamic'
+        IF NEW.type = 'dynamic' THEN
+            -- Kiểm tra: Nếu cột criteria thay đổi HOẶC cột type thay đổi (từ static -> dynamic)
+            IF (OLD.criteria IS DISTINCT FROM NEW.criteria) OR (OLD.type IS DISTINCT FROM NEW.type) THEN
+                -- Gọi hàm Refresh mà chúng ta đã viết ở lệnh trước
+                PERFORM public.refresh_segment_members(NEW.id);
+            END IF;
+        END IF;
+        
+        RETURN NEW;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."trigger_refresh_on_criteria_change"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_asset"("p_id" bigint, "p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") RETURNS "void"
@@ -6753,6 +7567,86 @@ ALTER SEQUENCE "public"."customer_guardians_id_seq" OWNED BY "public"."customer_
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."customer_segment_members" (
+    "id" bigint NOT NULL,
+    "segment_id" bigint NOT NULL,
+    "customer_id" bigint NOT NULL,
+    "added_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."customer_segment_members" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."customer_segment_members" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."customer_segment_members_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."customer_segments" (
+    "id" bigint NOT NULL,
+    "name" "text" NOT NULL,
+    "description" "text",
+    "type" "text" NOT NULL,
+    "criteria" "jsonb" DEFAULT '{}'::"jsonb",
+    "is_active" boolean DEFAULT true,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "customer_segments_type_check" CHECK (("type" = ANY (ARRAY['static'::"text", 'dynamic'::"text"])))
+);
+
+
+ALTER TABLE "public"."customer_segments" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."customer_segments" IS 'Lưu trữ các nhóm khách hàng (Tĩnh và Động)';
+
+
+
+ALTER TABLE "public"."customer_segments" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."customer_segments_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."customer_vouchers" (
+    "id" bigint NOT NULL,
+    "customer_id" bigint NOT NULL,
+    "promotion_id" "uuid" NOT NULL,
+    "code" "text" NOT NULL,
+    "status" "text" DEFAULT 'active'::"text" NOT NULL,
+    "used_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "usage_remaining" integer DEFAULT 1,
+    CONSTRAINT "customer_vouchers_status_check" CHECK (("status" = ANY (ARRAY['active'::"text", 'used'::"text", 'expired'::"text"])))
+);
+
+
+ALTER TABLE "public"."customer_vouchers" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."customer_vouchers" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."customer_vouchers_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."customers" (
     "id" bigint NOT NULL,
     "customer_code" "text",
@@ -6778,11 +7672,16 @@ CREATE TABLE IF NOT EXISTS "public"."customers" (
     "status" "public"."account_status" DEFAULT 'active'::"public"."account_status" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "contact_person_phone" "text"
+    "contact_person_phone" "text",
+    "last_purchase_at" timestamp with time zone
 );
 
 
 ALTER TABLE "public"."customers" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."customers"."last_purchase_at" IS 'Thời điểm hoàn thành đơn hàng gần nhất (Dùng cho CRM Retention)';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."customers_b2b" (
@@ -7315,11 +8214,19 @@ CREATE TABLE IF NOT EXISTS "public"."product_contents" (
     "short_description" "text",
     "images" "jsonb" DEFAULT '[]'::"jsonb",
     "is_published" boolean DEFAULT true,
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "seo_title" "text",
+    "seo_description" "text",
+    "seo_keywords" "text"[],
+    "language_code" "text" DEFAULT 'vi'::"text"
 );
 
 
 ALTER TABLE "public"."product_contents" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."product_contents"."channel" IS 'Kênh phân phối: default, website, shopee, pos...';
+
 
 
 ALTER TABLE "public"."product_contents" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
@@ -7341,7 +8248,10 @@ CREATE TABLE IF NOT EXISTS "public"."product_inventory" (
     "min_stock" integer DEFAULT 0,
     "max_stock" integer DEFAULT 0,
     "shelf_location" "text" DEFAULT 'Chưa xếp'::"text",
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "location_cabinet" "text",
+    "location_row" "text",
+    "location_slot" "text"
 );
 
 
@@ -7436,12 +8346,17 @@ CREATE TABLE IF NOT EXISTS "public"."products" (
     "stock_management_type" "public"."stock_management_type" DEFAULT 'lot_date'::"public"."stock_management_type",
     "wholesale_margin_rate" numeric DEFAULT 0,
     "retail_margin_rate" numeric DEFAULT 0,
+    "usage_instructions" "jsonb" DEFAULT '{}'::"jsonb",
     CONSTRAINT "products_items_per_carton_check" CHECK (("items_per_carton" > 0)),
     CONSTRAINT "products_purchasing_policy_check" CHECK (("purchasing_policy" = ANY (ARRAY['ALLOW_LOOSE'::"text", 'FULL_CARTON_ONLY'::"text"])))
 );
 
 
 ALTER TABLE "public"."products" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."products"."usage_instructions" IS 'HDSD phân theo nhóm tuổi: 0_2, 2_6, 6_18, 18_plus';
+
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."products_id_seq"
@@ -7456,6 +8371,30 @@ ALTER SEQUENCE "public"."products_id_seq" OWNER TO "postgres";
 
 
 ALTER SEQUENCE "public"."products_id_seq" OWNED BY "public"."products"."id";
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."promotion_targets" (
+    "id" bigint NOT NULL,
+    "promotion_id" "uuid" NOT NULL,
+    "target_type" "text" NOT NULL,
+    "target_id" bigint NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "promotion_targets_target_type_check" CHECK (("target_type" = ANY (ARRAY['segment'::"text", 'branch'::"text", 'customer'::"text"])))
+);
+
+
+ALTER TABLE "public"."promotion_targets" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."promotion_targets" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."promotion_targets_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
 
 
 
@@ -7907,6 +8846,62 @@ ALTER TABLE "public"."vaccination_templates" ALTER COLUMN "id" ADD GENERATED BY 
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."vat_inventory_ledger" (
+    "id" bigint NOT NULL,
+    "product_id" bigint NOT NULL,
+    "vat_rate" numeric DEFAULT 0 NOT NULL,
+    "quantity_balance" numeric DEFAULT 0 NOT NULL,
+    "total_value_balance" numeric DEFAULT 0 NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "vat_inventory_ledger_quantity_balance_check" CHECK (("quantity_balance" >= (0)::numeric))
+);
+
+
+ALTER TABLE "public"."vat_inventory_ledger" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."vat_inventory_ledger" IS 'Sổ cái theo dõi tồn kho Hóa đơn VAT (Lưu trữ theo Base Unit và Tax Rate)';
+
+
+
+ALTER TABLE "public"."vat_inventory_ledger" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."vat_inventory_ledger_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."vendor_product_mappings" (
+    "id" bigint NOT NULL,
+    "vendor_tax_code" "text" NOT NULL,
+    "vendor_product_name" "text" NOT NULL,
+    "internal_product_id" bigint NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "last_used_at" timestamp with time zone DEFAULT "now"(),
+    "updated_by" "uuid",
+    "vendor_unit" "text",
+    "internal_unit" "text"
+);
+
+
+ALTER TABLE "public"."vendor_product_mappings" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."vendor_product_mappings" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."vendor_product_mappings_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."warehouses" (
     "id" bigint NOT NULL,
     "key" "text" NOT NULL,
@@ -8116,6 +9111,21 @@ ALTER TABLE ONLY "public"."customer_guardians"
 
 
 
+ALTER TABLE ONLY "public"."customer_segment_members"
+    ADD CONSTRAINT "customer_segment_members_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."customer_segments"
+    ADD CONSTRAINT "customer_segments_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."customer_vouchers"
+    ADD CONSTRAINT "customer_vouchers_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."customers_b2b"
     ADD CONSTRAINT "customers_b2b_customer_code_key" UNIQUE ("customer_code");
 
@@ -8296,6 +9306,11 @@ ALTER TABLE ONLY "public"."products"
 
 
 
+ALTER TABLE ONLY "public"."promotion_targets"
+    ADD CONSTRAINT "promotion_targets_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."promotion_usages"
     ADD CONSTRAINT "promotion_usages_pkey" PRIMARY KEY ("id");
 
@@ -8426,6 +9441,26 @@ ALTER TABLE ONLY "public"."product_inventory"
 
 
 
+ALTER TABLE ONLY "public"."promotion_targets"
+    ADD CONSTRAINT "uq_promotion_target" UNIQUE ("promotion_id", "target_type", "target_id");
+
+
+
+ALTER TABLE ONLY "public"."customer_segment_members"
+    ADD CONSTRAINT "uq_segment_member" UNIQUE ("segment_id", "customer_id");
+
+
+
+ALTER TABLE ONLY "public"."vat_inventory_ledger"
+    ADD CONSTRAINT "uq_vat_ledger_product_rate" UNIQUE ("product_id", "vat_rate");
+
+
+
+ALTER TABLE ONLY "public"."vendor_product_mappings"
+    ADD CONSTRAINT "uq_vendor_product_unit_map" UNIQUE ("vendor_tax_code", "vendor_product_name", "vendor_unit");
+
+
+
 ALTER TABLE ONLY "public"."user_roles"
     ADD CONSTRAINT "user_roles_pkey" PRIMARY KEY ("id");
 
@@ -8468,6 +9503,16 @@ ALTER TABLE ONLY "public"."vaccination_template_items"
 
 ALTER TABLE ONLY "public"."vaccination_templates"
     ADD CONSTRAINT "vaccination_templates_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."vat_inventory_ledger"
+    ADD CONSTRAINT "vat_inventory_ledger_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."vendor_product_mappings"
+    ADD CONSTRAINT "vendor_product_mappings_pkey" PRIMARY KEY ("id");
 
 
 
@@ -8526,6 +9571,10 @@ CREATE INDEX "idx_customers_b2b_phone" ON "public"."customers_b2b" USING "btree"
 
 
 CREATE INDEX "idx_customers_code_trgm" ON "public"."customers" USING "gin" ("customer_code" "public"."gin_trgm_ops");
+
+
+
+CREATE INDEX "idx_customers_last_purchase" ON "public"."customers" USING "btree" ("last_purchase_at");
 
 
 
@@ -8733,6 +9782,14 @@ CREATE INDEX "idx_transfer_items_transfer_id" ON "public"."inventory_transfer_it
 
 
 
+CREATE UNIQUE INDEX "idx_unique_invoice_identity" ON "public"."finance_invoices" USING "btree" ("supplier_tax_code", "invoice_symbol", "invoice_number") WHERE ("status" <> 'rejected'::"text");
+
+
+
+COMMENT ON INDEX "public"."idx_unique_invoice_identity" IS 'Chặn nhập trùng hóa đơn trừ khi hóa đơn cũ đã bị từ chối/hủy';
+
+
+
 CREATE INDEX "idx_users_name_trgm" ON "public"."users" USING "gin" ("full_name" "public"."gin_trgm_ops");
 
 
@@ -8750,6 +9807,10 @@ CREATE INDEX "idx_vacc_templates_name" ON "public"."vaccination_templates" USING
 
 
 CREATE INDEX "products_fts_idx" ON "public"."products" USING "gin" ("fts");
+
+
+
+CREATE INDEX "trgm_idx_products_name" ON "public"."products" USING "gin" ("name" "public"."gin_trgm_ops");
 
 
 
@@ -8818,6 +9879,10 @@ CREATE OR REPLACE TRIGGER "on_updated_at" BEFORE UPDATE ON "public"."users" FOR 
 
 
 CREATE OR REPLACE TRIGGER "on_user_status_change" AFTER INSERT OR UPDATE OF "status" ON "public"."users" FOR EACH ROW EXECUTE FUNCTION "public"."sync_user_status_to_auth"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_auto_refresh_segment" AFTER UPDATE ON "public"."customer_segments" FOR EACH ROW EXECUTE FUNCTION "public"."trigger_refresh_on_criteria_change"();
 
 
 
@@ -8903,6 +9968,26 @@ ALTER TABLE ONLY "public"."customer_guardians"
 
 ALTER TABLE ONLY "public"."customer_guardians"
     ADD CONSTRAINT "customer_guardians_guardian_id_fkey" FOREIGN KEY ("guardian_id") REFERENCES "public"."customers"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."customer_segment_members"
+    ADD CONSTRAINT "customer_segment_members_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."customer_segment_members"
+    ADD CONSTRAINT "customer_segment_members_segment_id_fkey" FOREIGN KEY ("segment_id") REFERENCES "public"."customer_segments"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."customer_vouchers"
+    ADD CONSTRAINT "customer_vouchers_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."customer_vouchers"
+    ADD CONSTRAINT "customer_vouchers_promotion_id_fkey" FOREIGN KEY ("promotion_id") REFERENCES "public"."promotions"("id") ON DELETE CASCADE;
 
 
 
@@ -9081,6 +10166,11 @@ ALTER TABLE ONLY "public"."products"
 
 
 
+ALTER TABLE ONLY "public"."promotion_targets"
+    ADD CONSTRAINT "promotion_targets_promotion_id_fkey" FOREIGN KEY ("promotion_id") REFERENCES "public"."promotions"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."promotion_usages"
     ADD CONSTRAINT "promotion_usages_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id");
 
@@ -9191,6 +10281,21 @@ ALTER TABLE ONLY "public"."vaccination_template_items"
 
 
 
+ALTER TABLE ONLY "public"."vat_inventory_ledger"
+    ADD CONSTRAINT "vat_inventory_ledger_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."vendor_product_mappings"
+    ADD CONSTRAINT "vendor_product_mappings_internal_product_id_fkey" FOREIGN KEY ("internal_product_id") REFERENCES "public"."products"("id");
+
+
+
+ALTER TABLE ONLY "public"."vendor_product_mappings"
+    ADD CONSTRAINT "vendor_product_mappings_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "auth"."users"("id");
+
+
+
 CREATE POLICY "Allow authenticated full access" ON "public"."system_settings" TO "authenticated" USING (true) WITH CHECK (true);
 
 
@@ -9287,6 +10392,14 @@ CREATE POLICY "Allow authenticated write access (Temporary)" ON "public"."chart_
 
 
 
+CREATE POLICY "Auth users full access" ON "public"."customer_vouchers" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Auth users full access" ON "public"."promotion_targets" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Authenticated users can delete items" ON "public"."vaccination_template_items" FOR DELETE TO "authenticated" USING (true);
 
 
@@ -9316,6 +10429,22 @@ CREATE POLICY "Authenticated users can update items" ON "public"."vaccination_te
 
 
 CREATE POLICY "Authenticated users can update templates" ON "public"."vaccination_templates" FOR UPDATE TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "Enable access for auth users" ON "public"."customer_segment_members" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Enable access for auth users" ON "public"."customer_segments" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Enable access for authenticated users" ON "public"."vendor_product_mappings" USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "Enable all access for authenticated users" ON "public"."vat_inventory_ledger" TO "authenticated" USING (true) WITH CHECK (true);
 
 
 
@@ -9470,6 +10599,15 @@ ALTER TABLE "public"."customer_b2b_contacts" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."customer_guardians" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."customer_segment_members" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."customer_segments" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."customer_vouchers" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."customers" ENABLE ROW LEVEL SECURITY;
 
 
@@ -9533,6 +10671,9 @@ ALTER TABLE "public"."product_contents" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."product_units" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."promotion_targets" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."purchase_order_items" ENABLE ROW LEVEL SECURITY;
 
 
@@ -9578,6 +10719,12 @@ ALTER TABLE "public"."vaccination_template_items" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."vaccination_templates" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."vat_inventory_ledger" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."vendor_product_mappings" ENABLE ROW LEVEL SECURITY;
+
+
 
 
 ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
@@ -9603,6 +10750,9 @@ ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."purchase_orders";
 
 
 
+
+
+
 GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
@@ -9621,6 +10771,27 @@ GRANT ALL ON FUNCTION "public"."gtrgm_out"("public"."gtrgm") TO "postgres";
 GRANT ALL ON FUNCTION "public"."gtrgm_out"("public"."gtrgm") TO "anon";
 GRANT ALL ON FUNCTION "public"."gtrgm_out"("public"."gtrgm") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."gtrgm_out"("public"."gtrgm") TO "service_role";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9834,6 +11005,24 @@ GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doc
 
 
 
+GRANT ALL ON FUNCTION "public"."check_invoice_exists"("p_tax_code" "text", "p_symbol" "text", "p_number" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."check_invoice_exists"("p_tax_code" "text", "p_symbol" "text", "p_number" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."check_invoice_exists"("p_tax_code" "text", "p_symbol" "text", "p_number" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."check_product_dependencies"("p_product_ids" bigint[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."check_product_dependencies"("p_product_ids" bigint[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."check_product_dependencies"("p_product_ids" bigint[]) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."check_vat_availability"("p_product_id" bigint, "p_vat_rate" numeric, "p_qty_requested" numeric) TO "anon";
+GRANT ALL ON FUNCTION "public"."check_vat_availability"("p_product_id" bigint, "p_vat_rate" numeric, "p_qty_requested" numeric) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."check_vat_availability"("p_product_id" bigint, "p_vat_rate" numeric, "p_qty_requested" numeric) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."confirm_finance_transaction"("p_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."confirm_finance_transaction"("p_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."confirm_finance_transaction"("p_id" bigint) TO "service_role";
@@ -10032,6 +11221,12 @@ GRANT ALL ON FUNCTION "public"."delete_purchase_order"("p_id" bigint) TO "servic
 
 
 
+GRANT ALL ON FUNCTION "public"."delete_service_packages"("p_ids" bigint[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."delete_service_packages"("p_ids" bigint[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."delete_service_packages"("p_ids" bigint[]) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."delete_shipping_partner"("p_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."delete_shipping_partner"("p_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."delete_shipping_partner"("p_id" bigint) TO "service_role";
@@ -10047,6 +11242,12 @@ GRANT ALL ON FUNCTION "public"."delete_supplier"("p_id" bigint) TO "service_role
 GRANT ALL ON FUNCTION "public"."delete_vaccination_template"("p_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."delete_vaccination_template"("p_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."delete_vaccination_template"("p_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."distribute_voucher_to_segment"("p_promotion_id" "uuid", "p_segment_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."distribute_voucher_to_segment"("p_promotion_id" "uuid", "p_segment_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."distribute_voucher_to_segment"("p_promotion_id" "uuid", "p_segment_id" bigint) TO "service_role";
 
 
 
@@ -10155,6 +11356,12 @@ GRANT ALL ON FUNCTION "public"."get_distinct_manufacturers"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."get_inbound_detail"("p_po_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."get_inbound_detail"("p_po_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_inbound_detail"("p_po_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_mapped_product"("p_tax_code" "text", "p_product_name" "text", "p_vendor_unit" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_mapped_product"("p_tax_code" "text", "p_product_name" "text", "p_vendor_unit" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_mapped_product"("p_tax_code" "text", "p_product_name" "text", "p_vendor_unit" "text") TO "service_role";
 
 
 
@@ -10308,6 +11515,12 @@ GRANT ALL ON FUNCTION "public"."get_vaccination_templates"("p_search" "text", "p
 
 
 
+GRANT ALL ON FUNCTION "public"."get_valid_vouchers_for_checkout"("p_customer_id" bigint, "p_cart_total" numeric) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_valid_vouchers_for_checkout"("p_customer_id" bigint, "p_cart_total" numeric) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_valid_vouchers_for_checkout"("p_customer_id" bigint, "p_cart_total" numeric) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_warehouse_inbound_tasks"("p_warehouse_id" bigint, "p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" "date", "p_date_to" "date") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_warehouse_inbound_tasks"("p_warehouse_id" bigint, "p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" "date", "p_date_to" "date") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_warehouse_inbound_tasks"("p_warehouse_id" bigint, "p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" "date", "p_date_to" "date") TO "service_role";
@@ -10441,6 +11654,12 @@ GRANT ALL ON FUNCTION "public"."handover_to_shipping"("p_order_id" "uuid") TO "s
 
 
 
+GRANT ALL ON FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") TO "service_role";
@@ -10450,6 +11669,12 @@ GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name"
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) TO "service_role";
 
 
 
@@ -10468,6 +11693,18 @@ GRANT ALL ON FUNCTION "public"."reactivate_customer_b2c"("p_id" bigint) TO "serv
 GRANT ALL ON FUNCTION "public"."reactivate_shipping_partner"("p_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."reactivate_shipping_partner"("p_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."reactivate_shipping_partner"("p_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."reverse_vat_invoice_entry"("p_invoice_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."reverse_vat_invoice_entry"("p_invoice_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reverse_vat_invoice_entry"("p_invoice_id" bigint) TO "service_role";
 
 
 
@@ -10510,6 +11747,18 @@ GRANT ALL ON FUNCTION "public"."search_products_for_b2b_order"("p_keyword" "text
 GRANT ALL ON FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "text", "p_manufacturer" "text", "p_status" "text", "p_limit" integer, "p_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "text", "p_manufacturer" "text", "p_status" "text", "p_limit" integer, "p_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "text", "p_manufacturer" "text", "p_status" "text", "p_limit" integer, "p_offset" integer) TO "service_role";
 
 
 
@@ -10605,6 +11854,12 @@ GRANT ALL ON FUNCTION "public"."sync_inventory_batch_to_total"() TO "service_rol
 GRANT ALL ON FUNCTION "public"."sync_user_status_to_auth"() TO "anon";
 GRANT ALL ON FUNCTION "public"."sync_user_status_to_auth"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."sync_user_status_to_auth"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."trigger_refresh_on_criteria_change"() TO "anon";
+GRANT ALL ON FUNCTION "public"."trigger_refresh_on_criteria_change"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."trigger_refresh_on_criteria_change"() TO "service_role";
 
 
 
@@ -10784,6 +12039,12 @@ GRANT ALL ON FUNCTION "public"."word_similarity_op"("text", "text") TO "service_
 
 
 
+
+
+
+
+
+
 GRANT ALL ON TABLE "public"."appointments" TO "anon";
 GRANT ALL ON TABLE "public"."appointments" TO "authenticated";
 GRANT ALL ON TABLE "public"."appointments" TO "service_role";
@@ -10901,6 +12162,42 @@ GRANT ALL ON TABLE "public"."customer_guardians" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."customer_guardians_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."customer_guardians_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."customer_guardians_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."customer_segment_members" TO "anon";
+GRANT ALL ON TABLE "public"."customer_segment_members" TO "authenticated";
+GRANT ALL ON TABLE "public"."customer_segment_members" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."customer_segment_members_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."customer_segment_members_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."customer_segment_members_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."customer_segments" TO "anon";
+GRANT ALL ON TABLE "public"."customer_segments" TO "authenticated";
+GRANT ALL ON TABLE "public"."customer_segments" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."customer_segments_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."customer_segments_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."customer_segments_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."customer_vouchers" TO "anon";
+GRANT ALL ON TABLE "public"."customer_vouchers" TO "authenticated";
+GRANT ALL ON TABLE "public"."customer_vouchers" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."customer_vouchers_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."customer_vouchers_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."customer_vouchers_id_seq" TO "service_role";
 
 
 
@@ -11150,6 +12447,18 @@ GRANT ALL ON SEQUENCE "public"."products_id_seq" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."promotion_targets" TO "anon";
+GRANT ALL ON TABLE "public"."promotion_targets" TO "authenticated";
+GRANT ALL ON TABLE "public"."promotion_targets" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."promotion_targets_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."promotion_targets_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."promotion_targets_id_seq" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."promotion_usages" TO "anon";
 GRANT ALL ON TABLE "public"."promotion_usages" TO "authenticated";
 GRANT ALL ON TABLE "public"."promotion_usages" TO "service_role";
@@ -11321,6 +12630,30 @@ GRANT ALL ON TABLE "public"."vaccination_templates" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."vaccination_templates_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."vaccination_templates_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."vaccination_templates_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."vat_inventory_ledger" TO "anon";
+GRANT ALL ON TABLE "public"."vat_inventory_ledger" TO "authenticated";
+GRANT ALL ON TABLE "public"."vat_inventory_ledger" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."vat_inventory_ledger_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."vat_inventory_ledger_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."vat_inventory_ledger_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."vendor_product_mappings" TO "anon";
+GRANT ALL ON TABLE "public"."vendor_product_mappings" TO "authenticated";
+GRANT ALL ON TABLE "public"."vendor_product_mappings" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."vendor_product_mappings_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."vendor_product_mappings_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."vendor_product_mappings_id_seq" TO "service_role";
 
 
 

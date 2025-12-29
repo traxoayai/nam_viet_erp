@@ -29,13 +29,7 @@ export const PosCartTable = () => {
         </Space>
       ),
     },
-    {
-      title: "ĐVT",
-      dataIndex: "unit",
-      width: 70,
-      align: "center" as const,
-      render: (u: string) => <Tag color="blue">{u}</Tag>,
-    },
+    
     {
       title: "Liều dùng",
       dataIndex: "dosage",
@@ -67,6 +61,13 @@ export const PosCartTable = () => {
           </Tooltip>
         </Input.Group>
       ),
+    },
+    {
+      title: "ĐVT",
+      dataIndex: "unit",
+      width: 70,
+      align: "center" as const,
+      render: (u: string) => <Tag color="blue">{u}</Tag>,
     },
     {
       title: "SL",

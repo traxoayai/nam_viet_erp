@@ -12,6 +12,7 @@ import {
   SearchOutlined,
   PlusOutlined,
   DeleteOutlined,
+  ScanOutlined, // [NEW] Icon Scan
 } from "@ant-design/icons";
 import {
   Layout,
@@ -31,9 +32,12 @@ import {
   Form,
   Image,
   Spin,
+  App as AntApp,
 } from "antd";
 import viVN from "antd/locale/vi_VN";
-import React from "react";
+import React, { useState } from "react"; // [NEW] useState
+import { ProductAiScannerModal } from "@/features/product/components/ProductAiScannerModal"; // [NEW]
+import { aiService } from "@/features/product/api/aiService"; // [NEW]
 
 
 
@@ -45,6 +49,10 @@ const { Title } = Typography;
 const { Option } = Select;
 
 const ProductFormPage: React.FC = () => {
+  const { message: antMessage } = AntApp.useApp();
+  // [NEW] AI Scanner State
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  
   const {
     form,
     loading,
@@ -72,6 +80,14 @@ const ProductFormPage: React.FC = () => {
     navigate("/inventory");
   };
 
+  // [NEW] Xử lý khi AI điền form
+  const handleAiFill = (aiData: any) => {
+    const mappedData = aiService.mapAiDataToForm(aiData);
+    form.setFieldsValue(mappedData);
+    antMessage.success("Đã điền thông tin từ AI!");
+    // Có thể cần setup thêm ảnh nếu có
+  };
+
   return (
     <ConfigProvider locale={viVN}>
       <Layout style={{ minHeight: "100vh", backgroundColor: "#efededff" }}>
@@ -80,11 +96,20 @@ const ProductFormPage: React.FC = () => {
           tip={loading ? "Đang xử lý..." : "Đang tải dữ liệu..."}
         >
           <Content style={{ padding: "12px" }}>
-            <Title level={4} style={{ marginBottom: "12px" }}>
-              {isEditing
-                ? `Chỉnh sửa: ${currentProduct?.name || "Sản phẩm"}`
-                : "Thêm Sản phẩm mới"}
-            </Title>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <Title level={4} style={{ margin: 0 }}>
+                {isEditing
+                  ? `Chỉnh sửa: ${currentProduct?.name || "Sản phẩm"}`
+                  : "Thêm Sản phẩm mới"}
+              </Title>
+              <Button 
+                icon={<ScanOutlined />} 
+                onClick={() => setIsScannerOpen(true)}
+                type="dashed"
+              >
+                Scan Tài liệu (AI)
+              </Button>
+            </div>
             <Form
               form={form}
               layout="vertical"
@@ -227,16 +252,6 @@ const ProductFormPage: React.FC = () => {
                 bordered={false}
                 style={{ marginBottom: 24 }}
               >
-                  {/* UNTIS & CONVERSION */}
-              <Card
-                title={
-                  <Space>
-                    <ContainerOutlined /> Đơn vị tính & Quy đổi
-                  </Space>
-                }
-                bordered={false}
-                style={{ marginBottom: 24 }}
-              >
                   <Form.List name="units">
                     {(fields, { add, remove }) => (
                       <>
@@ -335,7 +350,7 @@ const ProductFormPage: React.FC = () => {
                     )}
                   </Form.List>
               </Card>
-              </Card>
+              
 
               <Card
                 title={
@@ -601,6 +616,13 @@ const ProductFormPage: React.FC = () => {
           </Content>
         </Spin>
       </Layout>
+      {/* [NEW] AI Scanner Modal */}
+      <ProductAiScannerModal 
+        open={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        mode="fill_form"
+        onSuccess={handleAiFill}
+      />
     </ConfigProvider>
   );
 };

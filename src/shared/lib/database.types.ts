@@ -1,3 +1,4 @@
+// src/shared/lib/database.types.ts
 export type Json =
   | string
   | number
@@ -433,95 +434,6 @@ export type Database = {
           },
         ]
       }
-      customer_vouchers: {
-        Row: {
-          id: number;
-          customer_id: number;
-          promotion_id: string; // UUID
-          code: string;         // Mã voucher hiển thị
-          status: 'active' | 'used' | 'expired';
-          used_at: string | null;
-          created_at: string;
-          usage_remaining: number | null; // null = vô hạn
-        };
-        Insert: {
-          customer_id: number;
-          promotion_id: string;
-          code: string;
-          status?: 'active' | 'used' | 'expired';
-          used_at?: string | null;
-          created_at?: string;
-          usage_remaining?: number | null;
-        };
-        Update: {
-          status?: 'active' | 'used' | 'expired';
-          used_at?: string | null;
-          usage_remaining?: number | null;
-        };
-        Relationships: [];
-      }
-      customer_segments: {
-        Row: {
-          id: number;
-          name: string;
-          description: string | null;
-          type: 'static' | 'dynamic';
-          criteria: Json | null;
-          is_active: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          name: string;
-          description?: string | null;
-          type: 'static' | 'dynamic';
-          criteria?: Json | null;
-          is_active?: boolean;
-        };
-        Update: {
-          name?: string;
-          description?: string | null;
-          type?: 'static' | 'dynamic';
-          criteria?: Json | null;
-          is_active?: boolean;
-          updated_at?: string;
-        };
-        Relationships: [];
-      }
-      customer_segment_members: {
-        Row: {
-          id: number;
-          segment_id: number;
-          customer_id: number;
-          added_at: string;
-        };
-        Insert: {
-          segment_id: number;
-          customer_id: number;
-          added_at?: string;
-        };
-        Update: {
-          segment_id?: number;
-          customer_id?: number;
-          added_at?: string;
-        };
-        Relationships: [
-           {
-             foreignKeyName: "customer_segment_members_segment_id_fkey";
-             columns: ["segment_id"];
-             isOneToOne: false;
-             referencedRelation: "customer_segments";
-             referencedColumns: ["id"];
-           },
-           {
-             foreignKeyName: "customer_segment_members_customer_id_fkey";
-             columns: ["customer_id"];
-             isOneToOne: false;
-             referencedRelation: "customers";
-             referencedColumns: ["id"];
-           }
-        ];
-      }
       customer_b2b_contacts: {
         Row: {
           created_at: string | null
@@ -599,6 +511,123 @@ export type Database = {
           },
         ]
       }
+      customer_segment_members: {
+        Row: {
+          added_at: string | null
+          customer_id: number
+          id: number
+          segment_id: number
+        }
+        Insert: {
+          added_at?: string | null
+          customer_id: number
+          id?: number
+          segment_id: number
+        }
+        Update: {
+          added_at?: string | null
+          customer_id?: number
+          id?: number
+          segment_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_segment_members_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_segment_members_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "customer_segments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_segments: {
+        Row: {
+          created_at: string | null
+          criteria: Json | null
+          description: string | null
+          id: number
+          is_active: boolean | null
+          name: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          criteria?: Json | null
+          description?: string | null
+          id?: number
+          is_active?: boolean | null
+          name: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          criteria?: Json | null
+          description?: string | null
+          id?: number
+          is_active?: boolean | null
+          name?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      customer_vouchers: {
+        Row: {
+          code: string
+          created_at: string | null
+          customer_id: number
+          id: number
+          promotion_id: string
+          status: string
+          usage_remaining: number | null
+          used_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          customer_id: number
+          id?: number
+          promotion_id: string
+          status?: string
+          usage_remaining?: number | null
+          used_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          customer_id?: number
+          id?: number
+          promotion_id?: string
+          status?: string
+          usage_remaining?: number | null
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_vouchers_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_vouchers_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null
@@ -616,6 +645,7 @@ export type Database = {
           email: string | null
           gender: Database["public"]["Enums"]["customer_gender"] | null
           id: number
+          last_purchase_at: string | null
           lifestyle_habits: string | null
           loyalty_points: number | null
           medical_history: string | null
@@ -643,6 +673,7 @@ export type Database = {
           email?: string | null
           gender?: Database["public"]["Enums"]["customer_gender"] | null
           id?: number
+          last_purchase_at?: string | null
           lifestyle_habits?: string | null
           loyalty_points?: number | null
           medical_history?: string | null
@@ -670,6 +701,7 @@ export type Database = {
           email?: string | null
           gender?: Database["public"]["Enums"]["customer_gender"] | null
           id?: number
+          last_purchase_at?: string | null
           lifestyle_habits?: string | null
           loyalty_points?: number | null
           medical_history?: string | null
@@ -1662,7 +1694,11 @@ export type Database = {
           id: number
           images: Json | null
           is_published: boolean | null
+          language_code: string | null
           product_id: number | null
+          seo_description: string | null
+          seo_keywords: string[] | null
+          seo_title: string | null
           short_description: string | null
           updated_at: string | null
         }
@@ -1672,7 +1708,11 @@ export type Database = {
           id?: number
           images?: Json | null
           is_published?: boolean | null
+          language_code?: string | null
           product_id?: number | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_title?: string | null
           short_description?: string | null
           updated_at?: string | null
         }
@@ -1682,7 +1722,11 @@ export type Database = {
           id?: number
           images?: Json | null
           is_published?: boolean | null
+          language_code?: string | null
           product_id?: number | null
+          seo_description?: string | null
+          seo_keywords?: string[] | null
+          seo_title?: string | null
           short_description?: string | null
           updated_at?: string | null
         }
@@ -1699,6 +1743,9 @@ export type Database = {
       product_inventory: {
         Row: {
           id: number
+          location_cabinet: string | null
+          location_row: string | null
+          location_slot: string | null
           max_stock: number | null
           min_stock: number | null
           product_id: number
@@ -1709,6 +1756,9 @@ export type Database = {
         }
         Insert: {
           id?: number
+          location_cabinet?: string | null
+          location_row?: string | null
+          location_slot?: string | null
           max_stock?: number | null
           min_stock?: number | null
           product_id: number
@@ -1719,6 +1769,9 @@ export type Database = {
         }
         Update: {
           id?: number
+          location_cabinet?: string | null
+          location_row?: string | null
+          location_slot?: string | null
           max_stock?: number | null
           min_stock?: number | null
           product_id?: number
@@ -1832,6 +1885,7 @@ export type Database = {
             | Database["public"]["Enums"]["stock_management_type"]
             | null
           updated_at: string | null
+          usage_instructions: Json | null
           wholesale_margin_rate: number | null
           wholesale_margin_type: string | null
           wholesale_margin_value: number | null
@@ -1868,6 +1922,7 @@ export type Database = {
             | Database["public"]["Enums"]["stock_management_type"]
             | null
           updated_at?: string | null
+          usage_instructions?: Json | null
           wholesale_margin_rate?: number | null
           wholesale_margin_type?: string | null
           wholesale_margin_value?: number | null
@@ -1904,6 +1959,7 @@ export type Database = {
             | Database["public"]["Enums"]["stock_management_type"]
             | null
           updated_at?: string | null
+          usage_instructions?: Json | null
           wholesale_margin_rate?: number | null
           wholesale_margin_type?: string | null
           wholesale_margin_value?: number | null
@@ -1915,6 +1971,38 @@ export type Database = {
             columns: ["distributor_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotion_targets: {
+        Row: {
+          created_at: string | null
+          id: number
+          promotion_id: string
+          target_id: number
+          target_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          promotion_id: string
+          target_id: number
+          target_type: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          promotion_id?: string
+          target_id?: number
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_targets_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
             referencedColumns: ["id"]
           },
         ]
@@ -1957,22 +2045,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      promotion_targets: {
-        Row: {
-          id: number;
-          promotion_id: string; // UUID
-          target_type: 'segment' | 'branch' | 'customer';
-          target_id: number;    // ID của Segment/Branch/Customer
-          created_at: string;
-        };
-        Insert: {
-          promotion_id: string;
-          target_type: 'segment' | 'branch' | 'customer';
-          target_id: number;
-          created_at?: string;
-        };
-        Relationships: [];
       }
       promotions: {
         Row: {
@@ -2801,6 +2873,85 @@ export type Database = {
         }
         Relationships: []
       }
+      vat_inventory_ledger: {
+        Row: {
+          id: number
+          product_id: number
+          quantity_balance: number
+          total_value_balance: number
+          updated_at: string | null
+          vat_rate: number
+        }
+        Insert: {
+          id?: number
+          product_id: number
+          quantity_balance?: number
+          total_value_balance?: number
+          updated_at?: string | null
+          vat_rate?: number
+        }
+        Update: {
+          id?: number
+          product_id?: number
+          quantity_balance?: number
+          total_value_balance?: number
+          updated_at?: string | null
+          vat_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vat_inventory_ledger_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_product_mappings: {
+        Row: {
+          created_at: string | null
+          id: number
+          internal_product_id: number
+          internal_unit: string | null
+          last_used_at: string | null
+          updated_by: string | null
+          vendor_product_name: string
+          vendor_tax_code: string
+          vendor_unit: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          internal_product_id: number
+          internal_unit?: string | null
+          last_used_at?: string | null
+          updated_by?: string | null
+          vendor_product_name: string
+          vendor_tax_code: string
+          vendor_unit?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          internal_product_id?: number
+          internal_unit?: string | null
+          last_used_at?: string | null
+          updated_by?: string | null
+          vendor_product_name?: string
+          vendor_tax_code?: string
+          vendor_unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_product_mappings_internal_product_id_fkey"
+            columns: ["internal_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       warehouses: {
         Row: {
           address: string | null
@@ -2890,6 +3041,22 @@ export type Database = {
           p_symptoms?: Json
         }
         Returns: Json
+      }
+      check_invoice_exists: {
+        Args: { p_number: string; p_symbol: string; p_tax_code: string }
+        Returns: boolean
+      }
+      check_product_dependencies: {
+        Args: { p_product_ids: number[] }
+        Returns: Json
+      }
+      check_vat_availability: {
+        Args: {
+          p_product_id: number
+          p_qty_requested: number
+          p_vat_rate: number
+        }
+        Returns: boolean
       }
       confirm_finance_transaction:
         | { Args: { p_id: number }; Returns: undefined }
@@ -3151,9 +3318,14 @@ export type Database = {
       delete_prescription_template: { Args: { p_id: number }; Returns: boolean }
       delete_products: { Args: { p_ids: number[] }; Returns: undefined }
       delete_purchase_order: { Args: { p_id: number }; Returns: boolean }
+      delete_service_packages: { Args: { p_ids: number[] }; Returns: undefined }
       delete_shipping_partner: { Args: { p_id: number }; Returns: undefined }
       delete_supplier: { Args: { p_id: number }; Returns: undefined }
       delete_vaccination_template: { Args: { p_id: number }; Returns: boolean }
+      distribute_voucher_to_segment: {
+        Args: { p_promotion_id: string; p_segment_id: number }
+        Returns: number
+      }
       export_customers_b2b_list: {
         Args: {
           sales_staff_filter: string
@@ -3379,6 +3551,17 @@ export type Database = {
         }[]
       }
       get_inbound_detail: { Args: { p_po_id: number }; Returns: Json }
+      get_mapped_product: {
+        Args: {
+          p_product_name: string
+          p_tax_code: string
+          p_vendor_unit?: string
+        }
+        Returns: {
+          internal_product_id: number
+          internal_unit: string
+        }[]
+      }
       get_outbound_order_detail: { Args: { p_order_id: string }; Returns: Json }
       get_outbound_stats: { Args: { p_warehouse_id: number }; Returns: Json }
       get_po_logistics_stats: {
@@ -3516,21 +3699,6 @@ export type Database = {
         }
       }
       get_service_package_details: { Args: { p_id: number }; Returns: Json }
-      get_mapped_product: {
-        Args: {
-          p_tax_code: string
-          p_product_name: string
-          p_vendor_unit: string
-        }
-        Returns: {
-          internal_product_id: number
-          internal_unit: string
-        }[]
-      }
-      process_vat_invoice_entry: {
-        Args: { p_invoice_id: number };
-        Returns: void;
-      };
       get_service_packages_list: {
         Args: {
           p_page_num: number
@@ -3709,6 +3877,20 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_valid_vouchers_for_checkout: {
+        Args: { p_cart_total?: number; p_customer_id: number }
+        Returns: {
+          code: string
+          discount_type: string
+          discount_value: number
+          ineligibility_reason: string
+          is_eligible: boolean
+          max_discount: number
+          min_order_value: number
+          promo_name: string
+          voucher_id: number
+        }[]
+      }
       get_warehouse_inbound_tasks: {
         Args: {
           p_date_from?: string
@@ -3768,6 +3950,7 @@ export type Database = {
         }[]
       }
       handover_to_shipping: { Args: { p_order_id: string }; Returns: Json }
+      import_product_from_ai: { Args: { p_data: Json }; Returns: number }
       invite_new_user: {
         Args: { p_email: string; p_full_name: string }
         Returns: string
@@ -3776,22 +3959,23 @@ export type Database = {
         Args: { p_items: Json; p_po_id: number; p_warehouse_id: number }
         Returns: Json
       }
+      process_vat_invoice_entry: {
+        Args: { p_invoice_id: number }
+        Returns: undefined
+      }
       reactivate_customer_b2b: { Args: { p_id: number }; Returns: undefined }
       reactivate_customer_b2c: { Args: { p_id: number }; Returns: undefined }
       reactivate_shipping_partner: {
         Args: { p_id: number }
         Returns: undefined
       }
-      distribute_voucher_to_segment: {
-        Args: {
-          p_promotion_id: string;
-          p_segment_id: number;
-        };
-        Returns: number;
-      }
       refresh_segment_members: {
-        Args: { p_segment_id: number };
-        Returns: void;
+        Args: { p_segment_id: number }
+        Returns: undefined
+      }
+      reverse_vat_invoice_entry: {
+        Args: { p_invoice_id: number }
+        Returns: undefined
       }
       save_outbound_progress: {
         Args: { p_items: Json; p_order_id: string }
@@ -3879,6 +4063,34 @@ export type Database = {
           sku: string
           wholesale_unit: string
         }[]
+      }
+      search_products_pos: {
+        Args: { p_keyword: string; p_limit?: number; p_warehouse_id: number }
+        Returns: {
+          id: number
+          image_url: string
+          location_cabinet: string
+          location_row: string
+          location_slot: string
+          name: string
+          retail_price: number
+          similarity_score: number
+          sku: string
+          stock_quantity: number
+          unit: string
+          usage_instructions: Json
+        }[]
+      }
+      search_products_v2: {
+        Args: {
+          p_category?: string
+          p_keyword?: string
+          p_limit?: number
+          p_manufacturer?: string
+          p_offset?: number
+          p_status?: string
+        }
+        Returns: Json
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

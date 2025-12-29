@@ -130,7 +130,7 @@ const InvoiceVerifyPage = () => {
     {
       title: "ĐVT Nhập",
       dataIndex: "internal_unit",
-      width: 120, // Tăng width lên chút cho thoải mái
+      width: 100,// Tăng width lên chút cho thoải mái
       align: 'center' as const, // Căn giữa
       render: (_: any, _record: any, index: number) => (
          <Form.Item shouldUpdate={(prev, curr) => prev.items?.[index]?.product_id !== curr.items?.[index]?.product_id}>

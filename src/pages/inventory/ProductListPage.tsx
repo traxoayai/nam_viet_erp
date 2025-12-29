@@ -12,6 +12,7 @@ import {
   PrinterOutlined,
   DeleteOutlined,
   SafetyOutlined,
+  FilePdfOutlined, // [NEW] Icon PDF
 } from "@ant-design/icons";
 import {
   Input,
@@ -43,6 +44,9 @@ import { useDebounce } from "@/shared/hooks/useDebounce";
 import * as productExcelManager from "@/features/product/utils/productExcelManager"; // Import Manager
 import { useProductStore } from "@/features/product/stores/productStore";
 import { Product } from "@/features/product/types/product.types";
+import { ProductAiScannerModal } from "@/features/product/components/ProductAiScannerModal"; // [NEW]
+import { aiService } from "@/features/product/api/aiService"; // [NEW]
+import { updateProduct } from "@/features/product/api/productService"; // [NEW] Hàm update cũ
 
 const { Title, Text } = Typography;
 
@@ -71,6 +75,11 @@ const ProductListPage = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  
+  // [NEW] AI Scanner State
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [targetProductForAi, setTargetProductForAi] = useState<Product | null>(null);
+
   const debouncedSearch = useDebounce(searchQuery, 500); // Tải data chung (Kho, NCC - đã đổi tên)
 
   useEffect(() => {
@@ -359,10 +368,21 @@ const ProductListPage = () => {
       title: "Hành động",
       key: "action",
       align: "center",
-      width: 100,
+      width: 140, // Tăng width để đủ chỗ
       fixed: "right" as const,
       render: (_: any, record: Product) => (
         <Space>
+           {/* [NEW] Nút AI Scanner */}
+          <Tooltip title="Cập nhật thông tin bằng AI (PDF)">
+            <Button 
+              type="text" 
+              icon={<FilePdfOutlined style={{ color: '#1890ff' }} />} 
+              onClick={() => {
+                 setTargetProductForAi(record);
+                 setIsScannerOpen(true);
+              }}
+            />
+          </Tooltip>
           <Tooltip title="Sửa">
             <Button
               type="text"
@@ -411,7 +431,29 @@ const ProductListPage = () => {
     },
   ];
 
+  // [NEW] Xử lý khi AI Scan thành công
+  const handleAiUpdateSuccess = async (aiData: any) => {
+    if (!targetProductForAi) return;
+
+    try {
+        antMessage.loading({ content: "Đang cập nhật dữ liệu...", key: 'ai_update' });
+
+        // Map dữ liệu AI sang format mà hàm updateProduct hiểu
+        const formValues = aiService.mapAiDataToForm(aiData);
+
+        // Gọi hàm update cũ (Lưu ý: inventoryPayload để rỗng vẫn OK)
+        await updateProduct(targetProductForAi.id, formValues, []);
+
+        antMessage.success({ content: "Cập nhật thành công!", key: 'ai_update' });
+        fetchProducts(); // Reload bảng
+        setIsScannerOpen(false); // Đóng modal
+    } catch (err: any) {
+        antMessage.error({ content: "Lỗi cập nhật: " + err.message, key: 'ai_update' });
+    }
+  };
+
   return (
+    <>
     <Spin spinning={loading} tip="Đang tải dữ liệu...">
       <Card styles={{ body: { padding: 12 } }}>
         {/* Phần 1: Header */}       
@@ -564,6 +606,16 @@ const ProductListPage = () => {
         {/* Modal đã bị xóa (theo chỉ thị) */}     
       </Card>
     </Spin>
+
+    {/* [NEW] AI Scanner Modal */}
+    <ProductAiScannerModal 
+        open={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        mode="update_existing"
+        onSuccess={handleAiUpdateSuccess}
+    />
+  );
+    </>
   );
 };
 
