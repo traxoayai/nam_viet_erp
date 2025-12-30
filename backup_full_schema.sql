@@ -4975,88 +4975,123 @@ COMMENT ON FUNCTION "public"."handover_to_shipping"("p_order_id" "uuid") IS 'V5:
 
 CREATE OR REPLACE FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") RETURNS bigint
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
-DECLARE
-    v_product_id BIGINT;
-    v_unit JSONB;
-BEGIN
-    -- 1. INSERT PRODUCT (Bảng Gốc)
-    INSERT INTO public.products (
-        name,
-        manufacturer_name, -- Đã sửa theo schema v2
-        registration_number,
-        barcode, -- Barcode chính của sản phẩm
-        active_ingredient, -- Chỉ lấy tên hoạt chất chính đầu tiên để display nhanh
-        usage_instructions, -- JSON HDSD
-        status,
-        created_at
-    )
-    VALUES (
-        p_data->>'product_name',
-        p_data->>'manufacturer_name',
-        p_data->>'registration_number',
-        p_data->>'barcode',
-        (p_data->'active_ingredients'->0->>'name'), -- Lấy hoạt chất đầu tiên làm đại diện
-        p_data->'usage_instructions',
-        'active',
-        NOW()
-    )
-    RETURNING id INTO v_product_id;
+    DECLARE
+        v_product_id BIGINT;
+        v_unit JSONB;
+        v_marketing JSONB;
+        v_items_per_carton INTEGER := 1; -- Mặc định là 1 nếu không tìm thấy thùng
+    BEGIN
+        -- 1. TÍNH TOÁN ITEMS_PER_CARTON
+        -- Logic: Tìm trong mảng units, nếu có type 'wholesale' (thùng/hộp to) thì lấy rate làm quy cách thùng
+        FOR v_unit IN SELECT * FROM jsonb_array_elements(COALESCE(p_data->'units', '[]'::jsonb))
+        LOOP
+            IF (v_unit->>'unit_type') = 'wholesale' THEN
+                v_items_per_carton := COALESCE((v_unit->>'conversion_rate')::INTEGER, 1);
+            END IF;
+        END LOOP;
 
-    -- 2. INSERT UNITS (Bảng Đơn vị)
-    FOR v_unit IN SELECT * FROM jsonb_array_elements(p_data->'units')
-    LOOP
-        INSERT INTO public.product_units (
-            product_id,
-            unit_name,
-            unit_type,
-            conversion_rate,
-            is_base_unit,
-            price, -- Giá gợi ý từ AI
-            barcode -- Barcode riêng của đơn vị này (nếu có)
+        -- 2. INSERT VÀO BẢNG PRODUCTS
+        -- Chỉ insert các trường cơ bản và packing_spec, items_per_carton theo yêu cầu
+        INSERT INTO public.products (
+            name,
+            manufacturer_name,
+            registration_number,
+            barcode,
+            active_ingredient,
+            usage_instructions,
+            packing_spec,       -- [REQ 1] Lấy từ JSON
+            items_per_carton,   -- [REQ 2] Đã tính toán ở trên
+            
+            -- Không có Auto SKU (để NULL hoặc theo JSON nếu có)
+            -- Không có Hybrid Sync (retail_unit/wholesale_unit giữ mặc định DB)
+            
+            status,
+            created_at
         )
         VALUES (
-            v_product_id,
-            v_unit->>'unit_name',
-            v_unit->>'unit_type',
-            (v_unit->>'conversion_rate')::NUMERIC,
-            (v_unit->>'is_base')::BOOLEAN,
-            COALESCE((v_unit->>'price')::NUMERIC, 0),
-            v_unit->>'barcode'
-        );
-    END LOOP;
+            p_data->>'product_name',
+            p_data->>'manufacturer_name',
+            p_data->>'registration_number',
+            p_data->>'barcode',
+            (p_data->'active_ingredients'->0->>'name'), 
+            COALESCE(p_data->'usage_instructions', '{}'::jsonb),
+            p_data->>'packing_spec', 
+            v_items_per_carton,
+            
+            'active',
+            NOW()
+        )
+        RETURNING id INTO v_product_id;
 
-    -- 3. INSERT CONTENT & SEO (Bảng Marketing)
-    INSERT INTO public.product_contents (
-        product_id,
-        channel,
-        short_description,
-        description_html, -- Nội dung HTML
-        seo_title,
-        seo_description,
-        seo_keywords,
-        is_ai_generated,
-        is_published
-    )
-    VALUES (
-        v_product_id,
-        'website', -- Mặc định
-        p_data->'marketing_content'->>'short_description',
-        p_data->'marketing_content'->>'full_description_html',
-        p_data->'marketing_content'->>'seo_title',
-        p_data->'marketing_content'->>'seo_description',
-        -- Chuyển JSON Array thành Text Array cho Postgres
-        (SELECT array_agg(x) FROM jsonb_array_elements_text(p_data->'marketing_content'->'seo_keywords') t(x)),
-        TRUE,
-        TRUE
-    );
+        -- 3. INSERT VÀO BẢNG ĐƠN VỊ (PRODUCT_UNITS)
+        FOR v_unit IN SELECT * FROM jsonb_array_elements(COALESCE(p_data->'units', '[]'::jsonb))
+        LOOP
+            INSERT INTO public.product_units (
+                product_id,
+                unit_name,
+                unit_type,
+                conversion_rate,
+                is_base_unit,
+                price,
+                barcode
+            )
+            VALUES (
+                v_product_id,
+                v_unit->>'unit_name',
+                v_unit->>'unit_type',
+                COALESCE((v_unit->>'conversion_rate')::NUMERIC, 1),
+                COALESCE((v_unit->>'is_base')::BOOLEAN, false),
+                COALESCE((v_unit->>'price')::NUMERIC, 0),
+                v_unit->>'barcode'
+            );
+        END LOOP;
 
-    RETURN v_product_id;
-END;
-$$;
+        -- 4. INSERT VÀO BẢNG CONTENT (CÓ KIỂM TRA ĐIỀU KIỆN)
+        v_marketing := p_data->'marketing_content';
+
+        -- [REQ 3] Explicitly check if marketing_content exists
+        IF v_marketing IS NOT NULL AND v_marketing != 'null'::jsonb THEN
+            INSERT INTO public.product_contents (
+                product_id,
+                channel,
+                short_description,
+                description_html, 
+                seo_title,
+                seo_description,
+                seo_keywords,
+                is_ai_generated,
+                is_published
+            )
+            VALUES (
+                v_product_id,
+                'website',
+                v_marketing->>'short_description',
+                v_marketing->>'full_description_html',
+                v_marketing->>'seo_title',
+                v_marketing->>'seo_description',
+                (SELECT array_agg(x) FROM jsonb_array_elements_text(COALESCE(v_marketing->'seo_keywords', '[]'::jsonb)) t(x)),
+                TRUE,
+                TRUE
+            )
+            ON CONFLICT (product_id, channel) 
+            DO UPDATE SET
+                short_description = EXCLUDED.short_description,
+                description_html = EXCLUDED.description_html,
+                updated_at = NOW();
+        END IF;
+
+        RETURN v_product_id;
+    END;
+    $$;
 
 
 ALTER FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") IS 'Import AI Senko Version: Packing Spec + Items Per Carton + Safe Content Check';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") RETURNS "uuid"

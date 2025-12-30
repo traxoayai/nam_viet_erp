@@ -1,6 +1,6 @@
-// src/pages/pos/PosPage.tsx
-// import React, { useEffect } from "react";
-import { Layout, Card, Button, Typography, Row, Col, Divider, Space, Tag } from "antd";
+// src/pages/posPage.tsx
+import React, { useEffect, useState } from "react";
+import { Layout, Card, Button, Typography, Row, Col, Divider, Space, Tag, Select, Modal, notification } from "antd"; // Import thêm
 import { 
   PlusOutlined, WalletOutlined, QrcodeOutlined, 
   PrinterOutlined, FileTextOutlined, AuditOutlined, UserOutlined 
@@ -11,8 +11,25 @@ import { PosSearchInput } from "../../features/pos/components/PosSearchInput";
 import { PosCartTable } from "../../features/pos/components/PosCartTable";
 import { usePosCartStore } from "../../features/pos/stores/usePosCartStore";
 
+import { posService } from "../../features/pos/api/posService";
+import { WarehousePosData } from "../../features/pos/types/pos.types";
+import { PosCustomerSearch } from "../../features/pos/components/PosCustomerSearch"; // Import Search mới
+
 const { Header, Content, Sider } = Layout;
 const { Title, Text } = Typography;
+
+// Utils tính khoảng cách (Core cung cấp)
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 const PosPage = () => {
   const { 
@@ -20,41 +37,119 @@ const PosPage = () => {
     customer, 
     isInvoiceRequested, 
     toggleInvoiceRequest,
-    setCustomer // Tạm thời chưa làm component chọn khách, sẽ hardcode test trước
+    setCustomer, // Tạm thời chưa làm component chọn khách, sẽ hardcode test trước
+    clearCart
   } = usePosCartStore();
+
+  const [warehouses, setWarehouses] = useState<WarehousePosData[]>([]);
+  const [currentWarehouseId, setCurrentWarehouseId] = useState<number | null>(null);
+
+  // --- LOGIC 1: AUTO SELECT WAREHOUSE ---
+  useEffect(() => {
+    const initWarehouse = async () => {
+      // 1. Lấy danh sách kho
+      const list = await posService.getActiveWarehouses();
+      setWarehouses(list);
+
+      // 2. Lấy GPS hiện tại
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+          const { latitude, longitude } = position.coords;
+          
+          // 3. Tính khoảng cách
+          let minDistance = Infinity;
+          let nearestId = null;
+          let nearestName = "";
+
+          list.forEach(w => {
+             if (w.latitude && w.longitude) {
+                 const dist = getDistanceFromLatLonInKm(latitude, longitude, w.latitude, w.longitude);
+                 if (dist < minDistance) {
+                     minDistance = dist;
+                     nearestId = w.id;
+                     nearestName = w.name;
+                 }
+             }
+          });
+
+          // 4. Tự động chọn nếu gần (< 0.5km) và chưa chọn kho nào
+          if (nearestId && minDistance < 0.5) {
+             setCurrentWarehouseId((prev) => {
+                 if (!prev) {
+                     notification.success({
+                         message: 'Tự động chọn kho',
+                         description: `Đã chọn kho: ${nearestName} (Cách bạn ${Math.round(minDistance * 1000)}m)`
+                     });
+                     return nearestId;
+                 }
+                 return prev;
+             });
+          } else {
+             // Fallback: Chọn kho đầu tiên nếu không tìm thấy GPS
+             setCurrentWarehouseId((prev) => prev || list[0]?.id);
+          }
+        }, (error) => {
+           console.warn("GPS Error:", error);
+           setCurrentWarehouseId((prev) => prev || list[0]?.id);
+        });
+      } else {
+         setCurrentWarehouseId((prev) => prev || list[0]?.id);
+      }
+    };
+    initWarehouse();
+  }, []);
+
+  // --- LOGIC 2: XỬ LÝ ĐỔI KHO ---
+  const handleChangeWarehouse = (newId: number) => {
+     // Cảnh báo nếu giỏ hàng đang có hàng (Tùy chọn, ở đây ta Clear luôn cho an toàn)
+     // Hoặc cảnh báo GPS nếu chọn kho quá xa (như Sếp yêu cầu)
+     
+     // Ví dụ cảnh báo xa (nếu có GPS) -> Đoạn này Dev tự implement thêm nếu cần gắt gao.
+     
+     Modal.confirm({
+        title: 'Đổi kho bán hàng?',
+        content: 'Việc đổi kho sẽ làm mới giỏ hàng hiện tại. Bạn chắc chắn chứ?',
+        onOk: () => {
+            clearCart();
+            setCurrentWarehouseId(newId);
+        }
+     });
+  };
 
   const totals = getTotals();
 
-  // Giả lập chọn khách hàng để test tính năng nợ
-  const mockSelectCustomer = () => {
-      setCustomer({ id: 10, name: "Nguyễn Văn A", phone: "0909123456", debt_amount: 50000 }); // Khách đang nợ 50k
-  };
-
   return (
     <Layout style={{ height: "100vh", overflow: "hidden" }}>
-      {/* HEADER */}
-      <Header style={{ background: "#5ab1dcff", padding: "0 16px", borderBottom: "1px solid #d9d9d9", display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 50 }}>
-         <Space>
-            <Title level={4} style={{ margin: 0, color: '#ae6a21ff' }}>NAM VIỆT POS</Title>
-            <Tag color="blue">KHO TỔNG</Tag>
-         </Space>
-         <Space>
-            <Button type="dashed" icon={<PlusOutlined />}>Đơn Mới (F1)</Button>
-            <Tag color="success">Online</Tag>
-         </Space>
-      </Header>
+       <Header style={{ background: "#5ab1dcff", padding: "0 16px", borderBottom: "1px solid #d9d9d9", display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 50 }}>
+          {/* Thay Tag KHO TỔNG bằng Select */}
+          <Space>
+             <Title level={4} style={{ margin: 0, color: '#ae6a21ff' }}>NAM VIỆT POS</Title>
+             <Select 
+                value={currentWarehouseId}
+                onChange={handleChangeWarehouse}
+                style={{ width: 200 }}
+                options={warehouses.map(w => ({ label: w.name, value: w.id }))}
+             />
+          </Space>
+          <Space>
+             <Button type="dashed" icon={<PlusOutlined />}>Đơn Mới (F1)</Button>
+             <Tag color="success">Online</Tag>
+          </Space>
+       </Header>
 
       <Layout>
         {/* === CỘT TRÁI: TÌM KIẾM & GIỎ HÀNG (65%) === */}
         <Content style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
            
-           {/* Ô TÌM KIẾM THÔNG MINH */}
-           <Card bodyStyle={{ padding: 12 }}>
-              <PosSearchInput 
-                  warehouseId={1} // Hardcode ID kho = 1 (sau này lấy từ Auth)
-                  onSelectProduct={(p) => usePosCartStore.getState().addToCart(p)} 
-              />
-           </Card>
+            {/* Ô TÌM KIẾM THÔNG MINH */}
+            <Card bodyStyle={{ padding: 12 }}>
+              {currentWarehouseId ? (
+                 <PosSearchInput 
+                    warehouseId={currentWarehouseId} 
+                    onSelectProduct={(p) => usePosCartStore.getState().addToCart(p)} 
+                 />
+              ) : <Tag color="warning">Vui lòng chọn kho để bán hàng</Tag>}
+            </Card>
 
            {/* BẢNG GIỎ HÀNG */}
            <Card style={{ flex: 1, display: 'flex', flexDirection: 'column' }} bodyStyle={{ padding: 0, flex: 1, overflow: 'hidden' }}>
@@ -80,7 +175,7 @@ const PosPage = () => {
                         <Button type="link" size="small" onClick={() => setCustomer(null)} style={{ padding: 0, marginTop: 4 }}>Bỏ chọn</Button>
                      </div>
                  ) : (
-                     <Button type="dashed" onClick={mockSelectCustomer}>+ Chọn Khách (Test)</Button>
+                    <PosCustomerSearch onSelect={(c) => setCustomer(c)} />
                  )}
               </Card>
 

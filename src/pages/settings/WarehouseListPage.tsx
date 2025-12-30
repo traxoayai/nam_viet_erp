@@ -6,6 +6,7 @@ import {
   UploadOutlined,
   EditOutlined,
   DeleteOutlined,
+  AimOutlined, // [NEW] Link Icon
 } from "@ant-design/icons";
 import {
   Input,
@@ -130,6 +131,29 @@ const WarehouseListPage: React.FC = () => {
     } else {
       antMessage.error("Xóa thất bại. Vui lòng thử lại.");
     }
+  };
+
+  // [NEW] Handler Function inside Component
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+        antMessage.error("Trình duyệt không hỗ trợ định vị.");
+        return;
+    }
+    antMessage.loading({ content: "Đang lấy vị trí...", key: "geo" });
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const { latitude, longitude } = position.coords;
+            form.setFieldsValue({
+                latitude: Number(latitude.toFixed(6)), // Limit precision
+                longitude: Number(longitude.toFixed(6))
+            });
+            antMessage.success({ content: "Đã cập nhật vị trí!", key: "geo" });
+        },
+        (error) => {
+            console.error(error);
+            antMessage.error({ content: "Không thể lấy vị trí. Hãy kiểm tra quyền truy cập.", key: "geo" });
+        }
+    );
   };
 
   const columns: TableProps<Warehouse>["columns"] = [
@@ -374,14 +398,26 @@ const WarehouseListPage: React.FC = () => {
                 </Form.Item>
               </Col>
               {/* --- CỘT GPS THEO YÊU CẦU CỦA SẾP --- */}
-              <Col span={8}>
+              <Col span={24}>
+                <Space align="end" style={{ marginBottom: 16 }}>
+                    <Button 
+                        icon={<AimOutlined />} 
+                        onClick={handleGetCurrentLocation}
+                    >
+                        Lấy vị trí hiện tại
+                    </Button>
+                    <Text type="secondary" style={{ fontSize: 12 }}>(Dùng để tự động chọn kho khi bán hàng)</Text>
+                </Space>
+              </Col>
+
+              <Col span={12}>
                 <Form.Item name="latitude" label="Vĩ độ (Latitude)">
-                  <InputNumber style={{ width: "100%" }} />
+                   <InputNumber style={{ width: "100%" }} />
                 </Form.Item>
               </Col>
-              <Col span={8}>
+              <Col span={12}>
                 <Form.Item name="longitude" label="Kinh độ (Longitude)">
-                  <InputNumber style={{ width: "100%" }} />
+                   <InputNumber style={{ width: "100%" }} />
                 </Form.Item>
               </Col>
               <Col span={8}>

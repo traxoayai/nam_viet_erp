@@ -41,3 +41,21 @@ export interface AppliedVoucher {
   discount_type: 'percent' | 'fixed';
   discount_value: number;
 }
+
+export interface PosCustomerSearchResult {
+  id: number;
+  code: string;
+  name: string;
+  phone: string;
+  type: 'CaNhan' | 'ToChuc' | 'NguoiGiamHo'; // Core trả về text, map tương ứng
+  debt_amount: number;
+  loyalty_points: number;
+  sub_label: string | null; // Quan trọng: "PH: Nguyễn Văn A" hoặc "Người LH: ..."
+}
+
+export interface WarehousePosData {
+  id: number;
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+}
