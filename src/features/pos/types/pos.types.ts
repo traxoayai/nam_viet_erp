@@ -59,3 +59,27 @@ export interface WarehousePosData {
   latitude: number | null;
   longitude: number | null;
 }
+
+export interface PosCreateOrderPayload {
+  p_customer_b2b_id: number | null;
+  p_customer_b2c_id: number | null;
+  p_order_type: 'B2B' | 'POS';
+  p_payment_method: 'cash' | 'transfer' | 'debt';
+  p_delivery_address?: string;
+  p_delivery_time?: string;
+  p_note?: string;
+  p_items: {
+    product_id: number;
+    quantity: number;
+    uom: string;
+    unit_price: number;
+    discount: number;
+    is_gift?: boolean;
+    note?: string;
+  }[];
+  p_discount_amount: number;
+  p_shipping_fee: number;
+  p_status: 'DRAFT' | 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'COMPLETED' | 'CANCELLED' | 'QUOTE' | 'DELIVERED';
+  p_delivery_method?: string;
+  p_shipping_partner_id?: number | null;
+}

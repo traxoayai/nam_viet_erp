@@ -57,5 +57,12 @@ export const posService = {
        return [];
     }
     return data as WarehousePosData[];
+  },
+
+  // 4. Tạo đơn hàng (Omnichannel V2)
+  async createOrder(payload: any): Promise<string> {
+    const { data, error } = await supabase.rpc('create_sales_order', payload);
+    if (error) throw error;
+    return data; // Trả về UUID của đơn hàng
   }
 };

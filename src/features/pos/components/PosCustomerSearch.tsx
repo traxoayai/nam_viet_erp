@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Select, Spin, Avatar, Tag, Typography, Empty } from 'antd';
 import { UserOutlined, TeamOutlined, UsergroupAddOutlined, SearchOutlined } from '@ant-design/icons';
 import { debounce } from 'lodash'; // Hoặc dùng hook useDebounce nếu có
@@ -46,7 +46,7 @@ export const PosCustomerSearch: React.FC<Props> = ({ onSelect }) => {
       filterOption={false}
       onSearch={fetchUser}
       notFoundContent={fetching ? <Spin size="small" /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tìm thấy" />}
-      onChange={(value, option: any) => {
+      onChange={(_value, option: any) => {
         // Option.item chứa dữ liệu gốc
         if (option?.item) onSelect(option.item);
       }}
