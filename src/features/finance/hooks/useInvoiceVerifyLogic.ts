@@ -53,7 +53,7 @@ export const useInvoiceVerifyLogic = () => {
     const items = form.getFieldValue("items");
     const totals = calculateTotal(items);
     form.setFieldsValue({ total_amount_post_tax: totals.final });
-    // message.info("Đã cập nhật tổng tiền"); // Tắt bớt cho đỡ phiền
+    
   };
 
   const loadInvoiceFromDB = async (invoiceId: number) => {
@@ -73,7 +73,10 @@ export const useInvoiceVerifyLogic = () => {
              items: (record.items_json || []).map((item: any, idx: number) => ({
                 ...item,
                 key: idx,
-                expiry_date: item.expiry_date ? dayjs(item.expiry_date) : null
+                expiry_date: item.expiry_date ? dayjs(item.expiry_date) : null,
+                // [FIX] Restore base price & qty for unit conversion logic
+                xml_unit_price: item.xml_unit_price || item.unit_price, 
+                xml_quantity: item.xml_quantity || item.quantity
              }))
         });
       }
@@ -183,6 +186,57 @@ export const useInvoiceVerifyLogic = () => {
     }
   };
 
+  const onSaveDraft = async (values: any) => {
+    setLoading(true);
+    try {
+      const totals = calculateTotal(values.items);
+      let safeSupplierId = values.supplier_id ? Number(values.supplier_id) : null;
+      if (typeof safeSupplierId === 'number' && isNaN(safeSupplierId)) safeSupplierId = null;
+
+      const xmlFileUrl = isXmlSource ? routerState?.xmlData?.fileUrl : null;
+      const xmlHeader = isXmlSource ? routerState?.xmlData?.header : {};
+
+      const payload = {
+        invoice_number: values.invoice_number || "Draft",
+        invoice_symbol: values.invoice_symbol || "",
+        invoice_date: values.invoice_date ? dayjs(values.invoice_date).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
+        supplier_id: safeSupplierId,
+        file_url: isXmlSource ? (xmlFileUrl || "") : undefined,
+        
+        supplier_name_raw: xmlHeader.supplier_name || null,
+        supplier_tax_code: xmlHeader.supplier_tax_code || null,
+        supplier_address_raw: xmlHeader.supplier_address || null,
+        parsed_data: isXmlSource ? routerState?.xmlData : null,
+        
+        total_amount_pre_tax: totals.totalPreTax,
+        tax_amount: totals.totalTax,
+        total_amount_post_tax: totals.final,
+        
+        items_json: values.items.map((item: any) => ({
+             ...item,
+             product_id: item.product_id ? Number(item.product_id) : null,
+             expiry_date: item.expiry_date ? dayjs(item.expiry_date).format("YYYY-MM-DD") : null,
+             // Explicitly save these 3 fields for Reload Logic
+             xml_quantity: item.xml_quantity,
+             xml_unit_price: item.xml_unit_price, 
+             internal_unit: item.internal_unit || null
+        })),
+        
+        status: 'draft' // FORCE STATUS
+      };
+
+      await invoiceService.saveDraft(id ? Number(id) : null, payload);
+      message.success("Đã lưu nháp hóa đơn!");
+      navigate("/finance/invoices");
+      
+    } catch (error: any) {
+        console.error(error);
+        message.error("Lỗi lưu nháp: " + error.message);
+    } finally {
+        setLoading(false);
+    }
+  };
+
   // --- INIT EFFECT ---
   useEffect(() => {
     const init = async () => {
@@ -209,7 +263,9 @@ export const useInvoiceVerifyLogic = () => {
                 name: item.name,
                 xml_unit: item.unit,
                 quantity: item.quantity,
+                xml_quantity: item.quantity, // [NEW] Base quantity for conversion calc
                 unit_price: item.unit_price,
+                xml_unit_price: item.unit_price, // [NEW] Base price for scaling
                 vat_rate: item.vat_rate,
                 // [FIX MAPPING] Ép kiểu Number để Select box nhận diện ID
                 product_id: item.internal_product_id ? Number(item.internal_product_id) : undefined, 
@@ -241,6 +297,7 @@ export const useInvoiceVerifyLogic = () => {
       navigate,
       onFinish,
       handleRecalculate,
+      onSaveDraft, // [NEW] Expose draft handler
       routerState // [FIX] Expose routerState
   };
 };

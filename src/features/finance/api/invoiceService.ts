@@ -202,6 +202,33 @@ export const invoiceService = {
     return data as boolean; // True nếu đã tồn tại
   },
 
+  // 5. Lưu Nháp (Create/Update with status='draft', Skip VAT Entry)
+  async saveDraft(id: number | null, payload: any) {
+      const draftPayload = { ...payload, status: 'draft' };
+      
+      let res;
+      if (id) {
+          // Update
+          res = await supabase
+              .from("finance_invoices")
+              .update(draftPayload)
+              .eq("id", id)
+              .select()
+              .single();
+      } else {
+          // Create
+          res = await supabase
+              .from("finance_invoices")
+              .insert([{ ...draftPayload, created_at: new Date().toISOString() }])
+              .select()
+              .single();
+      }
+
+      const { data, error } = res;
+      if (error) throw error;
+      return data;
+  },
+
   // 2. Hàm Lấy Mapping (Sửa lại để tránh lỗi null unit)
   async getMappedProduct(taxCode: string, productName: string, vendorUnit: string) {
     const { data, error } = await supabase.rpc("get_mapped_product", {

@@ -512,7 +512,7 @@ export const getAllProductsLite = async () => {
   // Lấy tối đa 5000 sản phẩm active, chỉ lấy các trường cần thiết để nhẹ payload
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, sku, barcode, wholesale_unit, retail_unit, actual_cost, items_per_carton")
+    .select("id, name, sku, barcode, wholesale_unit, retail_unit, actual_cost, items_per_carton, product_units(id, unit_name, conversion_rate, unit_type)")
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(5000); 
