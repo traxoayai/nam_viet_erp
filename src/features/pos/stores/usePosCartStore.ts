@@ -32,7 +32,7 @@ export const usePosCartStore = create<PosCartState>()(
       customer: null,
       isInvoiceRequested: false, // Mặc định không xuất
       selectedVoucher: null,
-      warehouseId: null,
+      warehouseId: 1, // Mặc định kho 1, sẽ được update ngay khi vào trang POS
 
       addToCart: (product) => {
         const { items } = get();

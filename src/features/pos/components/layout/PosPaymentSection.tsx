@@ -1,3 +1,4 @@
+// src/features/pos/components/layout/PosPaymentSection.tsx
 import { useState, useEffect } from "react";
 import { Card, Row, Typography, Divider, InputNumber } from "antd";
 import { usePosCartStore } from "../../stores/usePosCartStore";

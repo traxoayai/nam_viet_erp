@@ -1,3 +1,4 @@
+// src/features/pos/components/layout/PosCustomerCard.tsx
 import { Card, Button, Tag, Space, Typography } from "antd";
 import { UserOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import { usePosCartStore } from "../../stores/usePosCartStore";

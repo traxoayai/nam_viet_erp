@@ -1,3 +1,4 @@
+// src/features/pos/stores/usePosSearchStore.ts
 import { create } from "zustand";
 import { posService } from "../api/posService";
 import { PosProductSearchResult } from "../types/pos.types";

@@ -1,3 +1,4 @@
+// src/features/pos/components/layout/PosActionToolbar.tsx
 import { Row, Col, Button, message } from "antd";
 import { WalletOutlined, QrcodeOutlined, PrinterOutlined } from "@ant-design/icons";
 import { usePosCartStore } from "../../stores/usePosCartStore";
