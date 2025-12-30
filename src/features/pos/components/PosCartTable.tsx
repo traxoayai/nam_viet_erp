@@ -1,8 +1,9 @@
 // src/features/pos/components/PosCartTable.tsx
-import { Table, Avatar, Tag, Space, Input, Select, InputNumber, Button, Tooltip, Typography } from "antd";
+import { Table, Avatar, Tag, Space, Input, Select, InputNumber, Button, Tooltip, Typography, message } from "antd";
 import { DeleteOutlined, PrinterOutlined } from "@ant-design/icons";
 import { usePosCartStore } from "../stores/usePosCartStore";
 import { CartItem } from "../types/pos.types";
+import { printInstruction } from "@/shared/utils/printTemplates";
 
 const { Text } = Typography;
 
@@ -43,20 +44,22 @@ export const PosCartTable = () => {
             size="small"
             placeholder="Chọn hoặc nhập liều..."
             onChange={(val) => updateItemField(r.id, "dosage", val)}
-            // Tạm thời hardcode options, sau này lấy từ Master Data
             options={[
                 { value: "Sáng 1 - Tối 1", label: "Sáng 1 - Tối 1" },
                 { value: "Sáng 1 - Chiều 1 - Tối 1", label: "Sáng 1 - Chiều 1 - Tối 1" },
                 { value: "Uống khi đau/sốt", label: "Uống khi đau/sốt" }
             ]}
-            mode="tags" // Cho phép gõ chữ lạ
+            mode="tags"
           />
-          <Tooltip title="In HDSD">
+          <Tooltip title="In HDSD để bấm vào vỉ">
             <Button
               size="small"
               icon={<PrinterOutlined />}
-              style={{ width: 32, padding: 0 }}
-              onClick={() => console.log("In tem cho:", r.name)}
+              style={{ width: 32, padding: 0, color: '#1890ff', borderColor: '#1890ff' }}
+              onClick={() => {
+                  if (!t) return message.warning("Chưa nhập liều dùng!");
+                  printInstruction(r.name, t); // Calls the template function
+              }}
             />
           </Tooltip>
         </Input.Group>

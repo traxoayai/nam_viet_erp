@@ -2217,78 +2217,98 @@ $$;
 ALTER FUNCTION "public"."create_purchase_order"("p_data" "jsonb", "p_items" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric DEFAULT 0, "p_shipping_fee" numeric DEFAULT 0, "p_status" "public"."order_status" DEFAULT 'DRAFT'::"public"."order_status", "p_delivery_method" "text" DEFAULT 'internal'::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint) RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint DEFAULT NULL::bigint, "p_customer_b2c_id" bigint DEFAULT NULL::bigint, "p_order_type" "text" DEFAULT 'B2B'::"text", "p_payment_method" "text" DEFAULT 'cash'::"text", "p_delivery_address" "text" DEFAULT NULL::"text", "p_delivery_time" "text" DEFAULT NULL::"text", "p_note" "text" DEFAULT NULL::"text", "p_items" "jsonb" DEFAULT '[]'::"jsonb", "p_discount_amount" numeric DEFAULT 0, "p_shipping_fee" numeric DEFAULT 0, "p_status" "public"."order_status" DEFAULT 'DRAFT'::"public"."order_status", "p_delivery_method" "text" DEFAULT 'internal'::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_warehouse_id" bigint DEFAULT 1) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-DECLARE
-    v_order_id UUID;
-    v_code TEXT;
-    v_item JSONB;
-    v_product_record RECORD;
-    v_conversion_factor INTEGER;
-    v_total_amount NUMERIC := 0;
-BEGIN
-    -- Sinh mã đơn SO-YYMMDD-XXXX
-    v_code := 'SO-' || to_char(now(), 'YYMMDD') || '-' || lpad(floor(random() * 10000)::text, 4, '0');
-
-    -- Insert Header với đầy đủ thông tin vận chuyển
-    INSERT INTO public.orders (
-        code, customer_id, creator_id, status,
-        delivery_address, delivery_time, note,
-        discount_amount, shipping_fee,
-        delivery_method, shipping_partner_id
-    ) VALUES (
-        v_code, p_customer_id, auth.uid(), p_status,
-        p_delivery_address, p_delivery_time, p_note,
-        p_discount_amount, p_shipping_fee,
-        p_delivery_method, p_shipping_partner_id
-    ) RETURNING id INTO v_order_id;
-
-    -- Insert Items (Logic giữ nguyên)
-    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-    LOOP
-        SELECT items_per_carton, wholesale_unit 
-        INTO v_product_record
-        FROM public.products WHERE id = (v_item->>'product_id')::BIGINT;
-
-        IF (v_item->>'uom') = v_product_record.wholesale_unit THEN
-            v_conversion_factor := COALESCE(v_product_record.items_per_carton, 1);
+    DECLARE
+        v_order_id UUID;
+        v_code TEXT;
+        v_item JSONB;
+        v_total_amount NUMERIC := 0;
+        v_product_record RECORD;
+        v_conversion_factor INTEGER;
+        v_remittance_status TEXT := 'pending'; 
+        v_paid_amount NUMERIC := 0;
+        v_final_amount NUMERIC := 0;
+        v_payment_status TEXT := 'unpaid';
+    BEGIN
+        -- A. Sinh Mã
+        IF p_order_type = 'POS' THEN
+            v_code := 'POS-' || to_char(now(), 'YYMMDD') || '-' || lpad(floor(random() * 10000)::text, 4, '0');
         ELSE
-            v_conversion_factor := 1;
+            v_code := 'SO-' || to_char(now(), 'YYMMDD') || '-' || lpad(floor(random() * 10000)::text, 4, '0');
         END IF;
 
-        INSERT INTO public.order_items (
-            order_id, product_id, quantity, uom, conversion_factor,
-            unit_price, discount, is_gift, note
+        -- B. Tính Tiền
+        FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+        LOOP
+            v_total_amount := v_total_amount + (
+                ((v_item->>'quantity')::INTEGER * (v_item->>'unit_price')::NUMERIC) - COALESCE((v_item->>'discount')::NUMERIC, 0)
+            );
+        END LOOP;
+
+        v_final_amount := v_total_amount - p_discount_amount + p_shipping_fee;
+        if v_final_amount < 0 then v_final_amount := 0; end if;
+
+        -- C. Logic Thanh toán
+        IF p_payment_method = 'debt' THEN
+            v_paid_amount := 0;
+            v_payment_status := 'unpaid';
+            v_remittance_status := 'skipped';
+        ELSE
+            v_paid_amount := v_final_amount; 
+            v_payment_status := 'paid';
+            v_remittance_status := 'pending';
+        END IF;
+
+        -- D. Insert Order (Kèm warehouse_id)
+        INSERT INTO public.orders (
+            code, creator_id, status, customer_id, customer_b2c_id, order_type,
+            delivery_address, delivery_time, note, delivery_method, shipping_partner_id,
+            total_amount, discount_amount, shipping_fee, final_amount,
+            paid_amount, payment_status, remittance_status,
+            warehouse_id -- [INSERT NEW COLUMN]
         ) VALUES (
-            v_order_id,
-            (v_item->>'product_id')::BIGINT,
-            (v_item->>'quantity')::INTEGER,
-            v_item->>'uom',
-            v_conversion_factor,
-            (v_item->>'unit_price')::NUMERIC,
-            COALESCE((v_item->>'discount')::NUMERIC, 0),
-            COALESCE((v_item->>'is_gift')::BOOLEAN, false),
-            v_item->>'note'
-        );
+            v_code, auth.uid(), p_status, p_customer_b2b_id, p_customer_b2c_id, p_order_type,
+            p_delivery_address, p_delivery_time, p_note, p_delivery_method, p_shipping_partner_id,
+            v_total_amount, p_discount_amount, p_shipping_fee, v_final_amount,
+            v_paid_amount, v_payment_status, v_remittance_status,
+            p_warehouse_id -- [INSERT NEW VALUE]
+        ) RETURNING id INTO v_order_id;
 
-        v_total_amount := v_total_amount + (
-            ((v_item->>'quantity')::INTEGER * (v_item->>'unit_price')::NUMERIC) - COALESCE((v_item->>'discount')::NUMERIC, 0)
-        );
-    END LOOP;
+        -- E. Insert Items (Giữ nguyên)
+        FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+        LOOP
+            SELECT items_per_carton, wholesale_unit 
+            INTO v_product_record
+            FROM public.products WHERE id = (v_item->>'product_id')::BIGINT;
 
-    -- Update Tổng tiền
-    UPDATE public.orders 
-    SET total_amount = v_total_amount,
-        final_amount = v_total_amount - p_discount_amount + p_shipping_fee
-    WHERE id = v_order_id;
+            IF (v_item->>'uom') = v_product_record.wholesale_unit THEN
+                v_conversion_factor := COALESCE(v_product_record.items_per_carton, 1);
+            ELSE
+                v_conversion_factor := 1;
+            END IF;
 
-    RETURN v_order_id;
-END;
-$$;
+            INSERT INTO public.order_items (
+                order_id, product_id, quantity, uom, conversion_factor,
+                unit_price, discount, is_gift, note
+            ) VALUES (
+                v_order_id, (v_item->>'product_id')::BIGINT, (v_item->>'quantity')::INTEGER,
+                v_item->>'uom', v_conversion_factor, (v_item->>'unit_price')::NUMERIC,
+                COALESCE((v_item->>'discount')::NUMERIC, 0), COALESCE((v_item->>'is_gift')::BOOLEAN, false), v_item->>'note'
+            );
+        END LOOP;
+
+        RETURN v_order_id;
+    END;
+    $$;
 
 
-ALTER FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint) OWNER TO "postgres";
+ALTER FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_order_type" "text", "p_payment_method" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_warehouse_id" bigint) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_order_type" "text", "p_payment_method" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_warehouse_id" bigint) IS 'Tạo đơn V2.1: Hỗ trợ POS Multi-Warehouse Deduction';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."create_service_package"("p_data" "jsonb", "p_items" "jsonb") RETURNS bigint
@@ -2858,6 +2878,28 @@ $$;
 ALTER FUNCTION "public"."get_active_shipping_partners"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_active_warehouses"() RETURNS TABLE("id" bigint, "name" "text", "latitude" numeric, "longitude" numeric)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+        SELECT 
+            id, 
+            name, 
+            latitude, 
+            longitude
+        FROM public.warehouses 
+        WHERE status = 'active'
+        ORDER BY name ASC;
+    $$;
+
+
+ALTER FUNCTION "public"."get_active_warehouses"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."get_active_warehouses"() IS 'Lấy danh sách kho active kèm tọa độ GPS (cho POS auto-select)';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."get_applicable_vouchers"("p_customer_id" bigint, "p_order_total" numeric) RETURNS TABLE("id" "uuid", "code" "text", "description" "text", "discount_value" numeric, "discount_type" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -3017,83 +3059,6 @@ $$;
 
 
 ALTER FUNCTION "public"."get_available_vouchers"("p_customer_id" bigint, "p_order_total" numeric) OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."get_b2b_orders_view"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_search" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-    DECLARE
-        v_uid uuid := auth.uid(); -- Lấy ID người đang đăng nhập
-        v_offset int := (p_page - 1) * p_page_size;
-        v_result JSONB;
-        v_stats JSONB;
-    BEGIN
-        -- 1. Tính toán Thống kê nhanh (StatHeader)
-        -- Logic: Chỉ tính đơn của user đó (creator) hoặc khách do user đó quản lý (sales_staff)
-        SELECT jsonb_build_object(
-            'sales_this_month', COALESCE(SUM(o.final_amount) FILTER (WHERE o.created_at >= date_trunc('month', now())), 0),
-            'draft_count', COUNT(*) FILTER (WHERE o.status IN ('DRAFT', 'QUOTE')),
-            'pending_payment', COUNT(*) FILTER (WHERE o.paid_amount < o.final_amount AND o.status NOT IN ('DRAFT', 'CANCELLED'))
-        ) INTO v_stats
-        FROM public.orders o
-        JOIN public.customers_b2b c ON o.customer_id = c.id
-        WHERE (o.creator_id = v_uid OR c.sales_staff_id = v_uid);
-
-        -- 2. Truy vấn danh sách chính và Phân trang
-        WITH filtered_orders AS (
-            SELECT 
-                o.id,
-                o.code,
-                c.name as customer_name,
-                o.status,
-                -- Logic tính trạng thái thanh toán (Virtual Column)
-                CASE 
-                    WHEN o.paid_amount >= o.final_amount THEN 'paid'
-                    WHEN o.paid_amount > 0 THEN 'partial'
-                    ELSE 'unpaid'
-                END as payment_status,
-                o.final_amount,
-                o.paid_amount,
-                o.created_at
-            FROM public.orders o
-            JOIN public.customers_b2b c ON o.customer_id = c.id
-            WHERE 
-                (o.creator_id = v_uid OR c.sales_staff_id = v_uid) -- RLS Logic mềm
-                AND (p_status IS NULL OR o.status = p_status)
-                AND (p_date_from IS NULL OR o.created_at >= p_date_from)
-                AND (p_date_to IS NULL OR o.created_at <= p_date_to)
-                AND (
-                    p_search IS NULL OR 
-                    o.code ILIKE '%' || p_search || '%' OR 
-                    c.name ILIKE '%' || p_search || '%'
-                )
-        ),
-        paginated_orders AS (
-            SELECT * FROM filtered_orders
-            ORDER BY created_at DESC
-            LIMIT p_page_size OFFSET v_offset
-        )
-        -- Gom dữ liệu thành JSON
-        SELECT 
-            jsonb_build_object(
-                'data', COALESCE(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb),
-                'total', (SELECT COUNT(*) FROM filtered_orders),
-                'stats', v_stats
-            ) INTO v_result
-        FROM paginated_orders t;
-
-        -- Trả về kết quả (Xử lý trường hợp không có data thì trả về mảng rỗng thay vì NULL)
-        RETURN COALESCE(v_result, jsonb_build_object('data', '[]'::jsonb, 'total', 0, 'stats', v_stats));
-    END;
-    $$;
-
-
-ALTER FUNCTION "public"."get_b2b_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."get_b2b_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) IS 'API trả về danh sách đơn hàng B2B cho Admin/Sale, bao gồm cả thống kê nhanh.';
-
 
 
 CREATE OR REPLACE FUNCTION "public"."get_customer_b2b_details"("p_id" bigint) RETURNS "jsonb"
@@ -4067,6 +4032,99 @@ COMMENT ON FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_p
 
 
 
+CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_search" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_order_type" "text" DEFAULT NULL::"text", "p_remittance_status" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_offset INT := (p_page - 1) * p_page_size;
+        v_result JSONB;
+        v_stats JSONB;
+    BEGIN
+        -- A. TÍNH THỐNG KÊ (REAL-TIME STATS)
+        -- Chỉ tính toán dựa trên các bộ lọc hiện tại để hiển thị Dashboard mini
+        SELECT jsonb_build_object(
+            -- Tổng doanh số (đã chốt) trong range lọc
+            'total_sales', COALESCE(SUM(final_amount) FILTER (WHERE status NOT IN ('DRAFT', 'CANCELLED')), 0),
+            
+            -- Số đơn đang giữ tiền mặt (chờ nộp)
+            'count_pending_remittance', COUNT(*) FILTER (WHERE remittance_status = 'pending' AND payment_method = 'cash'),
+            
+            -- Tổng tiền mặt đang giữ (chờ nộp)
+            'total_cash_pending', COALESCE(SUM(paid_amount) FILTER (WHERE remittance_status = 'pending' AND payment_method = 'cash'), 0)
+        ) INTO v_stats
+        FROM public.orders o
+        WHERE 
+            (p_order_type IS NULL OR o.order_type = p_order_type)
+            AND (p_date_from IS NULL OR o.created_at >= p_date_from)
+            AND (p_date_to IS NULL OR o.created_at <= p_date_to);
+
+        -- B. TRUY VẤN DỮ LIỆU (MAIN QUERY)
+        WITH filtered_data AS (
+            SELECT 
+                o.id,
+                o.code,
+                o.created_at,
+                o.status,
+                o.order_type,
+                o.final_amount,
+                o.paid_amount,
+                o.payment_method,     -- 'cash', 'transfer', 'debt'
+                o.remittance_status,  -- 'pending', 'confirming', 'deposited', 'skipped'
+                
+                -- LOGIC TÊN KHÁCH HÀNG THÔNG MINH
+                -- 1. Nếu có customer_id (B2B) -> Lấy tên Cty
+                -- 2. Nếu có customer_b2c_id (POS) -> Lấy tên Khách lẻ
+                -- 3. Fallback -> 'Khách lẻ'
+                COALESCE(cb.name, cc.name, 'Khách lẻ') as customer_name,
+                COALESCE(cb.phone, cc.phone) as customer_phone,
+                
+                -- Thông tin người tạo đơn (Sales)
+                COALESCE(u.full_name, u.email) as creator_name
+                
+            FROM public.orders o
+            LEFT JOIN public.customers_b2b cb ON o.customer_id = cb.id
+            LEFT JOIN public.customers cc ON o.customer_b2c_id = cc.id
+            LEFT JOIN public.users u ON o.creator_id = u.id
+            WHERE 
+                (p_order_type IS NULL OR o.order_type = p_order_type)
+                AND (p_status IS NULL OR o.status = p_status)
+                AND (p_remittance_status IS NULL OR o.remittance_status = p_remittance_status)
+                AND (p_date_from IS NULL OR o.created_at >= p_date_from)
+                AND (p_date_to IS NULL OR o.created_at <= p_date_to)
+                AND (
+                    p_search IS NULL OR 
+                    o.code ILIKE '%' || p_search || '%' OR
+                    cb.name ILIKE '%' || p_search || '%' OR
+                    cc.name ILIKE '%' || p_search || '%' OR
+                    cc.phone ILIKE '%' || p_search || '%'
+                )
+        ),
+        paginated AS (
+            SELECT * FROM filtered_data
+            ORDER BY created_at DESC
+            LIMIT p_page_size OFFSET v_offset
+        )
+        SELECT jsonb_build_object(
+            'data', COALESCE(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb),
+            'total', (SELECT COUNT(*) FROM filtered_data),
+            'stats', v_stats
+        ) INTO v_result
+        FROM paginated t;
+
+        -- Trả về kết quả an toàn
+        RETURN COALESCE(v_result, jsonb_build_object('data', '[]'::jsonb, 'total', 0, 'stats', v_stats));
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text") IS 'RPC Vạn năng: Lấy đơn B2B/POS, hỗ trợ lọc theo trạng thái nộp tiền (remittance)';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."users" (
     "id" "uuid" NOT NULL,
     "email" "text",
@@ -4888,40 +4946,46 @@ ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
 CREATE OR REPLACE FUNCTION "public"."handle_sales_inventory_deduction"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-DECLARE
-    v_item RECORD;
-    v_current_stock INTEGER;
-    v_warehouse_id BIGINT := 1; -- Tạm thời Hardcode kho Tổng B2B (ID=1)
-BEGIN
-    -- Chỉ chạy khi trạng thái chuyển sang 'CONFIRMED' (Chốt đơn)
-    -- Và trạng thái cũ KHÔNG PHẢI là CONFIRMED/PACKED/SHIPPING... (tránh trừ 2 lần)
-    IF NEW.status = 'CONFIRMED' AND (OLD.status IS NULL OR OLD.status NOT IN ('CONFIRMED', 'PACKED', 'SHIPPING', 'DELIVERED')) THEN
+    DECLARE
+        v_item RECORD;
+        v_current_stock INTEGER;
+        v_warehouse_id BIGINT;
+    BEGIN
+        -- [FIX]: Lấy ID kho từ đơn hàng (Nếu null fallback về 1 - Kho tổng)
+        v_warehouse_id := COALESCE(NEW.warehouse_id, 1);
+
+        -- Logic kích hoạt: Status là CONFIRMED (B2B) hoặc DELIVERED (POS)
+        IF (NEW.status = 'CONFIRMED' OR NEW.status = 'DELIVERED') 
+           AND (OLD.status IS NULL OR OLD.status NOT IN ('CONFIRMED', 'PACKED', 'SHIPPING', 'DELIVERED')) THEN
+            
+            FOR v_item IN SELECT * FROM public.order_items WHERE order_id = NEW.id LOOP
+                -- 1. Kiểm tra tồn kho tại ĐÚNG KHO ĐÃ CHỌN
+                SELECT stock_quantity INTO v_current_stock
+                FROM public.product_inventory
+                WHERE product_id = v_item.product_id AND warehouse_id = v_warehouse_id;
+
+                IF v_current_stock IS NULL OR v_current_stock < v_item.base_quantity THEN
+                    RAISE EXCEPTION 'Sản phẩm ID % không đủ tồn kho tại Kho #% (Tồn: %, Cần: %)', 
+                        v_item.product_id, v_warehouse_id, COALESCE(v_current_stock,0), v_item.base_quantity;
+                END IF;
+
+                -- 2. Trừ kho tại ĐÚNG KHO ĐÃ CHỌN
+                UPDATE public.product_inventory
+                SET stock_quantity = stock_quantity - v_item.base_quantity
+                WHERE product_id = v_item.product_id AND warehouse_id = v_warehouse_id;
+            END LOOP;
+        END IF;
         
-        FOR v_item IN SELECT * FROM public.order_items WHERE order_id = NEW.id LOOP
-            -- 1. Kiểm tra tồn kho
-            SELECT stock_quantity INTO v_current_stock
-            FROM public.product_inventory
-            WHERE product_id = v_item.product_id AND warehouse_id = v_warehouse_id;
-
-            IF v_current_stock IS NULL OR v_current_stock < v_item.base_quantity THEN
-                RAISE EXCEPTION 'Sản phẩm ID % không đủ tồn kho (Tồn: %, Cần: %)', v_item.product_id, COALESCE(v_current_stock,0), v_item.base_quantity;
-            END IF;
-
-            -- 2. Trừ kho
-            UPDATE public.product_inventory
-            SET stock_quantity = stock_quantity - v_item.base_quantity
-            WHERE product_id = v_item.product_id AND warehouse_id = v_warehouse_id;
-        END LOOP;
-    END IF;
-    
-    -- TODO: Xử lý logic cộng lại kho khi HỦY đơn (CANCELLED) - Sẽ làm ở Phase sau
-    
-    RETURN NEW;
-END;
-$$;
+        RETURN NEW;
+    END;
+    $$;
 
 
 ALTER FUNCTION "public"."handle_sales_inventory_deduction"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."handle_sales_inventory_deduction"() IS 'Fixed V2: Trừ kho cho cả B2B (Confirmed) và POS (Delivered direct)';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_updated_at"() RETURNS "trigger"
@@ -5119,6 +5183,34 @@ $$;
 
 
 ALTER FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."notify_group"("p_permission_key" "text", "p_title" "text", "p_message" "text", "p_type" "text" DEFAULT 'info'::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_user_id UUID;
+    BEGIN
+        -- Loop qua danh sách user có quyền này
+        FOR v_user_id IN 
+            SELECT DISTINCT ur.user_id
+            FROM public.user_roles ur
+            JOIN public.role_permissions rp ON ur.role_id = rp.role_id
+            WHERE rp.permission_key = p_permission_key
+        LOOP
+            -- Gọi lại hàm cơ sở
+            PERFORM public.send_notification(v_user_id, p_title, p_message, p_type);
+        END LOOP;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."notify_group"("p_permission_key" "text", "p_title" "text", "p_message" "text", "p_type" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."notify_group"("p_permission_key" "text", "p_title" "text", "p_message" "text", "p_type" "text") IS 'Gửi thông báo cho tất cả user nắm giữ quyền (permission_key) cụ thể';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") RETURNS "jsonb"
@@ -5664,6 +5756,87 @@ $$;
 ALTER FUNCTION "public"."search_customers_by_phone_b2c"("p_search_query" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."search_customers_pos"("p_keyword" "text") RETURNS TABLE("id" bigint, "code" "text", "name" "text", "phone" "text", "type" "text", "debt_amount" numeric, "loyalty_points" integer, "sub_label" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_text_part TEXT;
+        v_phone_part TEXT;
+    BEGIN
+        -- Parse Input
+        v_phone_part := regexp_replace(p_keyword, '[^0-9]', '', 'g');
+        v_text_part := trim(regexp_replace(p_keyword, '[0-9]', '', 'g'));
+        
+        IF v_phone_part = '' THEN v_phone_part := NULL; END IF;
+        IF v_text_part = '' THEN v_text_part := NULL; END IF;
+
+        IF v_phone_part IS NULL AND v_text_part IS NULL THEN RETURN; END IF;
+
+        RETURN QUERY
+        WITH matched_customers AS (
+            -- 1. Cá nhân
+            SELECT c.id, c.customer_code as code, c.name, c.phone, c.type::TEXT, c.loyalty_points,
+                   NULL::TEXT as relation_info, 1 as priority
+            FROM public.customers c
+            WHERE c.status = 'active' AND c.type = 'CaNhan'
+              AND (v_text_part IS NULL OR c.name ILIKE '%' || v_text_part || '%')
+              AND (v_phone_part IS NULL OR c.phone ILIKE '%' || v_phone_part || '%')
+
+            UNION ALL
+
+            -- 2. Tổ chức (Qua người liên hệ)
+            SELECT c.id, c.customer_code as code, c.name, c.phone, c.type::TEXT, c.loyalty_points,
+                   'LH: ' || COALESCE(c.contact_person_name, 'N/A') as relation_info, 2 as priority
+            FROM public.customers c
+            WHERE c.status = 'active' AND c.type = 'ToChuc'
+              AND (
+                  (v_text_part IS NULL OR c.name ILIKE '%' || v_text_part || '%') AND (v_phone_part IS NULL OR c.phone ILIKE '%' || v_phone_part || '%')
+                  OR
+                  (v_text_part IS NULL OR c.contact_person_name ILIKE '%' || v_text_part || '%') AND (v_phone_part IS NULL OR c.contact_person_phone ILIKE '%' || v_phone_part || '%')
+              )
+
+            UNION ALL
+
+            -- 3. Phụ huynh
+            SELECT child.id, child.customer_code as code, child.name, child.phone, child.type::TEXT, child.loyalty_points,
+                   'PH: ' || guardian.name || ' (' || guardian.phone || ')' as relation_info, 3 as priority
+            FROM public.customers child
+            JOIN public.customer_guardians cg ON child.id = cg.customer_id
+            JOIN public.customers guardian ON cg.guardian_id = guardian.id
+            WHERE child.status = 'active'
+              AND (v_text_part IS NULL OR guardian.name ILIKE '%' || v_text_part || '%')
+              AND (v_phone_part IS NULL OR guardian.phone ILIKE '%' || v_phone_part || '%')
+        )
+        SELECT 
+            mc.id, mc.code, mc.name, mc.phone, mc.type,
+            
+            -- [FIXED] Tính nợ dựa trên customer_b2c_id và payment_status
+            COALESCE((
+                SELECT SUM(o.final_amount - o.paid_amount) 
+                FROM public.orders o 
+                WHERE o.customer_b2c_id = mc.id 
+                AND o.status NOT IN ('DRAFT', 'CANCELLED', 'QUOTE')
+                AND o.payment_status != 'paid' -- Cột mới đã có
+            ), 0) AS debt_amount,
+            
+            mc.loyalty_points,
+            CASE WHEN mc.relation_info IS NOT NULL THEN mc.relation_info WHEN mc.type = 'ToChuc' THEN 'Khách Doanh Nghiệp' ELSE 'Khách Lẻ' END AS sub_label
+        FROM matched_customers mc
+        GROUP BY mc.id, mc.code, mc.name, mc.phone, mc.type, mc.loyalty_points, mc.relation_info, mc.priority
+        ORDER BY mc.priority ASC, mc.name ASC
+        LIMIT 20;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."search_customers_pos"("p_keyword" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."search_customers_pos"("p_keyword" "text") IS 'Tìm kiếm POS thông minh: Cá nhân, Tổ chức (qua người LH), Phụ huynh (customer_guardians)';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."search_items_for_sales"("p_keyword" "text", "p_warehouse_id" bigint DEFAULT 1, "p_limit" integer DEFAULT 20) RETURNS TABLE("id" bigint, "type" "text", "sku" "text", "name" "text", "image_url" "text", "uom" "text", "uom_wholesale" "text", "stock_quantity" integer, "price_retail" numeric, "price_wholesale" numeric, "items_per_carton" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -6083,6 +6256,24 @@ ALTER FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "t
 
 
 COMMENT ON FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "text", "p_manufacturer" "text", "p_status" "text", "p_limit" integer, "p_offset" integer) IS 'Tìm kiếm SP V2 (Fixed: manufacturer_name column)';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."send_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text" DEFAULT 'info'::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    BEGIN
+        INSERT INTO public.notifications (user_id, title, message, type, is_read, created_at)
+        VALUES (p_user_id, p_title, p_message, p_type, false, now());
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."send_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."send_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text") IS 'Gửi thông báo cho 1 user cụ thể';
 
 
 
@@ -8189,7 +8380,14 @@ CREATE TABLE IF NOT EXISTS "public"."orders" (
     "shipping_partner_id" bigint,
     "note" "text",
     "delivery_method" "text" DEFAULT 'internal'::"text",
-    "package_count" integer DEFAULT 1
+    "package_count" integer DEFAULT 1,
+    "order_type" "text" DEFAULT 'B2B'::"text",
+    "customer_b2c_id" bigint,
+    "payment_status" "text" DEFAULT 'unpaid'::"text",
+    "remittance_status" "text" DEFAULT 'pending'::"text",
+    "remittance_transaction_id" bigint,
+    "payment_method" "text" DEFAULT 'cash'::"text",
+    "warehouse_id" bigint
 );
 
 
@@ -9701,11 +9899,27 @@ CREATE INDEX "idx_order_items_order_id" ON "public"."order_items" USING "btree" 
 
 
 
+CREATE INDEX "idx_orders_cust_b2c" ON "public"."orders" USING "btree" ("customer_b2c_id");
+
+
+
 CREATE INDEX "idx_orders_customer" ON "public"."orders" USING "btree" ("customer_id");
 
 
 
+CREATE INDEX "idx_orders_payment_method" ON "public"."orders" USING "btree" ("payment_method");
+
+
+
+CREATE INDEX "idx_orders_remittance" ON "public"."orders" USING "btree" ("remittance_status");
+
+
+
 CREATE INDEX "idx_orders_status" ON "public"."orders" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_orders_type" ON "public"."orders" USING "btree" ("order_type");
 
 
 
@@ -9861,7 +10075,7 @@ CREATE OR REPLACE TRIGGER "on_invoice_updated" BEFORE UPDATE ON "public"."financ
 
 
 
-CREATE OR REPLACE TRIGGER "on_sales_order_confirm" AFTER UPDATE ON "public"."orders" FOR EACH ROW EXECUTE FUNCTION "public"."handle_sales_inventory_deduction"();
+CREATE OR REPLACE TRIGGER "on_sales_order_confirm" AFTER INSERT OR UPDATE ON "public"."orders" FOR EACH ROW EXECUTE FUNCTION "public"."handle_sales_inventory_deduction"();
 
 
 
@@ -10162,7 +10376,22 @@ ALTER TABLE ONLY "public"."orders"
 
 
 ALTER TABLE ONLY "public"."orders"
+    ADD CONSTRAINT "orders_customer_b2c_id_fkey" FOREIGN KEY ("customer_b2c_id") REFERENCES "public"."customers"("id");
+
+
+
+ALTER TABLE ONLY "public"."orders"
+    ADD CONSTRAINT "orders_remittance_transaction_id_fkey" FOREIGN KEY ("remittance_transaction_id") REFERENCES "public"."finance_transactions"("id");
+
+
+
+ALTER TABLE ONLY "public"."orders"
     ADD CONSTRAINT "orders_shipping_partner_id_fkey" FOREIGN KEY ("shipping_partner_id") REFERENCES "public"."shipping_partners"("id");
+
+
+
+ALTER TABLE ONLY "public"."orders"
+    ADD CONSTRAINT "orders_warehouse_id_fkey" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouses"("id");
 
 
 
@@ -11184,9 +11413,9 @@ GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_data" "jsonb", "p_item
 
 
 
-GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint) TO "anon";
-GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint) TO "service_role";
+GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_order_type" "text", "p_payment_method" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_warehouse_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_order_type" "text", "p_payment_method" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_warehouse_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_order_type" "text", "p_payment_method" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_warehouse_id" bigint) TO "service_role";
 
 
 
@@ -11310,6 +11539,12 @@ GRANT ALL ON FUNCTION "public"."get_active_shipping_partners"() TO "service_role
 
 
 
+GRANT ALL ON FUNCTION "public"."get_active_warehouses"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_active_warehouses"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_active_warehouses"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_applicable_vouchers"("p_customer_id" bigint, "p_order_total" numeric) TO "anon";
 GRANT ALL ON FUNCTION "public"."get_applicable_vouchers"("p_customer_id" bigint, "p_order_total" numeric) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_applicable_vouchers"("p_customer_id" bigint, "p_order_total" numeric) TO "service_role";
@@ -11331,12 +11566,6 @@ GRANT ALL ON FUNCTION "public"."get_assets_list"("search_query" "text", "type_fi
 GRANT ALL ON FUNCTION "public"."get_available_vouchers"("p_customer_id" bigint, "p_order_total" numeric) TO "anon";
 GRANT ALL ON FUNCTION "public"."get_available_vouchers"("p_customer_id" bigint, "p_order_total" numeric) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_available_vouchers"("p_customer_id" bigint, "p_order_total" numeric) TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_b2b_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "anon";
-GRANT ALL ON FUNCTION "public"."get_b2b_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_b2b_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "service_role";
 
 
 
@@ -11463,6 +11692,12 @@ GRANT ALL ON FUNCTION "public"."get_purchase_order_details"("p_id" bigint) TO "s
 GRANT ALL ON FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "anon";
 GRANT ALL ON FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text") TO "service_role";
 
 
 
@@ -11701,6 +11936,12 @@ GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name"
 
 
 
+GRANT ALL ON FUNCTION "public"."notify_group"("p_permission_key" "text", "p_title" "text", "p_message" "text", "p_type" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."notify_group"("p_permission_key" "text", "p_title" "text", "p_message" "text", "p_type" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."notify_group"("p_permission_key" "text", "p_title" "text", "p_message" "text", "p_type" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "service_role";
@@ -11761,6 +12002,12 @@ GRANT ALL ON FUNCTION "public"."search_customers_by_phone_b2c"("p_search_query" 
 
 
 
+GRANT ALL ON FUNCTION "public"."search_customers_pos"("p_keyword" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."search_customers_pos"("p_keyword" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_customers_pos"("p_keyword" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."search_items_for_sales"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."search_items_for_sales"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."search_items_for_sales"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) TO "service_role";
@@ -11794,6 +12041,12 @@ GRANT ALL ON FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_ware
 GRANT ALL ON FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "text", "p_manufacturer" "text", "p_status" "text", "p_limit" integer, "p_offset" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "text", "p_manufacturer" "text", "p_status" "text", "p_limit" integer, "p_offset" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "text", "p_manufacturer" "text", "p_status" "text", "p_limit" integer, "p_offset" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."send_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."send_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."send_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text") TO "service_role";
 
 
 
