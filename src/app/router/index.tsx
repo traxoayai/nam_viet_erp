@@ -52,6 +52,7 @@ import TransferDetailPage from "@/pages/inventory/transfer/TransferDetailPage";
 import CustomerSegmentsPage from "@/pages/crm/CustomerSegmentsPage";
 import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
 import PosPage from "@/pages/pos/PosPage";
+import B2COrderListPage from "@/pages/sales/B2COrderListPage";
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -92,7 +93,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "store/b2c-orders",
-            element: <PagePlaceholder title="DS đơn hàng B2C" />,
+            element: <B2COrderListPage />,
           },
           {
             path: "store/ecommerce",

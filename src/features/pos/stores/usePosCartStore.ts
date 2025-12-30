@@ -7,6 +7,7 @@ interface PosCartState {
   customer: any | null; // Sẽ chứa { id, name, debt_amount, ... }
   isInvoiceRequested: boolean; // Khách có yêu cầu xuất VAT không?
   selectedVoucher: AppliedVoucher | null;
+  warehouseId: number | null; // [NEW] Kho đang bán
 
   // Actions
   addToCart: (product: PosProductSearchResult) => void;
@@ -15,6 +16,7 @@ interface PosCartState {
   updateItemField: (id: number, field: keyof CartItem, value: any) => void;
   
   setCustomer: (cust: any) => void;
+  setWarehouseId: (id: number | null) => void; // [NEW] Wrapper
   toggleInvoiceRequest: () => void; // Đổi tên hàm VAT
   applyVoucher: (voucher: AppliedVoucher | null) => void;
   clearCart: () => void;
@@ -30,6 +32,7 @@ export const usePosCartStore = create<PosCartState>()(
       customer: null,
       isInvoiceRequested: false, // Mặc định không xuất
       selectedVoucher: null,
+      warehouseId: null,
 
       addToCart: (product) => {
         const { items } = get();
@@ -62,6 +65,8 @@ export const usePosCartStore = create<PosCartState>()(
 
       setCustomer: (cust) => set({ customer: cust, selectedVoucher: null }),
       
+      setWarehouseId: (id) => set({ warehouseId: id }),
+
       toggleInvoiceRequest: () => set((state) => ({ isInvoiceRequested: !state.isInvoiceRequested })),
       
       applyVoucher: (voucher) => set({ selectedVoucher: voucher }),

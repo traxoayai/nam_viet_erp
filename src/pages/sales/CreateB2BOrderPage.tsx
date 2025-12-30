@@ -70,6 +70,7 @@ const CreateB2BOrderPage = () => {
         p_delivery_method: deliveryMethod,
         p_shipping_partner_id:
           deliveryMethod === "internal" ? null : shippingPartnerId,
+        p_warehouse_id: 1, // [NEW] B2B tạm thời lấy kho ID = 1
         p_items: items.map((i) => ({
           product_id: i.id,
           quantity: i.quantity,

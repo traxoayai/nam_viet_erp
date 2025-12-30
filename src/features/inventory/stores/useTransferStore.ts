@@ -323,43 +323,58 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       }
   },
 
-  updateDraftItem: (itemId, batchId, quantity) => {
-     set(state => {
-         const currentList = state.shippingDraft[itemId] || [];
-         
-         // If list is empty (no batch selected yet), try to auto-pick first available logic
-         if (currentList.length === 0) {
-             const item = state.currentTransfer?.items.find(i => i.id === itemId);
-             const available = item ? (state.availableBatchesMap[item.product_id] || []) : [];
-             
-             // Sort by expiry just in case
-             // available.sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
-             
-             if (available.length > 0) {
-                 const firstBatch = available[0];
-                 // Initialize with first batch
-                 return {
-                     shippingDraft: { 
-                         ...state.shippingDraft, 
-                         [itemId]: [{ ...firstBatch, quantity_picked: quantity }] 
-                     }
-                 };
-             }
-             return {}; // Cannot pick if no batches
-         }
+  // [FIX] Smart Update: Tự động phân bổ số lượng nhập tay vào các lô (FEFO)
+  updateDraftItem: (itemId, _batchId, totalQty) => {
+      set(state => {
+          // 1. Tìm thông tin sản phẩm từ Item ID
+          const item = state.currentTransfer?.items.find(i => i.id === itemId);
+          if (!item) return {};
 
-         const newList = currentList.map(b => {
-             // If batchId is valid match OR if batchId is -1 (sentinel) and it's the first batch
-             if (b.id === batchId || (batchId === -1 && b === currentList[0])) {
-                 return { ...b, quantity_picked: quantity };
-             }
-             return b;
-         });
-         
-         return {
-             shippingDraft: { ...state.shippingDraft, [itemId]: newList }
-         };
-     });
+          // 2. Lấy danh sách lô khả dụng (Đã load từ initTransferOperation)
+          let available = state.availableBatchesMap[item.product_id] || [];
+          
+          if (available.length === 0) {
+              message.warning("Sản phẩm này không có lô tồn kho khả dụng!");
+              return {}; // Giữ nguyên state cũ
+          }
+
+          // 3. Sắp xếp lô theo hạn sử dụng (Cũ nhất dùng trước - FEFO)
+          // Clone mảng để không mutate state gốc
+          const sortedBatches = [...available].sort((a, b) => 
+              new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime()
+          );
+
+          // 4. Phân bổ số lượng (Allocation Logic)
+          let remainingNeeded = totalQty;
+          const newDraftList: any[] = [];
+
+          for (const batch of sortedBatches) {
+              if (remainingNeeded <= 0) break; // Đã lấy đủ
+
+              // Lấy tối đa có thể của lô này
+              const take = Math.min(batch.quantity, remainingNeeded);
+              
+              newDraftList.push({
+                  ...batch,
+                  quantity_picked: take
+              });
+
+              remainingNeeded -= take;
+          }
+
+          // 5. Cảnh báo nếu không đủ hàng
+          if (remainingNeeded > 0) {
+              message.warning(`Kho chỉ còn đủ ${totalQty - remainingNeeded} sản phẩm (Thiếu ${remainingNeeded})`);
+          }
+
+          // 6. Cập nhật State
+          return {
+              shippingDraft: { 
+                  ...state.shippingDraft, 
+                  [itemId]: newDraftList 
+              }
+          };
+      });
   },
 
   submitTransferShipment: async () => {

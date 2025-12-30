@@ -29,10 +29,9 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
 }
 
 const PosPage = () => {
-  const { clearCart } = usePosCartStore();
+  const { clearCart, warehouseId, setWarehouseId } = usePosCartStore();
 
   const [warehouses, setWarehouses] = useState<WarehousePosData[]>([]);
-  const [currentWarehouseId, setCurrentWarehouseId] = useState<number | null>(null);
 
   // --- LOGIC 1: AUTO SELECT WAREHOUSE ---
   useEffect(() => {
@@ -40,6 +39,9 @@ const PosPage = () => {
       // 1. Lấy danh sách kho
       const list = await posService.getActiveWarehouses();
       setWarehouses(list);
+
+      // Nếu store đã có kho rồi thì không cần auto select lại (để tránh override khi reload)
+      if (warehouseId) return;
 
       // 2. Lấy GPS hiện tại
       if (navigator.geolocation) {
@@ -62,32 +64,27 @@ const PosPage = () => {
              }
           });
 
-          // 4. Tự động chọn nếu gần (< 0.5km) và chưa chọn kho nào
+          // 4. Tự động chọn nếu gần (< 0.5km) 
           if (nearestId && minDistance < 0.5) {
-             setCurrentWarehouseId((prev) => {
-                 if (!prev) {
-                     notification.success({
-                         message: 'Tự động chọn kho',
-                         description: `Đã chọn kho: ${nearestName} (Cách bạn ${Math.round(minDistance * 1000)}m)`
-                     });
-                     return nearestId;
-                 }
-                 return prev;
+             notification.success({
+                 message: 'Tự động chọn kho',
+                 description: `Đã chọn kho: ${nearestName} (Cách bạn ${Math.round(minDistance * 1000)}m)`
              });
+             setWarehouseId(nearestId);
           } else {
              // Fallback: Chọn kho đầu tiên nếu không tìm thấy GPS
-             setCurrentWarehouseId((prev) => prev || list[0]?.id);
+             setWarehouseId(list[0]?.id || null);
           }
         }, (error) => {
            console.warn("GPS Error:", error);
-           setCurrentWarehouseId((prev) => prev || list[0]?.id);
+           setWarehouseId(list[0]?.id || null);
         });
       } else {
-         setCurrentWarehouseId((prev) => prev || list[0]?.id);
+         setWarehouseId(list[0]?.id || null);
       }
     };
     initWarehouse();
-  }, []);
+  }, []); // Run once
 
   // --- LOGIC 2: XỬ LÝ ĐỔI KHO ---
   const handleChangeWarehouse = (newId: number) => {
@@ -96,7 +93,7 @@ const PosPage = () => {
         content: 'Việc đổi kho sẽ làm mới giỏ hàng hiện tại. Bạn chắc chắn chứ?',
         onOk: () => {
             clearCart();
-            setCurrentWarehouseId(newId);
+            setWarehouseId(newId);
         }
      });
   };
@@ -107,7 +104,7 @@ const PosPage = () => {
           <Space>
              <Title level={4} style={{ margin: 0, color: '#ae6a21ff' }}>NAM VIỆT POS</Title>
              <Select 
-                value={currentWarehouseId}
+                value={warehouseId}
                 onChange={handleChangeWarehouse}
                 style={{ width: 200 }}
                 options={warehouses.map(w => ({ label: w.name, value: w.id }))}

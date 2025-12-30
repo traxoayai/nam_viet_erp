@@ -61,4 +61,43 @@ export const salesService = {
     if (error) throw error;
     return data; // Trả về UUID đơn hàng
   },
+
+  // 6. [NEW] Lấy danh sách đơn hàng (Unified)
+  async getOrders(params: {
+    page: number;
+    pageSize: number;
+    orderType?: 'B2B' | 'POS'; // Lọc loại đơn
+    search?: string;
+    status?: string;
+    remittanceStatus?: string; // 'pending' để lọc đơn chưa nộp tiền
+    dateFrom?: string; // ISO String
+    dateTo?: string;   // ISO String
+  }) {
+    const { data, error } = await supabase.rpc('get_sales_orders_view', {
+      p_page: params.page,
+      p_page_size: params.pageSize,
+      p_order_type: params.orderType || null,
+      p_search: params.search || null,
+      p_status: params.status || null,
+      p_remittance_status: params.remittanceStatus || null,
+      p_date_from: params.dateFrom || null,
+      p_date_to: params.dateTo || null
+    });
+
+    if (error) {
+      console.error("Get Orders Error:", error);
+      return { data: [], total: 0, stats: {} };
+    }
+    
+    // Core trả về JSONB { data, total, stats }
+    return data as {
+        data: any[];
+        total: number;
+        stats: {
+            total_sales: number;
+            count_pending_remittance: number;
+            total_cash_pending: number;
+        }
+    };
+  }
 };

@@ -82,4 +82,5 @@ export interface PosCreateOrderPayload {
   p_status: 'DRAFT' | 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'COMPLETED' | 'CANCELLED' | 'QUOTE' | 'DELIVERED';
   p_delivery_method?: string;
   p_shipping_partner_id?: number | null;
+  p_warehouse_id: number; // [NEW] Trường bắt buộc mới
 }

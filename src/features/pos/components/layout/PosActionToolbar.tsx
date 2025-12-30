@@ -5,11 +5,16 @@ import { posService } from "../../api/posService";
 import { PosCreateOrderPayload } from "../../types/pos.types";
 
 export const PosActionToolbar = () => {
-  const { items, customer, getTotals, clearCart } = usePosCartStore();
+  const { items, customer, getTotals, clearCart, warehouseId } = usePosCartStore();
 
   const handleCheckout = async (method: 'cash' | 'transfer' | 'debt') => {
      if (items.length === 0) return message.warning("Giỏ hàng trống!");
      
+     // 2. Kiểm tra xem đã chọn kho chưa (đề phòng)
+     if (!warehouseId) {
+         return message.error("Chưa chọn kho xuất hàng!");
+     }
+
      // Chuẩn bị payload theo chuẩn Core mới
      const totals = getTotals();
      const payload: PosCreateOrderPayload = {
@@ -26,7 +31,8 @@ export const PosActionToolbar = () => {
         })),
         p_shipping_fee: 0,
         p_discount_amount: totals.discountVal,
-        p_status: 'DELIVERED' // POS xong luôn
+        p_status: 'DELIVERED', // POS xong luôn
+        p_warehouse_id: warehouseId, // [NEW] Gửi ID kho xuống để trừ đúng kho
      };
 
      try {

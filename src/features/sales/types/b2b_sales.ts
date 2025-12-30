@@ -1,4 +1,4 @@
-// src/types/b2b_sales.ts
+// src/features/sales/types/b2b_sales.ts
 
 // 1. IMPORT TỪ MODULE KHÁC (FIX LỖI TYPE MISMATCH)
 // Thay vì tự định nghĩa, ta import chuẩn từ shippingPartner
@@ -17,6 +17,7 @@ export interface CreateSalesOrderPayload {
   p_status: "DRAFT" | "QUOTE" | "CONFIRMED";
   p_delivery_method: "internal" | "app" | "coach";
   p_shipping_partner_id?: number | null;
+  p_warehouse_id: number; // [NEW] Trường bắt buộc mới
   p_items: SalesOrderItemPayload[];
 }
 

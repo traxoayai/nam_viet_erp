@@ -106,6 +106,7 @@ export function useListingLogic<T>({
       onRefresh: refresh,
     },
     filters, // <--- SENKO FIX: Đã thêm dòng này (Export biến filters)
+    setFilters, // [NEW] Expose setFilters for complex filter logic
     refresh,
   };
 }
