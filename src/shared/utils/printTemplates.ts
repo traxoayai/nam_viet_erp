@@ -49,8 +49,8 @@ export const printPosBill = (order: any) => {
     <body>
         <div class="bill-container text-xs text-black leading-relaxed">
             <div class="text-center mb-2">
-                <h1 class="font-bold text-lg uppercase">NAM VIỆT PHARMACY</h1>
-                <p class="text-[10px]">ĐC: 123 Đường Dược Phẩm, TP.HCM</p>
+                <h1 class="font-bold text-lg uppercase">N.T ĐỊNH HIỀN</h1>
+                <p class="text-[10px]">Hotline: 0866.83.13.83 - Web: NhaThuocDinhHien.com</p>
             </div>
             <div class="dashed-line"></div>
             <div class="flex justify-between text-[10px]">

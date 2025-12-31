@@ -38,12 +38,13 @@ import dayjs from "dayjs";
 import { useState, useEffect } from "react";
 
 // Import Store & Components
-import DebounceCustomerSelect from "@/shared/ui/common/DebounceCustomerSelect";
+import UniversalCustomerSelect from "@/shared/ui/common/UniversalCustomerSelect";
 import { useProductStore } from "@/features/product/stores/productStore";
 import {
   usePromotionStore,
   Promotion,
 } from "@/features/marketing/stores/usePromotionStore";
+import { promotionService } from "@/features/marketing/api/promotionService";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -120,27 +121,56 @@ const DiscountCodeManagement = () => {
     try {
       const values = await form.validateFields();
 
-      const payload = {
-        code: values.code,
-        name: values.campaignName,
-        description: values.description,
-        type: values.type,
-        discount_type: values.discount_type,
-        discount_value: values.value,
-        max_discount_value:
-          values.discount_type === "percent" ? values.max_discount_value : null,
-        min_order_value: values.minPurchase || 0,
-        total_usage_limit: values.maxUsage,
-        customer_ids: values.type === "personal" ? values.customer_ids : null,
-        apply_to_scope: values.apply_to_scope,
-        apply_to_ids: values.apply_to_ids ? [values.apply_to_ids] : [],
-        valid_from: values.validDates[0].toISOString(),
-        valid_to: values.validDates[1].toISOString(),
-        status: values.status,
-      };
+      // 1. Xử lý logic Voucher Tặng Riêng (Personal)
+      if (values.type === 'personal' && values.selected_customers) {
+            const batchData = values.selected_customers.map((c: any, index: number) => ({
+                 code: values.selected_customers.length > 1 ? `${values.code}-${index + 1}` : values.code,
+                 name: values.campaignName,
+                 description: values.description,
+                 type: values.type,
+                 discount_type: values.discount_type,
+                 discount_value: values.value,
+                 max_discount_value: values.discount_type === "percent" ? values.max_discount_value : null,
+                 min_order_value: values.minPurchase || 0,
+                 total_usage_limit: values.maxUsage,
+                 apply_to_scope: values.apply_to_scope,
+                 apply_to_ids: values.apply_to_ids ? [values.apply_to_ids] : [],
+                 valid_from: values.validDates[0].toISOString(),
+                 valid_to: values.validDates[1].toISOString(),
+                 status: values.status,
+                 
+                 customer_id: c.value, 
+                 customer_type: c.item?.type || values.customer_type || 'B2C', 
+            }));
+            
+            await promotionService.createBatchPromotions(batchData);
+            setIsModalVisible(false);
+            fetchPromotions(); 
+      } else {
+            // 2. Xử lý logic Voucher Công Khai (Public)
+            const payload = {
+                code: values.code,
+                name: values.campaignName,
+                description: values.description,
+                type: values.type,
+                discount_type: values.discount_type,
+                discount_value: values.value,
+                max_discount_value: values.discount_type === "percent" ? values.max_discount_value : null,
+                min_order_value: values.minPurchase || 0,
+                total_usage_limit: values.maxUsage,
+                customer_ids: null, 
+                apply_to_scope: values.apply_to_scope,
+                apply_to_ids: values.apply_to_ids ? [values.apply_to_ids] : [],
+                valid_from: values.validDates[0].toISOString(),
+                valid_to: values.validDates[1].toISOString(),
+                status: values.status,
 
-      const success = await createPromotion(payload);
-      if (success) setIsModalVisible(false);
+                customer_type: values.customer_type, 
+            };
+            
+            const success = await createPromotion(payload);
+            if (success) setIsModalVisible(false);
+      }
     } catch (info) {
       console.log("Validate Failed:", info);
     }
@@ -466,6 +496,19 @@ const DiscountCodeManagement = () => {
                 children: (
                   <>
                     <Form.Item
+                        name="customer_type"
+                        label="Hệ thống áp dụng"
+                        rules={[{ required: true, message: "Vui lòng chọn hệ thống áp dụng" }]}
+                        initialValue="B2C"
+                        help="Chọn 'Khách lẻ' để hiện trên POS, 'Đại lý' để hiện trên App đặt hàng B2B."
+                    >
+                        <Radio.Group buttonStyle="solid">
+                            <Radio.Button value="B2C">Khách lẻ (POS)</Radio.Button>
+                            <Radio.Button value="B2B">Đại lý / Nhà thuốc (B2B)</Radio.Button>
+                        </Radio.Group>
+                    </Form.Item>
+
+                    <Form.Item
                       name="type"
                       label="Đối tượng khách hàng"
                       rules={[{ required: true }]}
@@ -482,17 +525,17 @@ const DiscountCodeManagement = () => {
 
                     {promoType === "personal" && (
                       <Form.Item
-                        name="customer_ids"
-                        label="Chọn Khách hàng (Có thể chọn nhiều)"
+                        name="selected_customers" // Đổi tên field cho rõ nghĩa
+                        label="Chọn Khách hàng (B2B & B2C)"
                         rules={[
                           {
                             required: true,
                             message: "Vui lòng chọn ít nhất 1 khách hàng",
                           },
                         ]}
-                        help="Hệ thống sẽ tự động tạo mã riêng cho từng khách hàng."
+                        help="Hệ thống sẽ tìm kiếm cả Khách lẻ và Đại lý. Tự động tạo mã riêng cho từng người."
                       >
-                        <DebounceCustomerSelect />
+                        <UniversalCustomerSelect />
                       </Form.Item>
                     )}
 

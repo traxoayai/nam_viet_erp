@@ -1,3 +1,4 @@
+// src/features/pos/api/posService.ts
 import { supabase } from "@/shared/lib/supabaseClient";
 import { PosProductSearchResult, PosCustomerSearchResult, WarehousePosData } from "../types/pos.types";
 

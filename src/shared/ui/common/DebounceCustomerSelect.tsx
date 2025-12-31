@@ -1,4 +1,4 @@
-// src/components/common/DebounceCustomerSelect.tsx
+// src/shared/ui/common/DebounceCustomerSelect.tsx
 import { UserOutlined } from "@ant-design/icons";
 import { Select, Spin, Avatar, Typography, Empty } from "antd";
 import React, { useEffect, useState } from "react";

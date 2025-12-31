@@ -66,3 +66,108 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* --- POS VOUCHER ANIMATIONS --- */
+@keyframes neon-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(114, 46, 209, 0.4);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(114, 46, 209, 0);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(114, 46, 209, 0);
+    transform: scale(1);
+  }
+}
+
+.voucher-btn-glow {
+  animation: neon-pulse 2s infinite;
+  background-color: #f9f0ff !important; /* Tím nhạt nền */
+  border-color: #722ed1 !important;      /* Viền tím đậm */
+  color: #722ed1 !important;
+  font-weight: 600 !important;
+  transition: all 0.3s;
+}
+
+.voucher-btn-glow:hover {
+  background-color: #efdbff !important;
+}
+
+/* Style cho Badge số lượng */
+.voucher-badge .ant-badge-count {
+  background-color: #722ed1; 
+  box-shadow: 0 0 0 1px #ffffff;
+}
+
+/* --- POS VOUCHER ANIMATIONS --- */
+@keyframes neon-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(114, 46, 209, 0.4);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(114, 46, 209, 0);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(114, 46, 209, 0);
+    transform: scale(1);
+  }
+}
+
+.voucher-btn-glow {
+  animation: neon-pulse 2s infinite;
+  background-color: #f9f0ff !important; /* Tím nhạt nền */
+  border-color: #722ed1 !important;      /* Viền tím đậm */
+  color: #722ed1 !important;
+  font-weight: 600 !important;
+  transition: all 0.3s;
+}
+
+.voucher-btn-glow:hover {
+  background-color: #efdbff !important;
+}
+
+/* Style cho Badge số lượng */
+.voucher-badge .ant-badge-count {
+  background-color: #722ed1; 
+  box-shadow: 0 0 0 1px #ffffff;
+}
+
+/* --- POS VOUCHER ANIMATIONS --- */
+@keyframes neon-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(114, 46, 209, 0.4);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(114, 46, 209, 0);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(114, 46, 209, 0);
+    transform: scale(1);
+  }
+}
+
+.voucher-btn-glow {
+  animation: neon-pulse 2s infinite;
+  background-color: #f9f0ff !important; /* Tím nhạt nền */
+  border-color: #722ed1 !important;      /* Viền tím đậm */
+  color: #722ed1 !important;
+  font-weight: 600 !important;
+  transition: all 0.3s;
+}
+
+.voucher-btn-glow:hover {
+  background-color: #efdbff !important;
+}
+
+/* Style cho Badge số lượng */
+.voucher-badge .ant-badge-count {
+  background-color: #722ed1; 
+  box-shadow: 0 0 0 1px #ffffff;
+}

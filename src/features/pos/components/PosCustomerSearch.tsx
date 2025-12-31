@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Select, Spin, Avatar, Tag, Typography, Empty } from 'antd';
-import { UserOutlined, TeamOutlined, UsergroupAddOutlined, SearchOutlined } from '@ant-design/icons';
-import { debounce } from 'lodash'; // Hoặc dùng hook useDebounce nếu có
+import { Select, Spin, Avatar, Tag, Typography, Button } from 'antd';
+import { UserOutlined, TeamOutlined, UsergroupAddOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
+import { debounce } from 'lodash'; 
 import { posService } from '../api/posService';
 import { PosCustomerSearchResult } from '../types/pos.types';
 
@@ -9,9 +9,10 @@ const { Text } = Typography;
 
 interface Props {
   onSelect: (customer: PosCustomerSearchResult) => void;
+  onAddNew?: () => void; // [NEW PROP]
 }
 
-export const PosCustomerSearch: React.FC<Props> = ({ onSelect }) => {
+export const PosCustomerSearch: React.FC<Props> = ({ onSelect, onAddNew }) => {
   const [data, setData] = useState<PosCustomerSearchResult[]>([]);
   const [fetching, setFetching] = useState(false);
 
@@ -45,9 +46,26 @@ export const PosCustomerSearch: React.FC<Props> = ({ onSelect }) => {
       style={{ width: '100%' }}
       filterOption={false}
       onSearch={fetchUser}
-      notFoundContent={fetching ? <Spin size="small" /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tìm thấy" />}
+      notFoundContent={
+        fetching ? <Spin size="small" /> : (
+            <div style={{ textAlign: 'center', padding: 8 }}>
+                <Typography.Text type="secondary">Không tìm thấy khách hàng?</Typography.Text>
+                <br/>
+                {onAddNew && (
+                    <Button 
+                        type="primary" 
+                        size="small" 
+                        icon={<PlusOutlined />} 
+                        style={{ marginTop: 8 }}
+                        onClick={onAddNew}
+                    >
+                        Thêm Khách Mới Ngay
+                    </Button>
+                )}
+            </div>
+        )
+      }
       onChange={(_value, option: any) => {
-        // Option.item chứa dữ liệu gốc
         if (option?.item) onSelect(option.item);
       }}
       size="large" // To cho dễ bấm

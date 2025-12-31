@@ -34,12 +34,32 @@ export interface CartTotals {
   grandTotal: number;
 }
 
-export interface AppliedVoucher {
-  id: number;
-  code: string;
-  name?: string; // Thêm tên để hiển thị
+export interface PosVoucher {
+  // --- Thông tin gốc từ DB ---
+  id: string;                 // UUID
+  code: string;               // VD: "TET2025"
+  name: string;               // VD: "Lì xì 50k"
+  description: string | null; // VD: "Áp dụng cho đơn hàng..."
+  
+  type: 'public' | 'personal' | 'point_exchange';
   discount_type: 'percent' | 'fixed';
-  discount_value: number;
+  discount_value: number;     // Giá trị giảm (VD: 10 hoặc 50000)
+  max_discount_value: number | null; // Tối đa giảm (nếu là %)
+  min_order_value: number;    // Đơn tối thiểu
+  
+  valid_from: string;         // ISO Date String
+  valid_to: string;           // ISO Date String (Dùng cái này để hiện HSD)
+  
+  apply_to_scope: 'all' | 'personal';
+
+  // --- Thông tin tính toán (Virtual) ---
+  voucher_source: 'personal' | 'campaign'; // 'personal': Trong ví, 'campaign': Gợi ý
+  is_owned: boolean;          // Đã lưu chưa?
+  days_remaining: number;     // Số ngày còn lại ( < 0 là hết hạn, < 3 là sắp hết)
+  
+  // [NEW SHOPEE FIELDS]
+  is_eligible: boolean;      // True/False
+  missing_amount: number;    // Số tiền cần mua thêm
 }
 
 export interface PosCustomerSearchResult {
