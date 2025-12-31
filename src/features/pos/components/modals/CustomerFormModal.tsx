@@ -156,7 +156,7 @@ export const CustomerFormModal: React.FC<Props> = ({ visible, onCancel, customer
                         
                         <Col span={24}>
                             <Form.Item name="address" label="Địa chỉ">
-                                <Input prefix={<HomeOutlined className="text-gray-400" />} placeholder="Số nhà, Phường/Xã..." />
+                                <Input prefix={<HomeOutlined className="text-gray-400" />} placeholder="Số nhà, Phường/Xã... Gửi quà tặng khi có dịp sinh nhật" />
                             </Form.Item>
                         </Col>
                     </Row>

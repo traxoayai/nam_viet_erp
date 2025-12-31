@@ -102,7 +102,7 @@ const PosPage = () => {
     <Layout style={{ height: "100vh", overflow: "hidden" }}>
        <Header style={{ background: "#5ab1dcff", padding: "0 16px", borderBottom: "1px solid #d9d9d9", display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 50 }}>
           <Space>
-             <Title level={4} style={{ margin: 0, color: '#ae6a21ff' }}>NAM VIỆT POS</Title>
+             <Title level={4} style={{ margin: 0, color: '#862a02ff' }}>NAM VIỆT POS</Title>
              <Select 
                 value={warehouseId}
                 onChange={handleChangeWarehouse}
@@ -123,7 +123,7 @@ const PosPage = () => {
           </Content>
 
           {/* === CỘT PHẢI: KHÁCH & THANH TOÁN (35%) === */}
-          <Sider width={600} theme="light" style={{ borderLeft: '1px solid #d9d9d9', display: 'flex', flexDirection: 'column' }}>
+          <Sider width={650} theme="light" style={{ borderLeft: '1px solid #d9d9d9', display: 'flex', flexDirection: 'column' }}>
              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: 12 }}>
                 <PosCustomerCard />
                 <PosPaymentSection />

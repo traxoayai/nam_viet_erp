@@ -61,4 +61,18 @@ export const inventoryService = {
     if (error) throw error;
     return data;
   },
+
+  // 3. Cập nhật vị trí sản phẩm (Quick Location Update)
+  async updateProductLocation(warehouseId: number, productId: number, location: { cabinet?: string; row?: string; slot?: string }) {
+    const { data, error } = await supabase.rpc("update_product_location", {
+      p_warehouse_id: warehouseId,
+      p_product_id: productId,
+      p_cabinet: location.cabinet || '',
+      p_row: location.row || '',
+      p_slot: location.slot || ''
+    });
+
+    if (error) throw error;
+    return data;
+  },
 };

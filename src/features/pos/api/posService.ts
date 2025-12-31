@@ -3,7 +3,7 @@ import { supabase } from "@/shared/lib/supabaseClient";
 import { PosProductSearchResult, PosCustomerSearchResult, WarehousePosData } from "../types/pos.types";
 
 export const posService = {
-  async searchProducts(keyword: string, warehouseId: number): Promise<PosProductSearchResult[]> {
+  async searchProducts(keyword: string, warehouseId: number = 1): Promise<PosProductSearchResult[]> {
     if (!keyword.trim()) return [];
 
     const { data, error } = await supabase.rpc("search_products_pos", {

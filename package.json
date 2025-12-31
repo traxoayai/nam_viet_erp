@@ -20,6 +20,7 @@
     "dayjs": "^1.11.19",
     "firebase": "^12.5.0",
     "handlebars": "^4.7.8",
+    "html5-qrcode": "^2.3.8",
     "jodit-react": "^5.2.38",
     "lodash": "^4.17.21",
     "lucide-react": "^0.562.0",

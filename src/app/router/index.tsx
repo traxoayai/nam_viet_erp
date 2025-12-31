@@ -53,6 +53,7 @@ import CustomerSegmentsPage from "@/pages/crm/CustomerSegmentsPage";
 import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
 import PosPage from "@/pages/pos/PosPage";
 import B2COrderListPage from "@/pages/sales/B2COrderListPage";
+import QuickLocationUpdate from "@/pages/quick/QuickLocationUpdate";
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -233,7 +234,7 @@ const routes: RouteObject[] = [
           // 7. Thao tác Nhanh
           {
             path: "quick/product-location",
-            element: <PagePlaceholder title="Cài nhanh Vị trí Sản phẩm" />,
+            element: <QuickLocationUpdate />,
           },
           {
             path: "quick/price-edit",
