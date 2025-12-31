@@ -1,11 +1,12 @@
-import  { useState, useEffect, useRef } from 'react';
-import { Layout, Input, Table, Typography, Button, message, Tag, Avatar, Select } from 'antd'; 
+import { useState, useEffect, useRef } from 'react';
+import { Layout, Input, Table, Typography, Button, message, Tag, Avatar, Select, Modal } from 'antd'; 
 import { SearchOutlined, BarcodeOutlined, ArrowLeftOutlined, EnvironmentOutlined, HomeOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { debounce } from 'lodash';
 import { posService } from '@/features/pos/api/posService';
 import { inventoryService } from '@/features/inventory/api/inventoryService';
 import { WarehousePosData } from '@/features/pos/types/pos.types';
+// import { Html5QrcodeScanner } from 'html5-qrcode'; // Tạm ẩn để tránh lỗi unused nếu chưa dùng
 
 const { Header, Content } = Layout;
 const { Text, Title } = Typography;
@@ -19,7 +20,7 @@ const LocationCell = ({ productId, warehouseId, initialVal }: any) => {
     });
     const [saving, setSaving] = useState(false);
 
-    // Update state khi props thay đổi (Quan trọng khi chuyển kho hoặc search lại)
+    // Update state khi props thay đổi
     useEffect(() => {
         setVal({ 
             c: initialVal.cabinet || '', 
@@ -29,7 +30,6 @@ const LocationCell = ({ productId, warehouseId, initialVal }: any) => {
     }, [initialVal.cabinet, initialVal.row, initialVal.slot]);
 
     const handleSave = async () => {
-        // Chỉ lưu nếu có thay đổi so với initial (hoặc luôn lưu để chắc chắn)
         if (val.c === initialVal.cabinet && val.r === initialVal.row && val.s === initialVal.slot) return;
         
         setSaving(true);
@@ -91,7 +91,9 @@ export const QuickLocationUpdate = () => {
     const [searchText, setSearchText] = useState('');
     const [products, setProducts] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
-    const [isScannerOpen, setIsScannerOpen] = useState(false);
+    
+    // [FIX ERROR]: Biến này trước đây không được dùng, giờ ta sẽ dùng nó để mở Modal
+    const [isScannerOpen, setIsScannerOpen] = useState(false);  
 
     // 1. Load danh sách kho khi vào trang
     useEffect(() => {
@@ -99,7 +101,6 @@ export const QuickLocationUpdate = () => {
             try {
                 const data = await posService.getActiveWarehouses();
                 setWarehouses(data);
-                // Nếu có kho trả về, set kho đầu tiên làm mặc định (hoặc lấy từ localStorage nếu muốn nhớ)
                 if (data.length > 0) {
                     setWarehouseId(data[0].id);
                 }
@@ -110,13 +111,11 @@ export const QuickLocationUpdate = () => {
         fetchWarehouses();
     }, []);
 
-    // 2. Logic tìm kiếm (Tự động chạy lại khi searchText hoặc warehouseId đổi)
+    // 2. Logic tìm kiếm
     const searchProducts = useRef(
         debounce(async (text: string, wId: number) => {
             setLoading(true);
             try {
-                // Nếu không có text thì không tìm (hoặc tìm gợi ý)
-                // Ở đây ta cho phép tìm rỗng để xem list (tùy logic RPC của Sếp)
                 const res = await posService.searchProducts(text, wId);
                 setProducts(res);
             } catch (err) {
@@ -168,8 +167,7 @@ export const QuickLocationUpdate = () => {
     ];
 
     const handleScan = () => {
-        setIsScannerOpen(true);
-        message.info("Tính năng camera đang được tích hợp...");
+        setIsScannerOpen(true); // Mở Modal thay vì chỉ hiện message
     };
 
     return (
@@ -181,7 +179,7 @@ export const QuickLocationUpdate = () => {
                     <Title level={5} style={{ margin: 0 }}>Cài Vị Trí</Title>
                 </div>
 
-                {/* [NEW] SELECTOR KHO */}
+                {/* SELECTOR KHO */}
                 <Select
                     value={warehouseId}
                     onChange={setWarehouseId}
@@ -217,6 +215,24 @@ export const QuickLocationUpdate = () => {
                     locale={{ emptyText: warehouseId ? "Không có dữ liệu hoặc chưa tìm kiếm" : "Vui lòng chọn kho" }}
                 />
             </Content>
+
+            {/* [FIX LỖI TS6133] Thêm Modal sử dụng biến isScannerOpen */}
+            <Modal
+                title="Quét Mã Vạch Sản Phẩm"
+                open={isScannerOpen}
+                onCancel={() => setIsScannerOpen(false)}
+                footer={null}
+                centered
+            >
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                    <BarcodeOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />
+                    <p>Camera đang được kích hoạt...</p>
+                    <p style={{ color: '#999', fontSize: 12 }}>
+                        (Khu vực hiển thị Camera Scanner - Sẽ tích hợp html5-qrcode tại đây)
+                    </p>
+                    <Button onClick={() => setIsScannerOpen(false)}>Đóng</Button>
+                </div>
+            </Modal>
         </Layout>
     );
 };
