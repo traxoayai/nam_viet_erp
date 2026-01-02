@@ -1,4 +1,3 @@
-// src/shared/lib/database.types.ts
 export type Json =
   | string
   | number
@@ -1144,6 +1143,119 @@ export type Database = {
           },
         ]
       }
+      inventory_check_items: {
+        Row: {
+          actual_quantity: number | null
+          batch_code: string | null
+          check_id: number
+          cost_price: number | null
+          diff_quantity: number | null
+          difference_reason: string | null
+          expiry_date: string | null
+          id: number
+          location_snapshot: string | null
+          product_id: number
+          system_quantity: number | null
+        }
+        Insert: {
+          actual_quantity?: number | null
+          batch_code?: string | null
+          check_id: number
+          cost_price?: number | null
+          diff_quantity?: number | null
+          difference_reason?: string | null
+          expiry_date?: string | null
+          id?: number
+          location_snapshot?: string | null
+          product_id: number
+          system_quantity?: number | null
+        }
+        Update: {
+          actual_quantity?: number | null
+          batch_code?: string | null
+          check_id?: number
+          cost_price?: number | null
+          diff_quantity?: number | null
+          difference_reason?: string | null
+          expiry_date?: string | null
+          id?: number
+          location_snapshot?: string | null
+          product_id?: number
+          system_quantity?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_check_items_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_check_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_checks: {
+        Row: {
+          code: string
+          completed_at: string | null
+          created_at: string | null
+          created_by: string | null
+          id: number
+          note: string | null
+          status: string | null
+          total_actual_value: number | null
+          total_diff_value: number | null
+          total_system_value: number | null
+          updated_at: string | null
+          verified_by: string | null
+          warehouse_id: number
+        }
+        Insert: {
+          code: string
+          completed_at?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: number
+          note?: string | null
+          status?: string | null
+          total_actual_value?: number | null
+          total_diff_value?: number | null
+          total_system_value?: number | null
+          updated_at?: string | null
+          verified_by?: string | null
+          warehouse_id: number
+        }
+        Update: {
+          code?: string
+          completed_at?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: number
+          note?: string | null
+          status?: string | null
+          total_actual_value?: number | null
+          total_diff_value?: number | null
+          total_system_value?: number | null
+          updated_at?: string | null
+          verified_by?: string | null
+          warehouse_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_checks_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_receipt_items: {
         Row: {
           created_at: string | null
@@ -1239,6 +1351,67 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_receipts_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_transactions: {
+        Row: {
+          batch_id: number | null
+          created_at: string | null
+          created_by: string | null
+          id: number
+          note: string | null
+          product_id: number
+          quantity: number
+          ref_id: string | null
+          type: string
+          warehouse_id: number
+        }
+        Insert: {
+          batch_id?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: number
+          note?: string | null
+          product_id: number
+          quantity: number
+          ref_id?: string | null
+          type: string
+          warehouse_id: number
+        }
+        Update: {
+          batch_id?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: number
+          note?: string | null
+          product_id?: number
+          quantity?: number
+          ref_id?: string | null
+          type?: string
+          warehouse_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_transactions_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transactions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transactions_warehouse_id_fkey"
             columns: ["warehouse_id"]
             isOneToOne: false
             referencedRelation: "warehouses"
@@ -1521,6 +1694,7 @@ export type Database = {
           code: string
           created_at: string | null
           creator_id: string | null
+          customer_b2c_id: number | null
           customer_id: number | null
           delivery_address: string | null
           delivery_method: string | null
@@ -1530,19 +1704,26 @@ export type Database = {
           final_amount: number | null
           id: string
           note: string | null
+          order_type: string | null
           package_count: number | null
           paid_amount: number | null
+          payment_method: string | null
+          payment_status: string | null
           quote_expires_at: string | null
+          remittance_status: string | null
+          remittance_transaction_id: number | null
           shipping_fee: number | null
           shipping_partner_id: number | null
           status: string | null
           total_amount: number | null
           updated_at: string | null
+          warehouse_id: number | null
         }
         Insert: {
           code: string
           created_at?: string | null
           creator_id?: string | null
+          customer_b2c_id?: number | null
           customer_id?: number | null
           delivery_address?: string | null
           delivery_method?: string | null
@@ -1552,19 +1733,26 @@ export type Database = {
           final_amount?: number | null
           id?: string
           note?: string | null
+          order_type?: string | null
           package_count?: number | null
           paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: string | null
           quote_expires_at?: string | null
+          remittance_status?: string | null
+          remittance_transaction_id?: number | null
           shipping_fee?: number | null
           shipping_partner_id?: number | null
           status?: string | null
           total_amount?: number | null
           updated_at?: string | null
+          warehouse_id?: number | null
         }
         Update: {
           code?: string
           created_at?: string | null
           creator_id?: string | null
+          customer_b2c_id?: number | null
           customer_id?: number | null
           delivery_address?: string | null
           delivery_method?: string | null
@@ -1574,14 +1762,20 @@ export type Database = {
           final_amount?: number | null
           id?: string
           note?: string | null
+          order_type?: string | null
           package_count?: number | null
           paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: string | null
           quote_expires_at?: string | null
+          remittance_status?: string | null
+          remittance_transaction_id?: number | null
           shipping_fee?: number | null
           shipping_partner_id?: number | null
           status?: string | null
           total_amount?: number | null
           updated_at?: string | null
+          warehouse_id?: number | null
         }
         Relationships: [
           {
@@ -1592,10 +1786,31 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "orders_customer_b2c_id_fkey"
+            columns: ["customer_b2c_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_remittance_transaction_id_fkey"
+            columns: ["remittance_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "finance_transactions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "orders_shipping_partner_id_fkey"
             columns: ["shipping_partner_id"]
             isOneToOne: false
             referencedRelation: "shipping_partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]
@@ -2053,6 +2268,7 @@ export type Database = {
           code: string
           created_at: string | null
           customer_id: number | null
+          customer_type: string | null
           description: string | null
           discount_type: string
           discount_value: number
@@ -2074,6 +2290,7 @@ export type Database = {
           code: string
           created_at?: string | null
           customer_id?: number | null
+          customer_type?: string | null
           description?: string | null
           discount_type: string
           discount_value?: number
@@ -2095,6 +2312,7 @@ export type Database = {
           code?: string
           created_at?: string | null
           customer_id?: number | null
+          customer_type?: string | null
           description?: string | null
           discount_type?: string
           discount_value?: number
@@ -3028,6 +3246,10 @@ export type Database = {
         Returns: Json
       }
       calculate_package_cost: { Args: { p_items: Json }; Returns: number }
+      cancel_inventory_check: {
+        Args: { p_check_id: number; p_user_id: string }
+        Returns: undefined
+      }
       cancel_outbound_task: {
         Args: { p_order_id: string; p_reason: string; p_user_id: string }
         Returns: Json
@@ -3057,6 +3279,10 @@ export type Database = {
           p_vat_rate: number
         }
         Returns: boolean
+      }
+      complete_inventory_check: {
+        Args: { p_check_id: number; p_user_id: string }
+        Returns: undefined
       }
       confirm_finance_transaction:
         | { Args: { p_id: number }; Returns: undefined }
@@ -3159,6 +3385,17 @@ export type Database = {
             }
             Returns: number
           }
+      create_inventory_check: {
+        Args: {
+          p_int_val?: number
+          p_note?: string
+          p_scope?: string
+          p_text_val?: string
+          p_user_id: string
+          p_warehouse_id: number
+        }
+        Returns: number
+      }
       create_inventory_receipt: {
         Args: {
           p_items: Json
@@ -3267,16 +3504,20 @@ export type Database = {
       }
       create_sales_order: {
         Args: {
-          p_customer_id: number
-          p_delivery_address: string
+          p_customer_b2b_id?: number
+          p_customer_b2c_id?: number
+          p_delivery_address?: string
           p_delivery_method?: string
-          p_delivery_time: string
+          p_delivery_time?: string
           p_discount_amount?: number
-          p_items: Json
-          p_note: string
+          p_items?: Json
+          p_note?: string
+          p_order_type?: string
+          p_payment_method?: string
           p_shipping_fee?: number
           p_shipping_partner_id?: number
           p_status?: Database["public"]["Enums"]["order_status"]
+          p_warehouse_id?: number
         }
         Returns: string
       }
@@ -3404,6 +3645,15 @@ export type Database = {
           speed_hours: number
         }[]
       }
+      get_active_warehouses: {
+        Args: never
+        Returns: {
+          id: number
+          latitude: number
+          longitude: number
+          name: string
+        }[]
+      }
       get_applicable_vouchers: {
         Args: { p_customer_id: number; p_order_total: number }
         Returns: {
@@ -3453,17 +3703,6 @@ export type Database = {
           name: string
           valid_to: string
         }[]
-      }
-      get_b2b_orders_view: {
-        Args: {
-          p_date_from?: string
-          p_date_to?: string
-          p_page?: number
-          p_page_size?: number
-          p_search?: string
-          p_status?: string
-        }
-        Returns: Json
       }
       get_customer_b2b_details: { Args: { p_id: number }; Returns: Json }
       get_customer_b2c_details: { Args: { p_id: number }; Returns: Json }
@@ -3551,6 +3790,60 @@ export type Database = {
         }[]
       }
       get_inbound_detail: { Args: { p_po_id: number }; Returns: Json }
+      get_inventory_check_list: {
+        Args: { p_warehouse_id: number }
+        Returns: {
+          batch_code: string
+          cost_price: number
+          expiry_date: string
+          full_location: string
+          location_cabinet: string
+          location_row: string
+          location_slot: string
+          product_id: number
+          product_name: string
+          sku: string
+          system_quantity: number
+          unit: string
+        }[]
+      }
+      get_inventory_checks_list: {
+        Args: {
+          p_end_date?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_start_date?: string
+          p_status?: string
+          p_warehouse_id?: number
+        }
+        Returns: {
+          code: string
+          completed_at: string
+          created_at: string
+          created_by_name: string
+          id: number
+          note: string
+          status: string
+          total_actual_value: number
+          total_count: number
+          total_diff_value: number
+          total_system_value: number
+          verified_by_name: string
+          warehouse_name: string
+        }[]
+      }
+      get_inventory_drift: {
+        Args: { p_check_id: number }
+        Returns: {
+          batch_code: string
+          current_live: number
+          diff: number
+          product_id: number
+          product_name: string
+          system_snapshot: number
+        }[]
+      }
       get_mapped_product: {
         Args: {
           p_product_name: string
@@ -3577,6 +3870,10 @@ export type Database = {
           order_count: number
           total_cartons: number
         }[]
+      }
+      get_pos_usable_promotions: {
+        Args: { p_customer_id: number; p_order_total?: number }
+        Returns: Json
       }
       get_prescription_template_details: {
         Args: { p_id: number }
@@ -3658,6 +3955,19 @@ export type Database = {
           total_cartons: number
           total_quantity: number
         }[]
+      }
+      get_sales_orders_view: {
+        Args: {
+          p_date_from?: string
+          p_date_to?: string
+          p_order_type?: string
+          p_page?: number
+          p_page_size?: number
+          p_remittance_status?: string
+          p_search?: string
+          p_status?: string
+        }
+        Returns: Json
       }
       get_self_profile: {
         Args: never
@@ -3891,6 +4201,12 @@ export type Database = {
           voucher_id: number
         }[]
       }
+      get_warehouse_cabinets: {
+        Args: { p_warehouse_id: number }
+        Returns: {
+          cabinet_name: string
+        }[]
+      }
       get_warehouse_inbound_tasks: {
         Args: {
           p_date_from?: string
@@ -3955,6 +4271,15 @@ export type Database = {
         Args: { p_email: string; p_full_name: string }
         Returns: string
       }
+      notify_group: {
+        Args: {
+          p_message: string
+          p_permission_key: string
+          p_title: string
+          p_type?: string
+        }
+        Returns: undefined
+      }
       process_inbound_receipt: {
         Args: { p_items: Json; p_po_id: number; p_warehouse_id: number }
         Returns: Json
@@ -4007,6 +4332,19 @@ export type Database = {
           phone: string
           status: Database["public"]["Enums"]["account_status"]
           type: Database["public"]["Enums"]["customer_b2c_type"]
+        }[]
+      }
+      search_customers_pos: {
+        Args: { p_keyword: string }
+        Returns: {
+          code: string
+          debt_amount: number
+          id: number
+          loyalty_points: number
+          name: string
+          phone: string
+          sub_label: string
+          type: string
         }[]
       }
       search_items_for_sales: {
@@ -4092,6 +4430,15 @@ export type Database = {
         }
         Returns: Json
       }
+      send_notification: {
+        Args: {
+          p_message: string
+          p_title: string
+          p_type?: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       submit_transfer_shipping: {
@@ -4113,6 +4460,10 @@ export type Database = {
       }
       update_customer_b2c: {
         Args: { p_customer_data: Json; p_guardians: Json; p_id: number }
+        Returns: undefined
+      }
+      update_inventory_check_info: {
+        Args: { p_check_id: number; p_note: string }
         Returns: undefined
       }
       update_outbound_package_count: {
@@ -4215,6 +4566,16 @@ export type Database = {
             }
             Returns: undefined
           }
+      update_product_location: {
+        Args: {
+          p_cabinet: string
+          p_product_id: number
+          p_row: string
+          p_slot: string
+          p_warehouse_id: number
+        }
+        Returns: undefined
+      }
       update_product_status: {
         Args: { p_ids: number[]; p_status: string }
         Returns: undefined
