@@ -1,4 +1,4 @@
-// src/stores/useUserStore.ts
+// src/features/auth/stores/useUserStore.ts
 import { create } from "zustand";
 
 import * as userService from "@/features/auth/api/userService";

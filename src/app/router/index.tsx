@@ -54,6 +54,8 @@ import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
 import PosPage from "@/pages/pos/PosPage";
 import B2COrderListPage from "@/pages/sales/B2COrderListPage";
 import QuickLocationUpdate from "@/pages/quick/QuickLocationUpdate";
+import InventoryCheckList from '@/features/inventory/pages/InventoryCheckList';
+import InventoryCheckDetail from '@/features/inventory/pages/InventoryCheckDetail';
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -203,7 +205,11 @@ const routes: RouteObject[] = [
 
           {
             path: "inventory/stocktake",
-            element: <PagePlaceholder title="Kiểm hàng" />,
+            element: <InventoryCheckList />,
+          },
+          {
+            path: "inventory/stocktake/:id",
+            element: <InventoryCheckDetail />,
           },
           {
             path: "inventory/cost-adjustment",

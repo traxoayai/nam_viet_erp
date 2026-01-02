@@ -6,7 +6,7 @@ import { debounce } from 'lodash';
 import { posService } from '@/features/pos/api/posService';
 import { inventoryService } from '@/features/inventory/api/inventoryService';
 import { WarehousePosData } from '@/features/pos/types/pos.types';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 const { Header, Content } = Layout;
 const { Text, Title } = Typography;
@@ -151,15 +151,36 @@ export const QuickLocationUpdate = () => {
         message.info({ content: 'Sẵn sàng nhập mã tiếp theo', key: 'ready_next', duration: 1 });
     };
 
-    // --- LOGIC CAMERA SCANNER ---
+    // --- LOGIC CAMERA SCANNER (UPDATED) ---
     useEffect(() => {
         if (isScannerOpen) {
             const timeoutId = setTimeout(() => {
+                // Cấu hình các loại mã vạch phổ biến trong ngành dược
+                const formatsToSupport = [
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.CODE_128,
+                    Html5QrcodeSupportedFormats.CODE_39,
+                    Html5QrcodeSupportedFormats.UPC_A,
+                    Html5QrcodeSupportedFormats.UPC_E,
+                    Html5QrcodeSupportedFormats.QR_CODE, 
+                ];
+
                 const scanner = new Html5QrcodeScanner(
                     "reader", 
-                    { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
+                    { 
+                        fps: 10, 
+                        // [QUAN TRỌNG]: Chỉnh khung quét thành hình chữ nhật (Rộng > Cao) để dễ bắt Barcode dài
+                        qrbox: { width: 300, height: 150 }, 
+                        aspectRatio: 1.0,
+                        formatsToSupport: formatsToSupport, // [QUAN TRỌNG]: Bắt buộc scan barcode
+                        experimentalFeatures: {
+                            useBarCodeDetectorIfSupported: true
+                        }
+                    },
                     false
                 );
+
                 scanner.render((decodedText) => {
                     message.success(`Đã quét: ${decodedText}`);
                     setSearchText(decodedText);
