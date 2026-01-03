@@ -9,6 +9,7 @@ import {
   HistoryOutlined,
   HomeOutlined,
   PercentageOutlined,
+  ImportOutlined,
   StarOutlined,
   WalletOutlined,
   AccountBookOutlined,
@@ -62,7 +63,14 @@ const operationSettings = [
     icon: <HomeOutlined />,
     title: "Kho hàng & Chi nhánh",
     description: "CRUD cho các địa điểm kho và chi nhánh kinh doanh.",
-    link: "/settings/business/operations", // Đã khớp
+    link: "/settings/business/operations",
+  },
+  // [NEW] Thêm mục này vào
+  {
+    icon: <ImportOutlined />, // Nhớ import icon nhé
+    title: "Nhập Tồn Đầu Kỳ (Sapo Migration)",
+    description: "Công cụ hỗ trợ chuyển đổi dữ liệu kho từ hệ thống cũ.",
+    link: "/settings/opening-stock",
   },
 ];
 const businessSettings = [

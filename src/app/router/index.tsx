@@ -56,6 +56,7 @@ import B2COrderListPage from "@/pages/sales/B2COrderListPage";
 import QuickLocationUpdate from "@/pages/quick/QuickLocationUpdate";
 import InventoryCheckList from '@/features/inventory/pages/InventoryCheckList';
 import InventoryCheckDetail from '@/features/inventory/pages/InventoryCheckDetail';
+import OpeningStockImport from "@/features/inventory/pages/OpeningStockImport";
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -445,6 +446,11 @@ const routes: RouteObject[] = [
           {
             path: "settings",
             element: <SystemSettingsHub />,
+          },
+          // [NEW] Route cho trang Nhập Tồn
+          {
+            path: "settings/opening-stock",
+            element: <OpeningStockImport />,
           },
           { path: "settings/warehouses", element: <WarehouseListPage /> },
           {

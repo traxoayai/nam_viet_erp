@@ -11,6 +11,7 @@ import {
   MenuUnfoldOutlined,
   MenuFoldOutlined,
   AppstoreOutlined,
+  ImportOutlined,
   DownloadOutlined,
   SolutionOutlined,
   WalletOutlined,
@@ -469,12 +470,20 @@ const finalMenuItems: MenuItem[] = [
     ]),
   ]),
 
-  // 14. Cấu hình
-  getItem(
-    <Link to="/settings">Cấu hình hệ thống</Link>,
-    "/settings",
-    <SettingFilled />
-  ),
+  // 14. Cấu hình (Đã nâng cấp thành Submenu)
+  getItem("Cấu hình hệ thống", "settings-group", <SettingFilled />, [
+    getItem(
+      <Link to="/settings">Tổng quan Cấu hình</Link>,
+      "/settings",
+      <AppstoreOutlined />
+    ),
+    // [NEW] Nút Nhập Tồn Đầu Kỳ (Shortcut)
+    getItem(
+      <Link to="/settings/opening-stock">Nhập Tồn Đầu Kỳ</Link>,
+      "/settings/opening-stock",
+      <ImportOutlined />
+    ),
+  ]),
 ];
 
 const MainLayout: React.FC = () => {
