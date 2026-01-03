@@ -17,7 +17,7 @@ export const useXmlInvoice = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { products } = useProductStore(); 
 
-  // --- THUẬT TOÁN SENKO-MATCH V1 (Client Side) ---
+  // --- THUẬT TOÁN MATCH V1 (Client Side) ---
   const findBestMatchProduct = (xmlName: string): number | null => {
     if (!products || products.length === 0) return null;
     const normalize = (str: string) => str.toLowerCase().replace(/[^\w\s]/gi, '').split(/\s+/);

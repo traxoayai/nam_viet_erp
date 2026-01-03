@@ -1,16 +1,10 @@
 // src/shared/ui/layouts/MainLayout.tsx
 import {
-  //HomeOutlined,
   ShopOutlined,
-  //HeartOutlined,
   ShoppingCartOutlined,
-  //DropboxOutlined,
   ContactsOutlined,
   BulbOutlined,
   AuditOutlined,
-  // AccountBookOutlined,
-  // LineChartOutlined,
-  // SettingOutlined,
   BellOutlined,
   LogoutOutlined,
   UserOutlined,

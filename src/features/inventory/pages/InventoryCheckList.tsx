@@ -113,7 +113,7 @@ export const InventoryCheckList = () => {
             key: 'code',
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             render: (text: string, record: any) => (
-                <a onClick={() => navigate(`/inventory/check/${record.id}`)} style={{fontWeight: 'bold', color: '#1890ff'}}>
+                <a onClick={() => navigate(`/inventory/stocktake/${record.id}`)} style={{fontWeight: 'bold', color: '#1890ff'}}>
                     {text}
                 </a>
             )
@@ -170,7 +170,7 @@ export const InventoryCheckList = () => {
                 <Button 
                     size="small" 
                     icon={<AuditOutlined />} 
-                    onClick={() => navigate(`/inventory/check/${record.id}`)}
+                    onClick={() => navigate(`/inventory/stocktake/${record.id}`)}
                 />
             )
         }
