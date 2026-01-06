@@ -35,7 +35,13 @@ export interface AiExtractedData {
   manufacturer_name: string;
   active_ingredients: { name: string; amount: string }[];
   packing_spec: string;
+  
+  // [NEW] Hỗ trợ cấu trúc JSON cho HDSD
   usage_instructions?: AiUsageInstructions;
+  
+  // Units
   units: AiUnit[];
+  
+  // Marketing
   marketing_content?: AiMarketingContent;
 }

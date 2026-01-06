@@ -40,7 +40,7 @@ const CreateB2BOrderPage = () => {
     selectedVoucher,
     financials,
     estimatedDeliveryText,
-    shippingFee, // <-- Lấy biến này
+    shippingFee,
     setCustomer,
     addItem,
     updateItem,
@@ -65,7 +65,7 @@ const CreateB2BOrderPage = () => {
         p_delivery_time: estimatedDeliveryText,
         p_note: note,
         p_discount_amount: financials.discountAmount,
-        p_shipping_fee: shippingFee, // <-- Dùng biến trực tiếp, không dùng store.shippingFee
+        p_shipping_fee: shippingFee,
         p_status: status,
         p_delivery_method: deliveryMethod,
         p_shipping_partner_id:

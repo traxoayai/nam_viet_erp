@@ -11,7 +11,6 @@ interface FetchParams {
   pageSize: number;
 }
 
-// 1. HÀM ĐỌC DANH SÁCH
 // 1. HÀM ĐỌC DANH SÁCH (SMART SEARCH V2)
 export const getProducts = async ({ filters, page, pageSize }: FetchParams) => {
   const { data, error } = await supabase.rpc("search_products_v2", {
@@ -37,10 +36,10 @@ export const getProducts = async ({ filters, page, pageSize }: FetchParams) => {
 
 // 2. HÀM ĐỌC CHI TIẾT
 export const getProductDetails = async (id: number) => {
-  // A. Lấy thông tin sản phẩm từ bảng products
+  // A. Lấy thông tin sản phẩm từ bảng products (Kèm Units và Contents)
   const { data, error } = await supabase
     .from("products")
-    .select("*, product_units(*)")
+    .select("*, product_units(*), product_contents(*)")
     .eq("id", id)
     .single();
 
@@ -53,7 +52,7 @@ export const getProductDetails = async (id: number) => {
   const { data: inventoryData } = await supabase
     .from("product_inventory")
     .select(
-      "stock_quantity, min_stock, max_stock, warehouse_id, warehouses(key)"
+      "stock_quantity, min_stock, max_stock, shelf_location, location_cabinet, location_row, location_slot, warehouse_id, warehouses(key)"
     )
     .eq("product_id", id);
 
@@ -63,12 +62,22 @@ export const getProductDetails = async (id: number) => {
     inventoryData.forEach((inv: any) => {
       if (inv.warehouses && inv.warehouses.key) {
         inventorySettings[inv.warehouses.key] = {
+          warehouse_id: inv.warehouse_id,
           min: inv.min_stock,
           max: inv.max_stock,
+          shelf_location: inv.shelf_location,
+          location_cabinet: inv.location_cabinet,
+          location_row: inv.location_row,
+          location_slot: inv.location_slot
         };
       }
     });
   }
+
+  // [FIX] Lấy dữ liệu Marketing (Tìm bản ghi channel='website')
+  const marketingData = (data.product_contents && data.product_contents.length > 0)
+      ? data.product_contents.find((c: any) => c.channel === 'website') || {}
+      : {};
 
   // D. MAP DỮ LIỆU DB (Snake_case) -> FORM (CamelCase)
   return {
@@ -89,14 +98,19 @@ export const getProductDetails = async (id: number) => {
     wholesaleMarginType: data.wholesale_margin_type,
     retailMarginValue: data.retail_margin_value,
     retailMarginType: data.retail_margin_type,
-    estimatedWholesalePrice: 0, // Sẽ được tính lại bởi Form
-    estimatedRetailPrice: 0, // Sẽ được tính lại bởi Form
+    estimatedWholesalePrice: 0,
+    estimatedRetailPrice: 0,
 
     // Thông tin bổ sung
     description: data.description,
-    registrationNumber: data.registration_number, // Map snake_case -> camelCase
-    packingSpec: data.packing_spec, // Map snake_case -> camelCase
-    tags: data.active_ingredient, // Map tags
+    registrationNumber: data.registration_number,
+    packingSpec: data.packing_spec,
+    tags: data.active_ingredient,
+    
+    // [FIX] Map Usage Instructions (Đảm bảo luôn có object để Form bind dữ liệu)
+    usageInstructions: data.usage_instructions || {
+        "0_2": "", "2_6": "", "6_12": "", "18_plus": "", "contraindication": ""
+    },
 
     // Logistics
     items_per_carton: data.items_per_carton,
@@ -105,65 +119,58 @@ export const getProductDetails = async (id: number) => {
     carton_dimensions: data.carton_dimensions,
 
     // Tồn kho
-    // Tồn kho
     inventorySettings: inventorySettings,
     
     // Units
-    units: data.product_units || []
+    units: data.product_units || [],
+    
+    // [FIX] Map Marketing Content vào object content
+    content: {
+        description_html: marketingData.description_html || "",
+        short_description: marketingData.short_description || "",
+        seo_title: marketingData.seo_title || "",
+        seo_description: marketingData.seo_description || "",
+        seo_keywords: marketingData.seo_keywords || []
+    }
   };
 };
 
-// 3. HÀM TẠO MỚI SẢN PHẨM (ĐÃ BỔ SUNG THAM SỐ THIẾU)
-export const addProduct = async (formValues: any, inventoryPayload: any[] = []) => {
-  // 1. Construct Units Payload (Consolidate Base + Additional)
-  const unitsPayload = [];
-  
-  // A. Handle Legacy/Implicit Base Unit (if passed from form via hidden field or migration)
-  if (formValues.retailUnit) {
-      unitsPayload.push({
-          unit_name: formValues.retailUnit,
-          conversion_rate: 1,
-          unit_type: 'base',
-          price: formValues.actualCost, // Base unit price = Cost (or retail price if defined)
-          is_base: true,
-          is_direct_sale: true
-      });
-  }
-  
-  // B. Handle Units from List
-  const listUnits = (formValues.units || []).map((u: any) => ({
-      unit_name: u.unit_name,
-      conversion_rate: u.conversion_rate,
-      barcode: u.barcode || null,
-      unit_type: u.unit_type || 'wholesale',
-      price: u.price || 0,
-      is_base: u.unit_type === 'base',
-      is_direct_sale: true
-  }));
-  unitsPayload.push(...listUnits);
+// 3. HÀM TẠO MỚI & CẬP NHẬT (Unified Upsert RPC V5)
+export const upsertProduct = async (formValues: any) => {
+  console.log("🚀 Starting upsertProduct with payload:", formValues);
 
-  // 2. Construct Clean Product Payload
-  const productPayload = {
+  // [FIX] Gom nhóm HDSD (Nếu Form gửi rời rạc thì gom lại)
+  const usageInstructionsJson = formValues.usageInstructions || {
+      "0_2": formValues.usage_0_2 || "",
+      "2_6": formValues.usage_2_6 || "",
+      "6_12": formValues.usage_6_12 || "",
+      "18_plus": formValues.usage_18_plus || "",
+      "contraindication": formValues.usage_contraindication || ""
+  };
+
+  // 1. CHUẨN BỊ PAYLOAD PRODUCT (Tham số 1)
+  const productJson = {
+    id: formValues.id, 
+    code: formValues.sku,
     name: formValues.productName,
-    sku: formValues.sku || null,
-    barcode: formValues.barcode || null,
-    active_ingredient: formValues.tags || null,
-    image_url: formValues.imageUrl || null,
-    category_name: formValues.category || null,
-    manufacturer_name: formValues.manufacturer || null,
+    barcode: formValues.barcode,
+    registration_number: formValues.registrationNumber,
+    manufacturer_name: formValues.manufacturer,
+    category_name: formValues.category,
+    packing_spec: formValues.packingSpec,
+    active_ingredient: formValues.tags, 
+    status: formValues.status || 'active',
+    image_url: formValues.imageUrl,
+    
+    // [FIX] Thêm distributor_id (Quan trọng)
     distributor_id: formValues.distributor || null,
-    status: "active",
-
+    
     // Financials
-    // Financials
-    // invoice_price removed from header (Prices are in units now)
     actual_cost: formValues.actualCost || 0,
     wholesale_margin_value: formValues.wholesaleMarginValue || 0, 
     wholesale_margin_type: formValues.wholesaleMarginType || 'amount',
     retail_margin_value: formValues.retailMarginValue || 0,       
     retail_margin_type: formValues.retailMarginType || 'amount',
-    
-    // Legacy fields removed: wholesale_unit, retail_unit, conversion_factor, etc.
 
     // Logistics
     items_per_carton: formValues.items_per_carton || 1,
@@ -171,97 +178,93 @@ export const addProduct = async (formValues: any, inventoryPayload: any[] = []) 
     carton_dimensions: formValues.carton_dimensions || null,
     purchasing_policy: formValues.purchasing_policy || "ALLOW_LOOSE",
 
-    // Desc
-    description: formValues.description || null,
-    registration_number: formValues.registrationNumber || null,
-    packing_spec: formValues.packingSpec || null,
-    inventory_settings: formValues.inventorySettings || {},
+    // [FIX] Sử dụng biến JSON đã gom ở trên
+    usage_instructions: usageInstructionsJson 
   };
 
-  const { data, error } = await supabase.rpc("upsert_product_with_units", {
-    p_product_json: productPayload,
-    p_units_json: unitsPayload,
-    p_inventory_json: inventoryPayload
+  // 2. CHUẨN BỊ PAYLOAD UNITS (Tham số 2)
+  const unitsJson = (formValues.units || []).map((u: any) => ({
+    id: u.id, 
+    unit_name: u.unit_name,
+    unit_type: u.unit_type,
+    conversion_rate: u.conversion_rate,
+    price: u.price,
+    barcode: u.barcode,
+    is_base: u.is_base
+  }));
+
+  // Handle Legacy implicit unit if needed
+  if (formValues.retailUnit && !unitsJson.some((u:any) => u.is_base)) {
+     unitsJson.push({
+         unit_name: formValues.retailUnit,
+         conversion_rate: 1,
+         unit_type: 'base',
+         price: formValues.actualCost,
+         is_base: true
+     });
+  }
+
+  // 3. CHUẨN BỊ PAYLOAD CONTENT (Tham số 3 - Marketing)
+  const contentsJson = {
+    description_html: formValues.content?.description_html,
+    short_description: formValues.content?.short_description,
+    seo_title: formValues.content?.seo_title,
+    seo_description: formValues.content?.seo_description,
+    seo_keywords: formValues.content?.seo_keywords || [],
+    is_published: true
+  };
+
+  // 4. CHUẨN BỊ PAYLOAD INVENTORY (Tham số 4 - Cấu hình kho)
+  // Logic: Chuyển Object -> Array nếu cần
+  let inventoryJson = formValues.inventorySettings || [];
+  
+  if (!Array.isArray(inventoryJson) && typeof inventoryJson === 'object') {
+      // Transformation Logic: Convert Object { "KV-HL": { warehouse_id: 1, min: 10... } } to Array
+      inventoryJson = Object.values(inventoryJson).map((item: any) => {
+          if (!item.warehouse_id) return null;
+          return {
+              warehouse_id: item.warehouse_id,
+              min_stock: item.min,
+              max_stock: item.max,
+              shelf_location: item.shelf_location,
+              location_cabinet: item.location_cabinet,
+              location_row: item.location_row,
+              location_slot: item.location_slot
+          };
+      }).filter(Boolean);
+  }
+
+  // 5. GỌI RPC V5 (Đã fix lỗi Distributor và Content)
+  const { data, error } = await supabase.rpc('upsert_product_with_units', {
+    p_product_json: productJson,
+    p_units_json: unitsJson,
+    p_contents_json: contentsJson,
+    p_inventory_json: inventoryJson
   });
 
   if (error) {
-    console.error("Lỗi upsert_product_with_units (Add):", error);
-    throw error;
+    console.error("RPC Error (upsert_product_with_units):", error);
+    throw new Error(error.message);
   }
+
   return data;
 };
 
-// 4. HÀM CẬP NHẬT SẢN PHẨM (ĐÃ BỔ SUNG THAM SỐ THIẾU)
+// Wrapper backward compatibility
+export const addProduct = async (formValues: any, inventoryPayload: any[] = []) => {
+    if (inventoryPayload && inventoryPayload.length > 0) {
+        formValues.inventorySettings = inventoryPayload;
+    }
+    return upsertProduct(formValues);
+};
+
 export const updateProduct = async (id: number, formValues: any, inventoryPayload: any[] = []) => {
-  // 1. Construct Units Payload
-  const unitsPayload = [];
-  
-  if (formValues.retailUnit) {
-      unitsPayload.push({
-          unit_name: formValues.retailUnit,
-          conversion_rate: 1,
-          unit_type: 'base',
-          price: formValues.actualCost,
-          is_base: true,
-          is_direct_sale: true
-      });
-  }
-
-  const listUnits = (formValues.units || []).map((u: any) => ({
-      id: u.id,
-      unit_name: u.unit_name,
-      conversion_rate: u.conversion_rate,
-      barcode: u.barcode || null,
-      unit_type: u.unit_type || 'wholesale',
-      price: u.price || 0,
-      is_base: u.unit_type === 'base',
-      is_direct_sale: true
-  }));
-  unitsPayload.push(...listUnits);
-
-  // 2. Construct Clean Product Payload
-  const productPayload = {
-    id: id,
-    name: formValues.productName,
-    sku: formValues.sku || null,
-    barcode: formValues.barcode || null,
-    active_ingredient: formValues.tags || null,
-    image_url: formValues.imageUrl || null,
-    category_name: formValues.category || null,
-    manufacturer_name: formValues.manufacturer || null,
-    distributor_id: formValues.distributor || null,
-    status: formValues.status || "active",
-
-    // invoice_price removed
-    actual_cost: formValues.actualCost,
-    wholesale_margin_value: formValues.wholesaleMarginValue, 
-    wholesale_margin_type: formValues.wholesaleMarginType,
-    retail_margin_value: formValues.retailMarginValue,       
-    retail_margin_type: formValues.retailMarginType,
-    
-    // Logistics
-    items_per_carton: formValues.items_per_carton,
-    carton_weight: formValues.carton_weight,
-    carton_dimensions: formValues.carton_dimensions,
-    purchasing_policy: formValues.purchasing_policy,
-
-    description: formValues.description || null,
-    registration_number: formValues.registrationNumber || null,
-    packing_spec: formValues.packingSpec || null,
-    inventory_settings: formValues.inventorySettings || {},
-  };
-
-  const { error } = await supabase.rpc("upsert_product_with_units", {
-    p_product_json: productPayload,
-    p_units_json: unitsPayload,
-    p_inventory_json: inventoryPayload
-  });
-
-  if (error) {
-    console.error("Lỗi upsert_product_with_units (Update):", error);
-    throw error;
-  }
-  return true;
+    formValues.id = id;
+    if (inventoryPayload && inventoryPayload.length > 0) {
+        formValues.inventorySettings = inventoryPayload;
+    }
+    await upsertProduct(formValues);
+    return true;
 };
 
 // 5. HÀM CẬP NHẬT TRẠNG THÁI (HÀNG LOẠT)
@@ -296,10 +299,6 @@ export const checkDependencies = async (ids: React.Key[]) => {
 
 // 7. HÀM XÓA SẢN PHẨM (SOFT DELETE)
 export const deleteProducts = async (ids: React.Key[]) => {
-  // Thay vì gọi RPC delete_products (Hard Delete), ta dùng Soft Delete
-  // Update status = 'deleted'. Nếu DB có trigger hoặc column deleted_at thì càng tốt.
-  // Ở đây ta set status='deleted' để ẩn khỏi danh sách mặc định.
-  
   const { error } = await supabase
     .from("products")
     .update({ status: "deleted" })
@@ -312,16 +311,13 @@ export const deleteProducts = async (ids: React.Key[]) => {
   return true;
 };
 
-// 7. HÀM XUẤT EXCEL
+// 8. HÀM XUẤT EXCEL
 export const exportProducts = async (filters: ProductFilters) => {
   const { data, error } = await supabase.rpc("export_products_list", {
     search_query: filters.search_query || null,
     category_filter: filters.category_filter || null,
     manufacturer_filter: filters.manufacturer_filter || null,
     status_filter: filters.status_filter || null,
-    // Note: export_products_list logic in DB might need check if it filters 'deleted'
-    // Usually status_filter defaults to null which might include all? 
-    // Ideally the RPC should match the get_products_list logic.
   });
 
   if (error) {
@@ -331,7 +327,7 @@ export const exportProducts = async (filters: ProductFilters) => {
   return data || [];
 };
 
-// 8. HÀM Upload ẢNH
+// 9. HÀM Upload ẢNH
 export const uploadProductImage = async (file: File) => {
   const bucket = "product_images";
   const fileExt = file.name.split(".").pop();
@@ -351,7 +347,7 @@ export const uploadProductImage = async (file: File) => {
   return data.publicUrl;
 };
 
-// 9. HÀM NHẬP EXCEL
+// 10. HÀM NHẬP EXCEL
 export const importProducts = async (file: File) => {
   return new Promise(async (resolve, reject) => {
     try {
@@ -399,7 +395,7 @@ export const importProducts = async (file: File) => {
   });
 };
 
-// 10. HÀM TÌM KIẾM ĐA NĂNG
+// 11. HÀM TÌM KIẾM ĐA NĂNG (CHO DROPDOWN)
 export const searchProductsForDropdown = async (
   keyword: string,
   types: string[] = ["service", "bundle"]
@@ -475,8 +471,7 @@ export const searchProductsForDropdown = async (
   return [...services, ...products];
 };
 
-// 11. HÀM TÌM KIẾM CHUYÊN BIỆT CHO MUA HÀNG (Wholesale)
-// Gọi RPC mới search_products_for_purchase của CORE
+// 12. HÀM TÌM KIẾM CHUYÊN BIỆT CHO MUA HÀNG
 export const searchProductsForPurchase = async (keyword: string) => {
   const { data, error } = await supabase.rpc("search_products_for_purchase", {
     p_keyword: keyword || "",
@@ -487,29 +482,24 @@ export const searchProductsForPurchase = async (keyword: string) => {
     return [];
   }
 
-  // Map dữ liệu trả về chuẩn format cho Dropdown
   return data.map((p: any) => ({
     id: p.id,
     name: p.name,
     sku: p.sku,
-    // LOGIC QUAN TRỌNG: Mua hàng thì ưu tiên hiện Đơn vị Bán buôn
     unit: p.wholesale_unit || "Hộp",
-    price: p.actual_cost, // Giá vốn hiện tại
+    price: p.actual_cost,
     retail_price: 0,
     image: p.image_url,
     type: "product",
-
-    // Dữ liệu gốc quan trọng để tính toán
     items_per_carton: p.items_per_carton,
     wholesale_unit: p.wholesale_unit,
     retail_unit: p.retail_unit,
-    last_price: p.latest_purchase_price, // Giá nhập lần cuối (từ CORE)
+    last_price: p.latest_purchase_price,
   }));
 };
 
-// [NEW] 12. HÀM LẤY TOÀN BỘ SẢN PHẨM RÚT GỌN (CHO DROPDOWN & AI MATCHING)
+// 13. HÀM LẤY TOÀN BỘ SẢN PHẨM RÚT GỌN
 export const getAllProductsLite = async () => {
-  // Lấy tối đa 5000 sản phẩm active, chỉ lấy các trường cần thiết để nhẹ payload
   const { data, error } = await supabase
     .from("products")
     .select("id, name, sku, barcode, wholesale_unit, retail_unit, actual_cost, items_per_carton, product_units(id, unit_name, conversion_rate, unit_type)")
