@@ -6,12 +6,7 @@ import {
   PlusOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-
-// 1. Import UI Kit (AURA)
-// 1. Import UI Kit (AURA)
 import { B2BOrderColumns } from "./components/B2BOrderColumns";
-
-// import { useB2BOrders } from "@/features/b2b/hooks/useB2BOrders";
 import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders";
 import { FilterAction } from "@/shared/ui/listing/FilterAction";
 import { SmartTable } from "@/shared/ui/listing/SmartTable";

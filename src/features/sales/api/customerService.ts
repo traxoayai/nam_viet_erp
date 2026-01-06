@@ -138,9 +138,7 @@ export const importCustomers = async (file: File): Promise<number> => {
         customer.phone = row[headerMap["phone"]];
         customer.loyalty_points = row[headerMap["loyalty_points"]]; // SỬA LỖI: Tìm key "xấu" (bad key)
         customer.type = row[headerMap[badTypeHeader]]; // (Thêm các cột khác Sếp cần import)
-        // customer.email = row[headerMap['email']];
-        // customer.tax_code = row[headerMap['tax_code']];
-
+        
         // Các cột khác để THÊM THÔNG TIN nếu cần thiết
         customer.email = row[headerMap["email"]];
         customer.address = row[headerMap["address"]];

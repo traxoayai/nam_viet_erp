@@ -40,9 +40,9 @@ export const PurchaseOrderFilters: React.FC<PurchaseOrderFiltersProps> = React.m
                 <Col flex="auto">
                     <Space wrap>
                         <Input
-                            placeholder="Tìm theo Mã PO, NCC..."
+                            placeholder="Tìm theo Mã PO, NCC, tên Sản Phẩm ..."
                             prefix={<SearchOutlined />}
-                            style={{ width: 250 }}
+                            style={{ width: 550 }}
                             value={localSearch}
                             onChange={(e) => setLocalSearch(e.target.value)}
                             onPressEnter={handleSearch}

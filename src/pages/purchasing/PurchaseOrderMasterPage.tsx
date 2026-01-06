@@ -31,12 +31,12 @@ const PurchaseOrderMasterPage: React.FC = () => {
                 
                 {/* 2. HEADER NAV */}
                 <div style={{ marginBottom: 16 }}>
-                    <Breadcrumb items={[
+                    {/* <Breadcrumb items={[
                         { title: <HomeOutlined /> }, 
                         { title: "Mua Hàng" }, 
                         { title: "Đơn Mua Hàng (PO)" }
-                    ]} />
-                    <Title level={3} style={{ marginTop: 8 }}>Quản Lý Đơn Mua Hàng</Title>
+                    ]} /> */}
+                    <Title level={3} style={{ marginTop: 6 }}>Quản Lý Đơn Mua Hàng</Title>
                 </div>
 
                 {/* 3. WIDGET THỐNG KÊ LOGISTICS */}
