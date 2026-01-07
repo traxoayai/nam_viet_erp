@@ -1,3 +1,4 @@
+//src/features/pos/components/modals/CustomerFormModal.tsx
 import React, { useEffect, useState } from 'react';
 import { Modal, Form, Input, DatePicker, Radio, Row, Col, message, Divider, Typography, Space } from 'antd';
 import { UserOutlined, PhoneOutlined, HomeOutlined, IdcardOutlined, GiftOutlined, SafetyCertificateOutlined } from '@ant-design/icons';

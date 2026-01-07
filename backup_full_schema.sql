@@ -342,68 +342,89 @@ DECLARE
     v_supplier_id BIGINT;
     v_supplier_record RECORD;
 BEGIN
-    -- 1. Lấy ID của kho B2B
+    -- 1. Tìm ID kho B2B
     SELECT id INTO v_b2b_warehouse_id FROM public.warehouses WHERE key = 'b2b';
-    
-    IF v_b2b_warehouse_id IS NULL THEN
-        RAISE EXCEPTION 'Không tìm thấy kho B2B (key=b2b).';
+    IF v_b2b_warehouse_id IS NULL THEN 
+        SELECT id INTO v_b2b_warehouse_id FROM public.warehouses ORDER BY id ASC LIMIT 1;
     END IF;
 
-    -- 2. Tạo bảng tạm chứa danh sách cần mua
-    -- (Thay vì dùng Cursor, ta tạo bảng tạm luôn)
+    IF v_b2b_warehouse_id IS NULL THEN 
+        RAISE EXCEPTION 'Hệ thống chưa có kho hàng nào.'; 
+    END IF;
+
+    -- 2. TÍNH TOÁN NHU CẦU
     CREATE TEMP TABLE temp_products_to_buy AS
     SELECT 
         p.id as product_id,
         p.distributor_id as supplier_id,
-        p.actual_cost as unit_price,
-        p.wholesale_unit as unit,
-        (inv.max_stock - inv.stock_quantity) as quantity_needed
+        p.wholesale_unit as unit_name,
+        COALESCE(u.conversion_rate, 1) as conversion_factor,
+        
+        -- [FIX GIÁ] Nếu chưa có giá vốn (null hoặc 0), mặc định là 0 để không lỗi phép tính
+        (COALESCE(p.actual_cost, 0) * COALESCE(u.conversion_rate, 1)) as unit_price,
+        
+        CEIL(
+            (inv.max_stock - inv.stock_quantity)::NUMERIC / COALESCE(NULLIF(u.conversion_rate, 0), 1)
+        )::INTEGER as quantity_needed
+
     FROM public.product_inventory inv
     JOIN public.products p ON inv.product_id = p.id
+    LEFT JOIN public.product_units u ON u.product_id = p.id AND u.unit_name = p.wholesale_unit
+
     WHERE inv.warehouse_id = v_b2b_warehouse_id
       AND inv.stock_quantity < inv.min_stock
       AND p.status = 'active'
       AND p.distributor_id IS NOT NULL
-      AND (inv.max_stock - inv.stock_quantity) > 0; -- Chỉ mua nếu số lượng > 0
+      AND (inv.max_stock - inv.stock_quantity) > 0
+      
+      -- [ĐÃ GỠ BỎ ĐIỀU KIỆN p.actual_cost > 0] -> Cho phép sản phẩm giá 0 vẫn được tạo PO
+      
+      -- Chặn trùng đơn (Vẫn giữ để tránh spam đơn)
+      AND NOT EXISTS (
+          SELECT 1 
+          FROM public.purchase_order_items poi
+          JOIN public.purchase_orders po ON poi.po_id = po.id
+          WHERE poi.product_id = p.id
+            AND po.delivery_status IN ('draft', 'pending', 'ordered', 'shipping', 'partially_delivered')
+      );
 
-    -- 3. Loop qua từng NCC có trong bảng tạm
+    -- 3. LOOP TẠO PO
     FOR v_supplier_record IN SELECT DISTINCT supplier_id FROM temp_products_to_buy
     LOOP
         v_supplier_id := v_supplier_record.supplier_id;
 
-        -- Tạo Header PO
+        -- Tạo Header PO (Status = draft)
         INSERT INTO public.purchase_orders (
             code, supplier_id, delivery_status, payment_status, note, created_at, updated_at
         ) VALUES (
             'PO-AUTO-' || to_char(now(), 'YYMMDD') || '-' || v_supplier_id || '-' || floor(random()*1000)::text,
-            v_supplier_id,
-            'pending', 'unpaid',
-            'Đơn dự trù tự động (Min/Max)',
+            v_supplier_id, 
+            'draft', 
+            'unpaid',
+            'Đơn dự trù tự động (Min/Max)', 
             now(), now()
         ) RETURNING id INTO v_new_po_id;
 
-        -- Tạo Items từ bảng tạm
+        -- Tạo Items
         INSERT INTO public.purchase_order_items (
-            po_id, product_id, quantity_ordered, unit_price, unit
+            po_id, product_id, quantity_ordered, unit_price, unit, conversion_factor, base_quantity
         )
         SELECT 
-            v_new_po_id, product_id, quantity_needed, unit_price, unit
+            v_new_po_id, product_id, quantity_needed, unit_price, unit_name, conversion_factor,
+            (quantity_needed * conversion_factor)
         FROM temp_products_to_buy
         WHERE supplier_id = v_supplier_id;
 
-        -- Cập nhật tổng tiền
+        -- Update Tổng tiền
         UPDATE public.purchase_orders
-        SET 
-            total_amount = (SELECT COALESCE(SUM(quantity_ordered * unit_price), 0) FROM public.purchase_order_items WHERE po_id = v_new_po_id),
+        SET total_amount = (SELECT COALESCE(SUM(quantity_ordered * unit_price), 0) FROM public.purchase_order_items WHERE po_id = v_new_po_id),
             final_amount = (SELECT COALESCE(SUM(quantity_ordered * unit_price), 0) FROM public.purchase_order_items WHERE po_id = v_new_po_id)
         WHERE id = v_new_po_id;
 
         v_po_count := v_po_count + 1;
     END LOOP;
 
-    -- Dọn dẹp
     DROP TABLE temp_products_to_buy;
-
     RETURN v_po_count;
 END;
 $$;
@@ -10021,7 +10042,9 @@ CREATE TABLE IF NOT EXISTS "public"."purchase_orders" (
     "carrier_phone" "text",
     "expected_delivery_time" timestamp with time zone,
     CONSTRAINT "purchase_orders_delivery_status_check" CHECK (("delivery_status" = ANY (ARRAY['pending'::"text", 'partial'::"text", 'delivered'::"text", 'cancelled'::"text"]))),
-    CONSTRAINT "purchase_orders_payment_status_check" CHECK (("payment_status" = ANY (ARRAY['unpaid'::"text", 'partial'::"text", 'paid'::"text", 'overpaid'::"text"])))
+    CONSTRAINT "purchase_orders_final_amount_check" CHECK (("final_amount" >= (0)::numeric)),
+    CONSTRAINT "purchase_orders_payment_status_check" CHECK (("payment_status" = ANY (ARRAY['unpaid'::"text", 'partial'::"text", 'paid'::"text", 'overpaid'::"text"]))),
+    CONSTRAINT "purchase_orders_total_amount_check" CHECK (("total_amount" >= (0)::numeric))
 );
 
 

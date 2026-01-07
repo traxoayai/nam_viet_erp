@@ -31,6 +31,43 @@ interface Props {
 const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
   const screens = useBreakpoint();
 
+  // Helper: Render Unit Select (Shared between Mobile & Desktop)
+  const renderUnitSelect = (item: POItem, idx: number) => {
+    // [FIX]: Nếu item.uom bị rỗng, thử lấy đơn vị đầu tiên trong danh sách làm mặc định
+    // Hoặc ưu tiên lấy đơn vị Sỉ (_wholesale_unit)
+    const displayValue = item.uom || item._wholesale_unit || (item.available_units?.[0]?.unit_name);
+
+    return (
+      <Select
+        value={displayValue} // Dùng giá trị đã fix
+        style={{ width: "100%" }}
+        onChange={(val) => {
+          // 1. Cập nhật đơn vị mới
+          onItemChange(idx, "uom", val);
+          
+          // 2. [Optional] Auto-update price logic if needed later
+        }}
+      >
+        {/* Ưu tiên dùng available_units nếu có */}
+        {item.available_units && item.available_units.length > 0 ? (
+          item.available_units.map((u) => (
+            <Option key={u.unit_name} value={u.unit_name}>
+              {u.unit_name} {u.conversion_rate > 1 ? `(x${u.conversion_rate})` : ''}
+            </Option>
+          ))
+        ) : (
+          /* Fallback cho dữ liệu cũ */
+          <>
+            <Option value={item._wholesale_unit}>{item._wholesale_unit}</Option>
+            {item._retail_unit && item._retail_unit !== item._wholesale_unit && (
+               <Option value={item._retail_unit}>{item._retail_unit}</Option>
+            )}
+          </>
+        )}
+      </Select>
+    );
+  };
+
   // --- RENDER MOBILE VIEW (CARD LIST) ---
   if (!screens.md) {
     return (
@@ -67,21 +104,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
               }}
             >
               <Form.Item label="ĐVT" style={{ marginBottom: 0 }}>
-                <Select
-                  value={item.uom}
-                  onChange={(val) => onItemChange(idx, "uom", val)}
-                  size="middle"
-                >
-                  <Option value={item._wholesale_unit}>
-                    {item._wholesale_unit}
-                  </Option>
-                  {item._retail_unit &&
-                  item._retail_unit !== item._wholesale_unit ? (
-                    <Option value={item._retail_unit}>
-                      {item._retail_unit}
-                    </Option>
-                  ) : null}
-                </Select>
+                 {renderUnitSelect(item, idx)}
               </Form.Item>
 
               <Form.Item label="SL" style={{ marginBottom: 0 }}>
@@ -146,18 +169,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
     {
       title: "ĐVT",
       width: 120,
-      render: (_: any, r: POItem, idx: number) => (
-        <Select
-          value={r.uom}
-          style={{ width: "100%" }}
-          onChange={(val) => onItemChange(idx, "uom", val)}
-        >
-          <Option value={r._wholesale_unit}>{r._wholesale_unit}</Option>
-          {r._retail_unit && r._retail_unit !== r._wholesale_unit ? (
-            <Option value={r._retail_unit}>{r._retail_unit}</Option>
-          ) : null}
-        </Select>
-      ),
+      render: (_: any, r: POItem, idx: number) => renderUnitSelect(r, idx),
     },
     {
       title: "Số lượng",

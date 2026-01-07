@@ -78,19 +78,29 @@ export const usePurchaseOrderLogic = () => {
       }
 
       // Map items từ DB về UI
+      // [FIX] Map đầy đủ available_units từ API
       const mappedItems: POItem[] = (po.items || []).map((item: any) => ({
         product_id: item.product_id,
         sku: item.sku,
         name: item.product_name,
         image_url: item.image_url,
         quantity: item.quantity_ordered,
-        uom: item.uom_ordered || item.wholesale_unit,
+        
+        // Map mảng đơn vị động (QUAN TRỌNG)
+        available_units: item.available_units || [],
+
+        // Map đơn vị đang chọn
+        uom: item.uom_ordered || item.unit || item.wholesale_unit,
+        
         unit_price: Number(item.unit_price),
         discount: 0,
+        
+        // Các trường meta (Giữ nguyên để fallback)
         _items_per_carton: item.items_per_carton || 1,
         _wholesale_unit: item.wholesale_unit,
         _retail_unit: item.retail_unit,
-        // Tính lại giá cơ sở (Base Price) để hỗ trợ logic đổi ĐVT
+        
+        // Tính giá base
         _base_price:
           Number(item.unit_price) /
           (item.uom_ordered === item.wholesale_unit
@@ -175,6 +185,7 @@ export const usePurchaseOrderLogic = () => {
   );
 
   // Khi chọn sản phẩm từ ô tìm kiếm
+  // Khi chọn sản phẩm từ ô tìm kiếm
   const handleSelectProduct = (_: any, option: any) => {
     setSearchKey((prev) => prev + 1); // Reset thanh tìm kiếm
     const p = option.product;
@@ -184,16 +195,49 @@ export const usePurchaseOrderLogic = () => {
       return;
     }
 
-    // Tạo item mới (Mặc định là đơn vị Sỉ/Hộp)
+    // [SENKO FIX]: Xử lý danh sách đơn vị (available_units)
+    // 1. Ưu tiên lấy từ API nếu có (p.available_units hoặc p.units)
+    // 2. Nếu không có, tự tạo mảng giả lập từ wholesale_unit và retail_unit cũ
+    // Mục đích: Đảm bảo Dropdown chọn đơn vị luôn có dữ liệu, không bị trắng trơn.
+    let unitsData = p.available_units || p.units || [];
+
+    if (unitsData.length === 0) {
+       // Fallback an toàn: Tạo thủ công
+       if (p.wholesale_unit) {
+         unitsData.push({
+           unit_name: p.wholesale_unit,
+           conversion_rate: p.items_per_carton || 1, // Giả định rate theo quy cách thùng
+           is_base: false
+         });
+       }
+       if (p.retail_unit && p.retail_unit !== p.wholesale_unit) {
+         unitsData.push({
+           unit_name: p.retail_unit,
+           conversion_rate: 1,
+           is_base: true
+         });
+       }
+    }
+
+    // Tạo item mới
     const newItem: POItem = {
       product_id: p.id,
       sku: p.sku,
       name: p.name,
       image_url: p.image_url,
       quantity: 1,
-      uom: p.wholesale_unit || "Hộp",
-      unit_price: p.actual_cost || 0, // Giá nhập gần nhất hoặc giá vốn
+
+      // [QUAN TRỌNG] Gán danh sách đơn vị vào item để Table hiển thị
+      available_units: unitsData,
+
+      // Mặc định chọn đơn vị Sỉ (hoặc cái đầu tiên tìm thấy)
+      uom: p.wholesale_unit || (unitsData.length > 0 ? unitsData[0].unit_name : "Hộp"),
+
+      // Giá nhập: Ưu tiên giá nhập gần nhất -> Giá vốn -> 0
+      unit_price: p.latest_purchase_price || p.actual_cost || 0,
       discount: 0,
+
+      // Các trường meta cũ (để tính toán fallback)
       _items_per_carton: p.items_per_carton || 1,
       _wholesale_unit: p.wholesale_unit || "Hộp",
       _retail_unit: p.retail_unit || "Vỉ",
