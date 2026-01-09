@@ -33,30 +33,34 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
 
   // Helper: Render Unit Select (Shared between Mobile & Desktop)
   const renderUnitSelect = (item: POItem, idx: number) => {
-    // [FIX]: Nếu item.uom bị rỗng, thử lấy đơn vị đầu tiên trong danh sách làm mặc định
-    // Hoặc ưu tiên lấy đơn vị Sỉ (_wholesale_unit)
-    const displayValue = item.uom || item._wholesale_unit || (item.available_units?.[0]?.unit_name);
+    // Ưu tiên hiển thị giá trị đang chọn
+    const currentValue = item.uom; 
 
     return (
       <Select
-        value={displayValue} // Dùng giá trị đã fix
+        value={currentValue}
         style={{ width: "100%" }}
+        popupMatchSelectWidth={false} // Để dropdown không bị cắt chữ nếu dài
         onChange={(val) => {
-          // 1. Cập nhật đơn vị mới
+          // 1. Cập nhật đơn vị mới cho State
           onItemChange(idx, "uom", val);
           
-          // 2. [Optional] Auto-update price logic if needed later
+          // 2. [Optional] Tìm unit trong mảng để cập nhật giá gợi ý (nếu cần)
+          // const selectedUnit = item.available_units?.find(u => u.unit_name === val);
+          // if (selectedUnit && selectedUnit.price_sell) {
+          //    onItemChange(idx, "unit_price", selectedUnit.price_sell); 
+          // }
         }}
       >
-        {/* Ưu tiên dùng available_units nếu có */}
+        {/* LOGIC MỚI: Render từ mảng available_units trả về từ API */}
         {item.available_units && item.available_units.length > 0 ? (
           item.available_units.map((u) => (
-            <Option key={u.unit_name} value={u.unit_name}>
+            <Option key={u.id} value={u.unit_name}>
               {u.unit_name} {u.conversion_rate > 1 ? `(x${u.conversion_rate})` : ''}
             </Option>
           ))
         ) : (
-          /* Fallback cho dữ liệu cũ */
+          /* Fallback cho dữ liệu cũ (Legacy) */
           <>
             <Option value={item._wholesale_unit}>{item._wholesale_unit}</Option>
             {item._retail_unit && item._retail_unit !== item._wholesale_unit && (

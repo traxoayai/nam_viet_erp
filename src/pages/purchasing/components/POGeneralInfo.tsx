@@ -3,13 +3,16 @@ import {
   UserOutlined,
   PhoneOutlined,
   EnvironmentOutlined,
+  //CarOutlined, // Import thêm icon xe
 } from "@ant-design/icons";
 import {
   Card,
   Form,
   Select,
   DatePicker,
+  //TimePicker, // [QUAN TRỌNG] Nhớ import cái này
   Input,
+  //InputNumber, // [QUAN TRỌNG] Nhớ import cái này
   Row,
   Col,
   Typography,
@@ -124,22 +127,22 @@ const POGeneralInfo: React.FC<Props> = ({
           </Form.Item>
         </Col>
 
-        {/* --- [NEW] LOGISTICS INFO ---
-        <Col span={24}>
+        {/* --- [NEW] LOGISTICS INFO (ĐÃ UNCOMMENT & CHỈNH SỬA) --- */}
+        {/* <Col span={24}>
            <div style={{ marginBottom: 16, borderTop: '1px dashed #eee', paddingTop: 16 }}>
-              <Typography.Text strong style={{ display: 'block', marginBottom: 12 }}>
-                📦 Thông tin Vận chuyển (Logistics)
+              <Typography.Text strong style={{ display: 'block', marginBottom: 12, color: '#1677ff' }}>
+                <CarOutlined /> Thông tin Vận chuyển (Logistics)
               </Typography.Text>
               <Row gutter={16}>
                   <Col xs={24} md={8}>
-                     <Form.Item name="carrier_name" label="Đơn vị vận chuyển">
-                        <Input placeholder="Ví dụ: Viettel Post, Nhà xe..." prefix={<EnvironmentOutlined />} />
-                     </Form.Item>
+                      <Form.Item name="carrier_name" label="Đơn vị vận chuyển">
+                         <Input placeholder="Ví dụ: Viettel Post, Nhà xe..." prefix={<EnvironmentOutlined style={{color: '#bfbfbf'}}/>} />
+                      </Form.Item>
                   </Col>
                   <Col xs={24} md={8}>
-                     <Form.Item name="carrier_phone" label="SĐT Liên hệ">
-                        <Input placeholder="Số điện thoại shipper/nhà xe" prefix={<PhoneOutlined />} />
-                     </Form.Item>
+                      <Form.Item name="carrier_phone" label="SĐT Liên hệ">
+                         <Input placeholder="Số điện thoại shipper/nhà xe" prefix={<PhoneOutlined style={{color: '#bfbfbf'}}/>} />
+                      </Form.Item>
                   </Col>
                   <Col xs={12} md={4}>
                       <Form.Item name="total_packages" label="Số kiện hàng">

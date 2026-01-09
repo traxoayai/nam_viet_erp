@@ -1,10 +1,13 @@
 // src/types/purchaseOrderTypes.ts
 
 // [NEW] Cho phép Multi-Unit
-export interface UnitOption {
+export interface ProductUnitOption {
+  id: number;
   unit_name: string;
   conversion_rate: number;
   is_base: boolean;
+  price_sell?: number;
+  barcode?: string;
 }
 
 export interface POItem {
@@ -17,8 +20,8 @@ export interface POItem {
   unit_price: number;
   discount: number;
   
-  // [NEW] Mảng đơn vị khả dụng (Load từ API)
-  available_units?: UnitOption[];
+  // [NEW] Mảng đơn vị động trả về từ API
+  available_units?: ProductUnitOption[]; 
 
   // Các trường meta để tính toán
   _items_per_carton: number;
@@ -28,7 +31,8 @@ export interface POItem {
 }
 
 // [UPDATED] Master Type
-export interface PurchaseOrderMaster {
+// [UPDATED] PurchaseOrderDetail (Header)
+export interface PurchaseOrderDetail {
   id: number;
   code: string;
   created_at: string;
@@ -36,12 +40,14 @@ export interface PurchaseOrderMaster {
   supplier_name: string;
   final_amount: number;
 
-  // [NEW FIELDS] Logistics & Payment
-  carrier_name?: string;
-  carrier_phone?: string;
-  total_packages?: number;
-  expected_delivery_date?: string; // Tồn tại
-  expected_delivery_time?: string; // Mới (HH:mm)
+  // [NEW] Logistics Fields
+  delivery_method: string;
+  total_packages: number | null;
+  carrier_name: string | null;
+  carrier_contact: string | null;
+  carrier_phone: string | null;
+  expected_delivery_time: string | null;
+  expected_delivery_date?: string;
   
   payment_status?: 'unpaid' | 'partial' | 'paid';
   total_paid?: number;

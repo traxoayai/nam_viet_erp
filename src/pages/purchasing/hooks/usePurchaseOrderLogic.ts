@@ -322,6 +322,14 @@ export const usePurchaseOrderLogic = () => {
         delivery_method: values.delivery_method,
         shipping_partner_id: values.shipping_partner_id,
         shipping_fee: values.shipping_fee,
+        
+        // [NEW] Logistics & Time Format
+        carrier_name: values.carrier_name,
+        carrier_phone: values.carrier_phone,
+        total_packages: values.total_packages,
+        expected_delivery_time: values.expected_delivery_time 
+           ? dayjs(values.expected_delivery_time).format('HH:mm') 
+           : null,
       };
 
       if (isEditMode) {
