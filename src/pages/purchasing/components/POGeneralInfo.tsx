@@ -124,6 +124,37 @@ const POGeneralInfo: React.FC<Props> = ({
           </Form.Item>
         </Col>
 
+        {/* --- [NEW] LOGISTICS INFO ---
+        <Col span={24}>
+           <div style={{ marginBottom: 16, borderTop: '1px dashed #eee', paddingTop: 16 }}>
+              <Typography.Text strong style={{ display: 'block', marginBottom: 12 }}>
+                📦 Thông tin Vận chuyển (Logistics)
+              </Typography.Text>
+              <Row gutter={16}>
+                  <Col xs={24} md={8}>
+                     <Form.Item name="carrier_name" label="Đơn vị vận chuyển">
+                        <Input placeholder="Ví dụ: Viettel Post, Nhà xe..." prefix={<EnvironmentOutlined />} />
+                     </Form.Item>
+                  </Col>
+                  <Col xs={24} md={8}>
+                     <Form.Item name="carrier_phone" label="SĐT Liên hệ">
+                        <Input placeholder="Số điện thoại shipper/nhà xe" prefix={<PhoneOutlined />} />
+                     </Form.Item>
+                  </Col>
+                  <Col xs={12} md={4}>
+                      <Form.Item name="total_packages" label="Số kiện hàng">
+                          <InputNumber placeholder="SL" style={{ width: '100%' }} min={0} />
+                      </Form.Item>
+                  </Col>
+                   <Col xs={12} md={4}>
+                      <Form.Item name="expected_delivery_time" label="Giờ dự kiến">
+                          <TimePicker format="HH:mm" style={{ width: '100%' }} placeholder="HH:mm" />
+                      </Form.Item>
+                  </Col>
+              </Row>
+           </div>
+        </Col> */}
+
         <Col span={24}>
           <Form.Item name="note" label="Ghi chú">
             <TextArea

@@ -59,7 +59,8 @@ serve(async (req) => {
       - seo_title: Tên thuốc + Công dụng chính + [Chính hãng].
       - seo_description: Dưới 160 ký tự, chứa từ khóa chính, kêu gọi hành động (CTA).
       
-      4. Output: Trả về kết quả DUY NHẤT là một JSON Object (JSON ONLY). No markdown block.
+      4. "product_name": Tạo tên sản phẩm chuẩn theo công thức: [Tên thương mại] [Hãng sản xuất viết tắt] ([Quy cách đóng gói]). Ví dụ: "Panadol Extra GSK (15 vỉ x 12 viên)".
+      5. Output: Trả về kết quả DUY NHẤT là một JSON Object (JSON ONLY). No markdown block.
 
       OUTPUT FORMAT (Strict JSON Schema):
       {

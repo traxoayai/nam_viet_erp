@@ -11,6 +11,8 @@ import POPaymentSummary from "./components/POPaymentSummary";
 import POProductTable from "./components/POProductTable";
 import { usePurchaseOrderLogic } from "./hooks/usePurchaseOrderLogic";
 
+import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
+
 import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect";
 import { searchProductsForPurchase } from "@/features/product/api/productService";
 //import { POItem } from "@/types/purchaseOrderTypes";
@@ -96,6 +98,14 @@ const PurchaseOrderDetailContent = () => {
             </Col>
           </Row>
         </Content>
+
+        {/* [NEW] Payment Modal */}
+        <FinanceFormModal 
+            open={logic.paymentModalOpen}
+            onCancel={() => logic.setPaymentModalOpen(false)}
+            initialFlow="out"
+            initialValues={logic.paymentInitialValues}
+        />
       </Form>
     </Layout>
   );

@@ -26,3 +26,24 @@ export interface POItem {
   _retail_unit: string;
   _base_price: number;
 }
+
+// [UPDATED] Master Type
+export interface PurchaseOrderMaster {
+  id: number;
+  code: string;
+  created_at: string;
+  status: string;
+  supplier_name: string;
+  final_amount: number;
+
+  // [NEW FIELDS] Logistics & Payment
+  carrier_name?: string;
+  carrier_phone?: string;
+  total_packages?: number;
+  expected_delivery_date?: string; // Tồn tại
+  expected_delivery_time?: string; // Mới (HH:mm)
+  
+  payment_status?: 'unpaid' | 'partial' | 'paid';
+  total_paid?: number;
+  delivery_progress?: number; // % Giao hàng
+}

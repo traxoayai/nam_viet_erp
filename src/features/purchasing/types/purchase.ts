@@ -19,6 +19,7 @@ export interface PurchaseOrderMaster {
   expected_delivery_date: string | null;
   expected_delivery_time: string | null;
   carrier_name?: string; // Tên nhà vận chuyển
+  carrier_phone?: string; // SĐT nhà vận chuyển
   shipping_partner_name?: string;
   
   // Metrics

@@ -1360,39 +1360,54 @@ export type Database = {
       }
       inventory_transactions: {
         Row: {
+          action_group: string | null
           batch_id: number | null
           created_at: string | null
           created_by: string | null
+          description: string | null
           id: number
           note: string | null
+          partner_id: number | null
           product_id: number
           quantity: number
           ref_id: string | null
+          total_value: number | null
           type: string
+          unit_price: number | null
           warehouse_id: number
         }
         Insert: {
+          action_group?: string | null
           batch_id?: number | null
           created_at?: string | null
           created_by?: string | null
+          description?: string | null
           id?: number
           note?: string | null
+          partner_id?: number | null
           product_id: number
           quantity: number
           ref_id?: string | null
+          total_value?: number | null
           type: string
+          unit_price?: number | null
           warehouse_id: number
         }
         Update: {
+          action_group?: string | null
           batch_id?: number | null
           created_at?: string | null
           created_by?: string | null
+          description?: string | null
           id?: number
           note?: string | null
+          partner_id?: number | null
           product_id?: number
           quantity?: number
           ref_id?: string | null
+          total_value?: number | null
           type?: string
+          unit_price?: number | null
           warehouse_id?: number
         }
         Relationships: [
@@ -3347,44 +3362,29 @@ export type Database = {
             }
             Returns: number
           }
-      create_finance_transaction:
-        | {
-            Args: {
-              p_amount: number
-              p_business_type: Database["public"]["Enums"]["business_type"]
-              p_category_id?: number
-              p_description?: string
-              p_evidence_url?: string
-              p_flow: Database["public"]["Enums"]["transaction_flow"]
-              p_fund_account_id: number
-              p_partner_id?: string
-              p_partner_name?: string
-              p_partner_type?: string
-              p_ref_id?: string
-              p_ref_type?: string
-            }
-            Returns: number
-          }
-        | {
-            Args: {
-              p_amount: number
-              p_business_type: Database["public"]["Enums"]["business_type"]
-              p_cash_tally?: Json
-              p_category_id?: number
-              p_description?: string
-              p_evidence_url?: string
-              p_flow: Database["public"]["Enums"]["transaction_flow"]
-              p_fund_account_id: number
-              p_partner_id?: string
-              p_partner_name?: string
-              p_partner_type?: string
-              p_ref_advance_id?: number
-              p_ref_id?: string
-              p_ref_type?: string
-              p_status?: Database["public"]["Enums"]["transaction_status"]
-            }
-            Returns: number
-          }
+      create_finance_transaction: {
+        Args: {
+          p_amount: number
+          p_business_type: string
+          p_cash_tally?: Json
+          p_category_id: number
+          p_code: string
+          p_created_by: string
+          p_description: string
+          p_evidence_url: string
+          p_flow: string
+          p_fund_account_id: number
+          p_partner_id: string
+          p_partner_name_cache: string
+          p_partner_type: string
+          p_ref_advance_id?: number
+          p_ref_id: string
+          p_ref_type: string
+          p_status: string
+          p_warehouse_id?: number
+        }
+        Returns: number
+      }
       create_inventory_check: {
         Args: {
           p_int_val?: number
@@ -3504,16 +3504,13 @@ export type Database = {
       }
       create_sales_order: {
         Args: {
-          p_customer_b2b_id?: number
-          p_customer_b2c_id?: number
-          p_delivery_address?: string
+          p_customer_id: number
+          p_delivery_address: string
           p_delivery_method?: string
-          p_delivery_time?: string
+          p_delivery_time: string
           p_discount_amount?: number
-          p_items?: Json
-          p_note?: string
-          p_order_type?: string
-          p_payment_method?: string
+          p_items: Json
+          p_note: string
           p_shipping_fee?: number
           p_shipping_partner_id?: number
           p_status?: Database["public"]["Enums"]["order_status"]
@@ -4266,6 +4263,18 @@ export type Database = {
         }[]
       }
       handover_to_shipping: { Args: { p_order_id: string }; Returns: Json }
+      import_customers_b2b: {
+        Args: { p_customers_array: Json[] }
+        Returns: Json
+      }
+      import_opening_stock_v3_by_id: {
+        Args: {
+          p_stock_array: Json[]
+          p_user_id: string
+          p_warehouse_id: number
+        }
+        Returns: Json
+      }
       import_product_from_ai: { Args: { p_data: Json }; Returns: number }
       invite_new_user: {
         Args: { p_email: string; p_full_name: string }
@@ -4441,6 +4450,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      submit_cash_remittance: {
+        Args: { p_order_ids: string[]; p_user_id: string }
+        Returns: Json
+      }
       submit_transfer_shipping: {
         Args: { p_batch_items: Json; p_transfer_id: number }
         Returns: Json
@@ -4580,25 +4593,25 @@ export type Database = {
         Args: { p_ids: number[]; p_status: string }
         Returns: undefined
       }
-      update_purchase_order:
-        | {
-            Args: { p_data: Json; p_id: number; p_items: Json }
-            Returns: boolean
-          }
-        | {
-            Args: {
-              p_delivery_method?: string
-              p_expected_date: string
-              p_items: Json
-              p_note: string
-              p_po_id: number
-              p_shipping_fee?: number
-              p_shipping_partner_id?: number
-              p_status?: string
-              p_supplier_id: number
-            }
-            Returns: boolean
-          }
+      update_purchase_order: {
+        Args: {
+          p_carrier_contact?: string
+          p_carrier_name?: string
+          p_carrier_phone?: string
+          p_delivery_method?: string
+          p_expected_date: string
+          p_expected_time?: string
+          p_items: Json
+          p_note: string
+          p_po_id: number
+          p_shipping_fee?: number
+          p_shipping_partner_id?: number
+          p_status?: string
+          p_supplier_id: number
+          p_total_packages?: number
+        }
+        Returns: boolean
+      }
       update_self_profile: {
         Args: { p_profile_data: Json }
         Returns: undefined
@@ -4645,6 +4658,7 @@ export type Database = {
       }
       upsert_product_with_units: {
         Args: {
+          p_contents_json?: Json
           p_inventory_json?: Json
           p_product_json: Json
           p_units_json: Json

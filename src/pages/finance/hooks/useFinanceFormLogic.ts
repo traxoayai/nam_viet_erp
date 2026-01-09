@@ -14,7 +14,8 @@ import { CreateTransactionParams } from "@/features/finance/types/finance";
 export const useFinanceFormLogic = (
   open: boolean,
   onCancel: () => void,
-  initialFlow: "in" | "out"
+  initialFlow: "in" | "out",
+  initialValues?: any // [NEW] Support pre-fill
 ) => {
   const { message } = App.useApp();
   const [form] = Form.useForm();
@@ -43,14 +44,42 @@ export const useFinanceFormLogic = (
   useEffect(() => {
     if (open) {
       form.resetFields();
+      
+      // 1. Set Default
       form.setFieldsValue({ flow: initialFlow, business_type: "trade" });
 
-      setBusinessType("trade");
+      // 2. [NEW] Pre-fill from Props (e.g. from PO Page)
+      if (initialValues) {
+         form.setFieldsValue(initialValues);
+         
+         // Update state if business_type changed
+         if (initialValues.business_type) {
+            setBusinessType(initialValues.business_type);
+         }
+         
+         // Fix: If supplier_id provided -> Load Bank Info
+         if (initialValues.supplier_id && suppliers.length > 0) {
+             // Delay slightly to ensure suppliers loaded? Or just depend on suppliers
+            const s = suppliers.find(x => x.id === initialValues.supplier_id);
+            if(s) {
+                 setManualBankInfo({
+                    bin: s.bank_bin || '',
+                    acc: s.bank_account || '',
+                    holder: s.bank_holder || ''
+                 });
+            }
+         }
+      } else {
+         // Default Reset
+         setBusinessType("trade");
+         setManualBankInfo({ bin: "", acc: "", holder: "" });
+      }
+
       setFileList([]);
       setQrUrl(null);
       setCashTallyTotal(0);
       setReimburseDiff(null);
-      setManualBankInfo({ bin: "", acc: "", holder: "" });
+      // setManualBankInfo handled above
 
       if (users.length === 0) fetchUsers();
       if (suppliers.length === 0) fetchSuppliers();
@@ -59,6 +88,7 @@ export const useFinanceFormLogic = (
   }, [
     open,
     initialFlow,
+    initialValues, // Add dependency
     form,
     users.length,
     fetchUsers,
@@ -192,6 +222,8 @@ export const useFinanceFormLogic = (
         p_evidence_url: evidenceUrl || undefined,
         p_cash_tally: values.cash_tally,
         p_ref_advance_id: values.ref_advance_id,
+        p_ref_type: values.ref_type, // [NEW]
+        p_ref_id: values.ref_id,     // [NEW]
         p_partner_type: "other",
       };
 

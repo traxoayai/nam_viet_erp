@@ -59,6 +59,10 @@ export interface CreateTransactionParams {
   p_status?: TransactionStatus;
   p_ref_advance_id?: number;
   p_cash_tally?: Record<string, number>;
+  
+  // [NEW] Tham chiếu tổng quát
+  p_ref_type?: string;
+  p_ref_id?: number;
 }
 
 export interface TransactionFilter {

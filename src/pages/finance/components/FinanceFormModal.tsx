@@ -40,12 +40,14 @@ interface Props {
   open: boolean;
   onCancel: () => void;
   initialFlow: "in" | "out";
+  initialValues?: any; // [NEW]
 }
 
 export const FinanceFormModal: React.FC<Props> = ({
   open,
   onCancel,
   initialFlow,
+  initialValues,
 }) => {
   const { funds } = useFinanceStore();
   const { banks, fetchBanks } = useBankStore();
@@ -73,7 +75,7 @@ export const FinanceFormModal: React.FC<Props> = ({
     handleSupplierChange,
     generateQR,
     handleFinish,
-  } = useFinanceFormLogic(open, onCancel, initialFlow);
+  } = useFinanceFormLogic(open, onCancel, initialFlow, initialValues);
 
   useEffect(() => {
     fetchBanks();

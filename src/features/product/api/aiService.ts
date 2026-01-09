@@ -70,7 +70,6 @@ export const aiService = {
     return {
       // --- A. THÔNG TIN CƠ BẢN (Bảng products) ---
       productName: aiData.product_name,
-      sku: aiData.barcode, // Tạm dùng barcode làm SKU
       barcode: aiData.barcode,
       category: aiData.category_name,
       manufacturer: aiData.manufacturer_name,

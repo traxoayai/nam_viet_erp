@@ -27,11 +27,16 @@ export const usePurchaseOrderLogic = () => {
   const [financials, setFinancials] = useState({
     subtotal: 0,
     final: 0,
+    paid: 0, // [NEW]
     totalCartons: 0,
   });
   const [searchKey, setSearchKey] = useState<number>(0);
   const [shippingPartners, setShippingPartners] = useState<any[]>([]);
   const [supplierInfo, setSupplierInfo] = useState<any>(null);
+
+  // [NEW] Modal Payment State
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentInitialValues, setPaymentInitialValues] = useState<any>(null);
 
   // --- 1. KHỞI TẠO DỮ LIỆU ---
   useEffect(() => {
@@ -117,13 +122,21 @@ export const usePurchaseOrderLogic = () => {
           : null,
         note: po.note,
         delivery_method: po.delivery_method || "internal",
-        // Fix: Dùng undefined để Select hiển thị placeholder nếu null
         shipping_partner_id: po.shipping_partner_id || undefined,
         shipping_fee: po.shipping_fee || 0,
+        
+        // [NEW] Logistics Fields
+        carrier_name: po.carrier_name,
+        carrier_phone: po.carrier_phone,
+        total_packages: po.total_packages,
+        expected_delivery_time: po.expected_delivery_time 
+            ? dayjs(po.expected_delivery_time, 'HH:mm') 
+            : null,
+
         items: mappedItems,
       });
 
-      calculateTotals(mappedItems);
+      calculateTotals(mappedItems, po.total_paid || 0); // Pass paid amount
     } catch (error: any) {
       message.error(error.message || "Lỗi tải đơn hàng");
       navigate("/purchase-orders");
@@ -156,7 +169,7 @@ export const usePurchaseOrderLogic = () => {
 
   // Tính tổng tiền & số thùng
   const calculateTotals = useCallback(
-    (currentItems: POItem[]) => {
+    (currentItems: POItem[], currentPaid?: number) => {
       let sub = 0;
       let cartons = 0;
       currentItems.forEach((item) => {
@@ -175,11 +188,12 @@ export const usePurchaseOrderLogic = () => {
       });
 
       const ship = form.getFieldValue("shipping_fee") || 0;
-      setFinancials({
+      setFinancials((prev) => ({
         subtotal: sub,
         final: sub + ship,
+        paid: currentPaid !== undefined ? currentPaid : prev.paid, // [FIX] Keep existing paid if not passed
         totalCartons: parseFloat(cartons.toFixed(1)),
-      });
+      }));
     },
     [form]
   );
@@ -362,15 +376,28 @@ export const usePurchaseOrderLogic = () => {
 
   // Nút Yêu cầu Thanh toán (Mới)
   const requestPayment = () => {
-    modal.confirm({
-      title: "Gửi Yêu cầu Thanh toán?",
-      content: "Yêu cầu sẽ được gửi đến Kế toán để duyệt chi.",
-      okText: "Gửi ngay",
-      onOk: async () => {
-        // Mockup logic: Có thể gọi API update payment_status = 'pending_approval'
-        message.success("Đã gửi yêu cầu thanh toán thành công!");
-      },
+    // 1. Check số tiền còn lại
+    const remaining = financials.final - (financials.paid || 0);
+
+    if (remaining <= 0) {
+        message.info("Đơn hàng này đã thanh toán đủ!");
+        return;
+    }
+
+    // 2. Open Finance Modal
+    setPaymentInitialValues({
+        business_type: 'trade', 
+        flow: 'out',
+        partner_type: 'supplier',
+        supplier_id: form.getFieldValue("supplier_id"), // Auto-fill Supplier
+        amount: remaining, // Suggest remaining amount
+        description: `Thanh toán cho đơn hàng ${poCode}`,
+        
+        // [NEW] Backend Reference
+        ref_type: 'purchase_order',
+        ref_id: Number(id)
     });
+    setPaymentModalOpen(true);
   };
 
   return {
@@ -393,5 +420,10 @@ export const usePurchaseOrderLogic = () => {
     requestPayment,
     calculateTotals,
     handleSupplierChange,
+    
+    // [NEW]
+    paymentModalOpen,
+    setPaymentModalOpen,
+    paymentInitialValues,
   };
 };
