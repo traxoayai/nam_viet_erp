@@ -114,12 +114,12 @@ const LoginPage = () => {
                 Đăng nhập
               </Button>
             </Form.Item>
-            <div style={{ textAlign: "center" }}>
+            {/* <div style={{ textAlign: "center" }}>
               <Typography.Text type="secondary">
                 Chưa có tài khoản?
               </Typography.Text>{" "}
               <Link to="/auth/register">Đăng ký ngay!</Link>
-            </div>
+            </div> */}
           </Form>
         </Card>
       </Spin>
