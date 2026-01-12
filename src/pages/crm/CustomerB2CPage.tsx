@@ -340,7 +340,13 @@ const CustomerB2CPage: React.FC = () => {
         return;
       } // Tạo Bảng tính
 
-      const ws = XLSX.utils.json_to_sheet(dataToExport); // Tạo Sổ làm việc
+      // [UPDATE] Format dữ liệu cho Template (Thêm cột Nợ đầu kỳ)
+      const formattedData = dataToExport.map((item: any) => ({
+          ...item,
+          "Nợ Hiện Tại": item.current_debt || 0, // Cột mẫu để Import
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(formattedData); // Tạo Sổ làm việc
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "DanhSachKhachHang"); // Xuất file
       XLSX.writeFile(
@@ -414,6 +420,17 @@ const CustomerB2CPage: React.FC = () => {
   // --- GIAO DIỆN (Views) ---
   // 1. Giao diện Danh sách (List View)
   const renderListView = () => {
+    // [NEW] XỬ LÝ KHI BẤM HEADER TABLE
+    const handleTableChange = (pagination: any, filters: any, sorter: any) => {
+        // Reset sort debt nếu click cột khác, hoặc set giá trị nếu click cột nợ
+        if (sorter.field === 'current_debt') {
+            const order = sorter.order === 'ascend' ? 'asc' : (sorter.order === 'descend' ? 'desc' : null);
+            fetchCustomers({}, order); // Gọi store fetch với sort mới
+        } else {
+            fetchCustomers({}, null); // Reset sort
+        }
+    };
+
     const columns: TableProps<CustomerListRecord>["columns"] = [
       {
         title: "Mã KH",
@@ -463,6 +480,23 @@ const CustomerB2CPage: React.FC = () => {
         align: "center",
         render: (diem) =>
           diem > 0 ? <Tag color="gold">{diem} điểm</Tag> : "—",
+      },
+      // [NEW] CỘT NỢ HIỆN TẠI
+      {
+        title: 'Nợ hiện tại',
+        dataIndex: 'current_debt',
+        key: 'current_debt',
+        width: 150,
+        align: 'right',
+        sorter: true, // Bật tính năng sort header của Antd
+        render: (val: number) => (
+            <span style={{ 
+                color: val > 0 ? '#ff4d4f' : '#52c41a', // Đỏ nếu nợ > 0, Xanh nếu sạch
+                fontWeight: val > 0 ? 600 : 400 
+            }}>
+            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0)}
+            </span>
+        ),
       },
       {
         title: "Trạng thái",
@@ -602,6 +636,7 @@ const CustomerB2CPage: React.FC = () => {
               </Col>
             </Row>
             <Table
+              onChange={handleTableChange} // [NEW] Gắn hàm xử lý sort
               columns={columns}
               dataSource={customers}
               bordered

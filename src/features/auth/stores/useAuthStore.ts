@@ -7,8 +7,10 @@ import { AuthStoreState } from "@/features/auth/types/auth";
 
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
   // State (Trạng thái)
+  // State (Trạng thái)
   user: null,
   profile: null,
+  permissions: [], // [NEW] Default rỗng
   loading: true, // Mặc định là true khi app mới load
   isLoadingProfile: true, // --- HÀM NGHIỆP VỤ (Actions) ---
   /**
@@ -18,12 +20,27 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   fetchProfile: async () => {
     set({ isLoadingProfile: true });
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+         set({ profile: null, permissions: [], isLoadingProfile: false });
+         return null;
+      }
+
+      // 1. Lấy thông tin user (Code cũ)
       const profile = await authService.getSelfProfile();
-      set({ profile, isLoadingProfile: false });
+
+      // 2. [NEW] Gọi RPC lấy danh sách quyền
+      const { data: perms } = await supabase.rpc('get_my_permissions');
+
+      set({ 
+        profile, 
+        permissions: perms || [], 
+        isLoadingProfile: false 
+      });
       return profile;
     } catch (error) {
       console.error("Lỗi fetchProfile:", error);
-      set({ profile: null, isLoadingProfile: false });
+      set({ profile: null, permissions: [], isLoadingProfile: false });
       return null;
     }
   } /**
@@ -38,11 +55,11 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         set({ user: session.user });
         await get().fetchProfile(); // Lấy profile đi kèm
       } else {
-        set({ user: null, profile: null });
+        set({ user: null, profile: null, permissions: [] });
       }
     } catch (error) {
       console.error("Lỗi checkUserSession:", error);
-      set({ user: null, profile: null });
+      set({ user: null, profile: null, permissions: [] });
     } finally {
       set({ loading: false, isLoadingProfile: false });
     }
@@ -69,7 +86,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   logout: async () => {
     set({ loading: true });
     await authService.logout();
-    set({ user: null, profile: null, loading: false });
+    set({ user: null, profile: null, permissions: [], loading: false });
   } /**
    * (Bước 3 Sếp yêu cầu) Cập nhật Mật khẩu
    */,
@@ -101,7 +118,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 // --- Tự động lắng nghe thay đổi Auth của Supabase ---
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === "SIGNED_OUT") {
-    useAuthStore.setState({ user: null, profile: null });
+    useAuthStore.setState({ user: null, profile: null, permissions: [] });
   } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
     useAuthStore.setState({ user: session?.user ?? null });
   }

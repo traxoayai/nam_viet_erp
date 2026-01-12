@@ -5,7 +5,6 @@ import {
   ContactsOutlined,
   BulbOutlined,
   AuditOutlined,
-  BellOutlined,
   LogoutOutlined,
   UserOutlined,
   MenuUnfoldOutlined,
@@ -58,7 +57,6 @@ import {
   Grid,
   Menu,
   Avatar,
-  Badge,
   Drawer,
   Dropdown,
   type MenuProps,
@@ -70,6 +68,8 @@ import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import Logo from "@/assets/logo.png";
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 import { BookingModal } from "@/features/booking/components/BookingModal";
+import { useAutoLogout } from "@/shared/hooks/useAutoLogout"; // [NEW]
+import { NotificationBell } from "@/features/notifications/components/NotificationBell"; // [NEW]
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid; // Hook kiểm tra kích thước màn hình
@@ -486,7 +486,26 @@ const finalMenuItems: MenuItem[] = [
   ]),
 ];
 
+// 1. ĐỊNH NGHĨA QUYỀN TRUY CẬP CHO TỪNG MENU (Dựa trên SQL Core cung cấp)
+// Key của Menu => Permission Key trong DB
+const MENU_PERMISSIONS: Record<string, string> = {
+  // --- KHO ---
+  '/inventory/products': 'inv-product-view',
+  '/inventory/purchase': 'inv-po-create',
+  '/inventory/stocktake': 'inv-count-create',
+  
+  // --- TÀI CHÍNH (Chi tiết hóa) ---
+  '/finance/dashboard': 'fin-dashboard',
+  '/finance/transactions': 'fin-approve-cash', // Hoặc quyền xem DS thu chi
+  '/finance/debts': 'fin-ar',
+  
+  // --- CẤU HÌNH ---
+  'settings-group': 'settings', // Nhóm này giữ nguyên chặn cứng cũng được
+};
+
+
 const MainLayout: React.FC = () => {
+  useAutoLogout(); // [NEW] Kích hoạt bảo vệ 
   const screens = useBreakpoint(); // Kiểm tra màn hình (xs, sm, md...)
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false); // State cho Mobile Drawer
@@ -495,7 +514,42 @@ const MainLayout: React.FC = () => {
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
   const location = useLocation(); // Để active menu đúng
-  const { user, profile, logout } = useAuthStore();
+  const { user, profile, logout, permissions } = useAuthStore();
+
+  // 2. HÀM LỌC MENU ĐỆ QUY (QUAN TRỌNG)
+  const filterMenuItems = (items: MenuItem[]): MenuItem[] => {
+    return items
+      .map((item) => {
+        // 1. Copy item để tránh mutate
+        const newItem = { ...item } as any;
+
+        // 2. Nếu có con, lọc con trước (Đệ quy)
+        if (newItem.children && newItem.children.length > 0) {
+          newItem.children = filterMenuItems(newItem.children);
+          
+          // [QUAN TRỌNG] Nếu lọc xong mà rỗng con -> Ẩn luôn cha
+          if (newItem.children.length === 0) {
+            return null;
+          }
+        }
+
+        // 3. Check quyền của chính item này (Nếu có quy định trong MENU_PERMISSIONS)
+        const requiredPerm = MENU_PERMISSIONS[newItem.key as string];
+        if (requiredPerm) {
+           const hasPerm = permissions.includes(requiredPerm) || permissions.includes('admin-all');
+           if (!hasPerm) return null; // Không có quyền -> Ẩn
+        }
+
+        // 4. Mặc định hiển thị (nếu không dính các case trên)
+        return newItem;
+      })
+      .filter(Boolean) as MenuItem[]; // Loại bỏ các item null
+  };
+
+  // Tính toán menu hiển thị thực tế
+  const visibleMenuItems = React.useMemo(() => {
+     return filterMenuItems(finalMenuItems);
+  }, [permissions]); // Chỉ tính lại khi quyền thay đổi
 
   // Tự động đóng Drawer khi chuyển trang trên mobile
   useEffect(() => {
@@ -576,7 +630,7 @@ const MainLayout: React.FC = () => {
           "finance",
           "reports",
         ]} // Mở sẵn các nhóm chính
-        items={finalMenuItems} // (Biến finalMenuItems lấy từ code cũ của Sếp)
+        items={visibleMenuItems} // (Biến finalMenuItems lấy từ code cũ của Sếp)
         style={{ borderRight: 0 }}
       />
     </>
@@ -639,7 +693,7 @@ const MainLayout: React.FC = () => {
           <Menu
             mode="inline"
             defaultSelectedKeys={[location.pathname]}
-            items={finalMenuItems}
+            items={visibleMenuItems}
             style={{ borderRight: 0 }}
           />
         </Drawer>
@@ -687,15 +741,7 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Button
-              type="text"
-              shape="circle"
-              icon={
-                <Badge dot>
-                  <BellOutlined />
-                </Badge>
-              }
-            />
+            <NotificationBell />
             
             {/* BOOKING BUTTON */}
             <Button 

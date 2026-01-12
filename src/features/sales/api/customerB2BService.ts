@@ -101,34 +101,87 @@ export const reactivateCustomer = async (id: number): Promise<boolean> => {
 /**
  * 7. Nhập Excel (Bulk Upsert)
  */
+// MAPPER B2B
+// SỬA FILE: src/services/customerService.ts
+
+const B2C_COLUMN_MAP: Record<string, string> = {
+    // 1. Mã Khách Hàng (Chấp nhận nhiều cách gọi)
+    'Mã Khách hàng': 'customer_code',
+    'Mã KH': 'customer_code',
+    'Mã khách': 'customer_code',
+
+    // 2. Họ tên
+    'Họ và Tên': 'name',
+    'Tên Khách Hàng': 'name',
+    'Tên': 'name',
+
+    // 3. Số điện thoại
+    'Số điện thoại': 'phone',
+    'SĐT': 'phone',
+    'SDT': 'phone',
+
+    // 4. Loại Khách Hàng (QUAN TRỌNG)
+    'Loại khách': 'type',
+    'Loại KH': 'type',
+    'Loại hình': 'type',        // CaNhan hoặc ToChuc
+    'Đối tượng': 'type',
+
+    // 5. Các thông tin khác
+    'Điểm tích lũy': 'loyalty_points',
+    'Điểm': 'loyalty_points',
+    'Địa chỉ': 'address',
+    'Email': 'email',
+    'Ngày sinh': 'dob',
+    'Giới tính': 'gender',
+    'Số CCCD': 'cccd',
+    'CMND': 'cccd',
+
+    // 6. Thông tin Tổ chức (Nếu là Doanh nghiệp lẻ)
+    'Mã số thuế': 'tax_code',
+    'MST': 'tax_code',
+    'Người liên hệ': 'contact_person_name',
+    'SĐT Liên hệ': 'contact_person_phone',
+
+    // 7. Nợ cũ
+    'Nợ Hiện Tại': 'initial_debt',
+    'Dư Nợ': 'initial_debt',
+    'Công Nợ Đầu Kỳ': 'initial_debt'
+};
+
 export const importCustomers = async (file: File): Promise<number> => {
   return new Promise(async (resolve, reject) => {
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName]; // Chuyển đổi thành JSON (dòng đầu tiên là header)
-      // 'defval: null' đảm bảo ô trống là NULL (quan trọng)
-      const jsonArray: any[] = XLSX.utils.sheet_to_json(worksheet, {
-        defval: null,
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rawData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+
+      if (rawData.length === 0) { reject(new Error("File Rỗng")); return; }
+
+      const cleanedArray = rawData.map((row) => {
+         const newRow: any = {};
+         Object.keys(row).forEach((excelHeader) => {
+            const cleanHeader = excelHeader.trim();
+            const dbKey = B2B_COLUMN_MAP[cleanHeader] || cleanHeader;
+            
+            let value = row[excelHeader];
+            // Format số
+            if (['initial_debt', 'debt_limit', 'payment_term'].includes(dbKey) && typeof value === 'string') {
+                value = parseFloat(value.replace(/,/g, ''));
+            }
+            newRow[dbKey] = value;
+         });
+         return newRow;
       });
 
-      if (jsonArray.length === 0) {
-        reject(new Error("File Excel rỗng hoặc sai định dạng."));
-        return;
-      } // (Không cần dọn dẹp key nếu Sếp dùng tên cột chuẩn)
+      const { error } = await supabase.rpc("bulk_upsert_customers_b2b", {
+        p_customers_array: cleanedArray,
+      });
 
-      const { error: rpcError } = await supabase.rpc(
-        "bulk_upsert_customers_b2b",
-        {
-          p_customers_array: jsonArray,
-        }
-      );
-
-      if (rpcError) throw rpcError;
-      resolve(jsonArray.length);
+      if (error) throw error;
+      resolve(cleanedArray.length);
     } catch (error) {
-      console.error("Lỗi Dịch vụ Import B2B:", error);
+      console.error("Import B2B Error:", error);
       reject(error);
     }
   });

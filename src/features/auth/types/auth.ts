@@ -19,6 +19,7 @@ export interface AuthStoreState {
   profile: UserProfile | null; // Từ public.users (Nghiệp vụ)
   loading: boolean; // Dùng cho Login/Logout
   isLoadingProfile: boolean; // Dùng cho Gatekeeper (kiểm tra profile)
+  permissions: string[]; // [NEW] Danh sách quyền hạn
   // Hàm cơ bản
 
   login: (values: any) => Promise<any>;

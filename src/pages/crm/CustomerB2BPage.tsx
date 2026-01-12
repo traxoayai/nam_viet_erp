@@ -322,7 +322,14 @@ const CustomerB2BPage: React.FC = () => {
         return;
       }
 
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      // [UPDATE] Format dữ liệu cho Template (Thêm cột Nợ đầu kỳ)
+      const formattedData = dataToExport.map((item: any) => ({
+          ...item,
+          // Thêm cột này để làm mẫu cho người dùng nhập liệu (Import lại)
+          "Nợ Hiện Tại": item.current_debt || 0, 
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(formattedData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "DanhSachKhachHangB2B");
       XLSX.writeFile(

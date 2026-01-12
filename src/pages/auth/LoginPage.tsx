@@ -10,7 +10,7 @@ import {
   App as AntApp,
 } from "antd";
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import Logo from "@/assets/logo.png"; // <-- MỚI: Import logo
 // import { supabase } from "@/lib/supabaseClient"; // Import "bộ đàm" Supabase

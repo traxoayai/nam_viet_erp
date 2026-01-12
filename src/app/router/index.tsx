@@ -1,7 +1,8 @@
 // src/app/router/index.tsx
-import { Navigate, type RouteObject } from "react-router-dom";
+import { Navigate, type RouteObject, Outlet } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
+import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
 
 import LoginPage from "@/pages/auth/LoginPage";
 import PendingApprovalPage from "@/pages/auth/PendingApprovalPage";
@@ -443,63 +444,73 @@ const routes: RouteObject[] = [
             path: "reports/finance/cashflow",
             element: <PagePlaceholder title="Sổ quỹ" />,
           },
+          // [PROTECTED] Settings Group
           {
-            path: "settings",
-            element: <SystemSettingsHub />,
-          },
-          // [NEW] Route cho trang Nhập Tồn
-          {
-            path: "settings/opening-stock",
-            element: <OpeningStockImport />,
-          },
-          { path: "settings/warehouses", element: <WarehouseListPage /> },
-          {
-            path: "settings/users-roles",
-            element: <PermissionPage />,
-          },
-          {
-            path: "settings/business/general",
-            element: <CompanyInfoPage />,
-          },
-          {
-            path: "settings/business/operations",
-            element: <WarehouseListPage />,
-          },
-          {
-            path: "settings/business/sales",
-            element: <PagePlaceholder title="Cấu hình Kinh Doanh" />,
-          },
-          {
-            path: "settings/business/loyalty",
-            element: <LoyaltyPolicyPage />,
-          },
-          {
-            path: "settings/business/finance/accounts",
-            element: <FundAccountPage />,
-          },
-          {
-            path: "settings/business/finance/categories",
-            element: <TransactionCategoryPage />,
-          },
-          {
-            path: "settings/business/finance/banks",
-            element: <BankListPage />,
-          },
-          {
-            path: "settings/business/finance/recurring",
-            element: <PagePlaceholder title="Quản lý Thu - Chi tự động" />,
-          },
-          {
-            path: "settings/business/hr",
-            element: <PagePlaceholder title="Cấu hình Hành Chính - NS" />,
-          },
-          {
-            path: "settings/templates",
-            element: <TemplateManagerPage />,
-          },
-          {
-            path: "settings/audit-log",
-            element: <PagePlaceholder title="Nhật ký Hệ thống" />,
+            element: (
+              <PermissionGuard permission="settings">
+                <Outlet />
+              </PermissionGuard>
+            ),
+            children: [
+              {
+                path: "settings",
+                element: <SystemSettingsHub />,
+              },
+              // [NEW] Route cho trang Nhập Tồn
+              {
+                path: "settings/opening-stock",
+                element: <OpeningStockImport />,
+              },
+              { path: "settings/warehouses", element: <WarehouseListPage /> },
+              {
+                path: "settings/users-roles",
+                element: <PermissionPage />,
+              },
+              {
+                path: "settings/business/general",
+                element: <CompanyInfoPage />,
+              },
+              {
+                path: "settings/business/operations",
+                element: <WarehouseListPage />,
+              },
+              {
+                path: "settings/business/sales",
+                element: <PagePlaceholder title="Cấu hình Kinh Doanh" />,
+              },
+              {
+                path: "settings/business/loyalty",
+                element: <LoyaltyPolicyPage />,
+              },
+              {
+                path: "settings/business/finance/accounts",
+                element: <FundAccountPage />,
+              },
+              {
+                path: "settings/business/finance/categories",
+                element: <TransactionCategoryPage />,
+              },
+              {
+                path: "settings/business/finance/banks",
+                element: <BankListPage />,
+              },
+              {
+                path: "settings/business/finance/recurring",
+                element: <PagePlaceholder title="Quản lý Thu - Chi tự động" />,
+              },
+              {
+                path: "settings/business/hr",
+                element: <PagePlaceholder title="Cấu hình Hành Chính - NS" />,
+              },
+              {
+                path: "settings/templates",
+                element: <TemplateManagerPage />,
+              },
+              {
+                path: "settings/audit-log",
+                element: <PagePlaceholder title="Nhật ký Hệ thống" />,
+              },
+            ]
           },
           {
             path: "products",
