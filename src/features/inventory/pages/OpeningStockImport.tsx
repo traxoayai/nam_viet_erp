@@ -1,3 +1,4 @@
+// src/features/inventory/pages/OpeningStockImport.tsx
 import { useState, useEffect } from 'react';
 import { Table, Button, Upload, Card, Typography, Select, message, Tag, Steps, Space, Input, DatePicker } from 'antd';
 import { CloudUploadOutlined, CheckCircleOutlined, DeleteOutlined, SaveOutlined, ImportOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
@@ -231,7 +232,7 @@ export const OpeningStockImport = () => {
             }));
 
             // Gọi RPC V6 (Đã hỗ trợ Lô & Hạn)
-            const { data: res, error } = await supabase.rpc('import_opening_stock_v6_full', {
+            const { data: res, error } = await supabase.rpc('import_opening_stock_v3_by_id', {
                 p_stock_array: payload,
                 p_user_id: user?.id,
                 p_warehouse_id: 1 
