@@ -421,7 +421,7 @@ const CustomerB2CPage: React.FC = () => {
   // 1. Giao diện Danh sách (List View)
   const renderListView = () => {
     // [NEW] XỬ LÝ KHI BẤM HEADER TABLE
-    const handleTableChange = (pagination: any, filters: any, sorter: any) => {
+    const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
         // Reset sort debt nếu click cột khác, hoặc set giá trị nếu click cột nợ
         if (sorter.field === 'current_debt') {
             const order = sorter.order === 'ascend' ? 'asc' : (sorter.order === 'descend' ? 'desc' : null);

@@ -104,7 +104,7 @@ export const reactivateCustomer = async (id: number): Promise<boolean> => {
 // MAPPER B2B
 // SỬA FILE: src/services/customerService.ts
 
-const B2C_COLUMN_MAP: Record<string, string> = {
+const B2B_COLUMN_MAP: Record<string, string> = {
     // 1. Mã Khách Hàng (Chấp nhận nhiều cách gọi)
     'Mã Khách hàng': 'customer_code',
     'Mã KH': 'customer_code',

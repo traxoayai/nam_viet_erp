@@ -221,6 +221,13 @@ export const importCustomers = async (file: File): Promise<number> => {
           return;
       }
 
+      // // --- [CHÈN LOG VÀO ĐÂY] ---
+      // console.log("=== DEBUG IMPORT DATA ===");
+      // console.log("Toàn bộ dữ liệu gửi đi:", validArray);
+      // console.log("Dòng CaNhan:", validArray.find((x: any) => x.type === 'CaNhan'));
+      // console.log("Dòng ToChuc:", validArray.find((x: any) => x.type === 'ToChuc'));
+      // // --------------------------
+
       console.log("Data Sent to DB:", validArray);
 
       const { error: rpcError } = await supabase.rpc("bulk_upsert_customers_b2c", {
