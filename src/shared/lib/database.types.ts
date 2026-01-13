@@ -1718,6 +1718,10 @@ export type Database = {
           fee_payer: string | null
           final_amount: number | null
           id: string
+          invoice_request_data: Json | null
+          invoice_status:
+            | Database["public"]["Enums"]["invoice_request_status"]
+            | null
           note: string | null
           order_type: string | null
           package_count: number | null
@@ -1747,6 +1751,10 @@ export type Database = {
           fee_payer?: string | null
           final_amount?: number | null
           id?: string
+          invoice_request_data?: Json | null
+          invoice_status?:
+            | Database["public"]["Enums"]["invoice_request_status"]
+            | null
           note?: string | null
           order_type?: string | null
           package_count?: number | null
@@ -1776,6 +1784,10 @@ export type Database = {
           fee_payer?: string | null
           final_amount?: number | null
           id?: string
+          invoice_request_data?: Json | null
+          invoice_status?:
+            | Database["public"]["Enums"]["invoice_request_status"]
+            | null
           note?: string | null
           order_type?: string | null
           package_count?: number | null
@@ -2553,6 +2565,100 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      sales_invoices: {
+        Row: {
+          buyer_address: string | null
+          buyer_company_name: string | null
+          buyer_email: string | null
+          buyer_name: string | null
+          buyer_tax_code: string | null
+          created_at: string | null
+          customer_b2c_id: number | null
+          customer_id: number | null
+          final_amount: number | null
+          id: number
+          invoice_date: string
+          invoice_number: string | null
+          invoice_serial: string | null
+          invoice_template_code: string | null
+          note: string | null
+          order_id: string | null
+          payment_method: string | null
+          total_amount_pre_tax: number | null
+          updated_at: string | null
+          vat_amount: number | null
+          vat_rate: number | null
+        }
+        Insert: {
+          buyer_address?: string | null
+          buyer_company_name?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          buyer_tax_code?: string | null
+          created_at?: string | null
+          customer_b2c_id?: number | null
+          customer_id?: number | null
+          final_amount?: number | null
+          id?: number
+          invoice_date: string
+          invoice_number?: string | null
+          invoice_serial?: string | null
+          invoice_template_code?: string | null
+          note?: string | null
+          order_id?: string | null
+          payment_method?: string | null
+          total_amount_pre_tax?: number | null
+          updated_at?: string | null
+          vat_amount?: number | null
+          vat_rate?: number | null
+        }
+        Update: {
+          buyer_address?: string | null
+          buyer_company_name?: string | null
+          buyer_email?: string | null
+          buyer_name?: string | null
+          buyer_tax_code?: string | null
+          created_at?: string | null
+          customer_b2c_id?: number | null
+          customer_id?: number | null
+          final_amount?: number | null
+          id?: number
+          invoice_date?: string
+          invoice_number?: string | null
+          invoice_serial?: string | null
+          invoice_template_code?: string | null
+          note?: string | null
+          order_id?: string | null
+          payment_method?: string | null
+          total_amount_pre_tax?: number | null
+          updated_at?: string | null
+          vat_amount?: number | null
+          vat_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_invoices_customer_b2c_id_fkey"
+            columns: ["customer_b2c_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers_b2b"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_invoices_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_consumables: {
         Row: {
@@ -3502,22 +3608,42 @@ export type Database = {
         Args: { p_data: Json; p_items: Json }
         Returns: number
       }
-      create_sales_order: {
-        Args: {
-          p_customer_id: number
-          p_delivery_address: string
-          p_delivery_method?: string
-          p_delivery_time: string
-          p_discount_amount?: number
-          p_items: Json
-          p_note: string
-          p_shipping_fee?: number
-          p_shipping_partner_id?: number
-          p_status?: Database["public"]["Enums"]["order_status"]
-          p_warehouse_id?: number
-        }
-        Returns: string
-      }
+      create_sales_order:
+        | {
+            Args: {
+              p_customer_b2b_id?: number
+              p_customer_b2c_id?: number
+              p_delivery_address?: string
+              p_delivery_method?: string
+              p_delivery_time?: string
+              p_discount_amount?: number
+              p_items?: Json
+              p_note?: string
+              p_order_type?: string
+              p_payment_method?: string
+              p_shipping_fee?: number
+              p_shipping_partner_id?: number
+              p_status?: string
+              p_warehouse_id?: number
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_customer_id: number
+              p_delivery_address: string
+              p_delivery_method?: string
+              p_delivery_time: string
+              p_discount_amount?: number
+              p_items: Json
+              p_note: string
+              p_shipping_fee?: number
+              p_shipping_partner_id?: number
+              p_status?: Database["public"]["Enums"]["order_status"]
+              p_warehouse_id?: number
+            }
+            Returns: string
+          }
       create_service_package: {
         Args: { p_data: Json; p_items: Json }
         Returns: number
@@ -3720,6 +3846,7 @@ export type Database = {
           page_size: number
           sales_staff_filter: string
           search_query: string
+          sort_by_debt?: string
           status_filter: string
         }
         Returns: {
@@ -3735,45 +3862,29 @@ export type Database = {
           total_count: number
         }[]
       }
-      get_customers_b2c_list:
-        | {
-            Args: {
-              search_query: string
-              status_filter: string
-              type_filter: string
-            }
-            Returns: {
-              customer_code: string
-              id: number
-              key: string
-              loyalty_points: number
-              name: string
-              phone: string
-              status: Database["public"]["Enums"]["account_status"]
-              total_count: number
-              type: Database["public"]["Enums"]["customer_b2c_type"]
-            }[]
-          }
-        | {
-            Args: {
-              page_num: number
-              page_size: number
-              search_query: string
-              status_filter: string
-              type_filter: string
-            }
-            Returns: {
-              customer_code: string
-              id: number
-              key: string
-              loyalty_points: number
-              name: string
-              phone: string
-              status: Database["public"]["Enums"]["account_status"]
-              total_count: number
-              type: Database["public"]["Enums"]["customer_b2c_type"]
-            }[]
-          }
+      get_customers_b2c_list: {
+        Args: {
+          page_num: number
+          page_size: number
+          search_query: string
+          sort_by_debt?: string
+          status_filter: string
+          type_filter: string
+        }
+        Returns: {
+          avatar_url: string
+          current_debt: number
+          customer_code: string
+          id: number
+          key: string
+          loyalty_points: number
+          name: string
+          phone: string
+          status: Database["public"]["Enums"]["account_status"]
+          total_count: number
+          type: Database["public"]["Enums"]["customer_b2c_type"]
+        }[]
+      }
       get_distinct_categories: {
         Args: never
         Returns: {
@@ -3852,6 +3963,7 @@ export type Database = {
           internal_unit: string
         }[]
       }
+      get_my_permissions: { Args: never; Returns: string[] }
       get_outbound_order_detail: { Args: { p_order_id: string }; Returns: Json }
       get_outbound_stats: { Args: { p_warehouse_id: number }; Returns: Json }
       get_po_logistics_stats: {
@@ -3893,6 +4005,21 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_pending_reconciliation_orders: {
+        Args: never
+        Returns: {
+          created_at: string
+          customer_code: string
+          customer_name: string
+          final_amount: number
+          order_code: string
+          order_id: string
+          paid_amount: number
+          payment_method: string
+          remaining_amount: number
+          source: "B2B" | "POS"
+        }[]
       }
       get_product_details: { Args: { p_id: number }; Returns: Json }
       get_products_list: {
@@ -4280,7 +4407,20 @@ export type Database = {
         Args: { p_email: string; p_full_name: string }
         Returns: string
       }
+      mark_notification_read: {
+        Args: { p_noti_id: string }
+        Returns: undefined
+      }
       notify_group: {
+        Args: {
+          p_message: string
+          p_permission_key: string
+          p_title: string
+          p_type?: string
+        }
+        Returns: undefined
+      }
+      notify_users_by_permission: {
         Args: {
           p_message: string
           p_permission_key: string
@@ -4698,6 +4838,7 @@ export type Database = {
       employee_status: "pending_approval" | "active" | "inactive"
       fund_account_status: "active" | "locked"
       fund_account_type: "cash" | "bank"
+      invoice_request_status: "none" | "pending" | "exported" | "issued"
       maintenance_exec_type: "internal" | "external"
       order_status:
         | "DRAFT"
@@ -4880,6 +5021,7 @@ export const Constants = {
       employee_status: ["pending_approval", "active", "inactive"],
       fund_account_status: ["active", "locked"],
       fund_account_type: ["cash", "bank"],
+      invoice_request_status: ["none", "pending", "exported", "issued"],
       maintenance_exec_type: ["internal", "external"],
       order_status: [
         "DRAFT",

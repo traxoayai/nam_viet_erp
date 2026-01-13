@@ -1,75 +1,95 @@
-// src/types/finance.ts
+// src/features/finance/types/finance.ts
 
-export type TransactionFlow = "in" | "out";
-export type BusinessType =
-  | "trade"
-  | "advance"
-  | "reimbursement"
-  | "internal"
-  | "other";
-export type PartnerType =
-  | "customer"
-  | "supplier"
-  | "employee"
-  | "other"
-  | "customer_b2b";
-export type TransactionStatus =
-  | "pending"
-  | "approved"
-  | "confirmed"
-  | "cancelled"
-  | "completed";
+// 1. Dữ liệu Đơn hàng Treo (Trả về từ RPC get_pending_reconciliation_orders)
+export interface PendingReconciliationOrder {
+  order_id: string;        // UUID
+  order_code: string;      // SO-xxxx hoặc POS-xxxx
+  created_at: string;      // ISO Date
+  customer_code: string;   // Mã khách (để đối chiếu)
+  customer_name: string;
+  final_amount: number;
+  paid_amount: number;
+  remaining_amount: number; // Số tiền cần thu
+  payment_method: string;   // 'bank_transfer', 'debt', ...
+  source: 'B2B' | 'POS';
+}
 
-// Dữ liệu hiển thị trên bảng
+// 2. Dữ liệu Giao dịch Ngân hàng (Sau khi parse từ PDF/Excel)
+export interface BankTransaction {
+  key: string;             // Unique key (e.g. trans_0)
+  date: string;            // Ngày giao dịch (nếu parse được)
+  amount: number;          // Số tiền ghi có (Tiền vào)
+  debit: number;           // Số tiền ghi nợ (Tiền ra - nếu cần)
+  description: string;     // Nội dung giao dịch (quan trọng nhất)
+  raw_line: string;        // Dòng text gốc
+}
+
+// 3. Kết quả Khớp lệnh (Dùng cho State của bảng đối soát)
+export interface ReconciliationMatch {
+  key: string | number;
+  transaction: BankTransaction;        // Thông tin từ sao kê
+  matched_order_id: string | null;     // ID đơn hàng khớp (Null nếu chưa khớp)
+  status: 'matched' | 'unmatched';     // Trạng thái hiển thị
+  confidence_score?: number;           // (Optional) Độ tin cậy nếu sau này dùng AI
+}
+
+// 4. Tài khoản Quỹ
+export interface FundAccount {
+  id: number;
+  name: string;
+  type: string;
+  currency: string;
+  balance: number;
+  status: 'active' | 'inactive';
+}
+
+// 5. [RESTORED] Dữ liệu Giao dịch Tài chính (Full Record)
 export interface TransactionRecord {
   id: number;
   code: string;
-  transaction_date: string;
-  flow: TransactionFlow;
   amount: number;
-  fund_name: string;
-  partner_name: string;
-  category_name: string;
-  description: string;
-  business_type: BusinessType;
-  created_by_name: string;
-  status: TransactionStatus; // MỚI
-  total_count: number;
-
-  // Thông tin bổ sung
-  ref_advance_id?: number; // ID phiếu tạm ứng gốc
-  evidence_url?: string; // Ảnh chứng từ
-  cash_tally?: Record<string, number>; // Bảng kê tiền { "500000": 2, ... }
-}
-
-// Dữ liệu gửi lên để tạo mới
-export interface CreateTransactionParams {
-  p_flow: TransactionFlow;
-  p_business_type: BusinessType;
-  p_fund_account_id: number;
-  p_amount: number;
-  p_category_id?: number;
-  p_partner_type?: PartnerType;
-  p_partner_id?: string;
-  p_partner_name?: string;
-  p_description?: string;
-  p_evidence_url?: string;
-
-  // MỚI: Các trường nâng cấp V2
-  p_status?: TransactionStatus;
-  p_ref_advance_id?: number;
-  p_cash_tally?: Record<string, number>;
+  transaction_date: string; // ISO string
+  flow: 'in' | 'out';
+  business_type: 'trade' | 'advance' | 'reimbursement' | 'other' | string;
+  status: 'pending' | 'approved' | 'completed' | 'cancelled' | 'confirmed';
+  description?: string;
+  evidence_url?: string;
   
-  // [NEW] Tham chiếu tổng quát
-  p_ref_type?: string;
-  p_ref_id?: number;
+  // Fields from JOINs or RPC
+  fund_name?: string;
+  partner_name?: string;
+  created_by_name?: string;
+  cash_tally?: Record<string, number>; // Key: mệnh giá, Value: số lượng
+  total_count?: number; // For pagination
 }
 
+// 6. [RESTORED] Params tạo giao dịch (RPC create_finance_transaction)
+export interface CreateTransactionParams {
+  p_flow: 'in' | 'out';
+  p_business_type: string;
+  p_amount: number;
+  p_fund_id: number;
+  p_partner_id?: string;   // UUID or ID
+  p_partner_type?: 'customer' | 'supplier' | 'employee' | 'other';
+  p_partner_name?: string; // [ADDED]
+  p_description?: string;
+  p_transaction_date: string;
+  p_evidence_url?: string;
+  p_ref_doc_id?: string;    // e.g. order_id
+  p_ref_advance_id?: number | null; // ID phiếu tạm ứng (nếu là hoàn ứng)
+  p_cash_tally?: Record<string, number>;
+  p_category_id?: number; // [ADDED]
+  p_ref_type?: string; // [ADDED]
+  p_ref_id?: string; // [ADDED]
+  p_status?: string; // [ADDED]
+}
+
+// 7. [RESTORED] Bộ lọc giao dịch
 export interface TransactionFilter {
-  flow?: TransactionFlow;
+  flow?: 'in' | 'out';
   fund_id?: number;
   date_from?: string;
   date_to?: string;
-  status?: TransactionStatus; // MỚI
-  search?: string; // MỚI
+  search?: string;
+  status?: string;
 }

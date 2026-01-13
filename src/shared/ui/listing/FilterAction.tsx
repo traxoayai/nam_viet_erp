@@ -11,12 +11,13 @@ export interface FilterConfig {
 }
 
 export interface ActionConfig {
-  label: string;
+  label?: string;
   icon?: React.ReactNode;
-  onClick: () => void;
+  onClick?: () => void;
   type?: "primary" | "default" | "dashed" | "link" | "text";
   danger?: boolean;
   loading?: boolean; // [NEW]
+  render?: React.ReactNode; // [NEW] Support Custom Render (e.g Upload)
 }
 
 interface Props {
@@ -88,16 +89,20 @@ const FilterActionBase = ({
         <Col>
           <Space>
             {actions.map((act, idx) => (
-              <Button
-                key={idx}
-                type={act.type || "default"}
-                icon={act.icon}
-                onClick={act.onClick}
-                danger={act.danger}
-                loading={act.loading} // [NEW]
-              >
-                {act.label}
-              </Button>
+              act.render ? (
+                <React.Fragment key={idx}>{act.render}</React.Fragment>
+              ) : (
+                <Button
+                  key={idx}
+                  type={act.type || "default"}
+                  icon={act.icon}
+                  onClick={act.onClick}
+                  danger={act.danger}
+                  loading={act.loading}
+                >
+                  {act.label}
+                </Button>
+              )
             ))}
           </Space>
         </Col>

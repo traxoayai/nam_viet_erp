@@ -214,9 +214,10 @@ export const useFinanceFormLogic = (
       const payload: CreateTransactionParams = {
         p_flow: values.flow,
         p_business_type: values.business_type,
-        p_fund_account_id: values.fund_account_id,
+        p_fund_id: values.fund_account_id,
         p_amount: values.amount,
         p_category_id: values.category_id,
+        p_transaction_date: values.transaction_date ? values.transaction_date.toISOString() : new Date().toISOString(),
         p_description: values.description,
         p_status: "pending",
         p_evidence_url: evidenceUrl || undefined,

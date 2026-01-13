@@ -141,5 +141,15 @@ export const salesService = {
 
     if (error) throw error;
     return data;
+  },
+
+  // 9. [NEW] Xác nhận thu tiền đơn hàng (Bulk Action)
+  async confirmPayment(orderIds: (string | number)[], fundAccountId: number) {
+    const { error } = await supabase.rpc('confirm_order_payment', {
+      p_order_ids: orderIds,
+      p_fund_account_id: fundAccountId
+    });
+    if (error) throw error;
+    return true;
   }
 };

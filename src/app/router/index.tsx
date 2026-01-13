@@ -18,6 +18,7 @@ import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 import FinanceTransactionPage from "@/pages/finance/FinanceTransactionPage";
 import InvoiceListPage from "@/pages/finance/invoices/InvoiceListPage";
 import InvoiceVerifyPage from "@/pages/finance/invoices/InvoiceVerifyPage";
+import ReconciliationPage from "@/pages/finance/ReconciliationPage";	
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
 import WarehouseInboundPage from "@/pages/inventory/receipt/WarehouseInboundPage";
@@ -377,7 +378,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "finance/reconciliation",
-            element: <PagePlaceholder title="Đối Soát Giao Dịch" />,
+            element: <ReconciliationPage />,
           },
           {
             path: "finance/accounting/chart-of-accounts",

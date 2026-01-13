@@ -257,7 +257,7 @@ export const TransactionDetailModal: React.FC<Props> = ({
                 color="default"
                 style={{ padding: "4px 10px", fontSize: 13 }}
               >
-                {Number(denom).toLocaleString()}đ x <b>{count}</b>
+                {Number(denom).toLocaleString()}đ x <b>{Number(count)}</b>
               </Tag>
             ))}
           </div>
