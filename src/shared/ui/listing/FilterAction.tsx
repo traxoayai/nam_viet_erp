@@ -16,6 +16,7 @@ export interface ActionConfig {
   onClick: () => void;
   type?: "primary" | "default" | "dashed" | "link" | "text";
   danger?: boolean;
+  loading?: boolean; // [NEW]
 }
 
 interface Props {
@@ -93,6 +94,7 @@ const FilterActionBase = ({
                 icon={act.icon}
                 onClick={act.onClick}
                 danger={act.danger}
+                loading={act.loading} // [NEW]
               >
                 {act.label}
               </Button>

@@ -21,7 +21,8 @@ const B2B_LICENSE_BUCKET = "customer_b2b_licenses";
 export const fetchCustomers = async (
   filters: any,
   page: number,
-  pageSize: number
+  pageSize: number,
+  sortByDebt: 'asc' | 'desc' | null = null // [NEW] Thêm tham số
 ): Promise<{ data: CustomerB2BListRecord[]; totalCount: number }> => {
   const { data, error } = await supabase.rpc("get_customers_b2b_list", {
     search_query: filters.search_query || null,
@@ -29,12 +30,13 @@ export const fetchCustomers = async (
     status_filter: filters.status_filter || null,
     page_num: page,
     page_size: pageSize,
+    sort_by_debt: sortByDebt // [NEW] Truyền xuống RPC
   });
 
   if (error) throw error;
 
   const totalCount = data && data.length > 0 ? data[0].total_count : 0;
-  return { data: data || [], totalCount: totalCount || 0 };
+  return { data: data || [], totalCount: Number(totalCount) };
 };
 
 /**
@@ -105,47 +107,45 @@ export const reactivateCustomer = async (id: number): Promise<boolean> => {
 // SỬA FILE: src/services/customerService.ts
 
 const B2B_COLUMN_MAP: Record<string, string> = {
-    // 1. Mã Khách Hàng (Chấp nhận nhiều cách gọi)
+    // 1. Tên Công ty (Bắt buộc)
+    'Tên Công ty': 'name', 
+    'Tên Nhà thuốc': 'name',
+    'Tên Doanh nghiệp': 'name',
+    'Họ và Tên': 'name', // Dự phòng nếu dùng mẫu cũ
+
+    // 2. Mã Khách hàng
     'Mã Khách hàng': 'customer_code',
     'Mã KH': 'customer_code',
-    'Mã khách': 'customer_code',
 
-    // 2. Họ tên
-    'Họ và Tên': 'name',
-    'Tên Khách Hàng': 'name',
-    'Tên': 'name',
-
-    // 3. Số điện thoại
+    // 3. Thông tin liên hệ chính
     'Số điện thoại': 'phone',
     'SĐT': 'phone',
-    'SDT': 'phone',
-
-    // 4. Loại Khách Hàng (QUAN TRỌNG)
-    'Loại khách': 'type',
-    'Loại KH': 'type',
-    'Loại hình': 'type',        // CaNhan hoặc ToChuc
-    'Đối tượng': 'type',
-
-    // 5. Các thông tin khác
-    'Điểm tích lũy': 'loyalty_points',
-    'Điểm': 'loyalty_points',
-    'Địa chỉ': 'address',
     'Email': 'email',
-    'Ngày sinh': 'dob',
-    'Giới tính': 'gender',
-    'Số CCCD': 'cccd',
-    'CMND': 'cccd',
 
-    // 6. Thông tin Tổ chức (Nếu là Doanh nghiệp lẻ)
-    'Mã số thuế': 'tax_code',
+    // 4. Thông tin Pháp lý & Địa chỉ (Đặc thù B2B)
+    'Mã Số Thuế': 'tax_code', 
     'MST': 'tax_code',
-    'Người liên hệ': 'contact_person_name',
-    'SĐT Liên hệ': 'contact_person_phone',
+    'Địa chỉ ĐKKD': 'vat_address',      // Địa chỉ xuất hóa đơn
+    'Địa chỉ Xuất hóa đơn': 'vat_address',
+    'Địa chỉ': 'vat_address',           // Fallback
+    'Địa chỉ Giao hàng': 'shipping_address',
+    'Địa chỉ Kho': 'shipping_address',
 
-    // 7. Nợ cũ
+    // 5. Chính sách bán hàng (Đặc thù B2B)
+    'Hạn mức nợ': 'debt_limit',
+    'Hạn mức': 'debt_limit',
+    'Kỳ hạn thanh toán': 'payment_term',
+    'Số ngày nợ': 'payment_term',
+
+    // 6. Thông tin Ngân hàng
+    'Tên Ngân hàng': 'bank_name',
+    'Số Tài khoản': 'bank_account_number',
+    'Tên Chủ Tài khoản': 'bank_account_name',
+
+    // 7. Nợ Đầu kỳ
     'Nợ Hiện Tại': 'initial_debt',
-    'Dư Nợ': 'initial_debt',
-    'Công Nợ Đầu Kỳ': 'initial_debt'
+    'Công Nợ Đầu Kỳ': 'initial_debt',
+    'Dư Nợ': 'initial_debt'
 };
 
 export const importCustomers = async (file: File): Promise<number> => {
@@ -153,33 +153,67 @@ export const importCustomers = async (file: File): Promise<number> => {
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      
+      // Đọc file (Ô trống -> null)
       const rawData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: null });
 
-      if (rawData.length === 0) { reject(new Error("File Rỗng")); return; }
+      if (rawData.length === 0) {
+        reject(new Error("File Excel rỗng."));
+        return;
+      }
 
-      const cleanedArray = rawData.map((row) => {
-         const newRow: any = {};
+      const cleanedArray = rawData.map((row: any) => {
+         const newRow: any = {
+             // Khởi tạo giá trị mặc định để tránh undefined
+             name: null,
+             phone: null,
+             initial_debt: 0
+         };
+
          Object.keys(row).forEach((excelHeader) => {
             const cleanHeader = excelHeader.trim();
-            const dbKey = B2B_COLUMN_MAP[cleanHeader] || cleanHeader;
+            // Map tiêu đề (Xử lý cả trường hợp viết hoa/thường nhẹ nhàng hơn nếu cần)
+            const dbKey = B2B_COLUMN_MAP[cleanHeader] || B2B_COLUMN_MAP[cleanHeader.replace(/\s+/g, ' ')] || cleanHeader;
             
             let value = row[excelHeader];
-            // Format số
-            if (['initial_debt', 'debt_limit', 'payment_term'].includes(dbKey) && typeof value === 'string') {
-                value = parseFloat(value.replace(/,/g, ''));
+            
+            // Xử lý số liệu (Nợ, Hạn mức...)
+            if (['initial_debt', 'debt_limit', 'payment_term'].includes(dbKey)) {
+                if (typeof value === 'string') {
+                    const cleanVal = value.replace(/\D/g, ''); 
+                    value = cleanVal ? Number(cleanVal) : 0;
+                } else if (typeof value !== 'number') {
+                    value = 0;
+                }
             }
-            newRow[dbKey] = value;
+            
+            // Chỉ gán nếu map được key hợp lệ
+            if (dbKey) {
+                newRow[dbKey] = value;
+            }
          });
          return newRow;
       });
 
+      // [QUAN TRỌNG] BƯỚC LỌC DỮ LIỆU RÁC (FIX LỖI CỦA SẾP)
+      // Chỉ lấy những dòng có Tên Công Ty
+      const validArray = cleanedArray.filter((item: any) => item.name && String(item.name).trim() !== '');
+
+      if (validArray.length === 0) {
+          reject(new Error("Không tìm thấy dữ liệu hợp lệ. Vui lòng kiểm tra cột 'Tên Công ty'."));
+          return;
+      }
+
+      console.log("Valid Data B2B to Upload:", validArray); // Log để kiểm tra
+
       const { error } = await supabase.rpc("bulk_upsert_customers_b2b", {
-        p_customers_array: cleanedArray,
+        p_customers_array: validArray,
       });
 
       if (error) throw error;
-      resolve(cleanedArray.length);
+      resolve(validArray.length);
     } catch (error) {
       console.error("Import B2B Error:", error);
       reject(error);

@@ -4,8 +4,14 @@ import {
   FileTextOutlined,
   WarningOutlined,
   PlusOutlined,
+  FileExcelOutlined,
+  CloudUploadOutlined,
+  CheckCircleOutlined,
 } from "@ant-design/icons";
+import { Button, message, Tooltip } from "antd"; // Add Button, message
 import { useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react"; // Add hooks
+
 import { B2BOrderColumns } from "./components/B2BOrderColumns";
 import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders";
 import { FilterAction } from "@/shared/ui/listing/FilterAction";
@@ -13,29 +19,105 @@ import { SmartTable } from "@/shared/ui/listing/SmartTable";
 import { StatHeader } from "@/shared/ui/listing/StatHeader";
 import { B2B_STATUS_LABEL } from "@/shared/utils/b2bConstants";
 
+// --- [NEW] MODULE HÓA ĐƠN ---
+import { InvoiceRequestModal } from "@/shared/ui/sales/InvoiceRequestModal";
+import { generateInvoiceExcel } from "@/shared/utils/invoiceExcelGenerator";
+import { salesService } from "@/features/sales/api/salesService";
+
 const B2BOrderListPage = () => {
   const navigate = useNavigate();
 
-  // AURA chỉ việc gọi Hook và lấy data, không quan tâm logic bên trong
-  const { tableProps, filterProps, stats, currentFilters } = useSalesOrders({ orderType: 'B2B' });
+  // --- 1. STATE & HOOKS ---
+  const { tableProps, filterProps, stats, currentFilters, refresh } = useSalesOrders({ orderType: 'B2B' });
 
-  // Config StatHeader (Dashboard mini) từ data stats của Nexus
-  // Note: New stats structure is { total_sales, count_pending_remittance, total_cash_pending } from get_sales_orders_view
-  // But B2B page previously expected { sales_this_month, draft_count, pending_payment }
-  // The new RPC `get_sales_orders_view` stats are different.
-  // I should adapt statItems to reflect available stats or map them if possible.
-  // The RPC returns: 'total_sales' (sales_this_month approx), 'count_pending_remittance', 'total_cash_pending'.
-  // It does NOT return 'draft_count' or 'pending_payment' (unpaid orders) in the specific `stats` jsonb from RPC as described in Step 1249.
-  // RPC logic:
-  // 'total_sales': SUM(final_amount) FILTER (WHERE status NOT IN ('DRAFT', 'CANCELLED'))
-  // 'count_pending_remittance': ...
-  // 'total_cash_pending': ...
+  // State Xuất Hóa Đơn
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [currentOrderForInvoice, setCurrentOrderForInvoice] = useState<any>(null);
+  const [exportInvoiceLoading, setExportInvoiceLoading] = useState(false);
   
-  // So 'draft_count' and 'pending_payment' are MISSING from the new RPC stats object.
-  // I will map 'total_sales' to 'Doanh số', and maybe hide others or placeholders?
-  // User instruction: "Các logic hiển thị khác giữ nguyên hoặc tinh chỉnh cột cho phù hợp".
-  // I will adjust stats to show available info.
+  // State Chọn Hàng Loạt
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  // --- 2. HANDLERS ---
   
+  // A. Mở Modal Yêu cầu VAT
+  const handleRequestInvoice = (record: any) => {
+      setCurrentOrderForInvoice(record);
+      setIsInvoiceModalOpen(true);
+  };
+
+  // B. Lưu Yêu cầu VAT
+  const handleSaveInvoiceRequest = async (values: any) => {
+      if (!currentOrderForInvoice) return;
+      try {
+          await salesService.updateInvoiceRequest(currentOrderForInvoice.id, values);
+          message.success("Đã cập nhật yêu cầu xuất hóa đơn!");
+          setIsInvoiceModalOpen(false);
+          refresh(); // Reload bảng để cập nhật icon
+      } catch (err: any) {
+          message.error("Lỗi: " + err.message);
+      }
+  };
+
+  // C. Xuất Excel Misa
+  const handleExportInvoiceExcel = async () => {
+      if (selectedRowKeys.length === 0) {
+          message.warning("Vui lòng chọn các đơn hàng cần xuất!");
+          return;
+      }
+      setExportInvoiceLoading(true);
+      try {
+          // Lấy dữ liệu chi tiết
+          const ordersData = await salesService.getOrdersForInvoiceExport(selectedRowKeys as string[]);
+          // Gọi Utility tạo file
+          generateInvoiceExcel(ordersData);
+          message.success(`Đã xuất file cho ${ordersData.length} đơn hàng.`);
+          setSelectedRowKeys([]); // Reset chọn
+      } catch (err: any) {
+          message.error("Xuất file thất bại: " + err.message);
+      } finally {
+          setExportInvoiceLoading(false);
+      }
+  };
+
+  // --- 3. COLUMNS CONFIG ---
+  const columns = useMemo(() => {
+    // Clone cột cũ và thêm cột Action
+    return [
+      ...B2BOrderColumns,
+      {
+        title: "Hóa Đơn",
+        key: "invoice_action",
+        width: 100,
+        align: "center" as const,
+        render: (_: any, record: any) => {
+           const isPending = record.invoice_status === 'pending';
+           const isIssued = record.invoice_status === 'issued';
+           
+           if (isIssued) {
+             return <Tooltip title="Đã xuất HĐ"><CheckCircleOutlined style={{ color: '#52c41a' }} /></Tooltip>;
+           }
+
+           return (
+             <Tooltip title={isPending ? "Đang chờ xuất (Click để sửa)" : "Yêu cầu Xuất VAT"}>
+                <Button 
+                   size="small" 
+                   type={isPending ? "dashed" : "text"}
+                   style={{ color: isPending ? '#faad14' : undefined }}
+                   icon={<CloudUploadOutlined />}
+                   onClick={(e) => {
+                       e.stopPropagation(); // Tránh click row
+                       handleRequestInvoice(record);
+                   }}
+                />
+             </Tooltip>
+           );
+        }
+      }
+    ];
+  }, []); // Cột Action phụ thuộc vào logic render
+
+  // --- 4. DATA PREP ---
   const statItems = [
     {
       title: "Doanh số (Đã chốt)",
@@ -57,22 +139,16 @@ const B2BOrderListPage = () => {
     },
   ];
 
-  // Config Filter Options từ Utils của Nexus
   const statusOptions = Object.entries(B2B_STATUS_LABEL).map(
-    ([val, label]) => ({
-      label,
-      value: val,
-    })
+    ([val, label]) => ({ label, value: val })
   );
 
   return (
     <div style={{ padding: 8, background: "#e1e1dfff", minHeight: "100vh" }}>
-      {/* 1. Header Chỉ số */}
       <StatHeader items={statItems} loading={tableProps.loading} />
 
-      {/* 2. Thanh công cụ & Bộ lọc */}
       <FilterAction
-        {...filterProps} // Spread props: onSearch, onRefresh...
+        {...filterProps}
         searchPlaceholder="Tìm mã đơn, tên khách..."
         filterValues={currentFilters}
         filters={[
@@ -83,6 +159,14 @@ const B2BOrderListPage = () => {
           },
         ]}
         actions={[
+          // [NEW] Nút Export Misa
+          {
+            label: "Xuất File Kế Toán (Misa)",
+            icon: <FileExcelOutlined />,
+            onClick: handleExportInvoiceExcel,
+            type: "default", // Style nhẹ nhàng
+            loading: exportInvoiceLoading, // [FIX] Sử dụng biến state
+          },
           {
             label: "Tạo đơn mới",
             type: "primary",
@@ -92,15 +176,35 @@ const B2BOrderListPage = () => {
         ]}
       />
 
-      {/* 3. Bảng dữ liệu */}
       <SmartTable
-        {...tableProps} // Spread props: dataSource, loading, pagination...
-        columns={B2BOrderColumns}
+        {...tableProps}
+        columns={columns} // Use extended columns
         emptyText="Chưa có đơn hàng nào"
+        // [NEW] Row Selection
+        rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+            preserveSelectedRowKeys: true
+        }}
         onRow={(record) => ({
-          onClick: () => navigate(`/b2b/orders/${record.id}`), // Click xem chi tiết
+          onClick: () => navigate(`/b2b/orders/${record.id}`),
           style: { cursor: "pointer" },
         })}
+      />
+
+      {/* [NEW] MODAL RENDER */}
+      <InvoiceRequestModal 
+          visible={isInvoiceModalOpen}
+          onCancel={() => setIsInvoiceModalOpen(false)}
+          onSave={handleSaveInvoiceRequest}
+          loading={false}
+          initialData={
+            currentOrderForInvoice ? {
+                // Map dữ liệu có sẵn từ đơn hàng (nếu có snapshot customer)
+                // Giả định record có customer_name, có thể mở rộng sau
+                name: currentOrderForInvoice.customer_name, 
+            } : undefined
+          }
       />
     </div>
   );

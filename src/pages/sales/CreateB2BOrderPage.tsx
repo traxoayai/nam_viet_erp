@@ -21,6 +21,7 @@ import { ShippingForm } from "@/features/sales/components/Header/ShippingForm";
 import { SalesOrderTable } from "@/features/sales/components/ProductGrid/SalesOrderTable";
 import { useCreateOrderB2B } from "@/features/sales/hooks/useCreateOrderB2B";
 import { ActionButtons } from "@/features/sales/components/Footer/ActionButtons";
+//import { ProductSearchB2B } from "@/components/search/ProductSearchB2B";
 
 const { Content } = Layout;
 const { Title } = Typography;
@@ -141,15 +142,13 @@ const CreateB2BOrderPage = () => {
           {/* CỘT TRÁI: ĐIỀU CHỈNH TỪ 18 -> 16 */}
           <Col span={16}>
             <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: 0 }}>
-              {" "}
-              {/* Padding 0 để InfoCard full viền */}
+              {/* ... [Keep Customer Logic] ... */}
               {!customer ? (
                 <div style={{ padding: 20 }}>
                   <CustomerSelector onSelect={setCustomer} />
                 </div>
               ) : (
                 <>
-                  {/* CustomerInfoCard đã tự có padding */}
                   <CustomerInfoCard
                     customer={customer}
                     onClear={() => setCustomer(null)}
@@ -169,6 +168,14 @@ const CreateB2BOrderPage = () => {
                 </>
               )}
             </Card>
+
+            {/* [NEW] CHÈN THANH TÌM KIẾM VÀO ĐÂY */}
+            {/* <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: 12 }}>
+                <ProductSearchB2B 
+                    onSelect={addItem} 
+                    warehouseId={1} // Hardcode tạm hoặc lấy từ state
+                />
+            </Card> */}
 
             <SalesOrderTable
               items={items}

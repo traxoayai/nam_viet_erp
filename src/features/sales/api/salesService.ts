@@ -22,11 +22,12 @@ export const salesService = {
   },
 
   // 2. Tìm sản phẩm (Type ProductB2B giờ đã có shelf_location)
-  async searchProducts(keyword: string): Promise<ProductB2B[]> {
+  async searchProducts(keyword: string, warehouseId: number = 1): Promise<ProductB2B[]> {
     const { data, error } = await supabase.rpc(
       "search_products_for_b2b_order",
       {
         p_keyword: keyword || "",
+        p_warehouse_id: warehouseId // [FIX]
       }
     );
     if (error) return [];
@@ -88,6 +89,8 @@ export const salesService = {
       console.error("Get Orders Error:", error);
       return { data: [], total: 0, stats: {} };
     }
+
+
     
     // Core trả về JSONB { data, total, stats }
     return data as {
@@ -99,5 +102,44 @@ export const salesService = {
             total_cash_pending: number;
         }
     };
+  },
+
+  // 7. [NEW] Cập nhật Yêu cầu Xuất Hóa Đơn
+  async updateInvoiceRequest(orderId: string, invoiceData: any) {
+    // invoiceData: { companyName, taxCode, address, email, ... }
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        invoice_status: 'pending', // Chuyển trạng thái thành "Chờ xuất"
+        invoice_request_data: invoiceData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', orderId);
+
+    if (error) throw error;
+    return true;
+  },
+
+  // 8. [NEW] Lấy dữ liệu chi tiết để Xuất Excel Kế toán
+  // Hàm này sẽ lấy cả thông tin đơn hàng và danh sách sản phẩm (order_items)
+  async getOrdersForInvoiceExport(orderIds: string[]) {
+    // Lấy thông tin đơn hàng + items
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
+          product_name,
+          unit_name,
+          quantity,
+          unit_price,
+          total_price,
+          vat_rate -- Cần đảm bảo bảng order_items có cột này hoặc lấy từ product
+        )
+      `)
+      .in('id', orderIds);
+
+    if (error) throw error;
+    return data;
   }
 };

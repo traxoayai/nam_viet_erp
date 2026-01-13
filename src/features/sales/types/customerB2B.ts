@@ -48,8 +48,9 @@ export interface CustomerB2BListRecord {
   phone: string | null;
   sales_staff_name: string | null;
   debt_limit: number | null;
-  current_debt: number; // Tạm thời
+  current_debt: number; // Số tiền nợ
   status: CustomerStatus;
+  total_count: number;
 }
 
 // 4. Lịch sử GD (Tạm thời, sẽ nâng cấp)
@@ -101,8 +102,9 @@ export interface CustomerB2BStoreState {
   page: number;
   pageSize: number;
   filters: any; // Hàm
+  sortDebt: 'asc' | 'desc' | null; // [NEW]
 
-  fetchCustomers: (filters: any) => Promise<void>;
+  fetchCustomers: (filters: any, sortDebt?: 'asc' | 'desc' | null) => Promise<void>;
   getCustomerDetails: (id: number) => Promise<void>;
   createCustomer: (data: any, contacts: any[]) => Promise<number | null>;
   updateCustomer: (id: number, data: any, contacts: any[]) => Promise<boolean>;

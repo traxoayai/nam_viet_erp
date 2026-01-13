@@ -449,6 +449,16 @@ const CustomerB2BPage: React.FC = () => {
   // 1. Giao diện Danh sách (List View)
 
   const renderListView = () => {
+    // [NEW] Xử lý Sort Table
+    const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
+        if (sorter.field === 'current_debt') {
+            const order = sorter.order === 'ascend' ? 'asc' : (sorter.order === 'descend' ? 'desc' : null);
+            fetchCustomers({}, order); // Gọi store fetch với sort mới
+        } else {
+            fetchCustomers({}, null); // Reset sort
+        }
+    };
+
     const columns: TableProps<CustomerB2BListRecord>["columns"] = [
       {
         title: "Mã KH (B2B)",
@@ -478,14 +488,16 @@ const CustomerB2BPage: React.FC = () => {
         width: 180,
         render: (name) => name || <Text type="secondary">Chưa gán</Text>,
       },
+      // [NEW] CỘT NỢ HIỆN TẠI (Thay thế hoặc sửa cột cũ)
       {
         title: "Nợ Hiện tại",
         dataIndex: "current_debt",
         key: "current_debt",
         width: 150,
         align: "right",
+        sorter: true, // [NEW] Bật sort header
         render: (no) => (
-          <Text strong style={{ color: no > 0 ? "#cf1322" : "#595959" }}>
+          <Text strong style={{ color: no > 0 ? "#cf1322" : "#52c41a" }}>
             {currencyFormatter(no)}
           </Text>
         ),
@@ -639,6 +651,7 @@ const CustomerB2BPage: React.FC = () => {
             ) : null}
                 {/* --- KẾT THÚC THANH HÀNH ĐỘNG --- */}
             <Table
+              onChange={handleTableChange} // [NEW] Gắn hàm xử lý sort
               rowSelection={rowSelection}
               columns={columns}
               dataSource={customers}
