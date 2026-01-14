@@ -1,3 +1,4 @@
+// src/pages/sales/B2BOrderListPage.tsx
 import {
   DollarCircleOutlined,
   FileTextOutlined,
@@ -6,24 +7,28 @@ import {
   FileExcelOutlined,
   CloudUploadOutlined,
   CheckCircleOutlined,
+  SyncOutlined,
+  CarOutlined,
+  ShopOutlined,
 } from "@ant-design/icons";
-import { Button, message, Tooltip, Modal, Select, Upload } from "antd"; // Add Modal, Select, Upload
+import { Button, message, Tooltip, Modal, Select, Upload, Tag, Typography } from "antd";
 import { useNavigate } from "react-router-dom";
-import { useMemo, useState, useEffect } from "react"; // Add useEffect
+import { useMemo, useState, useEffect } from "react";
+import dayjs from "dayjs";
 
-import { B2BOrderColumns } from "./components/B2BOrderColumns";
 import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders";
 import { FilterAction } from "@/shared/ui/listing/FilterAction";
 import { SmartTable } from "@/shared/ui/listing/SmartTable";
 import { StatHeader } from "@/shared/ui/listing/StatHeader";
-import { B2B_STATUS_LABEL } from "@/shared/utils/b2bConstants";
-import { parseBankStatement } from "@/shared/utils/bankStatementParser"; // Add this
+import { parseBankStatement } from "@/shared/utils/bankStatementParser";
 
-// --- [NEW] MODULE HÓA ĐƠN ---
+// --- MODULE HÓA ĐƠN & TÀI CHÍNH ---
 import { InvoiceRequestModal } from "@/shared/ui/sales/InvoiceRequestModal";
 import { generateInvoiceExcel } from "@/shared/utils/invoiceExcelGenerator";
 import { salesService } from "@/features/sales/api/salesService";
-import { supabase } from "@/shared/lib/supabaseClient"; // Add this
+import { supabase } from "@/shared/lib/supabaseClient";
+
+const { Text } = Typography;
 
 const B2BOrderListPage = () => {
   const navigate = useNavigate();
@@ -46,7 +51,6 @@ const B2BOrderListPage = () => {
 
   // --- 2. EFFECT: LOAD QUỸ ---
   useEffect(() => {
-    // Load danh sách quỹ active khi mount
     supabase.from('fund_accounts').select('id, name').eq('status', 'active')
       .then(({ data }) => {
         setFundAccounts(data || []);
@@ -54,15 +58,14 @@ const B2BOrderListPage = () => {
       });
   }, []);
 
-  // --- 3. HANDLERS ---
+  // --- 3. HANDLERS (LOGIC) ---
 
   // A. Xử lý Upload Sao kê/Đối soát
   const handleUploadStatement = async (file: File) => {
     try {
         message.loading({ content: "Đang đọc sao kê...", key: "upload" });
-        const transactions = await parseBankStatement(file); // Returns BankTransaction[]
+        const transactions = await parseBankStatement(file);
 
-        // Extract codes from transactions
         const codes: string[] = [];
         transactions.forEach(t => {
             const matches = t.description.match(/(SO|DH)[- ]?\d+/gi);
@@ -72,29 +75,28 @@ const B2BOrderListPage = () => {
         });
         const uniqueCodes = [...new Set(codes)];
 
-
         if (uniqueCodes.length === 0) {
             message.warning({ content: "Không tìm thấy mã SO- nào trong file.", key: "upload" });
             return false;
         }
 
-        const ordersList = tableProps.dataSource || []; // Chỉ đối soát trên trang hiện tại
-        // Tìm ID đơn hàng khớp mã
+        const ordersList = tableProps.dataSource || [];
+        // Chỉ tìm những đơn chưa thanh toán (unpaid)
         const matchedIds = ordersList
             .filter((o: any) => uniqueCodes.includes(o.code) && o.payment_status !== 'paid')
             .map((o: any) => o.id);
 
         if (matchedIds.length > 0) {
-            setSelectedRowKeys(matchedIds); // Tự động tick
+            setSelectedRowKeys(matchedIds);
             message.success({ content: `Đã tìm thấy ${matchedIds.length} đơn hàng khớp!`, key: "upload" });
-            setIsPaymentModalOpen(true); // Mở modal xác nhận ngay
+            setIsPaymentModalOpen(true);
         } else {
             message.info({ content: "Mã đơn trong file không khớp đơn nào đang chờ thanh toán (trên trang này).", key: "upload" });
         }
     } catch (err: any) {
         message.error({ content: err.message, key: "upload" });
     }
-    return false; // Prevent default upload behavior
+    return false;
   };
   
   // B. Mở Modal Yêu cầu VAT
@@ -110,7 +112,7 @@ const B2BOrderListPage = () => {
           await salesService.updateInvoiceRequest(currentOrderForInvoice.id, values);
           message.success("Đã cập nhật yêu cầu xuất hóa đơn!");
           setIsInvoiceModalOpen(false);
-          refresh(); // Reload bảng để cập nhật icon
+          refresh();
       } catch (err: any) {
           message.error("Lỗi: " + err.message);
       }
@@ -124,12 +126,10 @@ const B2BOrderListPage = () => {
       }
       setExportInvoiceLoading(true);
       try {
-          // Lấy dữ liệu chi tiết
           const ordersData = await salesService.getOrdersForInvoiceExport(selectedRowKeys as string[]);
-          // Gọi Utility tạo file
           generateInvoiceExcel(ordersData);
           message.success(`Đã xuất file cho ${ordersData.length} đơn hàng.`);
-          setSelectedRowKeys([]); // Reset chọn
+          setSelectedRowKeys([]);
       } catch (err: any) {
           message.error("Xuất file thất bại: " + err.message);
       } finally {
@@ -137,12 +137,104 @@ const B2BOrderListPage = () => {
       }
   };
 
-  // --- 4. COLUMNS CONFIG ---
-  const columns = useMemo(() => {
-    // Clone cột cũ và thêm cột Action
-    return [
-      ...B2BOrderColumns,
-      {
+  // --- 4. CẤU HÌNH CỘT (COLUMNS DEFINITION) ---
+  const columns = useMemo(() => [
+    // 2. Ngày giờ tạo đơn
+    {
+        title: "Ngày tạo",
+        dataIndex: "created_at",
+        width: 140,
+        render: (date: string) => dayjs(date).format("DD/MM/YYYY HH:mm"),
+    },
+    // 3. Mã đơn hàng
+    {
+        title: "Mã đơn",
+        dataIndex: "code",
+        width: 150,
+        render: (code: string) => <Text strong copyable>{code}</Text>,
+    },
+    // 4. Tên khách hàng
+    {
+        title: "Khách hàng",
+        dataIndex: "customer_name",
+        width: 200,
+        render: (name: string, record: any) => (
+            <div>
+                <Text strong>{name}</Text>
+                <div style={{ fontSize: 11, color: '#666' }}>{record.customer_phone}</div>
+            </div>
+        ),
+    },
+    // 5. Tổng tiền
+    {
+        title: "Tổng tiền",
+        dataIndex: "final_amount",
+        align: "right" as const,
+        width: 150,
+        render: (val: number) => (
+            <Text strong style={{ color: '#1890ff' }}>
+                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val)}
+            </Text>
+        ),
+    },
+    // 6. Trạng thái đơn hàng (Lifecycle)
+    {
+        title: "Trạng thái Đơn",
+        dataIndex: "status",
+        width: 140,
+        render: (status: string) => {
+            const map: any = {
+                DRAFT: { color: 'default', text: 'Nháp' },
+                QUOTE: { color: 'purple', text: 'Báo giá' },
+                CONFIRMED: { color: 'blue', text: 'Đã xác nhận' },
+                SHIPPING: { color: 'cyan', text: 'Đang giao' },
+                COMPLETED: { color: 'green', text: 'Hoàn thành' },
+                CANCELLED: { color: 'red', text: 'Đã hủy' },
+            };
+            const s = map[status] || { color: 'default', text: status };
+            return <Tag color={s.color}>{s.text}</Tag>;
+        }
+    },
+    // 7. Trạng thái vận chuyển (Realtime Logistics)
+    {
+        title: "Vận chuyển",
+        key: "shipping_status",
+        width: 160,
+        render: (_: any, record: any) => {
+            // Logic hiển thị vận chuyển dựa trên status và delivery_method
+            if (record.delivery_method === 'self_shipping' || record.order_type === 'POS') {
+                return <Tag icon={<ShopOutlined />}>Tại quầy</Tag>;
+            }
+            if (record.status === 'CONFIRMED') return <Tag color="orange" icon={<SyncOutlined spin />}>Chờ đóng gói</Tag>;
+            if (record.status === 'SHIPPING') return <Tag color="geekblue" icon={<CarOutlined />}>Đang giao hàng</Tag>;
+            if (record.status === 'DELIVERED' || record.status === 'COMPLETED') return <Tag color="green">Khách đã nhận</Tag>;
+            if (record.status === 'CANCELLED') return <Text type="secondary">-</Text>;
+            return <Text type="secondary">Chờ xử lý</Text>;
+        }
+    },
+    // 8. Trạng thái thanh toán (Paid/Unpaid/Reconciled)
+    {
+        title: "Thanh toán",
+        key: "payment_status",
+        width: 150,
+        render: (_: any, record: any) => {
+            // Ưu tiên check paid_amount đủ chưa
+            const isPaid = record.payment_status === 'paid' || (record.paid_amount >= record.final_amount && record.final_amount > 0);
+            
+            if (isPaid) {
+                return <Tag color="success" icon={<CheckCircleOutlined />}>Đã thanh toán</Tag>;
+            }
+            
+            // Nếu chưa trả, check xem có phải đang chờ đối soát CK không
+            if (record.payment_method === 'bank_transfer' || record.payment_method === 'debt') {
+                return <Tag color="red">Chưa thanh toán</Tag>;
+            }
+            
+            return <Tag color="warning">Công nợ</Tag>;
+        }
+    },
+    // 9. Hóa đơn VAT
+    {
         title: "Hóa Đơn",
         key: "invoice_action",
         width: 100,
@@ -152,29 +244,30 @@ const B2BOrderListPage = () => {
            const isIssued = record.invoice_status === 'issued';
            
            if (isIssued) {
-             return <Tooltip title="Đã xuất HĐ"><CheckCircleOutlined style={{ color: '#52c41a' }} /></Tooltip>;
+             return <Tooltip title="Đã xuất HĐ"><CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18 }} /></Tooltip>;
            }
 
            return (
-             <Tooltip title={isPending ? "Đang chờ xuất (Click để sửa)" : "Yêu cầu Xuất VAT"}>
+             <Tooltip title={isPending ? "Đang chờ xuất (Click sửa)" : "Yêu cầu Xuất VAT"}>
                 <Button 
                    size="small" 
                    type={isPending ? "dashed" : "text"}
-                   style={{ color: isPending ? '#faad14' : undefined }}
+                   style={{ color: isPending ? '#faad14' : undefined, borderColor: isPending ? '#faad14' : undefined }}
                    icon={<CloudUploadOutlined />}
                    onClick={(e) => {
-                       e.stopPropagation(); // Tránh click row
+                       e.stopPropagation();
                        handleRequestInvoice(record);
                    }}
-                />
+                >
+                   {isPending ? "Chờ xuất" : ""}
+                </Button>
              </Tooltip>
            );
         }
-      }
-    ];
-  }, []); // Cột Action phụ thuộc vào logic render
+    }
+  ], []);
 
-  // --- 5. DATA PREP ---
+  // --- 5. DATA PREP (STATS) ---
   const statItems = [
     {
       title: "Doanh số (Đã chốt)",
@@ -189,16 +282,12 @@ const B2BOrderListPage = () => {
       icon: <WarningOutlined />,
     },
      {
-      title: "Số đơn chờ nộp",
+      title: "Đơn chờ thanh toán",
       value: stats?.count_pending_remittance || 0,
       color: "#ff4d4f",
       icon: <FileTextOutlined />,
     },
   ];
-
-  const statusOptions = Object.entries(B2B_STATUS_LABEL).map(
-    ([val, label]) => ({ label, value: val })
-  );
 
   return (
     <div style={{ padding: 8, background: "#e1e1dfff", minHeight: "100vh" }}>
@@ -212,11 +301,15 @@ const B2BOrderListPage = () => {
           {
             key: "status",
             placeholder: "Lọc trạng thái",
-            options: statusOptions,
+            options: [
+                { label: 'Hoàn thành', value: 'COMPLETED' },
+                { label: 'Đang giao', value: 'SHIPPING' },
+                { label: 'Đã xác nhận', value: 'CONFIRMED' },
+                { label: 'Đã hủy', value: 'CANCELLED' },
+            ],
           },
         ]}
         actions={[
-          // [NEW] Nút Upload Đối soát
           {
             render: (
               <Upload 
@@ -224,20 +317,19 @@ const B2BOrderListPage = () => {
                 showUploadList={false}
                 accept=".xlsx,.xls,.csv,.pdf"
               >
-                 <Button icon={<CloudUploadOutlined />}>Đọc Sao Kê (PDF/Excel)</Button>
+                 <Button icon={<CloudUploadOutlined />}>Đọc Sao Kê</Button>
               </Upload>
             )
           },
-          // [NEW] Nút Export Misa
           {
-            label: "Xuất File Kế Toán (Misa)",
+            label: "Xuất Excel Misa",
             icon: <FileExcelOutlined />,
             onClick: handleExportInvoiceExcel,
-            type: "default", // Style nhẹ nhàng
-            loading: exportInvoiceLoading, // [FIX] Sử dụng biến state
+            type: "default",
+            loading: exportInvoiceLoading,
           },
           {
-            label: "Tạo đơn mới",
+            label: "Tạo đơn B2B",
             type: "primary",
             icon: <PlusOutlined />,
             onClick: () => navigate("/b2b/create-order"),
@@ -247,9 +339,8 @@ const B2BOrderListPage = () => {
 
       <SmartTable
         {...tableProps}
-        columns={columns} // Use extended columns
+        columns={columns}
         emptyText="Chưa có đơn hàng nào"
-        // [NEW] Row Selection
         rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,
@@ -261,7 +352,7 @@ const B2BOrderListPage = () => {
         })}
       />
 
-      {/* [NEW] MODAL INVOICE RENDER */}
+      {/* MODAL INVOICE */}
       <InvoiceRequestModal 
           visible={isInvoiceModalOpen}
           onCancel={() => setIsInvoiceModalOpen(false)}
@@ -269,26 +360,21 @@ const B2BOrderListPage = () => {
           loading={false}
           initialData={
             currentOrderForInvoice ? {
-                // Map dữ liệu có sẵn từ đơn hàng (nếu có snapshot customer)
                 name: currentOrderForInvoice.customer_name, 
             } : undefined
           }
       />
 
-      {/* [NEW] MODAL PAYMENT CONFIRMATION */}
+      {/* MODAL PAYMENT */}
       <Modal
           title={`Xác nhận thu tiền ${selectedRowKeys.length} đơn hàng`}
           open={isPaymentModalOpen}
           onOk={async () => {
-              if (!selectedFundId) {
-                message.error("Vui lòng chọn Quỹ nhận tiền!");
-                return;
-              }
+              if (!selectedFundId) return message.error("Vui lòng chọn Quỹ nhận tiền!");
               try {
-                  // Chỉ lấy các ID hợp lệ (string/number)
                   await salesService.confirmPayment(selectedRowKeys as (string|number)[], selectedFundId);
                   setIsPaymentModalOpen(false);
-                  refresh(); // Reload list
+                  refresh();
                   setSelectedRowKeys([]);
                   message.success("Đã tạo phiếu thu thành công!");
               } catch(e: any) { message.error("Lỗi: " + e.message) }
@@ -298,17 +384,15 @@ const B2BOrderListPage = () => {
           cancelText="Hủy"
       >
           <div style={{ padding: '8px 0' }}>
-            <p>Tổng số đơn hàng được chọn: <b>{selectedRowKeys.length}</b></p>
-            <p>Hệ thống sẽ tự động tạo Phiếu Thu và trừ công nợ khách hàng.</p>
-            
+            <p>Tổng số đơn hàng: <b>{selectedRowKeys.length}</b></p>
+            <p>Hệ thống sẽ cập nhật trạng thái "Đã thanh toán" và tạo Phiếu Thu.</p>
             <div style={{ marginTop: 16 }}>
-                <label style={{ fontWeight: 500 }}>Chọn Tài khoản/Quỹ nhận tiền:</label>
+                <label style={{ fontWeight: 500 }}>Chọn Quỹ nhận tiền:</label>
                 <Select 
                     style={{ width: '100%', marginTop: 8 }}
                     value={selectedFundId}
                     onChange={setSelectedFundId}
                     options={fundAccounts.map(f => ({ label: f.name, value: f.id }))}
-                    placeholder="Chọn quỹ..."
                 />
             </div>
           </div>
