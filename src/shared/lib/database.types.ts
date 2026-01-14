@@ -3408,10 +3408,24 @@ export type Database = {
       confirm_finance_transaction:
         | { Args: { p_id: number }; Returns: undefined }
         | { Args: { p_id: number; p_target_status: string }; Returns: boolean }
+      confirm_order_payment: {
+        Args: { p_fund_account_id: number; p_order_ids: string[] }
+        Returns: Json
+      }
       confirm_outbound_packing: { Args: { p_order_id: string }; Returns: Json }
       confirm_purchase_order: {
         Args: { p_po_id: number; p_status: string }
         Returns: boolean
+      }
+      confirm_purchase_payment: {
+        Args: {
+          p_amount: number
+          p_fund_account_id: number
+          p_note?: string
+          p_order_id: number
+          p_payment_method?: string
+        }
+        Returns: Json
       }
       confirm_transaction: { Args: { p_id: number }; Returns: boolean }
       create_appointment_booking: {
@@ -3966,6 +3980,21 @@ export type Database = {
       get_my_permissions: { Args: never; Returns: string[] }
       get_outbound_order_detail: { Args: { p_order_id: string }; Returns: Json }
       get_outbound_stats: { Args: { p_warehouse_id: number }; Returns: Json }
+      get_pending_reconciliation_orders: {
+        Args: never
+        Returns: {
+          created_at: string
+          customer_code: string
+          customer_name: string
+          final_amount: number
+          order_code: string
+          order_id: string
+          paid_amount: number
+          payment_method: string
+          remaining_amount: number
+          source: string
+        }[]
+      }
       get_po_logistics_stats: {
         Args: {
           p_date_from?: string
@@ -4005,21 +4034,6 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
-      }
-      get_pending_reconciliation_orders: {
-        Args: never
-        Returns: {
-          created_at: string
-          customer_code: string
-          customer_name: string
-          final_amount: number
-          order_code: string
-          order_id: string
-          paid_amount: number
-          payment_method: string
-          remaining_amount: number
-          source: "B2B" | "POS"
-        }[]
       }
       get_product_details: { Args: { p_id: number }; Returns: Json }
       get_products_list: {

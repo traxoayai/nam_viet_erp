@@ -49,7 +49,7 @@ export const FinanceFormModal: React.FC<Props> = ({
   initialFlow,
   initialValues,
 }) => {
-  const { funds } = useFinanceStore();
+  const { funds, fetchFunds } = useFinanceStore();
   const { banks, fetchBanks } = useBankStore();
   const { categories, fetchCategories } = useTransactionCategoryStore();
 
@@ -78,6 +78,7 @@ export const FinanceFormModal: React.FC<Props> = ({
   } = useFinanceFormLogic(open, onCancel, initialFlow, initialValues);
 
   useEffect(() => {
+    fetchFunds();
     fetchBanks();
     if (categories.length === 0) fetchCategories();
   }, []);
