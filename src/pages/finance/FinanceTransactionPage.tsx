@@ -39,6 +39,7 @@ import { TransactionDetailModal } from "./components/TransactionDetailModal"; //
 import { useFinanceTransactionLogic } from "./hooks/useFinanceTransactionLogic";
 
 import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
+import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 import { TransactionRecord } from "@/features/finance/types/finance";
 
 dayjs.extend(utc);
@@ -54,8 +55,17 @@ const FinanceTransactionPage = () => {
   const { message } = App.useApp();
   const [viewRecord, setViewRecord] = useState<TransactionRecord | null>(null);
 
-  // Chỉ xóa phiếu Pending
-  const canDelete = (record: TransactionRecord) => record.status === "pending";
+  // [NEW] Lấy danh sách quyền của user hiện tại
+  const { permissions } = useAuthStore();
+  
+  // Helper check quyền nhanh
+  const canApprove = permissions.includes('finance.approve') || permissions.includes('admin-all');
+  const canExecute = permissions.includes('finance.execute') || permissions.includes('admin-all');
+  
+  // Chỉ xóa phiếu Pending và có quyền xóa
+  const canDelete = (record: TransactionRecord) => 
+      record.status === "pending" && 
+      (permissions.includes('finance.delete') || permissions.includes('admin-all'));
 
   const handleDelete = async (id: number) => {
     const success = await deleteTransaction(id);
@@ -170,8 +180,8 @@ const FinanceTransactionPage = () => {
         <Space size="small">
           {/* --- LOGIC NÚT DUYỆT THÔNG MINH --- */}
 
-          {/* TRƯỜNG HỢP 1: PHIẾU THU (Mới -> Đã Thu) */}
-          {record.flow === "in" && record.status === "pending" && (
+          {/* TRƯỜNG HỢP 1: PHIẾU THU (Mới -> Đã Thu) - Cần quyền Execute */}
+          {record.flow === "in" && record.status === "pending" && canExecute && (
             <Tooltip title="Xác nhận đã nhận tiền">
               <Popconfirm
                 title="Xác nhận ĐÃ THU tiền?"
@@ -192,8 +202,8 @@ const FinanceTransactionPage = () => {
             </Tooltip>
           )}
 
-          {/* TRƯỜNG HỢP 2: PHIẾU CHI (Mới -> Duyệt Chi) */}
-          {record.flow === "out" && record.status === "pending" && (
+          {/* TRƯỜNG HỢP 2: PHIẾU CHI (Mới -> Duyệt Chi) - Cần quyền Approve */}
+          {record.flow === "out" && record.status === "pending" && canApprove && (
             <Tooltip title="Quản lý duyệt chi">
               <Popconfirm
                 title="Duyệt khoản chi này?"
@@ -213,8 +223,8 @@ const FinanceTransactionPage = () => {
             </Tooltip>
           )}
 
-          {/* TRƯỜNG HỢP 3: PHIẾU CHI (Đã Duyệt -> Đã Chi) */}
-          {record.flow === "out" && record.status === "approved" && (
+          {/* TRƯỜNG HỢP 3: PHIẾU CHI (Đã Duyệt -> Đã Chi) - Cần quyền Execute */}
+          {record.flow === "out" && record.status === "approved" && canExecute && (
             <Tooltip title="Thủ quỹ xác nhận xuất tiền">
               <Popconfirm
                 title="Xác nhận ĐÃ CHI tiền?"

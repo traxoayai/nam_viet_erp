@@ -494,13 +494,13 @@ const MENU_PERMISSIONS: Record<string, string> = {
   '/inventory/purchase': 'inv-po-create',
   '/inventory/stocktake': 'inv-count-create',
   
-  // --- TÀI CHÍNH (Chi tiết hóa) ---
-  '/finance/dashboard': 'fin-dashboard',
-  '/finance/transactions': 'fin-approve-cash', // Hoặc quyền xem DS thu chi
-  '/finance/debts': 'fin-ar',
+  // --- TÀI CHÍNH (ĐÃ SỬA ĐỔI) ---
+  '/finance/dashboard': 'finance.view',     // [FIX] Dùng quyền view
+  '/finance/transactions': 'finance.view',  // [FIX] Dùng quyền view (thay vì fin-approve-cash)
+  '/finance/debts': 'finance.view',         // [FIX] Dùng quyền view
   
   // --- CẤU HÌNH ---
-  'settings-group': 'settings', // Nhóm này giữ nguyên chặn cứng cũng được
+  'settings-group': 'settings', 
 };
 
 

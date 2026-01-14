@@ -18,7 +18,7 @@ export interface Permission {
 
 // Dữ liệu đã được build thành cây cho AntD Tree
 export interface PermissionNode {
-  title: string;
+  title: ReactNode | string;
   key: string;
   icon: ReactNode;
   children: PermissionNode[];

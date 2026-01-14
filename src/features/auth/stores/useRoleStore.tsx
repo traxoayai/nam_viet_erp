@@ -17,51 +17,64 @@ import {
   Role,
 } from "@/features/auth/types/role";
 
-// --- LOGIC NỘI BỘ: Build cây Quyền hạn ---
+// 1. Cấu hình Mapping & Icon
+const MODULE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
+  'finance': { label: 'Tài Chính & Kế Toán', icon: <AccountBookOutlined /> },
+  'pos': { label: 'Bán Hàng POS', icon: <ShopOutlined /> },
+  'medical': { label: 'Y Tế & Phòng Khám', icon: <MedicineBoxOutlined /> },
+  'inventory': { label: 'Kho & Sản Phẩm', icon: <ApartmentOutlined /> },
+  'settings': { label: 'Cấu hình Hệ thống', icon: <SettingOutlined /> },
+};
+
+// 2. Cấu hình Highlight (QUAN TRỌNG)
+const PERMISSION_HIGHLIGHTS: Record<string, { color: string; label?: string }> = {
+  'finance.approve': { color: '#faad14' }, // Vàng
+  'finance.execute': { color: '#ff4d4f' }, // Đỏ
+};
+
+// --- LOGIC NỘI BỘ ---
 const buildPermissionTree = (permissions: Permission[]): PermissionNode[] => {
-  // 1. Nhóm các quyền theo module
   const moduleMap: { [key: string]: Permission[] } = {};
+  
   permissions.forEach((p) => {
-    if (!moduleMap[p.module]) {
-      moduleMap[p.module] = [];
-    }
-    moduleMap[p.module].push(p);
+    // Chuẩn hóa module key (fallback 'other')
+    const modKey = p.module || 'other';
+    if (!moduleMap[modKey]) moduleMap[modKey] = [];
+    moduleMap[modKey].push(p);
   });
 
-  // 2. Tạo icon map (theo "canvas" của Sếp)
-  const iconMap: { [key: string]: React.ReactNode } = {
-    "Module: Bán Hàng POS (Kênh Cửa Hàng)": <ShopOutlined />,
-    "Module: Nghiệp vụ Y Tế (Phòng Khám)": <MedicineBoxOutlined />,
-    "Module: Kho & Sản Phẩm": <ApartmentOutlined />,
-    "Module: Tài Chính & Kế Toán": <AccountBookOutlined />,
-    "Module: Cấu hình Hệ thống": <SettingOutlined />,
-  };
+  return Object.keys(moduleMap).map((moduleKey) => {
+    const permissionsInModule = moduleMap[moduleKey];
+    const config = MODULE_CONFIG[moduleKey] || { 
+      label: moduleKey.toUpperCase(), 
+      icon: <SafetyCertificateOutlined /> 
+    };
 
-  // 3. Xây dựng cây AntD
-  return Object.keys(moduleMap).map((moduleName) => {
-    const permissionsInModule = moduleMap[moduleName];
-    // Tìm key cha (ví dụ: 'pos', 'clinic')
-    const parentKey = permissionsInModule.find(
-      (p) => p.key === p.key.split("-")[0]
-    )?.key;
+    // Tạo Key Nhóm (Prefix 'GROUP_' để dễ lọc)
+    const groupKey = `GROUP_${moduleKey}`;
 
     return {
-      title: moduleName,
-      key: parentKey || moduleName, // Dùng key cha (vd: 'pos')
-      icon: iconMap[moduleName] || <SafetyCertificateOutlined />,
-      children: permissionsInModule
-        .filter((p) => p.key !== parentKey) // Lọc bỏ key cha
-        .map((p) => ({
-          title: p.name,
-          key: p.key,
-          icon: undefined, // Không cần icon cho con
-          children: [], // Không có con
-        })),
+      title: <span style={{ fontWeight: 'bold' }}>{config.label}</span>,
+      key: groupKey, // Key ảo
+      icon: config.icon,
+      children: permissionsInModule.map((p) => {
+        // Xử lý Highlight
+        const highlight = PERMISSION_HIGHLIGHTS[p.key];
+        const displayTitle = highlight 
+          ? <span style={{ color: highlight.color, fontWeight: 600 }}>{p.name}</span> 
+          : p.name;
+
+        return {
+          title: displayTitle,
+          key: p.key, // Key thật (VD: finance.approve)
+          icon: null,
+          children: [],
+        };
+      }),
     };
   });
 };
 
-// --- BỘ NÃO (STORE) ---
 export const useRoleStore = create<RoleStoreState>((set, get) => ({
   roles: [],
   permissionsTree: [],
@@ -117,7 +130,7 @@ export const useRoleStore = create<RoleStoreState>((set, get) => ({
       set((state) => ({
         checkedKeys: {
           ...state.checkedKeys,
-          [roleId]: keys,
+          [roleId]: keys, // Antd trả về cả key cha và key con
         },
       }));
     }
@@ -125,26 +138,16 @@ export const useRoleStore = create<RoleStoreState>((set, get) => ({
 
   handleSavePermissions: async () => {
     const { selectedRole, checkedKeys } = get();
-    if (!selectedRole) return false; // Luôn trả về boolean
+    if (!selectedRole) return false;
 
     set({ loadingSaving: true });
     try {
-      const keysToSave = checkedKeys[selectedRole.id] || [];
-      await roleService.savePermissionsForRole(selectedRole.id, keysToSave);
-      set({ loadingSaving: false });
-      return true; // Trả về true cho message.success
-    } catch (error) {
-      console.error(error);
-      set({ loadingSaving: false });
-      return false; // Trả về false cho message.error
-    }
-  },
+      const rawKeys = checkedKeys[selectedRole.id] || [];
+      
+      // [FIX LỖI 23503] Lọc bỏ các Key ảo (bắt đầu bằng GROUP_)
+      const realKeys = rawKeys.filter(k => !k.startsWith('GROUP_'));
 
-  addRole: async (values) => {
-    set({ loadingSaving: true });
-    try {
-      await roleService.addRole(values);
-      await get().fetchRoles(); // Tải lại danh sách
+      await roleService.savePermissionsForRole(selectedRole.id, realKeys);
       set({ loadingSaving: false });
       return true;
     } catch (error) {
@@ -154,12 +157,26 @@ export const useRoleStore = create<RoleStoreState>((set, get) => ({
     }
   },
 
-  updateRole: async (id, values) => {
+  // ... (Giữ nguyên các hàm addRole, updateRole, deleteRole) ...
+  addRole: async (values) => {
+    // ... code cũ ...
     set({ loadingSaving: true });
     try {
+      await roleService.addRole(values);
+      await get().fetchRoles(); 
+      set({ loadingSaving: false });
+      return true;
+    } catch (error) {
+      set({ loadingSaving: false });
+      return false;
+    }
+  },
+  updateRole: async (id, values) => {
+     // ... code cũ ...
+     set({ loadingSaving: true });
+    try {
       await roleService.updateRole(id, values);
-      await get().fetchRoles(); // Tải lại
-      // Cập nhật lại vai trò đang chọn (nếu là nó)
+      await get().fetchRoles();
       if (get().selectedRole?.id === id) {
         set((state) => ({
           selectedRole: { ...state.selectedRole!, ...values },
@@ -168,26 +185,24 @@ export const useRoleStore = create<RoleStoreState>((set, get) => ({
       set({ loadingSaving: false });
       return true;
     } catch (error) {
-      console.error(error);
       set({ loadingSaving: false });
       return false;
     }
   },
-
-  deleteRole: async (id: string) => {
-    set({ loadingSaving: true });
+  deleteRole: async (id) => {
+     // ... code cũ ...
+     set({ loadingSaving: true });
     try {
       await roleService.deleteRole(id);
-      await get().fetchRoles(); // Tải lại
+      await get().fetchRoles();
       if (get().selectedRole?.id === id) {
-        set({ selectedRole: null }); // Xóa lựa chọn nếu đã xóa
+        set({ selectedRole: null });
       }
       set({ loadingSaving: false });
       return true;
     } catch (error) {
-      console.error(error);
       set({ loadingSaving: false });
       return false;
     }
-  },
+  }
 }));

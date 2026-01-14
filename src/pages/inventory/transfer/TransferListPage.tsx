@@ -1,3 +1,4 @@
+// src/pages/inventory/transfer/TransferListPage.tsx
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Space, Tag, Input, Select, DatePicker } from 'antd';
 import { PlusOutlined, ThunderboltOutlined, SearchOutlined, EyeOutlined } from '@ant-design/icons';
