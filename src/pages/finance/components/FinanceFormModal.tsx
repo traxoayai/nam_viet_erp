@@ -20,15 +20,17 @@ import {
   Image,
   Alert,
   Button,
+  Spin,
 } from "antd";
 import dayjs from "dayjs";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
 import { useFinanceFormLogic } from "../hooks/useFinanceFormLogic";
 
 import { useBankStore } from "@/features/finance/stores/useBankStore";
 import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
 import { useTransactionCategoryStore } from "@/features/finance/stores/useTransactionCategoryStore";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -52,6 +54,9 @@ export const FinanceFormModal: React.FC<Props> = ({
   const { funds, fetchFunds } = useFinanceStore();
   const { banks, fetchBanks } = useBankStore();
   const { categories, fetchCategories } = useTransactionCategoryStore();
+
+  const [checkingPending, setCheckingPending] = useState(false);
+  const [pendingTrans, setPendingTrans] = useState<any[]>([]);
 
   const {
     form,
@@ -83,6 +88,28 @@ export const FinanceFormModal: React.FC<Props> = ({
     if (categories.length === 0) fetchCategories();
   }, []);
 
+  // [NEW] Check Pending Transactions
+  useEffect(() => {
+    const checkPendingTransactions = async () => {
+      if (initialValues?.ref_type && initialValues?.ref_id && open) {
+        setCheckingPending(true);
+        const { data } = await supabase
+          .from('finance_transactions')
+          .select('code, amount, created_at')
+          .eq('ref_type', initialValues.ref_type)
+          .eq('ref_id', String(initialValues.ref_id))
+          .eq('status', 'pending');
+        
+        setPendingTrans(data || []);
+        setCheckingPending(false);
+      } else {
+        setPendingTrans([]);
+      }
+    };
+
+    checkPendingTransactions();
+  }, [initialValues, open]);
+
   const amount = Form.useWatch("amount", form);
   const desc = Form.useWatch("description", form);
   const flow = Form.useWatch("flow", form);
@@ -95,7 +122,7 @@ export const FinanceFormModal: React.FC<Props> = ({
 
   return (
     <Modal
-      title="Lập Phiếu Thu / Chi"
+      title={initialFlow === 'in' ? "Lập Phiếu Thu" : "Lập Phiếu Chi"}
       open={open}
       onCancel={onCancel}
       onOk={form.submit}
@@ -107,7 +134,43 @@ export const FinanceFormModal: React.FC<Props> = ({
       maskClosable={false}
       centered
     >
-      <Form form={form} layout="vertical" onFinish={handleFinish}>
+      <Form form={form} layout="vertical" onFinish={handleFinish} initialValues={initialValues}>
+        {/* Hidden Fields for Ref & Partner */}
+        <Form.Item name="ref_type" hidden><Input /></Form.Item>
+        <Form.Item name="ref_id" hidden><Input /></Form.Item>
+        <Form.Item name="partner_type" hidden><Input /></Form.Item>
+        <Form.Item name="partner_id" hidden><Input /></Form.Item>
+        
+        {/* Loading / Checking Pending */}
+        {checkingPending && (
+           <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <Spin tip="Đang kiểm tra phiếu trùng..." />
+           </div>
+        )}
+
+        {/* Pending Warning */}
+        {pendingTrans.length > 0 && (
+          <Alert
+            message="Cảnh báo trùng lặp"
+            description={
+              <div>
+                Đơn hàng này đang có <b>{pendingTrans.length} phiếu chi</b> đang chờ kế toán duyệt. 
+                Vui lòng kiểm tra kỹ để tránh chi 2 lần.
+                <ul>
+                  {pendingTrans.map((t: any) => (
+                    <li key={t.code}>
+                      <b>{t.code}</b>: {Number(t.amount).toLocaleString()}đ ({dayjs(t.created_at).format('DD/MM HH:mm')})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            }
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
         {/* ... Header ... */}
         <Row gutter={16}>
           <Col span={12}>
@@ -116,7 +179,7 @@ export const FinanceFormModal: React.FC<Props> = ({
               label="Loại nghiệp vụ"
               rules={[{ required: true }]}
             >
-              <Select onChange={setBusinessType}>
+              <Select onChange={setBusinessType} disabled={!!initialValues?.business_type}>
                 <Option value="trade">Thanh toán Mua/Bán</Option>
                 <Option value="advance">Tạm ứng nhân viên</Option>
                 <Option value="reimbursement">Hoàn ứng / Quyết toán</Option>
@@ -127,7 +190,7 @@ export const FinanceFormModal: React.FC<Props> = ({
           <Col span={12}>
             <Form.Item name="flow" label="Loại phiếu">
               <Radio.Group
-                disabled={["advance", "reimbursement"].includes(businessType)}
+                disabled
               >
                 <Radio value="in" className="text-green-600">
                   <span style={{ color: "#52c41a", fontWeight: 600 }}>
@@ -302,51 +365,63 @@ export const FinanceFormModal: React.FC<Props> = ({
         {/* C. MUA BÁN */}
         {(businessType === "trade" || businessType === "other") && (
           <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                name="partner_type"
-                label="Đối tượng"
-                initialValue="supplier"
-              >
-                <Select>
-                  <Option value="supplier">Nhà cung cấp</Option>
-                  <Option value="customer">Khách hàng</Option>
-                  <Option value="other">Khác</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={16}>
-              <Form.Item shouldUpdate noStyle>
-                {({ getFieldValue }) =>
-                  getFieldValue("partner_type") === "supplier" ? (
-                    <Form.Item
-                      name="supplier_id"
-                      label="Chọn Nhà cung cấp"
-                      rules={[{ required: true }]}
-                    >
-                      <Select
-                        showSearch
-                        optionFilterProp="label"
-                        placeholder="Tìm NCC..."
-                        options={suppliers.map((s) => ({
-                          label: s.name,
-                          value: s.id,
-                        }))}
-                        onChange={handleSupplierChange}
-                      />
+            {/* Nếu đã có partner_name từ initValues (từ PO), hiển thị dạng text cho gọn */}
+             {initialValues?.partner_name ? (
+                <Col span={24}>
+                    <Form.Item label="Đối tác (Nhà cung cấp / Khách hàng)">
+                        <Input value={initialValues.partner_name} readOnly style={{ background: '#f5f5f5', fontWeight: 600 }} />
                     </Form.Item>
-                  ) : (
+                    <Form.Item name="partner_name" hidden><Input /></Form.Item>
+                </Col>
+             ) : (
+                <>
+                    <Col span={8}>
                     <Form.Item
-                      name="partner_name"
-                      label="Tên Khách hàng"
-                      rules={[{ required: true }]}
+                        name="partner_type"
+                        label="Đối tượng"
+                        initialValue="supplier"
                     >
-                      <Input />
+                        <Select>
+                        <Option value="supplier">Nhà cung cấp</Option>
+                        <Option value="customer">Khách hàng</Option>
+                        <Option value="other">Khác</Option>
+                        </Select>
                     </Form.Item>
-                  )
-                }
-              </Form.Item>
-            </Col>
+                    </Col>
+                    <Col span={16}>
+                    <Form.Item shouldUpdate noStyle>
+                        {({ getFieldValue }) =>
+                        getFieldValue("partner_type") === "supplier" ? (
+                            <Form.Item
+                            name="supplier_id"
+                            label="Chọn Nhà cung cấp"
+                            rules={[{ required: true }]}
+                            >
+                            <Select
+                                showSearch
+                                optionFilterProp="label"
+                                placeholder="Tìm NCC..."
+                                options={suppliers.map((s) => ({
+                                label: s.name,
+                                value: s.id,
+                                }))}
+                                onChange={handleSupplierChange}
+                            />
+                            </Form.Item>
+                        ) : (
+                            <Form.Item
+                            name="partner_name"
+                            label="Tên Khách hàng"
+                            rules={[{ required: true }]}
+                            >
+                            <Input />
+                            </Form.Item>
+                        )
+                        }
+                    </Form.Item>
+                    </Col>
+                </>
+             )}
           </Row>
         )}
 
@@ -378,7 +453,7 @@ export const FinanceFormModal: React.FC<Props> = ({
               label="Nguồn tiền"
               rules={[{ required: true }]}
             >
-              <Select placeholder="Chọn quỹ...">
+              <Select placeholder="Chọn quỹ..." loading={funds.length === 0}>
                 {funds.map((f) => (
                   <Option key={f.id} value={f.id}>
                     {f.name} (Dư: {Number(f.balance).toLocaleString()}đ)

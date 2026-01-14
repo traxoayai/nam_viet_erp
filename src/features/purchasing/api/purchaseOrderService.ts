@@ -2,7 +2,7 @@
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const purchaseOrderService = {
-  // 1. Lấy danh sách PO (FIX: Nhận đúng 3 tham số khớp với Store và Page)
+  // 1. Lấy danh sách PO
   async getPOs(filters: any, page: number, pageSize: number) {
     const { data, error } = await supabase.rpc("get_purchase_orders_master", {
       p_page: page,
