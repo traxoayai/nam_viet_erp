@@ -9,6 +9,7 @@ import {
   FileUnknownOutlined,
   DownloadOutlined,
   EyeOutlined,
+  QrcodeOutlined,
 } from "@ant-design/icons";
 import {
   Modal,
@@ -174,6 +175,23 @@ export const TransactionDetailModal: React.FC<Props> = ({
     }
   };
 
+  // [NEW] Logic tái tạo QR Code
+  // Kiểm tra xem record này có lưu thông tin ngân hàng đích không
+  const bankInfo = data.target_bank_info;
+  let qrUrl = null;
+
+  if (bankInfo?.bin && bankInfo?.acc && data.flow === "out") {
+    const { bin, acc, holder } = bankInfo;
+    // Encode nội dung để tránh lỗi URL
+    const addInfo = encodeURIComponent(
+      data.description || `Thanh toan phieu ${data.code}`
+    );
+    const accountName = encodeURIComponent(holder || "");
+
+    // Tạo link VietQR (Template compact)
+    qrUrl = `https://img.vietqr.io/image/${bin}-${acc}-compact.png?amount=${data.amount}&addInfo=${addInfo}&accountName=${accountName}`;
+  }
+
   return (
     <Modal
       title={
@@ -237,6 +255,64 @@ export const TransactionDetailModal: React.FC<Props> = ({
           {data.created_by_name}
         </Descriptions.Item>
       </Descriptions>
+
+      {/* 2. [NEW] Khu vực hiển thị QR Code (Chỉ hiện khi có URL) */}
+      {qrUrl && (
+        <>
+          <Divider
+            orientation="left"
+            style={{ borderColor: "#1890ff", color: "#1890ff" }}
+          >
+            <QrcodeOutlined /> Thông tin Thanh toán & QR
+          </Divider>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 16,
+              background: "#f5f5f5",
+              padding: 16,
+              borderRadius: 8,
+            }}
+          >
+            {/* Cột Trái: Ảnh QR */}
+            <div style={{ flexShrink: 0 }}>
+              <Image
+                src={qrUrl}
+                width={200}
+                style={{ borderRadius: 8, border: "1px solid #ddd" }}
+                alt="QR Code"
+              />
+            </div>
+
+            {/* Cột Phải: Thông tin Text */}
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+              }}
+            >
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ color: "#888" }}>Ngân hàng:</span> <br />
+                <b>{bankInfo?.bin}</b>{" "}
+                {/* Nếu có tên NH thì hiển thị, tạm thời hiện BIN */}
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ color: "#888" }}>Số tài khoản:</span> <br />
+                <b style={{ fontSize: 16, color: "#1890ff" }}>
+                  {bankInfo?.acc}
+                </b>
+              </div>
+              <div>
+                <span style={{ color: "#888" }}>Chủ tài khoản:</span> <br />
+                <b style={{ textTransform: "uppercase" }}>{bankInfo?.holder}</b>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       <Divider orientation="left" style={{ fontSize: 14, color: "#1890ff" }}>
         <FileImageOutlined /> Chứng từ đính kèm

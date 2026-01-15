@@ -211,6 +211,16 @@ export const useFinanceFormLogic = (
         }
       }
 
+      // [NEW] Prepare target_bank_info for 'out' flow
+      let targetBankInfo = null;
+      if (values.flow === 'out' && manualBankInfo?.bin && manualBankInfo?.acc) {
+          targetBankInfo = {
+              bin: manualBankInfo.bin,
+              acc: manualBankInfo.acc,
+              holder: manualBankInfo.holder || ''
+          };
+      }
+
       const payload: CreateTransactionParams = {
         p_flow: values.flow,
         p_business_type: values.business_type,
@@ -223,9 +233,10 @@ export const useFinanceFormLogic = (
         p_evidence_url: evidenceUrl || undefined,
         p_cash_tally: values.cash_tally,
         p_ref_advance_id: values.ref_advance_id,
-        p_ref_type: values.ref_type, // [NEW]
-        p_ref_id: values.ref_id,     // [NEW]
+        p_ref_type: values.ref_type,
+        p_ref_id: values.ref_id,
         p_partner_type: "other",
+        p_target_bank_info: targetBankInfo // [NEW] Add to payload
       };
 
       if (["advance", "reimbursement"].includes(values.business_type)) {

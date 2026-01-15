@@ -61,6 +61,7 @@ export interface TransactionRecord {
   created_by_name?: string;
   cash_tally?: Record<string, number>; // Key: mệnh giá, Value: số lượng
   total_count?: number; // For pagination
+  target_bank_info?: { bin: string; acc: string; holder: string }; // [NEW]
 }
 
 // 6. [RESTORED] Params tạo giao dịch (RPC create_finance_transaction)
@@ -81,7 +82,8 @@ export interface CreateTransactionParams {
   p_category_id?: number; // [ADDED]
   p_ref_type?: string; // [ADDED]
   p_ref_id?: string; // [ADDED]
-  p_status?: string; // [ADDED]
+  p_status?: string;
+  p_target_bank_info?: { bin: string; acc: string; holder: string } | null; // [ADDED]
 }
 
 // 7. [RESTORED] Bộ lọc giao dịch
