@@ -962,6 +962,7 @@ export type Database = {
           ref_id: string | null
           ref_type: string | null
           status: Database["public"]["Enums"]["transaction_status"]
+          target_bank_info: Json | null
           transaction_date: string
           updated_at: string | null
         }
@@ -985,6 +986,7 @@ export type Database = {
           ref_id?: string | null
           ref_type?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
+          target_bank_info?: Json | null
           transaction_date?: string
           updated_at?: string | null
         }
@@ -1008,6 +1010,7 @@ export type Database = {
           ref_id?: string | null
           ref_type?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
+          target_bank_info?: Json | null
           transaction_date?: string
           updated_at?: string | null
         }
@@ -1929,6 +1932,39 @@ export type Database = {
         }
         Relationships: []
       }
+      product_activity_logs: {
+        Row: {
+          action_type: string | null
+          created_at: string | null
+          id: number
+          new_value: string | null
+          note: string | null
+          old_value: string | null
+          product_id: number | null
+          user_id: string | null
+        }
+        Insert: {
+          action_type?: string | null
+          created_at?: string | null
+          id?: number
+          new_value?: string | null
+          note?: string | null
+          old_value?: string | null
+          product_id?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          action_type?: string | null
+          created_at?: string | null
+          id?: number
+          new_value?: string | null
+          note?: string | null
+          old_value?: string | null
+          product_id?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       product_contents: {
         Row: {
           channel: string
@@ -1943,6 +1979,7 @@ export type Database = {
           seo_title: string | null
           short_description: string | null
           updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           channel: string
@@ -1957,6 +1994,7 @@ export type Database = {
           seo_title?: string | null
           short_description?: string | null
           updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           channel?: string
@@ -1971,6 +2009,7 @@ export type Database = {
           seo_title?: string | null
           short_description?: string | null
           updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -1994,6 +2033,7 @@ export type Database = {
           shelf_location: string | null
           stock_quantity: number
           updated_at: string | null
+          updated_by: string | null
           warehouse_id: number
         }
         Insert: {
@@ -2007,6 +2047,7 @@ export type Database = {
           shelf_location?: string | null
           stock_quantity?: number
           updated_at?: string | null
+          updated_by?: string | null
           warehouse_id: number
         }
         Update: {
@@ -2020,6 +2061,7 @@ export type Database = {
           shelf_location?: string | null
           stock_quantity?: number
           updated_at?: string | null
+          updated_by?: string | null
           warehouse_id?: number
         }
         Relationships: [
@@ -2127,6 +2169,7 @@ export type Database = {
             | Database["public"]["Enums"]["stock_management_type"]
             | null
           updated_at: string | null
+          updated_by: string | null
           usage_instructions: Json | null
           wholesale_margin_rate: number | null
           wholesale_margin_type: string | null
@@ -2164,6 +2207,7 @@ export type Database = {
             | Database["public"]["Enums"]["stock_management_type"]
             | null
           updated_at?: string | null
+          updated_by?: string | null
           usage_instructions?: Json | null
           wholesale_margin_rate?: number | null
           wholesale_margin_type?: string | null
@@ -2201,6 +2245,7 @@ export type Database = {
             | Database["public"]["Enums"]["stock_management_type"]
             | null
           updated_at?: string | null
+          updated_by?: string | null
           usage_instructions?: Json | null
           wholesale_margin_rate?: number | null
           wholesale_margin_type?: string | null
@@ -3487,21 +3532,22 @@ export type Database = {
           p_amount: number
           p_business_type: string
           p_cash_tally?: Json
-          p_category_id: number
-          p_code: string
-          p_created_by: string
-          p_description: string
-          p_evidence_url: string
-          p_flow: string
-          p_fund_account_id: number
-          p_partner_id: string
-          p_partner_name_cache: string
-          p_partner_type: string
+          p_category_id?: number
+          p_code?: string
+          p_created_by?: string
+          p_description?: string
+          p_evidence_url?: string
+          p_flow?: string
+          p_fund_id?: number
+          p_partner_id?: string
+          p_partner_name?: string
+          p_partner_type?: string
           p_ref_advance_id?: number
-          p_ref_id: string
-          p_ref_type: string
-          p_status: string
-          p_warehouse_id?: number
+          p_ref_id?: string
+          p_ref_type?: string
+          p_status?: string
+          p_target_bank_info?: Json
+          p_transaction_date?: string
         }
         Returns: number
       }
@@ -4091,6 +4137,7 @@ export type Database = {
           supplier_id: number
           supplier_name: string
           total_cartons: number
+          total_paid: number
           total_quantity: number
         }[]
       }
@@ -4211,90 +4258,37 @@ export type Database = {
           total_count: number
         }[]
       }
-      get_transaction_history:
-        | {
-            Args: {
-              p_date_from?: string
-              p_date_to?: string
-              p_flow?: Database["public"]["Enums"]["transaction_flow"]
-              p_fund_id?: number
-              p_limit?: number
-              p_offset?: number
-            }
-            Returns: {
-              amount: number
-              business_type: Database["public"]["Enums"]["business_type"]
-              category_name: string
-              code: string
-              created_by_name: string
-              description: string
-              flow: Database["public"]["Enums"]["transaction_flow"]
-              fund_name: string
-              id: number
-              partner_name: string
-              total_count: number
-              transaction_date: string
-            }[]
-          }
-        | {
-            Args: {
-              p_created_by?: string
-              p_date_from?: string
-              p_date_to?: string
-              p_flow?: Database["public"]["Enums"]["transaction_flow"]
-              p_fund_id?: number
-              p_keyword?: string
-              p_limit?: number
-              p_offset?: number
-              p_status?: Database["public"]["Enums"]["transaction_status"]
-            }
-            Returns: {
-              amount: number
-              business_type: Database["public"]["Enums"]["business_type"]
-              category_name: string
-              code: string
-              created_by_name: string
-              description: string
-              flow: Database["public"]["Enums"]["transaction_flow"]
-              fund_name: string
-              id: number
-              partner_name: string
-              ref_advance_code: string
-              ref_advance_id: number
-              status: Database["public"]["Enums"]["transaction_status"]
-              total_count: number
-              transaction_date: string
-            }[]
-          }
-        | {
-            Args: {
-              p_date_from?: string
-              p_date_to?: string
-              p_flow?: Database["public"]["Enums"]["transaction_flow"]
-              p_fund_id?: number
-              p_limit?: number
-              p_offset?: number
-              p_search?: string
-              p_status?: string
-            }
-            Returns: {
-              amount: number
-              business_type: Database["public"]["Enums"]["business_type"]
-              category_name: string
-              code: string
-              created_by_name: string
-              description: string
-              evidence_url: string
-              flow: Database["public"]["Enums"]["transaction_flow"]
-              fund_name: string
-              id: number
-              partner_name: string
-              ref_advance_id: number
-              status: Database["public"]["Enums"]["transaction_status"]
-              total_count: number
-              transaction_date: string
-            }[]
-          }
+      get_transaction_history: {
+        Args: {
+          p_created_by?: string
+          p_date_from?: string
+          p_date_to?: string
+          p_flow?: Database["public"]["Enums"]["transaction_flow"]
+          p_fund_id?: number
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_status?: Database["public"]["Enums"]["transaction_status"]
+        }
+        Returns: {
+          amount: number
+          business_type: Database["public"]["Enums"]["business_type"]
+          category_name: string
+          code: string
+          created_by_name: string
+          description: string
+          flow: Database["public"]["Enums"]["transaction_flow"]
+          fund_name: string
+          id: number
+          partner_name: string
+          ref_advance_code: string
+          ref_advance_id: number
+          status: Database["public"]["Enums"]["transaction_status"]
+          target_bank_info: Json
+          total_count: number
+          transaction_date: string
+        }[]
+      }
       get_users_with_roles: {
         Args: never
         Returns: {
@@ -4645,94 +4639,39 @@ export type Database = {
         Args: { p_data: Json; p_id: number; p_items: Json }
         Returns: boolean
       }
-      update_product:
-        | {
-            Args: {
-              p_active_ingredient?: string
-              p_actual_cost?: number
-              p_barcode?: string
-              p_carton_dimensions?: string
-              p_carton_weight?: number
-              p_category_name?: string
-              p_conversion_factor?: number
-              p_distributor_id?: number
-              p_id: number
-              p_image_url?: string
-              p_inventory_settings?: Json
-              p_invoice_price?: number
-              p_items_per_carton?: number
-              p_manufacturer_name?: string
-              p_name?: string
-              p_purchasing_policy?: string
-              p_retail_margin_type?: string
-              p_retail_margin_value?: number
-              p_retail_unit?: string
-              p_sku?: string
-              p_status?: string
-              p_wholesale_margin_type?: string
-              p_wholesale_margin_value?: number
-              p_wholesale_unit?: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_active_ingredient?: string
-              p_actual_cost?: number
-              p_barcode?: string
-              p_carton_dimensions?: string
-              p_carton_weight?: number
-              p_category_name?: string
-              p_conversion_factor?: number
-              p_description?: string
-              p_distributor_id?: number
-              p_id: number
-              p_image_url?: string
-              p_inventory_settings?: Json
-              p_invoice_price?: number
-              p_items_per_carton?: number
-              p_manufacturer_name?: string
-              p_name?: string
-              p_packing_spec?: string
-              p_purchasing_policy?: string
-              p_registration_number?: string
-              p_retail_margin_type?: string
-              p_retail_margin_value?: number
-              p_retail_unit?: string
-              p_sku?: string
-              p_status?: string
-              p_wholesale_margin_type?: string
-              p_wholesale_margin_value?: number
-              p_wholesale_unit?: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_active_ingredient: string
-              p_actual_cost: number
-              p_barcode: string
-              p_category_name: string
-              p_conversion_factor: number
-              p_distributor_id: number
-              p_id: number
-              p_image_url: string
-              p_inventory_settings: Json
-              p_invoice_price: number
-              p_items_per_carton: number
-              p_manufacturer_name: string
-              p_name: string
-              p_retail_margin_type: string
-              p_retail_margin_value: number
-              p_retail_unit: string
-              p_sku: string
-              p_status: string
-              p_wholesale_margin_type: string
-              p_wholesale_margin_value: number
-              p_wholesale_unit: string
-            }
-            Returns: undefined
-          }
+      update_product: {
+        Args: {
+          p_active_ingredient?: string
+          p_actual_cost?: number
+          p_barcode?: string
+          p_carton_dimensions?: string
+          p_carton_weight?: number
+          p_category_name?: string
+          p_conversion_factor?: number
+          p_description?: string
+          p_distributor_id?: number
+          p_id: number
+          p_image_url?: string
+          p_inventory_settings?: Json
+          p_invoice_price?: number
+          p_items_per_carton?: number
+          p_manufacturer_name?: string
+          p_name?: string
+          p_packing_spec?: string
+          p_purchasing_policy?: string
+          p_registration_number?: string
+          p_retail_margin_type?: string
+          p_retail_margin_value?: number
+          p_retail_unit?: string
+          p_sku?: string
+          p_status?: string
+          p_updated_by?: string
+          p_wholesale_margin_type?: string
+          p_wholesale_margin_value?: number
+          p_wholesale_unit?: string
+        }
+        Returns: undefined
+      }
       update_product_location: {
         Args: {
           p_cabinet: string

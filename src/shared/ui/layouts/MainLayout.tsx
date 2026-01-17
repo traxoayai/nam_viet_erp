@@ -49,6 +49,8 @@ import {
   ShoppingTwoTone,
   ShopTwoTone,
   GiftTwoTone, // <-- Thêm icon mới
+  ThunderboltOutlined,
+  AudioOutlined,
 } from "@ant-design/icons";
 import { LogOut } from "lucide-react";
 import {
@@ -238,6 +240,16 @@ const finalMenuItems: MenuItem[] = [
 
   // 7. Thao tác Nhanh
   getItem("Thao tác Nhanh", "quick-actions", <RocketOutlined />, [
+    getItem(
+      <Link to="/quick/unit-setup">Cài nhanh Quy Cách (Smart Match)</Link>,
+      "/quick/unit-setup",
+      <ThunderboltOutlined />
+    ),
+    getItem(
+      <Link to="/quick/min-max">Cài Min/Max & Tồn kho (Voice)</Link>,
+      "/quick/min-max",
+      <AudioOutlined />
+    ),
     getItem(
       <Link to="/quick/product-location">Cài nhanh Vị trí Sản phẩm</Link>,
       "/quick/product-location",

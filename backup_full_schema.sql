@@ -2122,9 +2122,8 @@ $$;
 ALTER FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."create_finance_transaction"("p_code" "text", "p_flow" "text", "p_business_type" "text", "p_category_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_partner_type" "text", "p_partner_id" "text", "p_partner_name_cache" "text", "p_ref_type" "text", "p_ref_id" "text", "p_description" "text", "p_evidence_url" "text", "p_created_by" "uuid", "p_status" "text", "p_ref_advance_id" bigint DEFAULT NULL::bigint, "p_cash_tally" "jsonb" DEFAULT NULL::"jsonb", "p_warehouse_id" bigint DEFAULT NULL::bigint) RETURNS bigint
+CREATE OR REPLACE FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb" DEFAULT NULL::"jsonb", "p_category_id" bigint DEFAULT NULL::bigint, "p_description" "text" DEFAULT NULL::"text", "p_flow" "text" DEFAULT 'out'::"text", "p_fund_id" bigint DEFAULT NULL::bigint, "p_partner_id" "text" DEFAULT NULL::"text", "p_partner_name" "text" DEFAULT NULL::"text", "p_partner_type" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT 'pending'::"text", "p_transaction_date" timestamp with time zone DEFAULT "now"(), "p_code" "text" DEFAULT NULL::"text", "p_ref_type" "text" DEFAULT NULL::"text", "p_ref_id" "text" DEFAULT NULL::"text", "p_evidence_url" "text" DEFAULT NULL::"text", "p_ref_advance_id" bigint DEFAULT NULL::bigint, "p_created_by" "uuid" DEFAULT NULL::"uuid", "p_target_bank_info" "jsonb" DEFAULT NULL::"jsonb") RETURNS bigint
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
     DECLARE
         v_new_id BIGINT;
@@ -2132,78 +2131,58 @@ CREATE OR REPLACE FUNCTION "public"."create_finance_transaction"("p_code" "text"
         v_prefix TEXT;
         v_partner_name_final TEXT;
         v_creator_id UUID;
+        
+        v_flow_enum public.transaction_flow;
+        v_biz_enum public.business_type;
+        v_status_enum public.transaction_status;
     BEGIN
-        -- A. XÁC ĐỊNH NGƯỜI TẠO
+        -- A. Chuẩn hóa dữ liệu
+        v_flow_enum := p_flow::public.transaction_flow;
+        BEGIN v_biz_enum := p_business_type::public.business_type; EXCEPTION WHEN OTHERS THEN v_biz_enum := 'other'; END;
+        v_status_enum := COALESCE(p_status, 'pending')::public.transaction_status;
         v_creator_id := COALESCE(p_created_by, auth.uid());
 
-        -- B. SINH MÃ PHIẾU (Logic cũ)
-        IF p_flow = 'in' THEN v_prefix := 'PT'; ELSE v_prefix := 'PC'; END IF;
-        
-        IF p_code IS NULL OR p_code = '' THEN
-            v_final_code := v_prefix || '-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 10000)::TEXT, 4, '0');
-        ELSE
+        -- B. Sinh mã phiếu
+        IF v_flow_enum = 'in' THEN v_prefix := 'PT'; ELSE v_prefix := 'PC'; END IF;
+        IF p_code IS NOT NULL AND p_code <> '' THEN 
             v_final_code := p_code;
+        ELSE 
+            v_final_code := v_prefix || '-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 10000)::TEXT, 4, '0'); 
         END IF;
 
-        -- C. TÌM TÊN ĐỐI TÁC (Logic cũ - Rất tốt, nên giữ)
-        v_partner_name_final := p_partner_name_cache;
-        
+        -- C. Lấy tên đối tác
+        v_partner_name_final := p_partner_name;
         IF v_partner_name_final IS NULL AND p_partner_id IS NOT NULL AND p_partner_id <> '' THEN
             BEGIN
-                IF p_partner_type = 'supplier' THEN
-                    SELECT name INTO v_partner_name_final FROM public.suppliers WHERE id = p_partner_id::bigint;
-                ELSIF p_partner_type = 'customer' THEN
-                    SELECT name INTO v_partner_name_final FROM public.customers WHERE id = p_partner_id::bigint;
-                ELSIF p_partner_type = 'customer_b2b' THEN
-                    SELECT name INTO v_partner_name_final FROM public.customers_b2b WHERE id = p_partner_id::bigint;
-                ELSIF p_partner_type = 'employee' THEN
-                    SELECT full_name INTO v_partner_name_final FROM public.users WHERE id = p_partner_id::uuid;
+                IF p_partner_type = 'supplier' THEN SELECT name INTO v_partner_name_final FROM public.suppliers WHERE id = p_partner_id::bigint;
+                ELSIF p_partner_type = 'customer' THEN SELECT name INTO v_partner_name_final FROM public.customers WHERE id = p_partner_id::bigint;
+                ELSIF p_partner_type = 'customer_b2b' THEN SELECT name INTO v_partner_name_final FROM public.customers_b2b WHERE id = p_partner_id::bigint;
+                ELSIF p_partner_type = 'employee' THEN SELECT full_name INTO v_partner_name_final FROM public.users WHERE id = p_partner_id::uuid;
                 END IF;
-            EXCEPTION WHEN OTHERS THEN
-                -- Nếu lỗi cast ID (ví dụ ID text lung tung) thì bỏ qua, không chết app
-                v_partner_name_final := 'Unknown Partner';
-            END;
+            EXCEPTION WHEN OTHERS THEN v_partner_name_final := 'N/A'; END;
         END IF;
 
-        -- D. INSERT (Có thêm warehouse_id)
+        -- D. Insert
         INSERT INTO public.finance_transactions (
-            code, flow, business_type, category_id,
-            amount, fund_account_id,
+            code, flow, business_type, category_id, amount, fund_account_id,
             partner_type, partner_id, partner_name_cache,
-            ref_type, ref_id,
-            description, evidence_url, 
-            created_by, status, ref_advance_id,
-            
-            -- [MỚI]
-            warehouse_id, 
-            transaction_date,
-            
-            -- [SUPPORT CŨ] Nếu bảng có cột cash_tally thì bỏ comment dòng dưới
-            -- cash_tally,
+            ref_type, ref_id, description, evidence_url, created_by, status, 
+            transaction_date, ref_advance_id, 
+            cash_tally, target_bank_info, -- [UPDATED]
             updated_at
         ) VALUES (
-            v_final_code, p_flow::public.transaction_flow, p_business_type::public.business_type, p_category_id,
-            p_amount, p_fund_account_id,
+            v_final_code, v_flow_enum, v_biz_enum, p_category_id, p_amount, p_fund_id,
             p_partner_type, p_partner_id, v_partner_name_final,
-            p_ref_type, p_ref_id,
-            p_description, p_evidence_url,
-            v_creator_id, p_status::public.transaction_status, p_ref_advance_id,
-            
-            -- [MỚI]
-            p_warehouse_id,
-            NOW(),
-            
-            -- [SUPPORT CŨ]
-            -- p_cash_tally,
+            p_ref_type, p_ref_id, p_description, p_evidence_url, v_creator_id, v_status_enum, 
+            COALESCE(p_transaction_date, NOW()), p_ref_advance_id, 
+            p_cash_tally, p_target_bank_info,
             NOW()
         )
         RETURNING id INTO v_new_id;
 
-        -- E. LOGIC HOÀN ỨNG (Logic cũ quan trọng - Đã khôi phục) ⭐️
+        -- E. Hoàn ứng
         IF p_ref_advance_id IS NOT NULL THEN
-            UPDATE public.finance_transactions
-            SET status = 'completed', updated_at = now()
-            WHERE id = p_ref_advance_id;
+            UPDATE public.finance_transactions SET status = 'completed', updated_at = now() WHERE id = p_ref_advance_id;
         END IF;
 
         RETURN v_new_id;
@@ -2211,11 +2190,7 @@ CREATE OR REPLACE FUNCTION "public"."create_finance_transaction"("p_code" "text"
     $$;
 
 
-ALTER FUNCTION "public"."create_finance_transaction"("p_code" "text", "p_flow" "text", "p_business_type" "text", "p_category_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_partner_type" "text", "p_partner_id" "text", "p_partner_name_cache" "text", "p_ref_type" "text", "p_ref_id" "text", "p_description" "text", "p_evidence_url" "text", "p_created_by" "uuid", "p_status" "text", "p_ref_advance_id" bigint, "p_cash_tally" "jsonb", "p_warehouse_id" bigint) OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."create_finance_transaction"("p_code" "text", "p_flow" "text", "p_business_type" "text", "p_category_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_partner_type" "text", "p_partner_id" "text", "p_partner_name_cache" "text", "p_ref_type" "text", "p_ref_id" "text", "p_description" "text", "p_evidence_url" "text", "p_created_by" "uuid", "p_status" "text", "p_ref_advance_id" bigint, "p_cash_tally" "jsonb", "p_warehouse_id" bigint) IS 'V3 Merged: Full Logic Cũ + P&L Warehouse Support';
-
+ALTER FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_inventory_check"("p_warehouse_id" bigint, "p_user_id" "uuid", "p_note" "text" DEFAULT NULL::"text", "p_scope" "text" DEFAULT 'ALL'::"text", "p_text_val" "text" DEFAULT NULL::"text", "p_int_val" bigint DEFAULT NULL::bigint) RETURNS bigint
@@ -4900,9 +4875,8 @@ $$;
 ALTER FUNCTION "public"."get_purchase_order_details"("p_id" bigint) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_purchase_orders_master"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_search" "text" DEFAULT NULL::"text", "p_status_delivery" "text" DEFAULT NULL::"text", "p_status_payment" "text" DEFAULT NULL::"text", "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE("id" bigint, "code" "text", "supplier_id" bigint, "supplier_name" "text", "delivery_method" "text", "shipping_partner_name" "text", "delivery_status" "text", "payment_status" "text", "status" "text", "final_amount" numeric, "total_quantity" bigint, "total_cartons" numeric, "delivery_progress" numeric, "expected_delivery_date" timestamp with time zone, "expected_delivery_time" timestamp with time zone, "created_at" timestamp with time zone, "full_count" bigint)
+CREATE OR REPLACE FUNCTION "public"."get_purchase_orders_master"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_search" "text" DEFAULT NULL::"text", "p_status_delivery" "text" DEFAULT NULL::"text", "p_status_payment" "text" DEFAULT NULL::"text", "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE("id" bigint, "code" "text", "supplier_id" bigint, "supplier_name" "text", "delivery_method" "text", "shipping_partner_name" "text", "delivery_status" "text", "payment_status" "text", "status" "text", "final_amount" numeric, "total_paid" numeric, "total_quantity" bigint, "total_cartons" numeric, "delivery_progress" numeric, "expected_delivery_date" timestamp with time zone, "expected_delivery_time" timestamp with time zone, "created_at" timestamp with time zone, "full_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
     DECLARE
         v_offset INTEGER;
@@ -4911,7 +4885,6 @@ CREATE OR REPLACE FUNCTION "public"."get_purchase_orders_master"("p_page" intege
 
         RETURN QUERY
         WITH po_metrics AS (
-            -- Tính toán metrics tổng hợp từ chi tiết đơn
             SELECT 
                 poi.po_id,
                 COALESCE(SUM(poi.quantity_ordered), 0) as _total_qty,
@@ -4932,10 +4905,12 @@ CREATE OR REPLACE FUNCTION "public"."get_purchase_orders_master"("p_page" intege
                 po.payment_status,
                 po.status,
                 po.final_amount, 
+                
+                COALESCE(po.total_paid, 0) as total_paid, -- [FIX] Lấy dữ liệu thanh toán
+                
                 COALESCE(pm._total_qty, 0) as total_quantity,
                 COALESCE(pm._total_cartons, 0) as total_cartons,
                 
-                -- Logic tính % Tiến độ nhập kho
                 CASE 
                     WHEN COALESCE(pm._total_qty, 0) = 0 THEN 0
                     ELSE ROUND((COALESCE(pm._total_received, 0)::NUMERIC / pm._total_qty) * 100, 0)
@@ -4955,7 +4930,7 @@ CREATE OR REPLACE FUNCTION "public"."get_purchase_orders_master"("p_page" intege
                 AND (p_date_from IS NULL OR po.created_at >= p_date_from)
                 AND (p_date_to IS NULL OR po.created_at <= p_date_to)
                 
-                -- [DEEP SEARCH LOGIC]
+                -- [CORE RESTORED] Giữ lại logic tìm kiếm sâu (Deep Search)
                 AND (
                     p_search IS NULL OR p_search = '' 
                     -- 1. Tìm theo Mã đơn hoặc Tên NCC
@@ -4985,10 +4960,6 @@ CREATE OR REPLACE FUNCTION "public"."get_purchase_orders_master"("p_page" intege
 
 
 ALTER FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) IS 'V2: Danh sách Đơn mua hàng với Deep Search (Product Name/SKU) và Live Progress';
-
 
 
 CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_search" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_order_type" "text" DEFAULT NULL::"text", "p_remittance_status" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -5387,126 +5358,53 @@ $$;
 ALTER FUNCTION "public"."get_suppliers_list"("search_query" "text", "status_filter" "text", "page_num" integer, "page_size" integer) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow" DEFAULT NULL::"public"."transaction_flow", "p_fund_id" bigint DEFAULT NULL::bigint, "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_limit" integer DEFAULT 20, "p_offset" integer DEFAULT 0) RETURNS TABLE("id" bigint, "code" "text", "transaction_date" timestamp with time zone, "flow" "public"."transaction_flow", "amount" numeric, "fund_name" "text", "partner_name" "text", "category_name" "text", "description" "text", "business_type" "public"."business_type", "created_by_name" "text", "total_count" bigint)
+CREATE OR REPLACE FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow" DEFAULT NULL::"public"."transaction_flow", "p_fund_id" bigint DEFAULT NULL::bigint, "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_limit" integer DEFAULT 20, "p_offset" integer DEFAULT 0, "p_search" "text" DEFAULT NULL::"text", "p_created_by" "uuid" DEFAULT NULL::"uuid", "p_status" "public"."transaction_status" DEFAULT NULL::"public"."transaction_status") RETURNS TABLE("id" bigint, "code" "text", "transaction_date" timestamp with time zone, "flow" "public"."transaction_flow", "amount" numeric, "fund_name" "text", "partner_name" "text", "category_name" "text", "description" "text", "business_type" "public"."business_type", "created_by_name" "text", "status" "public"."transaction_status", "ref_advance_id" bigint, "ref_advance_code" "text", "target_bank_info" "jsonb", "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        t.id,
-        t.code,
-        t.transaction_date,
-        t.flow,
-        t.amount,
-        f.name as fund_name,
-        COALESCE(t.partner_name_cache, 'Khác') as partner_name,
-        cat.name as category_name,
-        t.description,
-        t.business_type,
-        u.full_name as created_by_name,
-        COUNT(*) OVER() as total_count
-    FROM public.finance_transactions t
-    JOIN public.fund_accounts f ON t.fund_account_id = f.id
-    LEFT JOIN public.transaction_categories cat ON t.category_id = cat.id
-    LEFT JOIN public.users u ON t.created_by = u.id
-    WHERE 
-        (p_flow IS NULL OR t.flow = p_flow)
-        AND (p_fund_id IS NULL OR t.fund_account_id = p_fund_id)
-        AND (p_date_from IS NULL OR t.transaction_date >= p_date_from)
-        AND (p_date_to IS NULL OR t.transaction_date <= p_date_to)
-    ORDER BY t.transaction_date DESC
-    LIMIT p_limit OFFSET p_offset;
-END;
-$$;
+    BEGIN
+        RETURN QUERY
+        SELECT 
+            t.id, 
+            t.code, 
+            t.transaction_date, 
+            t.flow, 
+            t.amount, 
+            f.name as fund_name, 
+            COALESCE(t.partner_name_cache, 'Khác') as partner_name, 
+            cat.name as category_name, 
+            t.description, 
+            t.business_type, 
+            u.full_name as created_by_name, 
+            t.status, 
+            t.ref_advance_id, 
+            parent.code as ref_advance_code,
+            t.target_bank_info, 
+            COUNT(*) OVER() as total_count
+        FROM public.finance_transactions t
+        JOIN public.fund_accounts f ON t.fund_account_id = f.id
+        LEFT JOIN public.transaction_categories cat ON t.category_id = cat.id
+        LEFT JOIN public.users u ON t.created_by = u.id
+        LEFT JOIN public.finance_transactions parent ON t.ref_advance_id = parent.id
+        WHERE 
+            (p_flow IS NULL OR t.flow = p_flow)
+            AND (p_fund_id IS NULL OR t.fund_account_id = p_fund_id)
+            AND (p_date_from IS NULL OR t.transaction_date >= p_date_from)
+            AND (p_date_to IS NULL OR t.transaction_date <= p_date_to)
+            AND (p_status IS NULL OR t.status = p_status)
+            AND (p_created_by IS NULL OR t.created_by = p_created_by)
+            AND (
+                p_search IS NULL OR 
+                t.code ILIKE '%' || p_search || '%' OR 
+                t.description ILIKE '%' || p_search || '%' OR
+                t.partner_name_cache ILIKE '%' || p_search || '%'
+            )
+        ORDER BY t.transaction_date DESC
+        LIMIT p_limit OFFSET p_offset;
+    END;
+    $$;
 
 
-ALTER FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer) OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow" DEFAULT NULL::"public"."transaction_flow", "p_fund_id" bigint DEFAULT NULL::bigint, "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_limit" integer DEFAULT 20, "p_offset" integer DEFAULT 0, "p_search" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text") RETURNS TABLE("id" bigint, "code" "text", "transaction_date" timestamp with time zone, "flow" "public"."transaction_flow", "amount" numeric, "fund_name" "text", "partner_name" "text", "category_name" "text", "description" "text", "business_type" "public"."business_type", "created_by_name" "text", "status" "public"."transaction_status", "ref_advance_id" bigint, "evidence_url" "text", "total_count" bigint)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        t.id, t.code, t.transaction_date, t.flow, t.amount,
-        f.name as fund_name,
-        COALESCE(t.partner_name_cache, 'Khác') as partner_name,
-        cat.name as category_name,
-        t.description, t.business_type,
-        u.full_name as created_by_name,
-        t.status, t.ref_advance_id, t.evidence_url,
-        COUNT(*) OVER() as total_count
-    FROM public.finance_transactions t
-    JOIN public.fund_accounts f ON t.fund_account_id = f.id
-    LEFT JOIN public.transaction_categories cat ON t.category_id = cat.id
-    LEFT JOIN public.users u ON t.created_by = u.id
-    WHERE 
-        (p_flow IS NULL OR t.flow = p_flow)
-        AND (p_fund_id IS NULL OR t.fund_account_id = p_fund_id)
-        AND (p_date_from IS NULL OR t.transaction_date >= p_date_from)
-        AND (p_date_to IS NULL OR t.transaction_date <= p_date_to)
-        AND (p_status IS NULL OR t.status = p_status::public.transaction_status)
-        AND (
-            p_search IS NULL OR p_search = '' OR 
-            t.code ILIKE '%' || p_search || '%' OR 
-            t.description ILIKE '%' || p_search || '%' OR
-            t.partner_name_cache ILIKE '%' || p_search || '%'
-        )
-    ORDER BY t.transaction_date DESC
-    LIMIT p_limit OFFSET p_offset;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_status" "text") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow" DEFAULT NULL::"public"."transaction_flow", "p_fund_id" bigint DEFAULT NULL::bigint, "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_limit" integer DEFAULT 20, "p_offset" integer DEFAULT 0, "p_keyword" "text" DEFAULT NULL::"text", "p_created_by" "uuid" DEFAULT NULL::"uuid", "p_status" "public"."transaction_status" DEFAULT NULL::"public"."transaction_status") RETURNS TABLE("id" bigint, "code" "text", "transaction_date" timestamp with time zone, "flow" "public"."transaction_flow", "amount" numeric, "fund_name" "text", "partner_name" "text", "category_name" "text", "description" "text", "business_type" "public"."business_type", "created_by_name" "text", "status" "public"."transaction_status", "ref_advance_id" bigint, "ref_advance_code" "text", "total_count" bigint)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        t.id,
-        t.code,
-        t.transaction_date,
-        t.flow,
-        t.amount,
-        f.name as fund_name,
-        COALESCE(t.partner_name_cache, 'Khác') as partner_name,
-        cat.name as category_name,
-        t.description,
-        t.business_type,
-        u.full_name as created_by_name,
-        t.status,
-        t.ref_advance_id,
-        parent.code as ref_advance_code, -- Self-join để lấy mã phiếu gốc
-        COUNT(*) OVER() as total_count
-    FROM public.finance_transactions t
-    JOIN public.fund_accounts f ON t.fund_account_id = f.id
-    LEFT JOIN public.transaction_categories cat ON t.category_id = cat.id
-    LEFT JOIN public.users u ON t.created_by = u.id
-    LEFT JOIN public.finance_transactions parent ON t.ref_advance_id = parent.id
-    WHERE 
-        (p_flow IS NULL OR t.flow = p_flow)
-        AND (p_fund_id IS NULL OR t.fund_account_id = p_fund_id)
-        AND (p_date_from IS NULL OR t.transaction_date >= p_date_from)
-        AND (p_date_to IS NULL OR t.transaction_date <= p_date_to)
-        AND (p_status IS NULL OR t.status = p_status)
-        AND (p_created_by IS NULL OR t.created_by = p_created_by)
-        AND (
-            p_keyword IS NULL OR 
-            t.code ILIKE '%' || p_keyword || '%' OR 
-            t.description ILIKE '%' || p_keyword || '%'
-        )
-    ORDER BY t.transaction_date DESC
-    LIMIT p_limit OFFSET p_offset;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_keyword" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") OWNER TO "postgres";
+ALTER FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_users_with_roles"() RETURNS TABLE("key" "text", "id" "uuid", "name" "text", "email" "text", "avatar" "text", "status" "text", "assignments" "jsonb")
@@ -7973,63 +7871,65 @@ COMMENT ON FUNCTION "public"."sync_order_remittance_status"() IS 'Trigger Strict
 CREATE OR REPLACE FUNCTION "public"."sync_po_payment_status"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-    DECLARE
-        v_po_id BIGINT;
-        v_total_paid NUMERIC;
-        v_final_amount NUMERIC;
-        v_new_status TEXT;
-    BEGIN
-        -- Xác định ID đơn hàng bị ảnh hưởng
-        IF (TG_OP = 'DELETE') THEN
-            IF OLD.ref_type <> 'purchase_order' OR OLD.ref_id IS NULL THEN RETURN OLD; END IF;
-            -- Ép kiểu an toàn (tránh lỗi nếu ref_id chứa ký tự lạ)
-            BEGIN
-                v_po_id := OLD.ref_id::BIGINT;
-            EXCEPTION WHEN OTHERS THEN
-                RETURN OLD; -- Bỏ qua nếu ID không phải số
-            END;
+DECLARE
+    v_po_id BIGINT;
+    v_total_paid NUMERIC;
+    v_final_amount NUMERIC;
+    v_new_status TEXT;
+BEGIN
+    -- 1. Xác định ID Đơn Mua Hàng bị ảnh hưởng
+    -- Nếu là DELETE, lấy ID từ bản ghi cũ (OLD). Nếu INSERT/UPDATE, lấy từ bản ghi mới (NEW).
+    IF (TG_OP = 'DELETE') THEN
+        IF OLD.ref_type = 'purchase_order' AND OLD.ref_id IS NOT NULL THEN
+            v_po_id := OLD.ref_id::BIGINT;
         ELSE
-            IF NEW.ref_type <> 'purchase_order' OR NEW.ref_id IS NULL THEN RETURN NEW; END IF;
-            BEGIN
-                v_po_id := NEW.ref_id::BIGINT;
-            EXCEPTION WHEN OTHERS THEN
-                RETURN NEW;
-            END;
+            RETURN NULL; -- Không liên quan đến PO
         END IF;
-
-        -- Tính tổng tiền ĐÃ THANH TOÁN (Chỉ tính các phiếu đã Completed/Confirmed)
-        SELECT COALESCE(SUM(amount), 0)
-        INTO v_total_paid
-        FROM public.finance_transactions
-        WHERE ref_type = 'purchase_order' 
-          AND ref_id = v_po_id::TEXT
-          AND flow = 'out' -- Phiếu Chi
-          AND status IN ('completed', 'confirmed'); -- Đã hoàn thành
-
-        -- Lấy tổng tiền phải trả của đơn hàng
-        SELECT final_amount INTO v_final_amount FROM public.purchase_orders WHERE id = v_po_id;
-
-        -- Xác định trạng thái thanh toán mới
-        IF v_final_amount = 0 THEN
-             v_new_status := 'paid'; -- Nếu đơn 0đ thì coi như đã trả
-        ELSIF v_total_paid >= v_final_amount THEN
-            v_new_status := 'paid';
-        ELSIF v_total_paid > 0 THEN
-            v_new_status := 'partial';
+    ELSE
+        IF NEW.ref_type = 'purchase_order' AND NEW.ref_id IS NOT NULL THEN
+            v_po_id := NEW.ref_id::BIGINT;
         ELSE
-            v_new_status := 'unpaid';
+            RETURN NULL; -- Không liên quan đến PO
         END IF;
+    END IF;
 
-        -- Cập nhật ngược lại vào bảng purchase_orders
-        UPDATE public.purchase_orders
-        SET total_paid = v_total_paid,
-            payment_status = v_new_status,
-            updated_at = NOW()
-        WHERE id = v_po_id;
+    -- 2. Tính tổng tiền thực tế ĐÃ ĐƯỢC CHẤP NHẬN CHI cho đơn này
+    -- Chỉ cộng các phiếu có status là 'completed' hoặc 'confirmed'
+    SELECT COALESCE(SUM(amount), 0)
+    INTO v_total_paid
+    FROM public.finance_transactions
+    WHERE ref_type = 'purchase_order' 
+      AND ref_id = v_po_id::TEXT
+      AND flow = 'out' -- Chỉ tính dòng tiền ra (Chi)
+      AND status IN ('confirmed', 'completed', 'approved'); -- Chỉ tính phiếu đã duyệt
 
-        RETURN NULL;
-    END;
-    $$;
+    -- 3. Lấy tổng tiền phải trả của đơn hàng
+    SELECT final_amount INTO v_final_amount 
+    FROM public.purchase_orders 
+    WHERE id = v_po_id;
+
+    -- Nếu không tìm thấy đơn (trường hợp hiếm), thoát luôn
+    IF v_final_amount IS NULL THEN RETURN NULL; END IF;
+
+    -- 4. Xác định trạng thái mới dựa trên số liệu thực tế
+    IF v_total_paid >= (v_final_amount - 500) THEN -- Cho phép sai số 500đ
+        v_new_status := 'paid';
+    ELSIF v_total_paid > 0 THEN
+        v_new_status := 'partial';
+    ELSE
+        v_new_status := 'unpaid';
+    END IF;
+
+    -- 5. Cập nhật ngược lại bảng PO
+    UPDATE public.purchase_orders
+    SET total_paid = v_total_paid,
+        payment_status = v_new_status,
+        updated_at = NOW()
+    WHERE id = v_po_id;
+
+    RETURN NULL; -- Trigger AFTER không cần trả về giá trị
+END;
+$$;
 
 
 ALTER FUNCTION "public"."sync_po_payment_status"() OWNER TO "postgres";
@@ -8063,6 +7963,65 @@ ALTER FUNCTION "public"."sync_user_status_to_auth"() OWNER TO "postgres";
 
 COMMENT ON FUNCTION "public"."sync_user_status_to_auth"() IS 'Trigger function: Đồng bộ trạng thái từ public.users sang auth.users (Ban/Unban)';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."track_inventory_changes"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+    BEGIN
+        IF NEW.updated_by IS NOT NULL THEN
+            -- Case 5: Cập nhật Vị trí kệ
+            IF (OLD.shelf_location IS DISTINCT FROM NEW.shelf_location) THEN
+                INSERT INTO public.product_activity_logs (user_id, product_id, action_type, old_value, new_value)
+                VALUES (NEW.updated_by, NEW.product_id, 'update_location', OLD.shelf_location, NEW.shelf_location);
+            END IF;
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."track_inventory_changes"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."track_product_changes"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+    BEGIN
+        -- Chỉ ghi log nếu có người thực hiện (updated_by không null)
+        IF NEW.updated_by IS NOT NULL THEN
+            
+            -- Case 1: Cập nhật Barcode
+            IF (OLD.barcode IS DISTINCT FROM NEW.barcode) THEN
+                INSERT INTO public.product_activity_logs (user_id, product_id, action_type, old_value, new_value)
+                VALUES (NEW.updated_by, NEW.id, 'update_barcode', OLD.barcode, NEW.barcode);
+            END IF;
+
+            -- Case 2: Cập nhật Đơn vị (Wholesale Unit)
+            IF (OLD.wholesale_unit IS DISTINCT FROM NEW.wholesale_unit) THEN
+                INSERT INTO public.product_activity_logs (user_id, product_id, action_type, old_value, new_value)
+                VALUES (NEW.updated_by, NEW.id, 'update_unit', OLD.wholesale_unit, NEW.wholesale_unit);
+            END IF;
+
+             -- Case 3: Cập nhật Nội dung/Tên (Content)
+            IF (OLD.description IS DISTINCT FROM NEW.description) OR (OLD.name IS DISTINCT FROM NEW.name) THEN
+                INSERT INTO public.product_activity_logs (user_id, product_id, action_type, old_value, new_value)
+                VALUES (NEW.updated_by, NEW.id, 'update_content', 'old_content', 'new_content');
+            END IF;
+
+            -- Case 4: Cập nhật Giá bán (Invoice Price) - Thêm cái này để quản lý chặt hơn
+            IF (OLD.invoice_price IS DISTINCT FROM NEW.invoice_price) THEN
+                 INSERT INTO public.product_activity_logs (user_id, product_id, action_type, old_value, new_value)
+                VALUES (NEW.updated_by, NEW.id, 'update_price', OLD.invoice_price::text, NEW.invoice_price::text);
+            END IF;
+
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."track_product_changes"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."trigger_notify_finance_approval"() RETURNS "trigger"
@@ -8406,192 +8365,75 @@ $$;
 ALTER FUNCTION "public"."update_prescription_template"("p_id" bigint, "p_data" "jsonb", "p_items" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_inventory_settings" "jsonb") RETURNS "void"
-    LANGUAGE "plpgsql"
+CREATE OR REPLACE FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text" DEFAULT NULL::"text", "p_sku" "text" DEFAULT NULL::"text", "p_barcode" "text" DEFAULT NULL::"text", "p_active_ingredient" "text" DEFAULT NULL::"text", "p_image_url" "text" DEFAULT NULL::"text", "p_category_name" "text" DEFAULT NULL::"text", "p_manufacturer_name" "text" DEFAULT NULL::"text", "p_distributor_id" bigint DEFAULT NULL::bigint, "p_status" "text" DEFAULT NULL::"text", "p_invoice_price" numeric DEFAULT NULL::numeric, "p_actual_cost" numeric DEFAULT NULL::numeric, "p_wholesale_unit" "text" DEFAULT NULL::"text", "p_retail_unit" "text" DEFAULT NULL::"text", "p_conversion_factor" integer DEFAULT NULL::integer, "p_wholesale_margin_value" numeric DEFAULT NULL::numeric, "p_wholesale_margin_type" "text" DEFAULT NULL::"text", "p_retail_margin_value" numeric DEFAULT NULL::numeric, "p_retail_margin_type" "text" DEFAULT NULL::"text", "p_items_per_carton" integer DEFAULT NULL::integer, "p_carton_weight" numeric DEFAULT NULL::numeric, "p_carton_dimensions" "text" DEFAULT NULL::"text", "p_purchasing_policy" "text" DEFAULT NULL::"text", "p_inventory_settings" "jsonb" DEFAULT '{}'::"jsonb", "p_description" "text" DEFAULT NULL::"text", "p_registration_number" "text" DEFAULT NULL::"text", "p_packing_spec" "text" DEFAULT NULL::"text", "p_updated_by" "uuid" DEFAULT NULL::"uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-DECLARE
-    v_warehouse_key TEXT;
-    v_warehouse_id BIGINT;
-    v_min_stock INT;
-    v_max_stock INT;
-BEGIN
-    -- Update Sản phẩm
-    UPDATE public.products
-    SET
-        name = p_name,
-        sku = p_sku,
-        barcode = p_barcode,
-        active_ingredient = p_active_ingredient,
-        image_url = p_image_url,
-        category_name = p_category_name,
-        manufacturer_name = p_manufacturer_name,
-        distributor_id = p_distributor_id,
-        status = p_status,
-        invoice_price = p_invoice_price,
-        actual_cost = p_actual_cost,
-        wholesale_unit = p_wholesale_unit,
-        retail_unit = p_retail_unit,
-        conversion_factor = p_conversion_factor,
-        wholesale_margin_value = p_wholesale_margin_value,
-        wholesale_margin_type = p_wholesale_margin_type,
-        retail_margin_value = p_retail_margin_value,
-        retail_margin_type = p_retail_margin_type,
-        items_per_carton = COALESCE(p_items_per_carton, 1), -- <-- CẬP NHẬT
-        updated_at = now()
-    WHERE id = p_id;
+    DECLARE
+        v_warehouse_key TEXT;
+        v_warehouse_id BIGINT;
+        v_min_stock INT;
+        v_max_stock INT;
+        v_user_id UUID;
+    BEGIN
+        -- 1. Xác định người thực hiện (Ưu tiên tham số truyền vào -> Fallback auth.uid())
+        v_user_id := COALESCE(p_updated_by, auth.uid());
 
-    -- Update Tồn kho Min/Max (Xóa cũ thêm mới cho an toàn)
-    DELETE FROM public.product_inventory WHERE product_id = p_id;
+        -- 2. Update Bảng Products
+        UPDATE public.products
+        SET
+            name = COALESCE(p_name, name),
+            sku = COALESCE(p_sku, sku),
+            barcode = COALESCE(p_barcode, barcode),
+            active_ingredient = COALESCE(p_active_ingredient, active_ingredient),
+            image_url = COALESCE(p_image_url, image_url),
+            category_name = COALESCE(p_category_name, category_name),
+            manufacturer_name = COALESCE(p_manufacturer_name, manufacturer_name),
+            distributor_id = COALESCE(p_distributor_id, distributor_id),
+            status = COALESCE(p_status, status),
+            invoice_price = COALESCE(p_invoice_price, invoice_price),
+            actual_cost = COALESCE(p_actual_cost, actual_cost),
+            wholesale_unit = COALESCE(p_wholesale_unit, wholesale_unit),
+            retail_unit = COALESCE(p_retail_unit, retail_unit),
+            conversion_factor = COALESCE(p_conversion_factor, conversion_factor),
+            wholesale_margin_value = COALESCE(p_wholesale_margin_value, wholesale_margin_value),
+            wholesale_margin_type = COALESCE(p_wholesale_margin_type, wholesale_margin_type),
+            retail_margin_value = COALESCE(p_retail_margin_value, retail_margin_value),
+            retail_margin_type = COALESCE(p_retail_margin_type, retail_margin_type),
+            items_per_carton = COALESCE(p_items_per_carton, items_per_carton),
+            carton_weight = COALESCE(p_carton_weight, carton_weight),
+            carton_dimensions = COALESCE(p_carton_dimensions, carton_dimensions),
+            purchasing_policy = COALESCE(p_purchasing_policy, purchasing_policy),
+            description = COALESCE(p_description, description),
+            registration_number = COALESCE(p_registration_number, registration_number),
+            packing_spec = COALESCE(p_packing_spec, packing_spec),
+            
+            updated_at = now(),
+            updated_by = v_user_id -- [KEY] Ghi nhận người sửa để Trigger hoạt động
+        WHERE id = p_id;
 
-    FOR v_warehouse_key IN SELECT * FROM jsonb_object_keys(p_inventory_settings)
-    LOOP
-        SELECT id INTO v_warehouse_id FROM public.warehouses WHERE key = v_warehouse_key;
-        IF v_warehouse_id IS NOT NULL THEN
-            v_min_stock := (p_inventory_settings -> v_warehouse_key ->> 'min')::INT;
-            v_max_stock := (p_inventory_settings -> v_warehouse_key ->> 'max')::INT;
-
-            INSERT INTO public.product_inventory (product_id, warehouse_id, stock_quantity, min_stock, max_stock)
-            VALUES (p_id, v_warehouse_id, 0, v_min_stock, v_max_stock)
-            ON CONFLICT (product_id, warehouse_id) 
-            DO UPDATE SET min_stock = EXCLUDED.min_stock, max_stock = EXCLUDED.max_stock;
+        -- 3. Update Tồn kho Min/Max (Giữ nguyên logic cũ)
+        IF p_inventory_settings IS NOT NULL AND p_inventory_settings <> '{}'::jsonb THEN
+            DELETE FROM public.product_inventory WHERE product_id = p_id;
+            
+            FOR v_warehouse_key IN SELECT * FROM jsonb_object_keys(p_inventory_settings)
+            LOOP
+                SELECT id INTO v_warehouse_id FROM public.warehouses WHERE key = v_warehouse_key;
+                IF v_warehouse_id IS NOT NULL THEN
+                    v_min_stock := (p_inventory_settings -> v_warehouse_key ->> 'min')::INT;
+                    v_max_stock := (p_inventory_settings -> v_warehouse_key ->> 'max')::INT;
+                    
+                    INSERT INTO public.product_inventory (product_id, warehouse_id, stock_quantity, min_stock, max_stock, updated_by)
+                    VALUES (p_id, v_warehouse_id, 0, COALESCE(v_min_stock,0), COALESCE(v_max_stock,0), v_user_id)
+                    ON CONFLICT (product_id, warehouse_id) 
+                    DO UPDATE SET min_stock = EXCLUDED.min_stock, max_stock = EXCLUDED.max_stock, updated_by = v_user_id;
+                END IF;
+            END LOOP;
         END IF;
-    END LOOP;
-END;
-$$;
+    END;
+    $$;
 
 
-ALTER FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_inventory_settings" "jsonb") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text" DEFAULT NULL::"text", "p_sku" "text" DEFAULT NULL::"text", "p_barcode" "text" DEFAULT NULL::"text", "p_active_ingredient" "text" DEFAULT NULL::"text", "p_image_url" "text" DEFAULT NULL::"text", "p_category_name" "text" DEFAULT NULL::"text", "p_manufacturer_name" "text" DEFAULT NULL::"text", "p_distributor_id" bigint DEFAULT NULL::bigint, "p_status" "text" DEFAULT NULL::"text", "p_invoice_price" numeric DEFAULT NULL::numeric, "p_actual_cost" numeric DEFAULT NULL::numeric, "p_wholesale_unit" "text" DEFAULT NULL::"text", "p_retail_unit" "text" DEFAULT NULL::"text", "p_conversion_factor" integer DEFAULT NULL::integer, "p_wholesale_margin_value" numeric DEFAULT NULL::numeric, "p_wholesale_margin_type" "text" DEFAULT NULL::"text", "p_retail_margin_value" numeric DEFAULT NULL::numeric, "p_retail_margin_type" "text" DEFAULT NULL::"text", "p_items_per_carton" integer DEFAULT NULL::integer, "p_carton_weight" numeric DEFAULT NULL::numeric, "p_carton_dimensions" "text" DEFAULT NULL::"text", "p_purchasing_policy" "text" DEFAULT NULL::"text", "p_inventory_settings" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "void"
-    LANGUAGE "plpgsql"
-    AS $$
-DECLARE
-    v_warehouse_key TEXT;
-    v_warehouse_id BIGINT;
-    v_min_stock INT;
-    v_max_stock INT;
-BEGIN
-    -- Cập nhật bảng Products
-    -- Logic: COALESCE(giá_trị_mới, giá_trị_cũ)
-    -- Nghĩa là: Nếu Frontend không gửi (null), thì giữ nguyên cái đang có trong DB.
-    UPDATE public.products
-    SET
-        name = COALESCE(p_name, name),
-        sku = COALESCE(p_sku, sku),
-        barcode = COALESCE(p_barcode, barcode),
-        active_ingredient = COALESCE(p_active_ingredient, active_ingredient),
-        image_url = COALESCE(p_image_url, image_url),
-        category_name = COALESCE(p_category_name, category_name),
-        manufacturer_name = COALESCE(p_manufacturer_name, manufacturer_name),
-        distributor_id = COALESCE(p_distributor_id, distributor_id),
-        status = COALESCE(p_status, status),
-        invoice_price = COALESCE(p_invoice_price, invoice_price),
-        actual_cost = COALESCE(p_actual_cost, actual_cost),
-        wholesale_unit = COALESCE(p_wholesale_unit, wholesale_unit),
-        retail_unit = COALESCE(p_retail_unit, retail_unit),
-        conversion_factor = COALESCE(p_conversion_factor, conversion_factor),
-        wholesale_margin_value = COALESCE(p_wholesale_margin_value, wholesale_margin_value),
-        wholesale_margin_type = COALESCE(p_wholesale_margin_type, wholesale_margin_type),
-        retail_margin_value = COALESCE(p_retail_margin_value, retail_margin_value),
-        retail_margin_type = COALESCE(p_retail_margin_type, retail_margin_type),
-        items_per_carton = COALESCE(p_items_per_carton, items_per_carton),
-        carton_weight = COALESCE(p_carton_weight, carton_weight),
-        carton_dimensions = COALESCE(p_carton_dimensions, carton_dimensions),
-        purchasing_policy = COALESCE(p_purchasing_policy, purchasing_policy),
-        updated_at = now()
-    WHERE id = p_id;
-
-    -- Cập nhật tồn kho Min/Max
-    -- Chỉ chạy logic này nếu p_inventory_settings CÓ dữ liệu (không phải mặc định rỗng)
-    IF p_inventory_settings IS NOT NULL AND p_inventory_settings <> '{}'::jsonb THEN
-        -- Xóa cũ để cập nhật mới cho sạch sẽ
-        DELETE FROM public.product_inventory WHERE product_id = p_id;
-        
-        FOR v_warehouse_key IN SELECT * FROM jsonb_object_keys(p_inventory_settings)
-        LOOP
-            SELECT id INTO v_warehouse_id FROM public.warehouses WHERE key = v_warehouse_key;
-            IF v_warehouse_id IS NOT NULL THEN
-                v_min_stock := (p_inventory_settings -> v_warehouse_key ->> 'min')::INT;
-                v_max_stock := (p_inventory_settings -> v_warehouse_key ->> 'max')::INT;
-                
-                INSERT INTO public.product_inventory (product_id, warehouse_id, stock_quantity, min_stock, max_stock)
-                VALUES (p_id, v_warehouse_id, 0, v_min_stock, v_max_stock)
-                ON CONFLICT (product_id, warehouse_id) 
-                DO UPDATE SET min_stock = EXCLUDED.min_stock, max_stock = EXCLUDED.max_stock;
-            END IF;
-        END LOOP;
-    END IF;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text" DEFAULT NULL::"text", "p_sku" "text" DEFAULT NULL::"text", "p_barcode" "text" DEFAULT NULL::"text", "p_active_ingredient" "text" DEFAULT NULL::"text", "p_image_url" "text" DEFAULT NULL::"text", "p_category_name" "text" DEFAULT NULL::"text", "p_manufacturer_name" "text" DEFAULT NULL::"text", "p_distributor_id" bigint DEFAULT NULL::bigint, "p_status" "text" DEFAULT NULL::"text", "p_invoice_price" numeric DEFAULT NULL::numeric, "p_actual_cost" numeric DEFAULT NULL::numeric, "p_wholesale_unit" "text" DEFAULT NULL::"text", "p_retail_unit" "text" DEFAULT NULL::"text", "p_conversion_factor" integer DEFAULT NULL::integer, "p_wholesale_margin_value" numeric DEFAULT NULL::numeric, "p_wholesale_margin_type" "text" DEFAULT NULL::"text", "p_retail_margin_value" numeric DEFAULT NULL::numeric, "p_retail_margin_type" "text" DEFAULT NULL::"text", "p_items_per_carton" integer DEFAULT NULL::integer, "p_carton_weight" numeric DEFAULT NULL::numeric, "p_carton_dimensions" "text" DEFAULT NULL::"text", "p_purchasing_policy" "text" DEFAULT NULL::"text", "p_inventory_settings" "jsonb" DEFAULT '{}'::"jsonb", "p_description" "text" DEFAULT NULL::"text", "p_registration_number" "text" DEFAULT NULL::"text", "p_packing_spec" "text" DEFAULT NULL::"text") RETURNS "void"
-    LANGUAGE "plpgsql"
-    AS $$
-DECLARE
-    v_warehouse_key TEXT;
-    v_warehouse_id BIGINT;
-    v_min_stock INT;
-    v_max_stock INT;
-BEGIN
-    UPDATE public.products
-    SET
-        name = COALESCE(p_name, name),
-        sku = COALESCE(p_sku, sku),
-        barcode = COALESCE(p_barcode, barcode),
-        active_ingredient = COALESCE(p_active_ingredient, active_ingredient),
-        image_url = COALESCE(p_image_url, image_url),
-        category_name = COALESCE(p_category_name, category_name),
-        manufacturer_name = COALESCE(p_manufacturer_name, manufacturer_name),
-        distributor_id = COALESCE(p_distributor_id, distributor_id),
-        status = COALESCE(p_status, status),
-        invoice_price = COALESCE(p_invoice_price, invoice_price),
-        actual_cost = COALESCE(p_actual_cost, actual_cost),
-        wholesale_unit = COALESCE(p_wholesale_unit, wholesale_unit),
-        retail_unit = COALESCE(p_retail_unit, retail_unit),
-        conversion_factor = COALESCE(p_conversion_factor, conversion_factor),
-        wholesale_margin_value = COALESCE(p_wholesale_margin_value, wholesale_margin_value),
-        wholesale_margin_type = COALESCE(p_wholesale_margin_type, wholesale_margin_type),
-        retail_margin_value = COALESCE(p_retail_margin_value, retail_margin_value),
-        retail_margin_type = COALESCE(p_retail_margin_type, retail_margin_type),
-        items_per_carton = COALESCE(p_items_per_carton, items_per_carton),
-        carton_weight = COALESCE(p_carton_weight, carton_weight),
-        carton_dimensions = COALESCE(p_carton_dimensions, carton_dimensions),
-        purchasing_policy = COALESCE(p_purchasing_policy, purchasing_policy),
-        -- Cập nhật cột mới
-        description = COALESCE(p_description, description),
-        registration_number = COALESCE(p_registration_number, registration_number),
-        packing_spec = COALESCE(p_packing_spec, packing_spec),
-        updated_at = now()
-    WHERE id = p_id;
-
-    -- Cập nhật tồn kho (Xóa đi thêm lại)
-    IF p_inventory_settings IS NOT NULL AND p_inventory_settings <> '{}'::jsonb THEN
-        DELETE FROM public.product_inventory WHERE product_id = p_id;
-        
-        FOR v_warehouse_key IN SELECT * FROM jsonb_object_keys(p_inventory_settings)
-        LOOP
-            SELECT id INTO v_warehouse_id FROM public.warehouses WHERE key = v_warehouse_key;
-            IF v_warehouse_id IS NOT NULL THEN
-                v_min_stock := (p_inventory_settings -> v_warehouse_key ->> 'min')::INT;
-                v_max_stock := (p_inventory_settings -> v_warehouse_key ->> 'max')::INT;
-                
-                INSERT INTO public.product_inventory (product_id, warehouse_id, stock_quantity, min_stock, max_stock)
-                VALUES (p_id, v_warehouse_id, 0, COALESCE(v_min_stock,0), COALESCE(v_max_stock,0))
-                ON CONFLICT (product_id, warehouse_id) 
-                DO UPDATE SET min_stock = EXCLUDED.min_stock, max_stock = EXCLUDED.max_stock;
-            END IF;
-        END LOOP;
-    END IF;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb", "p_description" "text", "p_registration_number" "text", "p_packing_spec" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb", "p_description" "text", "p_registration_number" "text", "p_packing_spec" "text", "p_updated_by" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_product_location"("p_warehouse_id" bigint, "p_product_id" bigint, "p_cabinet" "text", "p_row" "text", "p_slot" "text") RETURNS "void"
@@ -9891,6 +9733,7 @@ CREATE TABLE IF NOT EXISTS "public"."finance_transactions" (
     "cash_tally" "jsonb",
     "ref_advance_id" bigint,
     "updated_at" timestamp with time zone DEFAULT "now"(),
+    "target_bank_info" "jsonb",
     CONSTRAINT "finance_transactions_amount_check" CHECK (("amount" > (0)::numeric))
 );
 
@@ -10337,6 +10180,32 @@ ALTER TABLE "public"."prescription_templates" ALTER COLUMN "id" ADD GENERATED BY
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."product_activity_logs" (
+    "id" bigint NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "user_id" "uuid",
+    "product_id" bigint,
+    "action_type" "text",
+    "old_value" "text",
+    "new_value" "text",
+    "note" "text"
+);
+
+
+ALTER TABLE "public"."product_activity_logs" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."product_activity_logs" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."product_activity_logs_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."product_contents" (
     "id" bigint NOT NULL,
     "product_id" bigint,
@@ -10349,7 +10218,8 @@ CREATE TABLE IF NOT EXISTS "public"."product_contents" (
     "seo_title" "text",
     "seo_description" "text",
     "seo_keywords" "text"[],
-    "language_code" "text" DEFAULT 'vi'::"text"
+    "language_code" "text" DEFAULT 'vi'::"text",
+    "updated_by" "uuid"
 );
 
 
@@ -10382,7 +10252,8 @@ CREATE TABLE IF NOT EXISTS "public"."product_inventory" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "location_cabinet" "text",
     "location_row" "text",
-    "location_slot" "text"
+    "location_slot" "text",
+    "updated_by" "uuid"
 );
 
 
@@ -10478,6 +10349,7 @@ CREATE TABLE IF NOT EXISTS "public"."products" (
     "wholesale_margin_rate" numeric DEFAULT 0,
     "retail_margin_rate" numeric DEFAULT 0,
     "usage_instructions" "jsonb" DEFAULT '{}'::"jsonb",
+    "updated_by" "uuid",
     CONSTRAINT "products_items_per_carton_check" CHECK (("items_per_carton" > 0)),
     CONSTRAINT "products_purchasing_policy_check" CHECK (("purchasing_policy" = ANY (ARRAY['ALLOW_LOOSE'::"text", 'FULL_CARTON_ONLY'::"text"])))
 );
@@ -11460,6 +11332,11 @@ ALTER TABLE ONLY "public"."prescription_templates"
 
 
 
+ALTER TABLE ONLY "public"."product_activity_logs"
+    ADD CONSTRAINT "product_activity_logs_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."product_contents"
     ADD CONSTRAINT "product_contents_pkey" PRIMARY KEY ("id");
 
@@ -11722,6 +11599,18 @@ ALTER TABLE ONLY "public"."warehouses"
 
 ALTER TABLE ONLY "public"."warehouses"
     ADD CONSTRAINT "warehouses_pkey" PRIMARY KEY ("id");
+
+
+
+CREATE INDEX "idx_activity_action" ON "public"."product_activity_logs" USING "btree" ("action_type");
+
+
+
+CREATE INDEX "idx_activity_date" ON "public"."product_activity_logs" USING "btree" ("created_at");
+
+
+
+CREATE INDEX "idx_activity_user" ON "public"."product_activity_logs" USING "btree" ("user_id");
 
 
 
@@ -12081,6 +11970,10 @@ CREATE OR REPLACE TRIGGER "on_inventory_batch_change" AFTER INSERT OR DELETE OR 
 
 
 
+CREATE OR REPLACE TRIGGER "on_inventory_track" AFTER UPDATE ON "public"."product_inventory" FOR EACH ROW EXECUTE FUNCTION "public"."track_inventory_changes"();
+
+
+
 CREATE OR REPLACE TRIGGER "on_invoice_updated" BEFORE UPDATE ON "public"."finance_invoices" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
 
@@ -12094,6 +11987,10 @@ CREATE OR REPLACE TRIGGER "on_po_notify" AFTER INSERT OR UPDATE ON "public"."pur
 
 
 CREATE OR REPLACE TRIGGER "on_po_payment_sync" AFTER INSERT OR DELETE OR UPDATE ON "public"."finance_transactions" FOR EACH ROW EXECUTE FUNCTION "public"."sync_po_payment_status"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_product_track" AFTER UPDATE ON "public"."products" FOR EACH ROW EXECUTE FUNCTION "public"."track_product_changes"();
 
 
 
@@ -12472,13 +12369,28 @@ ALTER TABLE ONLY "public"."prescription_template_items"
 
 
 
+ALTER TABLE ONLY "public"."product_activity_logs"
+    ADD CONSTRAINT "product_activity_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
+
+
+
 ALTER TABLE ONLY "public"."product_contents"
     ADD CONSTRAINT "product_contents_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE CASCADE;
 
 
 
+ALTER TABLE ONLY "public"."product_contents"
+    ADD CONSTRAINT "product_contents_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "auth"."users"("id");
+
+
+
 ALTER TABLE ONLY "public"."product_inventory"
     ADD CONSTRAINT "product_inventory_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."product_inventory"
+    ADD CONSTRAINT "product_inventory_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "auth"."users"("id");
 
 
 
@@ -12494,6 +12406,11 @@ ALTER TABLE ONLY "public"."product_units"
 
 ALTER TABLE ONLY "public"."products"
     ADD CONSTRAINT "products_distributor_id_fkey" FOREIGN KEY ("distributor_id") REFERENCES "public"."suppliers"("id");
+
+
+
+ALTER TABLE ONLY "public"."products"
+    ADD CONSTRAINT "products_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "auth"."users"("id");
 
 
 
@@ -13472,9 +13389,9 @@ GRANT ALL ON FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expe
 
 
 
-GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_code" "text", "p_flow" "text", "p_business_type" "text", "p_category_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_partner_type" "text", "p_partner_id" "text", "p_partner_name_cache" "text", "p_ref_type" "text", "p_ref_id" "text", "p_description" "text", "p_evidence_url" "text", "p_created_by" "uuid", "p_status" "text", "p_ref_advance_id" bigint, "p_cash_tally" "jsonb", "p_warehouse_id" bigint) TO "anon";
-GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_code" "text", "p_flow" "text", "p_business_type" "text", "p_category_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_partner_type" "text", "p_partner_id" "text", "p_partner_name_cache" "text", "p_ref_type" "text", "p_ref_id" "text", "p_description" "text", "p_evidence_url" "text", "p_created_by" "uuid", "p_status" "text", "p_ref_advance_id" bigint, "p_cash_tally" "jsonb", "p_warehouse_id" bigint) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_code" "text", "p_flow" "text", "p_business_type" "text", "p_category_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_partner_type" "text", "p_partner_id" "text", "p_partner_name_cache" "text", "p_ref_type" "text", "p_ref_id" "text", "p_description" "text", "p_evidence_url" "text", "p_created_by" "uuid", "p_status" "text", "p_ref_advance_id" bigint, "p_cash_tally" "jsonb", "p_warehouse_id" bigint) TO "service_role";
+GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") TO "service_role";
 
 
 
@@ -13898,21 +13815,9 @@ GRANT ALL ON FUNCTION "public"."get_suppliers_list"("search_query" "text", "stat
 
 
 
-GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer) TO "anon";
-GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer) TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_status" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_status" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_status" "text") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_keyword" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_keyword" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_keyword" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "service_role";
+GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "service_role";
 
 
 
@@ -14348,6 +14253,18 @@ GRANT ALL ON FUNCTION "public"."sync_user_status_to_auth"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."track_inventory_changes"() TO "anon";
+GRANT ALL ON FUNCTION "public"."track_inventory_changes"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."track_inventory_changes"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."track_product_changes"() TO "anon";
+GRANT ALL ON FUNCTION "public"."track_product_changes"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."track_product_changes"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."trigger_notify_finance_approval"() TO "anon";
 GRANT ALL ON FUNCTION "public"."trigger_notify_finance_approval"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."trigger_notify_finance_approval"() TO "service_role";
@@ -14408,21 +14325,9 @@ GRANT ALL ON FUNCTION "public"."update_prescription_template"("p_id" bigint, "p_
 
 
 
-GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_inventory_settings" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_inventory_settings" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_inventory_settings" "jsonb") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb", "p_description" "text", "p_registration_number" "text", "p_packing_spec" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb", "p_description" "text", "p_registration_number" "text", "p_packing_spec" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb", "p_description" "text", "p_registration_number" "text", "p_packing_spec" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb", "p_description" "text", "p_registration_number" "text", "p_packing_spec" "text", "p_updated_by" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb", "p_description" "text", "p_registration_number" "text", "p_packing_spec" "text", "p_updated_by" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_product"("p_id" bigint, "p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb", "p_description" "text", "p_registration_number" "text", "p_packing_spec" "text", "p_updated_by" "uuid") TO "service_role";
 
 
 
@@ -14941,6 +14846,18 @@ GRANT ALL ON SEQUENCE "public"."prescription_template_items_id_seq" TO "service_
 GRANT ALL ON SEQUENCE "public"."prescription_templates_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."prescription_templates_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."prescription_templates_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."product_activity_logs" TO "anon";
+GRANT ALL ON TABLE "public"."product_activity_logs" TO "authenticated";
+GRANT ALL ON TABLE "public"."product_activity_logs" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."product_activity_logs_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."product_activity_logs_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."product_activity_logs_id_seq" TO "service_role";
 
 
 

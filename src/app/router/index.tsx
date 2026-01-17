@@ -59,6 +59,8 @@ import QuickLocationUpdate from "@/pages/quick/QuickLocationUpdate";
 import InventoryCheckList from '@/features/inventory/pages/InventoryCheckList';
 import InventoryCheckDetail from '@/features/inventory/pages/InventoryCheckDetail';
 import OpeningStockImport from "@/features/inventory/pages/OpeningStockImport";
+import QuickUnitPage from "@/pages/quick/QuickUnitPage";
+import QuickMinMaxPage from "@/pages/quick/QuickMinMaxPage";
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -240,10 +242,20 @@ const routes: RouteObject[] = [
             ],
           },
 
+
+
           // 7. Thao tác Nhanh
           {
             path: "quick/product-location",
             element: <QuickLocationUpdate />,
+          },
+          {
+            path: "quick/unit-setup", // [NEW]
+            element: <QuickUnitPage />,
+          },
+          {
+            path: "quick/min-max", // [NEW]
+            element: <QuickMinMaxPage />,
           },
           {
             path: "quick/price-edit",
