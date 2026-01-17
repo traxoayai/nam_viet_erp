@@ -2,16 +2,12 @@
 import {
   ShopOutlined,
   ShoppingCartOutlined,
-  ContactsOutlined,
-  BulbOutlined,
-  AuditOutlined,
   LogoutOutlined,
-  UserOutlined,
   MenuUnfoldOutlined,
-  MenuFoldOutlined,
   AppstoreOutlined,
   ImportOutlined,
   DownloadOutlined,
+  UserOutlined,
   SolutionOutlined,
   WalletOutlined,
   ContainerOutlined,
@@ -28,7 +24,6 @@ import {
   BankOutlined,
   TeamOutlined,
   GiftOutlined,
-  RocketOutlined,
   BarcodeOutlined,
   ToolOutlined,
   ScheduleOutlined,
@@ -38,21 +33,21 @@ import {
   IdcardOutlined,
   FilePdfOutlined,
   ProductOutlined,
-  SettingFilled,
-  PieChartFilled,
-  EuroCircleFilled,
   //HomeFilled,
   //ShopFilled,
   //ShoppingFilled,
-  HeartTwoTone,
-  HomeTwoTone,
-  ShoppingTwoTone,
-  ShopTwoTone,
-  GiftTwoTone, // <-- Thêm icon mới
+  //ShopFilled,
+  //ShoppingFilled,
   ThunderboltOutlined,
+  AuditOutlined,
   AudioOutlined,
 } from "@ant-design/icons";
-import { LogOut } from "lucide-react";
+import { 
+  LogOut, CircleChevronLeft, CircleChevronRight, 
+  Home, Store, Stethoscope, Briefcase, Gift, Package, Rocket, 
+  Handshake, Users, Megaphone, ClipboardList, CircleDollarSign, 
+  PieChart, Settings 
+} from "lucide-react";
 import {
   Layout,
   Button,
@@ -89,10 +84,10 @@ function getItem(
 
 const finalMenuItems: MenuItem[] = [
   // 1. Trang chủ
-  getItem(<Link to="/">Trang chủ</Link>, "/", <HomeTwoTone />),
+  getItem(<Link to="/">Trang chủ</Link>, "/", <Home size={20} color="#4b5563" strokeWidth={1.5} />),
 
   // 2. Kênh Cửa Hàng
-  getItem("Kênh Cửa Hàng", "store", <ShoppingTwoTone />, [
+  getItem("Kênh Cửa Hàng", "store", <Store size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/store/dashboard">Dashboard Cửa hàng</Link>,
       "/store/dashboard",
@@ -140,7 +135,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 3. Nghiệp vụ Y Tế
-  getItem("Nghiệp vụ Y Tế", "medical", <HeartTwoTone />, [
+  getItem("Nghiệp vụ Y Tế", "medical", <Stethoscope size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/medical/dashboard">Dashboard Y Tế</Link>,
       "/medical/dashboard",
@@ -159,7 +154,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 4. Bán buôn
-  getItem("Bán buôn (B2B)", "b2b", <ShopTwoTone />, [
+  getItem("Bán buôn (B2B)", "b2b", <Briefcase size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/b2b/dashboard">Thông tin chung B2B</Link>,
       "/b2b/dashboard",
@@ -195,11 +190,11 @@ const finalMenuItems: MenuItem[] = [
   getItem(
     <Link to="/services">Combo và Dịch Vụ</Link>,
     "services",
-    <GiftTwoTone />
+    <Gift size={20} color="#4b5563" strokeWidth={1.5} />
   ),
 
   // 6. Kho - Hàng Hóa
-  getItem("Kho – Hàng Hóa", "inventory", <ProductOutlined />, [
+  getItem("Kho – Hàng Hóa", "inventory", <Package size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/inventory/products">Danh sách Sản Phẩm</Link>,
       "/inventory/products",
@@ -239,7 +234,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 7. Thao tác Nhanh
-  getItem("Thao tác Nhanh", "quick-actions", <RocketOutlined />, [
+  getItem("Thao tác Nhanh", "quick-actions", <Rocket size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/quick/unit-setup">Cài nhanh Quy Cách (Smart Match)</Link>,
       "/quick/unit-setup",
@@ -278,7 +273,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 8. Đối tác
-  getItem("Đối tác", "partners", <ContactsOutlined />, [
+  getItem("Đối tác", "partners", <Handshake size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/partners/suppliers">Nhà Cung Cấp</Link>,
       "/partners/suppliers",
@@ -292,7 +287,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 9. CRM
-  getItem("Quản lý Khách hàng", "crm", <UserOutlined />, [
+  getItem("Quản lý Khách hàng", "crm", <Users size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/crm/retail">Khách kênh Cửa Hàng</Link>,
       "/crm/retail",
@@ -302,7 +297,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 10. Marketing
-  getItem("Quản lý Marketing", "marketing", <BulbOutlined />, [
+  getItem("Quản lý Marketing", "marketing", <Megaphone size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/marketing/dashboard">Dashboard Marketing</Link>,
       "/marketing/dashboard",
@@ -342,7 +337,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 11. Nhân sự
-  getItem("Quản lý Nhân sự", "hr", <AuditOutlined />, [
+  getItem("Quản lý Nhân sự", "hr", <ClipboardList size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/hr/dashboard">Dashboard Nhân sự</Link>,
       "/hr/dashboard",
@@ -376,7 +371,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 12. Tài Chính & Kế Toán (CẬP NHẬT MENU MỚI TẠI ĐÂY)
-  getItem("Tài Chính & Kế Toán", "finance", <EuroCircleFilled />, [
+  getItem("Tài Chính & Kế Toán", "finance", <CircleDollarSign size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/finance/dashboard">Dashboard Tài chính</Link>,
       "/finance/dashboard",
@@ -435,7 +430,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 13. Báo Cáo
-  getItem("Báo Cáo", "reports", <PieChartFilled />, [
+  getItem("Báo Cáo", "reports", <PieChart size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem("Báo cáo Kinh doanh", "report-sales", <AreaChartOutlined />, [
       getItem(
         <Link to="/reports/sales/overview">Báo cáo Bán hàng</Link>,
@@ -483,7 +478,7 @@ const finalMenuItems: MenuItem[] = [
   ]),
 
   // 14. Cấu hình (Đã nâng cấp thành Submenu)
-  getItem("Cấu hình hệ thống", "settings-group", <SettingFilled />, [
+  getItem("Cấu hình hệ thống", "settings-group", <Settings size={20} color="#4b5563" strokeWidth={1.5} />, [
     getItem(
       <Link to="/settings">Tổng quan Cấu hình</Link>,
       "/settings",
@@ -519,7 +514,7 @@ const MENU_PERMISSIONS: Record<string, string> = {
 const MainLayout: React.FC = () => {
   useAutoLogout(); // [NEW] Kích hoạt bảo vệ 
   const screens = useBreakpoint(); // Kiểm tra màn hình (xs, sm, md...)
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false); // State cho Mobile Drawer
   const [isBookingOpen, setIsBookingOpen] = useState(false);
 
@@ -634,14 +629,7 @@ const MainLayout: React.FC = () => {
       <Menu
         mode="inline"
         defaultSelectedKeys={[location.pathname]}
-        defaultOpenKeys={[
-          "store",
-          "medical",
-          "b2b",
-          "inventory",
-          "finance",
-          "reports",
-        ]} // Mở sẵn các nhóm chính
+        defaultOpenKeys={[]} // Không mở sẵn nhóm nào
         items={visibleMenuItems} // (Biến finalMenuItems lấy từ code cũ của Sếp)
         style={{ borderRight: 0 }}
       />
@@ -735,9 +723,16 @@ const MainLayout: React.FC = () => {
           <div style={{ display: "flex", alignItems: "center" }}>
             {screens.md ? (
               // Nút Toggle cho Desktop
+              // Nút Toggle cho Desktop
               <Button
                 type="text"
-                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                icon={
+                  collapsed ? (
+                    <CircleChevronRight color="#4b5563" size={24} strokeWidth={1.5} />
+                  ) : (
+                    <CircleChevronLeft color="#4b5563" size={24} strokeWidth={1.5} />
+                  )
+                }
                 onClick={() => setCollapsed(!collapsed)}
                 style={{ fontSize: "16px", width: 48, height: 48 }}
               />
