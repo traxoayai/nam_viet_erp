@@ -11,9 +11,10 @@ import {
     FileImageOutlined
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
-import stringSimilarity from 'string-similarity'; 
+ 
 import { getAllProductsLite, upsertProduct, getProducts, getProductDetails } from '@/features/product/api/productService'; 
 import { useDebounce } from '@/shared/hooks/useDebounce'; 
+import { supabase } from "@/shared/lib/supabaseClient"; 
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -244,46 +245,89 @@ const QuickUnitPage: React.FC = () => {
     };
 
     const processExcelData = async (excelRows: any[]) => {
-        const matches: any[] = [];
-        // Lấy danh sách tên sản phẩm hiện tại để so khớp
-        const dbNames = products.map(p => p.name); 
-        
-        excelRows.forEach((row, index) => {
-            // Mapping tên cột linh hoạt
-            const name = row['Tên Sản Phẩm'] || row['Product Name'] || row['Tên'] || '';
-            const unitSmall = row['Đơn vị Lẻ'] || row['Base Unit'] || row['Lẻ'] || '';
-            const unitBig = row['Đơn vị Sỉ'] || row['Wholesale Unit'] || row['Sỉ'] || '';
-            const rate = row['Hệ số'] || row['Conversion Rate'] || 1;
-            
-            if (!name) return;
+        // 1. Chuẩn bị dữ liệu (Lấy cả Tên và SKU từ Excel)
+        const itemsToMatch = excelRows.map(row => ({
+            name: row['Tên Sản Phẩm'] || row['Product Name'] || row['Tên'] || '',
+            sku: row['SKU'] || row['Mã hàng'] || row['Mã'] || '' 
+        })).filter(item => item.name); // Lọc bỏ dòng trống tên
 
-            let bestMatch = null;
-            let bestScore = 0;
-            
-            // Fuzzy Search (Tìm tên gần đúng nhất)
-            if (dbNames.length > 0) {
-                const matchResult = stringSimilarity.findBestMatch(name, dbNames);
-                const bestCandidate = matchResult.bestMatch;
-                
-                // Chỉ nhận nếu độ chính xác > 40%
-                if (bestCandidate.rating > 0.4) { 
-                    bestScore = bestCandidate.rating;
-                    bestMatch = products.find(p => p.name === bestCandidate.target);
+        if (itemsToMatch.length === 0) {
+            message.warning("File Excel không có dữ liệu hợp lệ (Cần cột 'Tên Sản Phẩm')");
+            return;
+        }
+
+        // 2. Cấu hình Batching
+        const BATCH_SIZE = 200; 
+        const totalBatches = Math.ceil(itemsToMatch.length / BATCH_SIZE);
+        let allServerMatches: any[] = [];
+        
+        const hideLoading = message.loading(`Đang đối chiếu dữ liệu (0/${itemsToMatch.length})...`, 0);
+
+        try {
+            // Loop từng Batch
+            for (let i = 0; i < totalBatches; i++) {
+                const start = i * BATCH_SIZE;
+                const end = start + BATCH_SIZE;
+                const batchItems = itemsToMatch.slice(start, end);
+
+                hideLoading(); 
+                message.loading(`Đang đối chiếu: ${Math.min(end, itemsToMatch.length)}/${itemsToMatch.length} sản phẩm...`, 0);
+
+                // [NEW API CALL] Gửi JSONB {name, sku}
+                const { data: batchResults, error } = await supabase.rpc('match_products_from_excel', {
+                    p_data: batchItems 
+                });
+
+                if (error) throw error;
+                if (batchResults) {
+                    allServerMatches = [...allServerMatches, ...batchResults];
                 }
             }
-            
-            matches.push({
-                rowIndex: index,
-                excel: { name, unitSmall, unitBig, rate },
-                match: bestMatch,
-                score: bestScore
-            });
-        });
 
-        // Sắp xếp các kết quả tìm được theo độ chính xác
-        const confidentMatches = matches.filter(m => m.match).sort((a,b) => b.score - a.score);
-        setMatchedData(confidentMatches);
-        setReviewModalVisible(true);
+            // 3. Map kết quả trả về vào cấu trúc bảng Preview
+            const matches: any[] = [];
+            
+            excelRows.forEach((row, index) => {
+                const name = row['Tên Sản Phẩm'] || row['Product Name'] || row['Tên'] || '';
+                const sku = row['SKU'] || row['Mã hàng'] || row['Mã'] || '';
+                
+                const unitSmall = row['Đơn vị Lẻ'] || row['Base Unit'] || row['Lẻ'] || '';
+                const unitBig = row['Đơn vị Sỉ'] || row['Wholesale Unit'] || row['Sỉ'] || '';
+                const rate = row['Hệ số'] || row['Conversion Rate'] || 1;
+
+                if (!name) return;
+
+                // Tìm kết quả match từ Server (Dựa vào excel_name và excel_sku trả về)
+                const serverMatch = allServerMatches.find((m: any) => {
+                    return m.excel_name === name && (sku ? m.excel_sku === sku : true);
+                });
+
+                matches.push({
+                    rowIndex: index,
+                    excel: { name, sku, unitSmall, unitBig, rate }, 
+                    match: serverMatch?.product_id ? {
+                        id: serverMatch.product_id,
+                        name: serverMatch.product_name,
+                        sku: serverMatch.product_sku
+                    } : null,
+                    score: serverMatch?.similarity_score || 0,
+                    matchType: serverMatch?.match_type // 'sku_exact', 'name_exact', 'name_fuzzy'
+                });
+            });
+
+            // 4. Hiển thị Modal Review
+            const confidentMatches = matches.sort((a,b) => b.score - a.score);
+            setMatchedData(confidentMatches);
+            setReviewModalVisible(true);
+            
+            message.success("Đối chiếu hoàn tất!");
+
+        } catch (err) {
+            console.error("Match Error:", err);
+            message.error("Lỗi khi đối chiếu dữ liệu với Server.");
+        } finally {
+            hideLoading();
+        }
     };
     
     const applyMatches = async () => {
@@ -493,19 +537,27 @@ const QuickUnitPage: React.FC = () => {
                             {
                                 title: 'Khớp với (Hệ thống)',
                                 dataIndex: 'match',
-                                render: (match, record) => (
+                                render: (match, record: any) => (
                                     <div style={{ 
                                         padding: 8, 
-                                        background: record.score > 0.8 ? '#f6ffed' : '#fffbe6', 
+                                        background: record.score >= 0.9 ? '#f6ffed' : '#fffbe6', 
                                         borderRadius: 4, 
                                         border: '1px solid #ddd' 
                                     }}>
                                         {match ? (
                                             <>
-                                                <div>{match.name}</div>
-                                                <Tag color={record.score > 0.8 ? 'green' : 'orange'}>
-                                                    Độ khớp: {Math.round(record.score * 100)}%
-                                                </Tag>
+                                                <div>
+                                                    {/* Hiển thị Icon độ tin cậy */}
+                                                    {record.matchType === 'sku_exact' && <Tag color="green">Khớp SKU</Tag>}
+                                                    {record.matchType === 'name_exact' && <Tag color="cyan">Khớp Tên</Tag>}
+                                                    {record.matchType === 'name_fuzzy' && <Tag color="orange">Gần giống</Tag>}
+                                                    
+                                                    <b style={{ marginLeft: 4 }}>{match.name}</b>
+                                                </div>
+                                                <div style={{ fontSize: 12, color: '#666' }}>
+                                                    Mã: {match.sku} 
+                                                    {record.matchType === 'name_fuzzy' && ` (Độ giống: ${Math.round(record.score * 100)}%)`}
+                                                </div>
                                             </>
                                         ) : <Text type="danger">Không tìm thấy</Text>}
                                     </div>
