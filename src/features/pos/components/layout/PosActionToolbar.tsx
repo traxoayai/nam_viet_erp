@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Row, Col, Button, message } from "antd";
+import { Row, Col, Button, message, notification } from "antd";
 import { WalletOutlined, QrcodeOutlined, PrinterOutlined, FileProtectOutlined, ReadOutlined } from "@ant-design/icons";
 import { usePosCartStore } from "../../stores/usePosCartStore";
 import { posService } from "../../api/posService";
@@ -8,7 +8,11 @@ import { printPosBill, printInstruction } from "@/shared/utils/printTemplates";
 import { VatInvoiceModal } from "../modals/VatInvoiceModal";
 
 export const PosActionToolbar = () => {
-  const { items, customer, getTotals, clearCart, warehouseId } = usePosCartStore();
+  const { getTotals, clearCart, warehouseId, getCurrentOrder } = usePosCartStore();
+  const currentOrder = getCurrentOrder();
+  const items = currentOrder?.items || [];
+  const customer = currentOrder?.customer;
+
   const [showVatModal, setShowVatModal] = useState(false);
 
   // --- LOGIC BÁN HÀNG ---
@@ -42,9 +46,18 @@ export const PosActionToolbar = () => {
         await posService.createOrder(payload);
         message.success({ content: "Thanh toán thành công!", key: 'pos_checkout' });
         clearCart();
-     } catch (err: any) {
-        message.error({ content: "Lỗi: " + err.message, key: 'pos_checkout' });
-     }
+      } catch (err: any) {
+         const errMsg = err.message || "Lỗi không xác định";
+         if (errMsg.toLowerCase().includes("không đủ tồn kho") || errMsg.toLowerCase().includes("không đủ vật tư")) {
+             notification.error({
+                 message: 'Lỗi Tồn Kho / Vật Tư',
+                 description: errMsg,
+                 duration: 6
+             });
+         } else {
+             message.error({ content: "Lỗi: " + errMsg, key: 'pos_checkout' });
+         }
+      }
   };
 
   // --- LOGIC IN ẤN ---

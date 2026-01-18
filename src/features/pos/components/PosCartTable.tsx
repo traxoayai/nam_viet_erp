@@ -8,7 +8,9 @@ import { printInstruction } from "@/shared/utils/printTemplates";
 const { Text } = Typography;
 
 export const PosCartTable = () => {
-  const { items, updateQuantity, updateItemField, removeFromCart } = usePosCartStore();
+  const { updateQuantity, updateItemField, removeFromCart, getCurrentOrder } = usePosCartStore();
+  const currentOrder = getCurrentOrder();
+  const items = currentOrder?.items || [];
 
   const columns = [
     {
@@ -22,7 +24,7 @@ export const PosCartTable = () => {
             <div style={{fontWeight: 600, fontSize: 14}}>{r.name}</div>
             <div style={{ fontSize: 11, color: "#8c8c8c", marginTop: 2 }}>
               <Tag color="orange" style={{ marginRight: 4, padding: "0 4px", fontSize: 10 }}>
-                {r.location.cabinet ? `${r.location.cabinet}-${r.location.row}` : 'Kho'}
+                {r.location?.cabinet ? `${r.location.cabinet}-${r.location.row}` : 'Kho'}
               </Tag>
               {r.sku}
             </div>

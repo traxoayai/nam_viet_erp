@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { UploadFile } from "antd/es/upload/interface";
 
 import { uploadFile } from "@/shared/api/storageService";
+import { financeService } from "@/features/finance/api/financeService";
 import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
 import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
 import { useTransactionCategoryStore } from "@/features/finance/stores/useTransactionCategoryStore";
@@ -40,6 +41,10 @@ export const useFinanceFormLogic = (
     acc: "",
     holder: "",
   });
+
+  const [partnerOptions, setPartnerOptions] = useState<any[]>([]);
+  const [currentDebt, setCurrentDebt] = useState<number | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -78,9 +83,15 @@ export const useFinanceFormLogic = (
       setFileList([]);
       setQrUrl(null);
       setCashTallyTotal(0);
+      setQrUrl(null);
+      setCashTallyTotal(0);
       setReimburseDiff(null);
-      // setManualBankInfo handled above
-
+      
+      // Reset Search State
+      setPartnerOptions([]);
+      setCurrentDebt(null);
+      setIsSearching(false);
+      
       if (users.length === 0) fetchUsers();
       if (suppliers.length === 0) fetchSuppliers();
       if (categories.length === 0) fetchCategories();
@@ -176,6 +187,67 @@ export const useFinanceFormLogic = (
     }
   };
 
+
+
+  // --- LOGIC TÌM KIẾM ĐỐI TÁC (NEW) ---
+  const handleSearchPartner = async (keyword: string, type: 'customer' | 'customer_b2b') => {
+    if (!keyword) return;
+    setIsSearching(true);
+    try {
+
+        
+        if (type === 'customer') { // B2C
+            const dataB2C = await financeService.searchCustomersB2C(keyword);
+            
+            // Map data cho Select
+            setPartnerOptions(dataB2C.map((item: any) => ({
+                label: `${item.name} (${item.phone})`,
+                value: item.id, // ID khách hàng
+                // Lưu object gốc để dùng sau nếu cần
+                original: item 
+            })));
+
+        } else { // B2B
+            const dataB2B = await financeService.searchCustomersB2B(keyword);
+
+            setPartnerOptions(dataB2B.map((item: any) => ({
+                label: `${item.name} - MST: ${item.tax_code}`,
+                value: item.id,
+                original: item
+            })));
+        }
+    } catch (err) {
+        console.error("Lỗi tìm kiếm:", err);
+    } finally {
+        setIsSearching(false);
+    }
+  };
+
+  const handleSelectPartner = async (partnerId: number, type: 'customer' | 'customer_b2b') => {
+    // 1. Reset nợ cũ
+    setCurrentDebt(null);
+    
+    // 2. Tìm object trong options để lấy tên hiển thị
+    const selected = partnerOptions.find(opt => opt.value === partnerId);
+    if (selected) {
+        // Set form field partner_name (để lưu vào DB)
+        form.setFieldsValue({ 
+            partner_name: selected.original.name,
+            partner_id: partnerId // Lưu ID
+        });
+    }
+
+    // 3. Gọi API lấy nợ Real-time
+    // 3. Gọi API lấy nợ Real-time
+    try {
+        const debt = await financeService.getPartnerDebt(partnerId, type);
+        setCurrentDebt(debt);
+    } catch (e) {
+        console.error("Lỗi lấy công nợ:", e);
+    }
+  };
+
+
   const generateQR = (amount: number, desc: string) => {
     if (manualBankInfo.bin && manualBankInfo.acc && amount > 0) {
       const description = encodeURIComponent(desc || "Thanh toan");
@@ -250,10 +322,27 @@ export const useFinanceFormLogic = (
           if (sup) payload.p_partner_name = sup.name;
         } else {
           payload.p_partner_type = "customer";
+          payload.p_partner_type = "customer";
           payload.p_partner_name = values.partner_name;
         }
       } else {
         payload.p_partner_name = values.partner_name;
+      }
+
+      // [NEW] Ưu tiên lấy partner_id/type từ form values (Do logic tìm kiếm mới)
+      if (values.partner_type && values.partner_id) {
+          payload.p_partner_type = values.partner_type;
+          payload.p_partner_id = values.partner_id;
+          
+          // Nếu là Customer B2B -> set partner_type = customer_b2b (Nếu DB hỗ trợ enum này, nếu không thì cứ để 'other' hoặc handle sau)
+          // Lưu ý: Nếu DB enum p_partner_type chỉ có 'supplier' | 'customer' | 'employee' | 'other'
+          // Thì 'customer_b2b' nên map về 'customer'
+          if (values.partner_type === 'customer_b2b') {
+             payload.p_partner_type = 'customer'; 
+             // Tuy nhiên, ID của B2B và B2C có thể trùng nhau? 
+             // Cần đảm bảo logic lưu trữ. Nếu DB transaction chỉ lưu partner_id và partner_type enum cố định.
+             // Tạm thời map về 'customer'. Nhưng cần lưu ý tên partner đã được set ở trên.
+          }
       }
 
       const success = await createTransaction(payload);
@@ -289,5 +378,10 @@ export const useFinanceFormLogic = (
     handleSupplierChange,
     generateQR,
     handleFinish,
+    partnerOptions,
+    isSearching,
+    currentDebt,
+    handleSearchPartner,
+    handleSelectPartner,
   };
 };

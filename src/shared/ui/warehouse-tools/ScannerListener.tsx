@@ -1,3 +1,4 @@
+// src/shared/ui/warehouse-tools/ScannerListener.tsx
 import { useEffect, useRef, useState } from "react";
 import { Zap, ZapOff } from "lucide-react";
 import { Tag } from "antd";

@@ -11,7 +11,10 @@ import { CustomerFormModal } from "../modals/CustomerFormModal";
 const { Text } = Typography;
 
 export const PosCustomerCard = () => {
-  const { customer, setCustomer, fetchVouchers } = usePosCartStore();
+  const { setCustomer, fetchVouchers, getCurrentOrder, setAvailableVouchers } = usePosCartStore();
+  const currentOrder = getCurrentOrder();
+  const customer = currentOrder?.customer;
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   // Logic lấy Voucher: Tự động gọi khi Khách đổi hoặc Tổng tiền đổi
@@ -22,7 +25,7 @@ export const PosCustomerCard = () => {
       if (customer) {
           fetchVouchers(customer.id, debouncedTotal);
       } else {
-          usePosCartStore.getState().setAvailableVouchers([]);
+          setAvailableVouchers([]);
       }
   }, [customer?.id, debouncedTotal]); 
 

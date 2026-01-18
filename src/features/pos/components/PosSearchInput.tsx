@@ -3,6 +3,7 @@ import { Select, Avatar, Tag, Typography, Empty, Spin } from "antd";
 import { ScanOutlined, MedicineBoxOutlined } from "@ant-design/icons";
 import { usePosSearchStore } from "../stores/usePosSearchStore";
 import { PosProductSearchResult } from "../types/pos.types";
+import { supabase } from "@/shared/lib/supabaseClient";
 // import { useDebounce } from "@/shared/hooks/useDebounce"; // Hook tồn tại nhưng logic dưới dùng tay (setTimeout) nên comment để tránh unused variable
 
 const { Text } = Typography;
@@ -11,9 +12,10 @@ const { Option } = Select;
 interface ProductSearchInputProps {
   warehouseId: number; // ID kho hiện tại
   onSelectProduct: (product: PosProductSearchResult) => void; // Callback khi chọn thuốc
+  searchRef?: React.Ref<any>; // [NEW] Ref để focus
 }
 
-export const PosSearchInput: React.FC<ProductSearchInputProps> = ({ warehouseId, onSelectProduct }) => {
+export const PosSearchInput: React.FC<ProductSearchInputProps> = ({ warehouseId, onSelectProduct, searchRef }) => {
   const { keyword, setKeyword, searchProducts, results, loading } = usePosSearchStore();
   
   // Debounce việc gõ phím để tránh gọi API liên tục
@@ -30,8 +32,43 @@ export const PosSearchInput: React.FC<ProductSearchInputProps> = ({ warehouseId,
     return () => clearTimeout(timer);
   }, [internalKeyword, warehouseId]);
 
+  // [NEW] Logic bắt sự kiện Enter của máy quét
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+          // 1. Lấy giá trị hiện tại
+          const keyword = e.currentTarget.value.trim(); // Hoặc internalKeyword
+          if (!keyword && !internalKeyword) return;
+
+          const finalKeyword = keyword || internalKeyword;
+
+          // 2. Tìm chính xác (Force search backend nếu options đang rỗng hoặc enter nhanh)
+          // Lưu ý: Máy quét thường nhập Barcode rất nhanh -> Gọi API tìm Barcode
+          const { data } = await supabase.rpc('search_products_pos', {
+             p_keyword: finalKeyword,
+             p_limit: 1, // Chỉ cần 1 kết quả chính xác
+             p_warehouse_id: warehouseId
+          });
+
+          // 3. Nếu tìm thấy chính xác -> Add luôn & Xóa text để quét tiếp
+          if (data && data.length > 0) {
+              const product = data[0];
+              // Check nếu khớp barcode hoặc SKU hoặc tên (tương đối) thì ưu tiên
+              // Ở đây search_products_pos trả về list theo độ ưu tiên rồi, nên lấy cái đầu tiên là chuẩn nhất.
+              if (product) {
+                   onSelectProduct(product);
+                   
+                   // Clear input
+                   setInternalKeyword(""); 
+                   e.preventDefault(); // Chặn hành vi form submit / reload
+              }
+          }
+      }
+  };
+
   return (
     <Select
+      ref={searchRef}
+      onKeyDown={handleKeyDown}
       showSearch
       value={internalKeyword}
       placeholder="🔍 (F2) Quét mã vạch / Tìm tên thuốc (gõ 'effe 150')..."

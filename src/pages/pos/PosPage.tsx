@@ -1,10 +1,13 @@
+// src/pages/pos/PosPage.tsx
 import { useEffect, useState } from "react";
-import { Layout, Select, Space, Typography, Button, Tag, notification, Modal } from "antd";
+import { Tabs, Layout, Select, Space, Typography, Button, Tag, notification, Modal, message } from "antd"; // Import Tabs
 import { PlusOutlined } from "@ant-design/icons";
 
 import { usePosCartStore } from "../../features/pos/stores/usePosCartStore";
 import { posService } from "../../features/pos/api/posService";
 import { WarehousePosData } from "../../features/pos/types/pos.types";
+import { supabase } from "@/shared/lib/supabaseClient"; 
+import { ScannerListener } from "@/shared/ui/warehouse-tools/ScannerListener";
 
 // Import Layout Components
 import { PosLeftSection } from "../../features/pos/components/layout/PosLeftSection";
@@ -12,7 +15,7 @@ import { PosCustomerCard } from "../../features/pos/components/layout/PosCustome
 import { PosPaymentSection } from "../../features/pos/components/layout/PosPaymentSection";
 import { PosActionToolbar } from "../../features/pos/components/layout/PosActionToolbar";
 
-const { Header, Content, Sider } = Layout;
+const { Header, Content } = Layout;
 const { Title } = Typography;
 
 // Utils tính khoảng cách (Core cung cấp)
@@ -29,7 +32,11 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
 }
 
 const PosPage = () => {
-  const { clearCart, warehouseId, setWarehouseId } = usePosCartStore();
+  const { 
+      orders, activeOrderId, warehouseId, setWarehouseId,
+      createOrder, setActiveOrder, removeOrder, addToCart, clearCart 
+  } = usePosCartStore();
+  // const searchRef = useRef<any>(null); // Không cần ref nữa vì dùng ScannerListener
 
   const [warehouses, setWarehouses] = useState<WarehousePosData[]>([]);
 
@@ -86,6 +93,58 @@ const PosPage = () => {
     initWarehouse();
   }, []); // Run once
 
+  // [FIX] Logic Scanner (Sử dụng API search_products_pos V3 mới nhất)
+  const handleScan = async (code: string) => {
+      if (!warehouseId) return;
+      const hide = message.loading("Đang tra cứu...", 0);
+      try {
+          // Gọi API tìm kiếm (Backend đã update tìm chính xác Barcode)
+          const { data } = await supabase.rpc('search_products_pos', {
+             p_keyword: code,
+             p_limit: 1,
+             p_warehouse_id: warehouseId
+          });
+
+          if (data && data.length > 0) {
+              const product = data[0];
+              addToCart(product); // Hàm này đã được fix lỗi map data ở trên
+              // message.success(`Đã thêm: ${product.name}`); // addToCart đã báo rồi
+          } else {
+              message.error(`Không tìm thấy mã: ${code}`);
+          }
+      } catch (err) {
+          console.error(err);
+      } finally {
+          hide();
+      }
+  };
+
+  // --- LOGIC F1 ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+       if (e.key === 'F1') {
+           e.preventDefault();
+           createOrder();
+       }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Tab Items
+  const tabItems = orders.map(order => ({
+      label: (
+          <span>
+              {order.name} 
+              <span style={{ fontSize: 12, marginLeft: 8, color: activeOrderId === order.id ? '#1890ff' : '#888' }}>
+                  ({order.items.length})
+              </span>
+          </span>
+      ),
+      key: order.id,
+      closable: orders.length > 1,
+  }));
+
   // --- LOGIC 2: XỬ LÝ ĐỔI KHO ---
   const handleChangeWarehouse = (newId: number) => {
      Modal.confirm({
@@ -100,36 +159,73 @@ const PosPage = () => {
 
   return (
     <Layout style={{ height: "100vh", overflow: "hidden" }}>
-       <Header style={{ background: "#5ab1dcff", padding: "0 16px", borderBottom: "1px solid #d9d9d9", display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 50 }}>
-          <Space>
-             <Title level={4} style={{ margin: 0, color: '#862a02ff' }}>NAM VIỆT POS</Title>
-             <Select 
-                value={warehouseId}
-                onChange={handleChangeWarehouse}
-                style={{ width: 200 }}
-                options={warehouses.map(w => ({ label: w.name, value: w.id }))}
-             />
-          </Space>
-          <Space>
-             <Button type="dashed" icon={<PlusOutlined />}>Đơn Mới (F1)</Button>
-             <Tag color="success">Online</Tag>
-          </Space>
+       {/* 1. Kích hoạt Scanner Listener Toàn Cục */}
+       <ScannerListener onScan={handleScan} enabled={true} />
+       {/* HEADER MỚI: Logo - Tabs - Actions */}
+       <Header style={{ 
+           background: "#215E61",
+           padding: "0 16px", 
+           display: 'flex', 
+           alignItems: 'center', 
+           height: 50,
+           gap: 16
+       }}>
+           {/* Khu vực 1: Logo & Chọn Kho */}
+           <Space>
+               <Title level={4} style={{ margin: 0, color: '#fff', whiteSpace: 'nowrap', fontSize: 18 }}>NAM VIỆT POS</Title>
+               <Select 
+                   value={warehouseId}
+                   onChange={handleChangeWarehouse}
+                   style={{ width: 160 }} 
+                   size="small"
+                   options={warehouses.map(w => ({ label: w.name, value: w.id }))}
+               />
+           </Space>
+
+           {/* Khu vực 2: Tabs Đơn Hàng (Nằm giữa, Flex 1) */}
+           <div style={{ flex: 1, overflow: 'hidden', marginTop: 12 }}>
+               <Tabs
+                   type="editable-card"
+                   onChange={setActiveOrder}
+                   activeKey={activeOrderId}
+                   onEdit={(targetKey, action) => {
+                       if (action === 'add') createOrder();
+                       else if (action === 'remove') removeOrder(targetKey as string);
+                   }}
+                   items={tabItems}
+                   hideAdd // Ẩn nút + mặc định
+                   size="small"
+                   tabBarStyle={{ margin: 0, border: 'none', color: '#fff' }}
+               />
+           </div>
+
+           {/* Khu vực 3: Nút F1 & Status */}
+           <Space>
+                <Button type="primary" icon={<PlusOutlined />} onClick={createOrder} size="small">
+                    Đơn Mới (F1)
+                </Button>
+                <Tag color="success">Online</Tag>
+           </Space>
        </Header>
 
        <Layout>
-          {/* === CỘT TRÁI: TÌM KIẾM & GIỎ HÀNG (65%) === */}
-          <Content style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
-              <PosLeftSection /> 
+          {/* Content giữ nguyên Layout 2 cột */}
+          <Content style={{ padding: '8px 12px 0 12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <div style={{ display: 'flex', gap: 12, height: '100%', paddingTop: 12 }}>
+                  <div style={{ flex: 1 }}>
+                      {/* Note: Store tự biết activeOrder -> Component con tự lấy data của activeOrder */}
+                      <PosLeftSection /> 
+                  </div>
+                  <div style={{ width: 650 }}>
+                       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                            {/* Các component này cũng đã update để dùng activeOrder */}
+                            <PosCustomerCard />
+                            <PosPaymentSection />
+                            <PosActionToolbar />
+                       </div>
+                  </div>
+              </div>
           </Content>
-
-          {/* === CỘT PHẢI: KHÁCH & THANH TOÁN (35%) === */}
-          <Sider width={650} theme="light" style={{ borderLeft: '1px solid #d9d9d9', display: 'flex', flexDirection: 'column' }}>
-             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: 12 }}>
-                <PosCustomerCard />
-                <PosPaymentSection />
-                <PosActionToolbar />
-             </div>
-          </Sider>
        </Layout>
     </Layout>
   );

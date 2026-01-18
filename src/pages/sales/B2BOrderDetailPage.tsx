@@ -16,6 +16,7 @@ import {
   List,
   message,
   Modal,
+  notification,
   Row,
   Space,
   Spin,
@@ -71,8 +72,20 @@ const B2BOrderDetailPage = () => {
       await b2bService.updateStatus(id, status);
       message.success("Cập nhật trạng thái thành công");
       fetchOrder(id); // Reload data
-    } catch (error) {
-      message.error("Cập nhật thất bại");
+    } catch (error: any) {
+      console.error(error);
+      const errMsg = error.message || "Cập nhật thất bại";
+      if (errMsg.toLowerCase().includes("không đủ tồn kho") || errMsg.toLowerCase().includes("không đủ vật tư")) {
+        // Hiển thị thông báo chi tiết cho lỗi kho
+        notification.error({
+          message: 'Lỗi Tồn Kho / Vật Tư',
+          description: errMsg,
+          duration: 6, // Hiện lâu hơn chút để đọc
+          placement: 'topRight'
+        });
+      } else {
+         message.error(errMsg);
+      }
     } finally {
       setActionLoading(false);
     }

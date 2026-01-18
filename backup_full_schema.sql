@@ -8862,155 +8862,169 @@ $$;
 ALTER FUNCTION "public"."update_vaccination_template"("p_id" bigint, "p_data" "jsonb", "p_items" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_contents_json" "jsonb" DEFAULT '{}'::"jsonb", "p_inventory_json" "jsonb" DEFAULT '[]'::"jsonb") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_contents_json" "jsonb" DEFAULT NULL::"jsonb", "p_inventory_json" "jsonb" DEFAULT NULL::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-    DECLARE
-        v_product_id BIGINT;
-        v_unit_data JSONB;
-        v_inv_data JSONB;
-        v_new_product_code TEXT;
-        v_kept_unit_ids BIGINT[]; 
-    BEGIN
-        -- [1. PRODUCT] UPSERT SẢN PHẨM
-        IF (p_product_json->>'id') IS NOT NULL AND (p_product_json->>'id') <> '' THEN
-            -- === UPDATE ===
-            v_product_id := (p_product_json->>'id')::BIGINT;
+DECLARE
+    v_product_id BIGINT;
+    v_new_product_code TEXT;
+    
+    -- Biến cho xử lý Unit
+    v_unit_data JSONB;
+    v_kept_unit_ids BIGINT[];
+    v_base_cost NUMERIC;      -- Giá vốn đơn vị cơ sở
+    v_unit_cost NUMERIC;      -- Giá vốn đơn vị quy đổi
+    v_unit_price NUMERIC;     -- Giá bán
+    v_conversion_rate INT;
+    v_margin_value NUMERIC;
+    v_margin_type TEXT;
+    
+    -- Biến cho Inventory
+    v_inv_data JSONB;
+    v_warehouse_id BIGINT;
+BEGIN
+    -- ==================================================================================
+    -- [1. PRODUCT] UPSERT SẢN PHẨM (Giữ nguyên logic V5 + Lấy thêm tham số Financial)
+    -- ==================================================================================
+    IF (p_product_json->>'id') IS NOT NULL AND (p_product_json->>'id') <> '' THEN
+        -- === UPDATE ===
+        v_product_id := (p_product_json->>'id')::BIGINT;
+        
+        UPDATE public.products
+        SET
+            name = p_product_json->>'name',
+            barcode = p_product_json->>'barcode',
+            registration_number = p_product_json->>'registration_number',
+            manufacturer_name = p_product_json->>'manufacturer_name',
+            distributor_id = CASE WHEN (p_product_json->>'distributor_id') IS NOT NULL AND (p_product_json->>'distributor_id') <> '' THEN (p_product_json->>'distributor_id')::BIGINT ELSE NULL END,
+            category_name = p_product_json->>'category_name',
+            packing_spec = p_product_json->>'packing_spec',
+            active_ingredient = p_product_json->>'active_ingredient',
+            usage_instructions = COALESCE(p_product_json->'usage_instructions', '{}'::jsonb),
+            image_url = p_product_json->>'image_url',
             
-            UPDATE public.products
-            SET
-                name = p_product_json->>'name',
-                barcode = p_product_json->>'barcode',
-                registration_number = p_product_json->>'registration_number',
-                manufacturer_name = p_product_json->>'manufacturer_name',
-                
-                -- Distributor (V5 đã fix)
-                distributor_id = CASE 
-                    WHEN (p_product_json->>'distributor_id') IS NOT NULL AND (p_product_json->>'distributor_id') <> '' 
-                    THEN (p_product_json->>'distributor_id')::BIGINT ELSE NULL END,
-                
-                category_name = p_product_json->>'category_name',
-                packing_spec = p_product_json->>'packing_spec',
-                active_ingredient = p_product_json->>'active_ingredient',
-                usage_instructions = COALESCE(p_product_json->'usage_instructions', '{}'::jsonb),
-                
-                -- [MỚI - V6] HÌNH ẢNH
-                image_url = p_product_json->>'image_url',
+            -- Financials (Quan trọng cho tính giá)
+            actual_cost = COALESCE((p_product_json->>'actual_cost')::NUMERIC, 0),
+            wholesale_margin_value = COALESCE((p_product_json->>'wholesale_margin_value')::NUMERIC, 0),
+            wholesale_margin_type = COALESCE(p_product_json->>'wholesale_margin_type', 'amount'),
+            retail_margin_value = COALESCE((p_product_json->>'retail_margin_value')::NUMERIC, 0),
+            retail_margin_type = COALESCE(p_product_json->>'retail_margin_type', 'amount'),
+            
+            -- Logistics
+            items_per_carton = COALESCE((p_product_json->>'items_per_carton')::INTEGER, 1),
+            carton_weight = COALESCE((p_product_json->>'carton_weight')::NUMERIC, 0),
+            carton_dimensions = p_product_json->>'carton_dimensions',
+            purchasing_policy = COALESCE(p_product_json->>'purchasing_policy', 'ALLOW_LOOSE'),
+            
+            updated_at = NOW()
+        WHERE id = v_product_id
+        RETURNING actual_cost, retail_margin_value, retail_margin_type INTO v_base_cost, v_margin_value, v_margin_type;
+    ELSE
+        -- === INSERT ===
+        v_new_product_code := COALESCE(p_product_json->>'code', 'SP-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 1000)::TEXT, 3, '0'));
 
-                -- [MỚI - V6] FINANCIALS (Tài chính)
-                actual_cost = COALESCE((p_product_json->>'actual_cost')::NUMERIC, 0),
-                wholesale_margin_value = COALESCE((p_product_json->>'wholesale_margin_value')::NUMERIC, 0),
-                wholesale_margin_type = COALESCE(p_product_json->>'wholesale_margin_type', 'amount'),
-                retail_margin_value = COALESCE((p_product_json->>'retail_margin_value')::NUMERIC, 0),
-                retail_margin_type = COALESCE(p_product_json->>'retail_margin_type', 'amount'),
+        INSERT INTO public.products (
+            code, name, barcode, registration_number, manufacturer_name, distributor_id,
+            category_name, packing_spec, active_ingredient, usage_instructions, status,
+            image_url, actual_cost, wholesale_margin_value, wholesale_margin_type,
+            retail_margin_value, retail_margin_type, items_per_carton, carton_weight, carton_dimensions, purchasing_policy,
+            created_at, updated_at
+        ) VALUES (
+            v_new_product_code, p_product_json->>'name', p_product_json->>'barcode', p_product_json->>'registration_number', p_product_json->>'manufacturer_name',
+            CASE WHEN (p_product_json->>'distributor_id') IS NOT NULL AND (p_product_json->>'distributor_id') <> '' THEN (p_product_json->>'distributor_id')::BIGINT ELSE NULL END,
+            p_product_json->>'category_name', p_product_json->>'packing_spec', p_product_json->>'active_ingredient',
+            COALESCE(p_product_json->'usage_instructions', '{}'::jsonb), 'active',
+            p_product_json->>'image_url',
+            COALESCE((p_product_json->>'actual_cost')::NUMERIC, 0),
+            COALESCE((p_product_json->>'wholesale_margin_value')::NUMERIC, 0),
+            COALESCE(p_product_json->>'wholesale_margin_type', 'amount'),
+            COALESCE((p_product_json->>'retail_margin_value')::NUMERIC, 0),
+            COALESCE(p_product_json->>'retail_margin_type', 'amount'),
+            COALESCE((p_product_json->>'items_per_carton')::INTEGER, 1),
+            COALESCE((p_product_json->>'carton_weight')::NUMERIC, 0),
+            p_product_json->>'carton_dimensions',
+            COALESCE(p_product_json->>'purchasing_policy', 'ALLOW_LOOSE'),
+            NOW(), NOW()
+        ) 
+        RETURNING id, actual_cost, retail_margin_value, retail_margin_type INTO v_product_id, v_base_cost, v_margin_value, v_margin_type;
+    END IF;
 
-                -- [MỚI - V6] LOGISTICS (Vận chuyển/Đóng gói)
-                items_per_carton = COALESCE((p_product_json->>'items_per_carton')::INTEGER, 1),
-                carton_weight = COALESCE((p_product_json->>'carton_weight')::NUMERIC, 0),
-                carton_dimensions = p_product_json->>'carton_dimensions',
-                purchasing_policy = COALESCE(p_product_json->>'purchasing_policy', 'ALLOW_LOOSE'),
+    -- ==================================================================================
+    -- [2. UNITS] XỬ LÝ ĐƠN VỊ (SMART PRICING & SYNC) - ĐÂY LÀ PHẦN NÂNG CẤP
+    -- ==================================================================================
+    
+    -- 2.1. Lọc các Unit ID cần giữ lại (Để xóa các unit không còn trong list)
+    SELECT COALESCE(array_agg((x->>'id')::BIGINT), ARRAY[]::BIGINT[])
+    INTO v_kept_unit_ids
+    FROM jsonb_array_elements(p_units_json) x
+    WHERE (x->>'id') IS NOT NULL AND (x->>'id') <> '';
 
-                updated_at = NOW()
-            WHERE id = v_product_id;
-        ELSE
-            -- === INSERT ===
-            v_new_product_code := COALESCE(
-                p_product_json->>'code', 
-                'SP-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 1000)::TEXT, 3, '0')
-            );
+    DELETE FROM public.product_units 
+    WHERE product_id = v_product_id AND id <> ALL(v_kept_unit_ids);
 
-            INSERT INTO public.products (
-                code, name, barcode, registration_number, 
-                manufacturer_name, distributor_id,
-                category_name, packing_spec, active_ingredient,
-                usage_instructions, status, 
-                
-                -- [MỚI - V6] CÁC CỘT BỔ SUNG
-                image_url,
-                actual_cost, wholesale_margin_value, wholesale_margin_type,
-                retail_margin_value, retail_margin_type,
-                items_per_carton, carton_weight, carton_dimensions, purchasing_policy,
+    -- 2.2. Loop Upsert
+    IF p_units_json IS NOT NULL THEN
+        FOR v_unit_data IN SELECT * FROM jsonb_array_elements(p_units_json)
+        LOOP
+            v_conversion_rate := COALESCE((v_unit_data->>'conversion_rate')::INTEGER, 1);
+            
+            -- A. TÍNH GIÁ VỐN TỰ ĐỘNG (Unit Cost = Base Cost * Rate)
+            v_unit_cost := v_base_cost * v_conversion_rate;
 
-                created_at, updated_at
-            ) VALUES (
-                v_new_product_code,
-                p_product_json->>'name',
-                p_product_json->>'barcode',
-                p_product_json->>'registration_number',
-                p_product_json->>'manufacturer_name',
-                
-                -- Distributor Logic
-                CASE 
-                    WHEN (p_product_json->>'distributor_id') IS NOT NULL AND (p_product_json->>'distributor_id') <> '' 
-                    THEN (p_product_json->>'distributor_id')::BIGINT ELSE NULL END,
-                
-                p_product_json->>'category_name',
-                p_product_json->>'packing_spec',
-                p_product_json->>'active_ingredient',
-                COALESCE(p_product_json->'usage_instructions', '{}'::jsonb),
-                'active', 
-                
-                -- [MỚI - V6] GIÁ TRỊ FINANCIALS & LOGISTICS
-                p_product_json->>'image_url',
-                COALESCE((p_product_json->>'actual_cost')::NUMERIC, 0),
-                COALESCE((p_product_json->>'wholesale_margin_value')::NUMERIC, 0),
-                COALESCE(p_product_json->>'wholesale_margin_type', 'amount'),
-                COALESCE((p_product_json->>'retail_margin_value')::NUMERIC, 0),
-                COALESCE(p_product_json->>'retail_margin_type', 'amount'),
-                
-                COALESCE((p_product_json->>'items_per_carton')::INTEGER, 1),
-                COALESCE((p_product_json->>'carton_weight')::NUMERIC, 0),
-                p_product_json->>'carton_dimensions',
-                COALESCE(p_product_json->>'purchasing_policy', 'ALLOW_LOOSE'),
-
-                NOW(), NOW()
-            ) RETURNING id INTO v_product_id;
-        END IF;
-
-        -- [2. UNITS] XỬ LÝ ĐƠN VỊ (SMART SYNC)
-        SELECT COALESCE(array_agg((x->>'id')::BIGINT), ARRAY[]::BIGINT[])
-        INTO v_kept_unit_ids
-        FROM jsonb_array_elements(p_units_json) x
-        WHERE (x->>'id') IS NOT NULL;
-
-        DELETE FROM public.product_units 
-        WHERE product_id = v_product_id AND id <> ALL(v_kept_unit_ids);
-
-        IF p_units_json IS NOT NULL THEN
-            FOR v_unit_data IN SELECT * FROM jsonb_array_elements(p_units_json)
-            LOOP
-                IF (v_unit_data->>'id') IS NOT NULL THEN
-                    UPDATE public.product_units
-                    SET 
-                        unit_name = v_unit_data->>'unit_name',
-                        unit_type = COALESCE(v_unit_data->>'unit_type', 'retail'),
-                        conversion_rate = COALESCE((v_unit_data->>'conversion_rate')::INTEGER, 1),
-                        price_sell = COALESCE((v_unit_data->>'price')::NUMERIC, 0),
-                        barcode = v_unit_data->>'barcode',
-                        is_base = COALESCE((v_unit_data->>'is_base')::BOOLEAN, false),
-                        is_direct_sale = true,
-                        updated_at = NOW()
-                    WHERE id = (v_unit_data->>'id')::BIGINT;
+            -- B. TÍNH GIÁ BÁN THÔNG MINH (Option C)
+            -- Nếu Frontend có gửi giá > 0 thì dùng, nếu không thì tự tính theo Margin
+            IF (v_unit_data->>'price') IS NOT NULL AND (v_unit_data->>'price')::NUMERIC > 0 THEN
+                v_unit_price := (v_unit_data->>'price')::NUMERIC;
+            ELSE
+                -- Fallback: Tự tính
+                IF v_margin_type = '%' THEN
+                    v_unit_price := v_unit_cost * (1 + v_margin_value / 100);
                 ELSE
-                    INSERT INTO public.product_units (
-                        product_id, unit_name, unit_type, conversion_rate, 
-                        price_sell, barcode, is_base, is_direct_sale
-                    ) VALUES (
-                        v_product_id,
-                        v_unit_data->>'unit_name',
-                        COALESCE(v_unit_data->>'unit_type', 'retail'),
-                        COALESCE((v_unit_data->>'conversion_rate')::INTEGER, 1),
-                        COALESCE((v_unit_data->>'price')::NUMERIC, 0),
-                        v_unit_data->>'barcode',
-                        COALESCE((v_unit_data->>'is_base')::BOOLEAN, false),
-                        true
-                    );
+                    v_unit_price := v_unit_cost + (v_margin_value * v_conversion_rate);
                 END IF;
-            END LOOP;
-        END IF;
+                -- Làm tròn lên hàng trăm đồng
+                v_unit_price := CEIL(v_unit_price / 100.0) * 100;
+            END IF;
 
-        -- [3. CONTENT] MARKETING
+            -- C. Thực hiện Upsert
+            IF (v_unit_data->>'id') IS NOT NULL AND (v_unit_data->>'id') <> '' THEN
+                UPDATE public.product_units
+                SET 
+                    unit_name = v_unit_data->>'unit_name',
+                    unit_type = COALESCE(v_unit_data->>'unit_type', 'retail'),
+                    conversion_rate = v_conversion_rate,
+                    price_cost = v_unit_cost,   -- UPDATE: Giá vốn tự tính
+                    price_sell = v_unit_price,  -- UPDATE: Giá bán thông minh
+                    barcode = v_unit_data->>'barcode',
+                    is_base = COALESCE((v_unit_data->>'is_base')::BOOLEAN, false),
+                    is_direct_sale = COALESCE((v_unit_data->>'is_direct_sale')::BOOLEAN, true),
+                    updated_at = NOW()
+                WHERE id = (v_unit_data->>'id')::BIGINT;
+            ELSE
+                INSERT INTO public.product_units (
+                    product_id, unit_name, unit_type, conversion_rate, 
+                    price_cost, price_sell, barcode, is_base, is_direct_sale, created_at, updated_at
+                ) VALUES (
+                    v_product_id,
+                    v_unit_data->>'unit_name',
+                    COALESCE(v_unit_data->>'unit_type', 'retail'),
+                    v_conversion_rate,
+                    v_unit_cost,  -- Giá vốn
+                    v_unit_price, -- Giá bán
+                    v_unit_data->>'barcode',
+                    COALESCE((v_unit_data->>'is_base')::BOOLEAN, false),
+                    COALESCE((v_unit_data->>'is_direct_sale')::BOOLEAN, true),
+                    NOW(), NOW()
+                );
+            END IF;
+        END LOOP;
+    END IF;
+
+    -- ==================================================================================
+    -- [3. CONTENT] MARKETING (Giữ nguyên logic V5 - Rất tốt)
+    -- ==================================================================================
+    IF p_contents_json IS NOT NULL THEN
         INSERT INTO public.product_contents (
             product_id, channel, language_code,
             description_html, short_description,
@@ -9034,41 +9048,44 @@ CREATE OR REPLACE FUNCTION "public"."upsert_product_with_units"("p_product_json"
             seo_description = EXCLUDED.seo_description,
             seo_keywords = EXCLUDED.seo_keywords,
             updated_at = NOW();
+    END IF;
 
-        -- [4. INVENTORY] CẤU HÌNH KHO
-        IF p_inventory_json IS NOT NULL AND jsonb_typeof(p_inventory_json) = 'array' THEN
-            FOR v_inv_data IN SELECT * FROM jsonb_array_elements(p_inventory_json)
-            LOOP
-                IF (v_inv_data->>'warehouse_id') IS NOT NULL THEN
-                    INSERT INTO public.product_inventory (
-                        product_id, warehouse_id,
-                        min_stock, max_stock,
-                        shelf_location, location_cabinet, location_row, location_slot,
-                        stock_quantity, updated_at
-                    ) VALUES (
-                        v_product_id, (v_inv_data->>'warehouse_id')::BIGINT,
-                        (v_inv_data->>'min_stock')::NUMERIC,
-                        (v_inv_data->>'max_stock')::NUMERIC,
-                        v_inv_data->>'shelf_location', v_inv_data->>'location_cabinet',
-                        v_inv_data->>'location_row', v_inv_data->>'location_slot',
-                        0, NOW()
-                    )
-                    ON CONFLICT (warehouse_id, product_id)
-                    DO UPDATE SET
-                        min_stock = EXCLUDED.min_stock,
-                        max_stock = EXCLUDED.max_stock,
-                        shelf_location = EXCLUDED.shelf_location,
-                        location_cabinet = EXCLUDED.location_cabinet,
-                        location_row = EXCLUDED.location_row,
-                        location_slot = EXCLUDED.location_slot,
-                        updated_at = NOW();
-                END IF;
-            END LOOP;
-        END IF;
+    -- ==================================================================================
+    -- [4. INVENTORY] CẤU HÌNH KHO (Giữ nguyên logic V5 - Rất tốt)
+    -- ==================================================================================
+    IF p_inventory_json IS NOT NULL AND jsonb_typeof(p_inventory_json) = 'array' THEN
+        FOR v_inv_data IN SELECT * FROM jsonb_array_elements(p_inventory_json)
+        LOOP
+            IF (v_inv_data->>'warehouse_id') IS NOT NULL THEN
+                INSERT INTO public.product_inventory (
+                    product_id, warehouse_id,
+                    min_stock, max_stock,
+                    shelf_location, location_cabinet, location_row, location_slot,
+                    stock_quantity, updated_at
+                ) VALUES (
+                    v_product_id, (v_inv_data->>'warehouse_id')::BIGINT,
+                    (v_inv_data->>'min_stock')::NUMERIC,
+                    (v_inv_data->>'max_stock')::NUMERIC,
+                    v_inv_data->>'shelf_location', v_inv_data->>'location_cabinet',
+                    v_inv_data->>'location_row', v_inv_data->>'location_slot',
+                    0, NOW() -- Stock quantity giữ nguyên 0 nếu mới tạo
+                )
+                ON CONFLICT (warehouse_id, product_id)
+                DO UPDATE SET
+                    min_stock = EXCLUDED.min_stock,
+                    max_stock = EXCLUDED.max_stock,
+                    shelf_location = EXCLUDED.shelf_location,
+                    location_cabinet = EXCLUDED.location_cabinet,
+                    location_row = EXCLUDED.location_row,
+                    location_slot = EXCLUDED.location_slot,
+                    updated_at = NOW();
+            END IF;
+        END LOOP;
+    END IF;
 
-        RETURN jsonb_build_object('success', true, 'product_id', v_product_id);
-    END;
-    $$;
+    RETURN jsonb_build_object('success', true, 'product_id', v_product_id);
+END;
+$$;
 
 
 ALTER FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_contents_json" "jsonb", "p_inventory_json" "jsonb") OWNER TO "postgres";

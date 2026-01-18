@@ -80,6 +80,11 @@ export const FinanceFormModal: React.FC<Props> = ({
     handleSupplierChange,
     generateQR,
     handleFinish,
+    partnerOptions,
+    isSearching,
+    currentDebt,
+    handleSearchPartner,
+    handleSelectPartner,
   } = useFinanceFormLogic(open, onCancel, initialFlow, initialValues);
 
   useEffect(() => {
@@ -374,53 +379,121 @@ export const FinanceFormModal: React.FC<Props> = ({
                     <Form.Item name="partner_name" hidden><Input /></Form.Item>
                 </Col>
              ) : (
-                <>
-                    <Col span={8}>
-                    <Form.Item
-                        name="partner_type"
-                        label="Đối tượng"
-                        initialValue="supplier"
-                    >
-                        <Select>
-                        <Option value="supplier">Nhà cung cấp</Option>
-                        <Option value="customer">Khách hàng</Option>
-                        <Option value="other">Khác</Option>
-                        </Select>
-                    </Form.Item>
-                    </Col>
-                    <Col span={16}>
-                    <Form.Item shouldUpdate noStyle>
-                        {({ getFieldValue }) =>
-                        getFieldValue("partner_type") === "supplier" ? (
-                            <Form.Item
-                            name="supplier_id"
-                            label="Chọn Nhà cung cấp"
-                            rules={[{ required: true }]}
-                            >
-                            <Select
-                                showSearch
-                                optionFilterProp="label"
-                                placeholder="Tìm NCC..."
-                                options={suppliers.map((s) => ({
-                                label: s.name,
-                                value: s.id,
-                                }))}
-                                onChange={handleSupplierChange}
-                            />
-                            </Form.Item>
-                        ) : (
-                            <Form.Item
-                            name="partner_name"
-                            label="Tên Khách hàng"
-                            rules={[{ required: true }]}
-                            >
-                            <Input />
-                            </Form.Item>
-                        )
-                        }
-                    </Form.Item>
-                    </Col>
-                </>
+               <>
+                        {/* Updated Partner Type Select */}
+                        <Col span={8}>
+                        <Form.Item
+                            name="partner_type"
+                            label="Đối tượng"
+                            initialValue="supplier"
+                        >
+                            <Select onChange={() => {
+                                // Reset các trường khi đổi loại
+                                form.setFieldsValue({ partner_id: null, partner_name: null });
+                            }}>
+                            <Option value="supplier">Nhà cung cấp</Option>
+                            <Option value="customer">Khách lẻ (B2C)</Option>
+                            <Option value="customer_b2b">Khách Doanh nghiệp</Option>
+                            <Option value="employee">Nhân viên</Option>
+                            <Option value="other">Khác</Option>
+                            </Select>
+                        </Form.Item>
+                        </Col>
+                        
+                        {/* Dynamic Partner Select */}
+                        <Col span={16}>
+                        <Form.Item shouldUpdate={(prev, curr) => prev.partner_type !== curr.partner_type} noStyle>
+                            {({ getFieldValue }) => {
+                                const type = getFieldValue("partner_type");
+
+                                // 1. KHÁCH LẺ hoặc KHÁCH B2B
+                                if (type === 'customer' || type === 'customer_b2b') {
+                                    return (
+                                        <div>
+                                            <Form.Item 
+                                                name="partner_id" 
+                                                label={type === 'customer' ? "Tìm Khách lẻ (Tên, SĐT)" : "Tìm Doanh nghiệp (Tên, MST)"}
+                                                rules={[{ required: true, message: "Vui lòng chọn khách hàng" }]}
+                                            >
+                                                <Select
+                                                    showSearch
+                                                    placeholder="Gõ để tìm kiếm..."
+                                                    defaultActiveFirstOption={false}
+                                                    filterOption={false} // Tắt filter client để dùng server-side
+                                                    onSearch={(val) => handleSearchPartner(val, type)}
+                                                    onChange={(val) => handleSelectPartner(val, type)}
+                                                    notFoundContent={isSearching ? <Spin size="small" /> : null}
+                                                    options={partnerOptions}
+                                                />
+                                            </Form.Item>
+                                            
+                                            {/* Hiển thị Công Nợ */}
+                                            {currentDebt !== null && (
+                                                <div style={{ marginTop: -10, marginBottom: 10, color: currentDebt > 0 ? '#faad14' : '#52c41a' }}>
+                                                    <span>Công nợ hiện tại: </span>
+                                                    <strong style={{ fontSize: 16 }}>
+                                                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(currentDebt)}
+                                                    </strong>
+                                                    {currentDebt > 0 && <span style={{ marginLeft: 5 }}>(Phải thu)</span>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }
+
+                                // 2. NHÀ CUNG CẤP
+                                if (type === "supplier") {
+                                    return (
+                                        <Form.Item
+                                        name="supplier_id"
+                                        label="Chọn Nhà cung cấp"
+                                        rules={[{ required: true }]}
+                                        >
+                                        <Select
+                                            showSearch
+                                            optionFilterProp="label"
+                                            placeholder="Tìm NCC..."
+                                            options={suppliers.map((s) => ({
+                                            label: s.name,
+                                            value: s.id,
+                                            }))}
+                                            onChange={handleSupplierChange}
+                                        />
+                                        </Form.Item>
+                                    );
+                                }
+                                
+                                // 3. NHÂN VIÊN
+                                if (type === "employee") {
+                                     return (
+                                        <Form.Item
+                                            name="employee_id"
+                                            label="Chọn Nhân viên"
+                                            rules={[{ required: true }]}
+                                        >
+                                            <Select
+                                                showSearch
+                                                optionFilterProp="label"
+                                                options={users.map((u) => ({ label: u.name, value: u.key }))}
+                                            />
+                                        </Form.Item>
+                                     );
+                                }
+
+                                // 4. KHÁC
+                                return (
+                                    <Form.Item
+                                    name="partner_name"
+                                    label="Tên Đối tượng / Người nộp / Người nhận"
+                                    rules={[{ required: true }]}
+                                    >
+                                    <Input />
+                                    </Form.Item>
+                                );
+                            }}
+                        </Form.Item>
+                        </Col>
+               </>
              )}
           </Row>
         )}

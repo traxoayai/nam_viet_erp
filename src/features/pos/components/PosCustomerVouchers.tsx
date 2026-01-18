@@ -8,7 +8,10 @@ import { PosVoucher } from "../types/pos.types";
 const { Text } = Typography;
 
 export const PosCustomerVouchers = () => {
-  const { availableVouchers, selectedVoucher, applyVoucher } = usePosCartStore();
+  const { availableVouchers, applyVoucher, getCurrentOrder } = usePosCartStore();
+  const currentOrder = getCurrentOrder();
+  const selectedVoucher = currentOrder?.selectedVoucher;
+
   const [showModal, setShowModal] = useState(false);
 
   // Nếu không có voucher nào -> Ẩn luôn khu vực này
