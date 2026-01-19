@@ -246,10 +246,21 @@ const QuickUnitPage: React.FC = () => {
 
     const processExcelData = async (excelRows: any[]) => {
         // 1. Chuẩn bị dữ liệu (Lấy cả Tên và SKU từ Excel)
-        const itemsToMatch = excelRows.map(row => ({
-            name: row['Tên Sản Phẩm'] || row['Product Name'] || row['Tên'] || '',
-            sku: row['SKU'] || row['Mã hàng'] || row['Mã'] || '' 
-        })).filter(item => item.name); // Lọc bỏ dòng trống tên
+        const itemsToMatch = excelRows.map(row => {
+            // Lấy giá trị thô
+            const rawSku = row['SKU'] || row['Mã hàng'] || row['Mã'];
+            
+            // [FIX] Chuẩn hóa SKU: Chuyển về String, Trim khoảng trắng
+            let cleanSku = '';
+            if (rawSku !== undefined && rawSku !== null) {
+                cleanSku = String(rawSku).trim();
+            }
+
+            return {
+                name: (row['Tên Sản Phẩm'] || row['Product Name'] || row['Tên'] || '').trim(),
+                sku: cleanSku
+            };
+        }).filter(item => item.name); // Lọc bỏ dòng trống tên
 
         if (itemsToMatch.length === 0) {
             message.warning("File Excel không có dữ liệu hợp lệ (Cần cột 'Tên Sản Phẩm')");
@@ -257,7 +268,7 @@ const QuickUnitPage: React.FC = () => {
         }
 
         // 2. Cấu hình Batching
-        const BATCH_SIZE = 200; 
+        const BATCH_SIZE = 50; 
         const totalBatches = Math.ceil(itemsToMatch.length / BATCH_SIZE);
         let allServerMatches: any[] = [];
         
@@ -515,6 +526,7 @@ const QuickUnitPage: React.FC = () => {
                 onOk={applyMatches}
                 onCancel={() => setReviewModalVisible(false)}
                 width={800}
+                zIndex={9999}
                 okText="Áp dụng Tất cả"
                 cancelText="Hủy"
             >
