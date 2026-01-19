@@ -139,39 +139,51 @@ const QuickUnitPage: React.FC = () => {
         setSavingId(row.id);
         
         try {
-            // 1. Chuẩn bị Object Đơn vị Lẻ (Luôn là Base)
+            // 1. Lấy chi tiết hiện tại để lấy ID của các unit cũ
+            const currentDetail = await getProductDetails(row.id);
+            const currentUnits = currentDetail.units || []; 
+
+            // 2. Tìm ID của Unit Retail cũ (nếu có)
+            // Logic: Tìm cái nào đang là retail, hoặc là base, hoặc có rate = 1
+            const oldRetailUnit = currentUnits.find((u: any) => u.unit_type === 'retail' || u.is_base || u.conversion_rate === 1);
+            
+            // 3. Tìm ID của Unit Wholesale cũ (nếu có)
+            const oldWholesaleUnit = currentUnits.find((u: any) => u.unit_type === 'wholesale' || (!u.is_base && u.conversion_rate > 1));
+
+            // 4. Chuẩn bị Object Đơn vị Lẻ (Base/Retail gộp làm 1)
             const retailUnitObj = {
+                id: oldRetailUnit?.id, // [QUAN TRỌNG] Gắn ID cũ để update
                 unit_name: row.retail_unit,
                 unit_type: 'retail', 
                 conversion_rate: 1, 
                 is_base: true,
                 is_direct_sale: true,
-                price: row.actual_cost // Gợi ý giá vốn base
+                price: row.actual_cost, // Gợi ý giá vốn base
+                product_id: row.id
             };
 
-            // 2. Chuẩn bị Object Đơn vị Sỉ (Quy đổi)
+            // 5. Chuẩn bị Object Đơn vị Sỉ (Quy đổi)
             const wholesaleUnitObj = {
+                id: oldWholesaleUnit?.id, // [QUAN TRỌNG] Gắn ID cũ để update
                 unit_name: row.wholesale_unit,
                 unit_type: 'wholesale',
                 conversion_rate: row.conversion_rate,
                 is_base: false,
                 is_direct_sale: true,
-                price: 0 // Để 0 để Backend tự tính giá theo Margin
+                price: 0, // Để 0 để Backend tự tính giá theo Margin
+                product_id: row.id
             };
-
-            // 3. Lấy chi tiết hiện tại để merge (An toàn dữ liệu)
-            const currentDetail = await getProductDetails(row.id);
             
-            // 4. Giữ lại các đơn vị khác (Ví dụ: Thùng, Lốc... nếu đã định nghĩa trước đó)
-            // Logic: Lọc bỏ các đơn vị Base cũ và Wholesale cũ để thay bằng cái mới
-            const otherUnits = (currentDetail.units || []).filter((u: any) => 
-                !u.is_base && u.conversion_rate !== 1 && u.unit_type !== 'wholesale'
+            // 6. Giữ lại các đơn vị khác (Ví dụ: Thùng, Lốc... nếu đã định nghĩa trước đó)
+            // Logic: Lọc bỏ 2 thằng cũ mà mình vừa replace
+            const otherUnits = currentUnits.filter((u: any) => 
+                u.id !== oldRetailUnit?.id && u.id !== oldWholesaleUnit?.id
             );
             
-            // 5. Gom mảng units mới
+            // 7. Gom mảng units mới
             const newUnits = [retailUnitObj, wholesaleUnitObj, ...otherUnits];
 
-            // 6. Tạo Payload chuẩn form upsert_product_with_units
+            // 8. Tạo Payload chuẩn form upsert_product_with_units
             const payload = {
                 ...currentDetail,
                 retailUnit: row.retail_unit, // Sync legacy column
@@ -180,7 +192,7 @@ const QuickUnitPage: React.FC = () => {
                 units: newUnits
             };
             
-            // 7. Gọi API
+            // 9. Gọi API
              await upsertProduct(payload);
              
              message.success("Đã lưu!", 0.5);
