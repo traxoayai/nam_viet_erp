@@ -227,19 +227,25 @@ const QuickUnitPage: React.FC = () => {
 
     // --- TEMPLATE DOWNLOAD ---
     const handleDownloadTemplate = () => {
-        const header = ['SKU', 'Tên Sản Phẩm', 'Đơn vị Lẻ', 'Đơn vị Sỉ', 'Hệ số'];
+        const header = [
+            'SKU', 
+            'Tên Sản Phẩm', 
+            'Đơn vị Cơ Sở',           // VD: Viên
+            'Đơn vị Lẻ',              // VD: Vỉ
+            'Quy đổi Lẻ (Rate)',      // VD: 10 (1 Vỉ = 10 Viên)
+            'Đơn vị Buôn',            // VD: Hộp
+            'Quy đổi Buôn (Rate)'     // VD: 100 (1 Hộp = 100 Viên)
+        ];
         const data = [
-             ['PAN001', 'Panadol Extra', 'Viên', 'Hộp', 10],
-             ['PAN002', 'Panadol Cảm cúm', 'Viên', 'Vỉ', 10],
+            ['PAN001', 'Panadol Extra', 'Viên', 'Vỉ', 10, 'Hộp', 100],
+            ['EFF001', 'Efferalgan 500', 'Viên', 'Tuýp', 16, 'Thùng', 320],
         ];
         
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
-        // Set độ rộng cột
-        ws['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 10 }];
-        
-        XLSX.utils.book_append_sheet(wb, ws, "Mau_Quy_Cach");
-        XLSX.writeFile(wb, "Mau_Cai_Dat_Quy_Cach.xlsx");
+        ws['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(wb, ws, "Mau_Quy_Cach_3_Cap");
+        XLSX.writeFile(wb, "Mau_Setup_Quy_Cach_V2.xlsx");
     };
 
     // --- EXCEL SMART MATCH LOGIC ---
@@ -312,22 +318,33 @@ const QuickUnitPage: React.FC = () => {
             
             excelRows.forEach((row, index) => {
                 const name = row['Tên Sản Phẩm'] || row['Product Name'] || row['Tên'] || '';
-                const sku = row['SKU'] || row['Mã hàng'] || row['Mã'] || '';
+                const sku = String(row['SKU'] || row['Mã hàng'] || '').trim();
                 
-                const unitSmall = row['Đơn vị Lẻ'] || row['Base Unit'] || row['Lẻ'] || '';
-                const unitBig = row['Đơn vị Sỉ'] || row['Wholesale Unit'] || row['Sỉ'] || '';
-                const rate = row['Hệ số'] || row['Conversion Rate'] || 1;
+                // Map 3 cấp đơn vị
+                const baseUnit = row['Đơn vị Cơ Sở'] || 'Viên'; // Mặc định Viên nếu trống
+                const retailUnit = row['Đơn vị Lẻ'] || '';
+                const retailRate = Number(row['Quy đổi Lẻ (Rate)'] || row['Quy đổi Lẻ']) || 1;
+                const wholesaleUnit = row['Đơn vị Buôn'] || '';
+                const wholesaleRate = Number(row['Quy đổi Buôn (Rate)'] || row['Quy đổi Buôn']) || 1;
 
                 if (!name) return;
 
-                // Tìm kết quả match từ Server (Dựa vào excel_name và excel_sku trả về)
+                // [FIX] Chuẩn hóa để so sánh an toàn
                 const serverMatch = allServerMatches.find((m: any) => {
-                    return m.excel_name === name && (sku ? m.excel_sku === sku : true);
+                    // So sánh tên (Trimmed)
+                    const nameMatch = m.excel_name === name;
+                    
+                    // So sánh SKU (Chấp nhận null == '' == undefined)
+                    const serverSku = m.excel_sku ? String(m.excel_sku).trim() : '';
+                    const clientSku = sku ? String(sku).trim() : '';
+                    const skuMatch = serverSku === clientSku;
+
+                    return nameMatch && skuMatch;
                 });
 
                 matches.push({
                     rowIndex: index,
-                    excel: { name, sku, unitSmall, unitBig, rate }, 
+                    excel: { name, sku, baseUnit, retailUnit, retailRate, wholesaleUnit, wholesaleRate }, 
                     match: serverMatch?.product_id ? {
                         id: serverMatch.product_id,
                         name: serverMatch.product_name,
@@ -354,30 +371,52 @@ const QuickUnitPage: React.FC = () => {
     };
     
     const applyMatches = async () => {
-        setReviewModalVisible(false);
         setLoading(true);
-        let count = 0;
         
-        // Lặp qua danh sách khớp và lưu
-        for (const item of matchedData) {
-           if (!item.match) continue;
-           
-           const newConversion = Number(item.excel.rate) || item.match.conversion_rate;
-           const newUnitSmall = item.excel.unitSmall || item.match.retail_unit;
-           const newUnitBig = item.excel.unitBig || item.match.wholesale_unit;
-           
-           await handleSaveRow({
-               ...item.match,
-               retail_unit: newUnitSmall,
-               wholesale_unit: newUnitBig,
-               conversion_rate: newConversion
-           });
-           count++;
+        console.log("Matched Data:", matchedData); // [DEBUG]
+
+        // [FIX] Lọc linh hoạt hơn
+        const payload = matchedData
+            .filter(m => m.match && m.match.id) // Chỉ cần có match object và có ID
+            .map(m => ({
+                product_id: m.match.id,
+                sku: m.match.sku || m.excel.sku, // Ưu tiên SKU hệ thống
+                
+                base_unit: m.excel.baseUnit,
+                
+                retail_unit: m.excel.retailUnit,
+                retail_rate: m.excel.retailRate,
+                
+                wholesale_unit: m.excel.wholesaleUnit,
+                wholesale_rate: m.excel.wholesaleRate
+            }));
+
+        console.log("Payload to send:", payload); // [DEBUG] Check xem có dữ liệu không
+
+        if (payload.length === 0) {
+            message.warning("Không tìm thấy dữ liệu khớp hợp lệ để lưu.");
+            setLoading(false);
+            return;
         }
-        
-        setLoading(false);
-        message.success(`Đã cập nhật thành công ${count} sản phẩm!`);
-        loadProducts(pagination.current, pagination.pageSize); // Reload lại bảng
+
+        try {
+            // Gọi RPC mới
+            const { error } = await supabase.rpc('bulk_update_product_units_for_quick_unit_page', {
+                p_data: payload
+            });
+            
+            if (error) throw error;
+            
+            message.success(`Đã cập nhật quy cách cho ${payload.length} sản phẩm!`);
+            setReviewModalVisible(false);
+            loadProducts(pagination.current, pagination.pageSize); // Reload bảng
+
+        } catch (err: any) {
+            console.error(err);
+            message.error("Lỗi cập nhật: " + err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // --- TABLE COLUMNS ---
@@ -554,7 +593,11 @@ const QuickUnitPage: React.FC = () => {
                                 render: (excel) => (
                                     <div>
                                         <b>{excel.name}</b> <br/>
-                                        <Text type="secondary">{excel.unitSmall} - {excel.unitBig} (x{excel.rate})</Text>
+                                        <Text type="secondary">
+                                            {excel.baseUnit} (1) {' -> '} 
+                                            {excel.retailUnit} ({excel.retailRate}) {' -> '}
+                                            {excel.wholesaleUnit} ({excel.wholesaleRate})
+                                        </Text>
                                     </div>
                                 )
                             },
