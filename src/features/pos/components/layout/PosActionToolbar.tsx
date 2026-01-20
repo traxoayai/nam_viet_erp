@@ -88,7 +88,6 @@ export const PosActionToolbar = () => {
            visible={showVatModal} 
            onCancel={() => setShowVatModal(false)}
            orderItems={items}
-           totalAmount={getTotals().grandTotal}
            customer={customer}
        />
 

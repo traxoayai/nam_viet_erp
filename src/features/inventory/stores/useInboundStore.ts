@@ -1,3 +1,4 @@
+// src/features/inventory/stores/useInboundStore.ts
 import { create } from "zustand";
 import { inboundService } from "../api/inboundService";
 import { InboundTask, InboundFilter, InboundDetailResponse, InboundDetailItem } from "../types/inbound";

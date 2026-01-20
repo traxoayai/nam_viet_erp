@@ -3907,6 +3907,14 @@ export type Database = {
           user_name: string
         }[]
       }
+      get_available_vat_rates_for_product: {
+        Args: { p_product_id: number }
+        Returns: {
+          quantity_base: number
+          unit_base: string
+          vat_rate: number
+        }[]
+      }
       get_available_vouchers: {
         Args: { p_customer_id: number; p_order_total: number }
         Returns: {
@@ -4435,6 +4443,10 @@ export type Database = {
           total_count: number
         }[]
       }
+      handle_order_cancellation: {
+        Args: { p_order_id: string }
+        Returns: undefined
+      }
       handover_to_shipping: { Args: { p_order_id: string }; Returns: Json }
       import_customers_b2b: {
         Args: { p_customers_array: Json[] }
@@ -4490,6 +4502,10 @@ export type Database = {
       process_inbound_receipt: {
         Args: { p_items: Json; p_po_id: number; p_warehouse_id: number }
         Returns: Json
+      }
+      process_sales_invoice_deduction: {
+        Args: { p_invoice_id: number }
+        Returns: undefined
       }
       process_vat_invoice_entry: {
         Args: { p_invoice_id: number }

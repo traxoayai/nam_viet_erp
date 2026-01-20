@@ -1,3 +1,4 @@
+// src/features/inventory/types/inbound.ts
 export interface InboundTask {
   task_id: number; // PO ID
   code: string;

@@ -14,6 +14,7 @@ import "dayjs/locale/vi";
 // --- MỚI: Import Context ---
 import { AuthProvider } from "@/app/contexts/AuthProvider";
 import { NotificationProvider } from "@/app/contexts/NotificationContext";
+import { PermissionGate } from "@/app/providers/PermissionGate";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -31,9 +32,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         >
           {/* Bọc NotificationProvider trong ConfigProvider để ăn theo Theme */}
           <NotificationProvider>
+          <PermissionGate>
             <AntApp>
               <App />
             </AntApp>
+          </PermissionGate>
           </NotificationProvider>
         </ConfigProvider>
       </AuthProvider>

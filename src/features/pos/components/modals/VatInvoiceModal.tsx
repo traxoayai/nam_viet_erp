@@ -1,16 +1,18 @@
+//src/features/pos/components/modals/VatInvoiceModal.tsx
 import React, { useEffect, useState } from "react";
 import { Modal, Form, Input, Table, InputNumber, message, Tag } from "antd";
 import { supabase } from "@/shared/lib/supabaseClient";
+import * as XLSX from 'xlsx';
 
 interface Props {
   visible: boolean;
   onCancel: () => void;
   orderItems: any[];
-  totalAmount: number;
   customer: any; // [NEW] Nhận object khách hàng từ POS
+  onOk?: () => void; // Callback khi xuất thành công
 }
 
-export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems, customer }) => {
+export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems, customer, onOk }) => {
   const [form] = Form.useForm();
   const [vatItems, setVatItems] = useState<any[]>([]);
   // const [loading, setLoading] = useState(false);
@@ -84,6 +86,111 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
       };
   }, { goods: 0, tax: 0, pay: 0 });
 
+  // Helper 1: Map phương thức thanh toán sang Mã quy định
+  const getPaymentMethodCode = (method: string) => {
+      const m = (method || '').toLowerCase();
+      if (m.includes('chuyển khoản') || m.includes('bank')) return '2';
+      if (m.includes('thẻ') || m.includes('card')) return '4';
+      if (m.includes('công nợ') || m.includes('debt')) return '5';
+      return '1'; // Mặc định Tiền mặt
+  };
+
+  // Hàm xử lý chính export excel
+  const handleExportExcel = async () => {
+    // Validate
+    const invalidItems = vatItems.filter(i => i.vat_qty > i.max_vat_qty);
+    if (invalidItems.length > 0) {
+        message.error("Có sản phẩm vượt quá tồn kho VAT cho phép!");
+        return;
+    }
+    const validItems = vatItems.filter(i => i.vat_qty > 0);
+    if (validItems.length === 0) {
+        message.warning("Không có sản phẩm nào để xuất!");
+        return;
+    }
+
+    try {
+        // 1. CHUẨN BỊ HEADER (24 Cột Bắt Buộc - Thứ tự A->X)
+        const headers = [
+            "Mã hóa đơn", "Mã số thuế", "Mã QHNSNN", "Tên đơn vị, tổ chức", "Người mua hàng", 
+            "Số CCCD/Số hộ chiếu", "Địa chỉ", "Số điện thoại", "Email", "Hình thức thanh toán", 
+            "Số tài khoản ngân hàng", "Tên ngân hàng", "Tiền chiết khấu", "Ghi chú", "Loại hàng hóa", 
+            "Tên hàng hóa", "Đơn vị tính", "Số lượng", "Đơn giá", "Thành tiền", 
+            "VAT", "Tổng tiền hàng", "Tổng tiền thuế", "Tổng tiền thanh toán"
+        ];
+
+        // 2. CHUẨN BỊ DỮ LIỆU (Logic Dòng Cơ Sở / Dòng Con)
+        // Tạo mã hóa đơn duy nhất để group
+        const invoiceCode = `HD_${orderItems[0]?.order_code || Date.now()}`;
+        const paymentMethod = getPaymentMethodCode(customer?.payment_method || 'cash'); 
+        
+        // Lấy tổng từ state đã tính
+        const totalGoods = totals.goods;
+        const totalTax = totals.tax;
+        const totalPay = totals.pay;
+
+        const excelRows = validItems.map((item, index) => {
+            const isBaseRow = index === 0; // [QUAN TRỌNG] Chỉ dòng đầu tiên chứa thông tin Tổng
+
+            // Map VAT Rate (0, 5, 8, 10)
+            let vatStr = String(item.vat_rate);
+            if (vatStr === '0') vatStr = '0';
+
+            return [
+                invoiceCode,                                // A: Mã hóa đơn (Chung cho cả nhóm)
+                customer?.tax_code || '',                   // B
+                '',                                         // C
+                customer?.customer_name || '',              // D
+                customer?.buyer_name || '',                 // E
+                '',                                         // F
+                customer?.address || '',                    // G
+                customer?.phone || '',                      // H
+                customer?.email || '',                      // I
+                
+                // [LOGIC] Chỉ dòng cơ sở mới có Payment Method
+                isBaseRow ? paymentMethod : '',             // J
+                '',                                         // K
+                '',                                         // L
+                0,                                          // M: Tiền chiết khấu
+                '',                                         // N: Ghi chú
+                
+                '0',                                        // O: Loại hàng hóa (0=Hàng hóa)
+                item.name,                                  // P
+                item.unit || 'Cái',                         // Q
+                item.vat_qty,                               // R: Số lượng
+                item.price,                                 // S: Đơn giá
+                item.price * item.vat_qty,                  // T: Thành tiền
+                vatStr,                                     // U: VAT
+                
+                // [LOGIC] Chỉ dòng cơ sở mới có Tổng Tiền
+                isBaseRow ? totalGoods : '',                // V
+                isBaseRow ? totalTax : '',                  // W
+                isBaseRow ? totalPay : ''                   // X
+            ];
+        });
+
+        // 3. Tạo & Xuất File
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...excelRows]);
+
+        // Set độ rộng cột cho đẹp
+        ws['!cols'] = [{wch:15}, {wch:15}, {wch:10}, {wch:30}, {wch:20}, {wch:15}, {wch:40}, {wch:15}, {wch:25}, {wch:10}, {wch:15}, {wch:15}, {wch:10}, {wch:20}, {wch:8}, {wch:30}, {wch:8}, {wch:10}, {wch:12}, {wch:15}, {wch:8}, {wch:15}, {wch:15}, {wch:15}];
+
+        const fileName = `VAT_${invoiceCode}_${new Date().toISOString().slice(0,10)}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+
+        // 4. Callback thành công (Update DB status -> 'processing')
+        if (onOk) onOk(); 
+        
+        message.success("Đã xuất file Excel chuẩn định dạng!");
+        onCancel();
+
+    } catch (err: any) {
+        console.error(err);
+        message.error("Lỗi tạo file Excel: " + err.message);
+    }
+  };
+
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'name' },
     { 
@@ -135,8 +242,8 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
        open={visible} 
        onCancel={onCancel}
        width={950}
-       onOk={() => { /* Logic submit form */ }}
-       okText="Phát hành Hóa đơn"
+       onOk={() => handleExportExcel()}
+       okText="Tải file Excel"
     >
        <Form form={form} layout="vertical" className="mb-4">
           <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
