@@ -17,6 +17,7 @@ export interface ActionConfig {
   type?: "primary" | "default" | "dashed" | "link" | "text";
   danger?: boolean;
   loading?: boolean; // [NEW]
+  disabled?: boolean; // [NEW]
   render?: React.ReactNode; // [NEW] Support Custom Render (e.g Upload)
 }
 
@@ -99,6 +100,7 @@ const FilterActionBase = ({
                   onClick={act.onClick}
                   danger={act.danger}
                   loading={act.loading}
+                  disabled={act.disabled}
                 >
                   {act.label}
                 </Button>

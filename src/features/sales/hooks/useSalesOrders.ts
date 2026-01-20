@@ -25,7 +25,10 @@ export const useSalesOrders = ({ orderType }: UseSalesOrdersProps = {}) => {
       // New Filters from UI
       creatorId: params.creatorId,
       paymentStatus: params.paymentStatus,
-      invoiceStatus: params.invoiceStatus
+      invoiceStatus: params.invoiceStatus,
+      paymentMethod: params.paymentMethod, // [NEW]
+      warehouseId: params.warehouseId,     // [NEW]
+      customerId: params.customerId        // [NEW]
     });
 
 

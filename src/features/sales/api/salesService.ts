@@ -77,6 +77,10 @@ export const salesService = {
     creatorId?: string;
     paymentStatus?: string;
     invoiceStatus?: string;
+    // [NEW] Filters for RPC V9.2
+    paymentMethod?: string;
+    warehouseId?: number;
+    customerId?: number;
   }) {
     const { data, error } = await supabase.rpc("get_sales_orders_view", {
       p_page: params.page,
@@ -89,7 +93,11 @@ export const salesService = {
       p_date_to: params.dateTo || null,
       p_creator_id: params.creatorId || null,
       p_payment_status: params.paymentStatus || null,
-      p_invoice_status: params.invoiceStatus || null
+      p_invoice_status: params.invoiceStatus || null,
+      // [NEW] Params
+      p_payment_method: params.paymentMethod || null,
+      p_warehouse_id: params.warehouseId || null,
+      p_customer_id: params.customerId || null
     });
 
     if (error) {

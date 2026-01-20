@@ -1,48 +1,60 @@
 // src/pages/sales/B2COrderListPage.tsx
-import React, { useState, useEffect } from 'react';
-import { Table, Tag, Button, Space, Card, DatePicker, Typography, Row, Col, Modal, message } from 'antd';
-import { PrinterOutlined, BankOutlined, CheckCircleOutlined, SyncOutlined, ExclamationCircleOutlined, UserOutlined, AlertOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Tag, Button, Space, Typography, Modal, message, Avatar } from 'antd';
+import { 
+    BankOutlined, CheckCircleOutlined, SyncOutlined, 
+    ExclamationCircleOutlined, UserOutlined, AlertOutlined, ShopOutlined, PrinterOutlined 
+} from '@ant-design/icons';
+import dayjs from "dayjs";
+
 import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
 import { posTransactionService } from '@/features/finance/api/posTransactionService'; 
 import { useAuth } from '@/app/contexts/AuthProvider';
 import { VatActionButton } from '@/features/pos/components/VatActionButton';
+import { FilterAction } from "@/shared/ui/listing/FilterAction";
+import { SmartTable } from "@/shared/ui/listing/SmartTable";
+import { StatHeader } from "@/shared/ui/listing/StatHeader";
+import { supabase } from "@/shared/lib/supabaseClient";
 
-const { Title, Text } = Typography;
-const { RangePicker } = DatePicker;
+const { Text } = Typography;
 
 const B2COrderListPage = () => {
-  const { orders, loading, stats, refetch, setFilters } = useSalesOrders({ orderType: 'POS' });
+  // Hooks
+  const { tableProps, filterProps, stats, currentFilters, refresh } = useSalesOrders({ orderType: 'POS' });
   const { user } = useAuth();
   
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  
-  // [NEW STATE] Doanh thu treo (Trách nhiệm)
   const [pendingRevenue, setPendingRevenue] = useState<number>(0);
+  const [creators, setCreators] = useState<any[]>([]);
 
-  // Load công nợ
+  // [NEW STATE]
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+
+  // 1. Load Data bổ trợ (Doanh thu treo & List User & Warehouse)
   useEffect(() => {
-      if (user) loadPendingRevenue();
-  }, [user, orders]); // Reload khi user hoặc orders thay đổi
+    // Load Pending Revenue
+    if (user) {
+        posTransactionService.getUserPendingRevenue(user.id).then(setPendingRevenue);
+    }
+    // Load Users for Filter
+    supabase.from('users').select('id, full_name, email').then(({ data }) => setCreators(data || []));
+    // Load Warehouses for Filter
+    supabase.from('warehouses').select('id, name').then(({ data }) => setWarehouses(data || []));
+  }, [user, currentFilters]); // Reload revenue khi filter thay đổi (có thể đơn mới tạo)
 
-  const loadPendingRevenue = async () => {
-      if (!user) return;
-      // Gọi hàm mới lấy cả tiền mặt và CK
-      const amount = await posTransactionService.getUserPendingRevenue(user.id);
-      setPendingRevenue(amount);
-  };
-
+  // 2. Logic Nộp tiền (Giữ nguyên)
   const handleRemitCash = () => {
-    const selectedOrders = orders.filter(o => selectedRowKeys.includes(o.id));
+    const orders = tableProps.dataSource || [];
+    const selectedOrders = orders.filter((o: any) => selectedRowKeys.includes(o.id));
     
     // Logic nộp tiền: Chỉ nộp Tiền mặt (Cash). 
-    // Tiền CK thì Kế toán tự đối soát, Dược sĩ không cầm tiền nên không nộp được.
-    const cashOrders = selectedOrders.filter(o => o.payment_method === 'cash' && o.remittance_status === 'pending');
+    const cashOrders = selectedOrders.filter((o:  any) => o.payment_method === 'cash' && o.remittance_status === 'pending');
     
     // Tính tổng tiền mặt
-    const totalCash = cashOrders.reduce((sum, o) => sum + (o.final_amount || 0), 0);
+    const totalCash = cashOrders.reduce((sum: number, o: any) => sum + (o.final_amount || 0), 0);
 
     // Cảnh báo nếu chọn nhầm đơn CK
-    const hasTransfer = selectedOrders.some(o => o.payment_method === 'transfer');
+    const hasTransfer = selectedOrders.some((o: any) => o.payment_method === 'transfer');
 
     if (cashOrders.length === 0) {
         message.warning("Không có đơn TIỀN MẶT nào cần nộp trong các đơn đã chọn.");
@@ -100,7 +112,7 @@ const B2COrderListPage = () => {
                     ),
                     onOk: () => {
                         setSelectedRowKeys([]); 
-                        refetch(); 
+                        refresh(); 
                     }
                 });
             } catch (error: any) {
@@ -111,20 +123,43 @@ const B2COrderListPage = () => {
     });
   };
 
-  const columns = [
+  // 3. Columns Definition
+  const columns = useMemo(() => [
     {
       title: 'Mã đơn',
       dataIndex: 'code',
+      width: 140,
       render: (text: string) => <Text strong style={{ color: '#1890ff' }}>{text}</Text>,
     },
     {
-      title: 'Thời gian',
-      dataIndex: 'created_at',
-      render: (d: string) => <div style={{fontSize: 13}}>{new Date(d).toLocaleString('vi-VN')}</div>,
+       title: 'Ngày tạo',
+       dataIndex: 'created_at',
+       width: 120,
+       render: (d: string) => dayjs(d).format("DD/MM HH:mm"),
+    },
+    // [NEW] KHO XUẤT
+    { 
+        title: 'Kho xuất', 
+        dataIndex: 'warehouse_name',
+        width: 140,
+        render: (t: string) => <Tag icon={<ShopOutlined />}>{t}</Tag>
+    },
+    // [NEW] NGƯỜI BÁN
+    {
+        title: 'Người bán',
+        dataIndex: 'creator_name',
+        width: 150,
+        render: (name: string) => (
+            <Space>
+                <Avatar size="small" style={{backgroundColor:'#87d068'}} icon={<UserOutlined />} />
+                <span style={{fontSize:12}}>{name}</span>
+            </Space>
+        )
     },
     {
       title: 'Khách hàng',
       dataIndex: 'customer_name',
+      width: 200,
       render: (name: string, r: any) => (
         <div>
             <div style={{fontWeight: 500}}>{name || 'Khách lẻ'}</div>
@@ -136,50 +171,56 @@ const B2COrderListPage = () => {
       title: 'Tổng tiền',
       dataIndex: 'final_amount',
       align: 'right' as const,
+      width: 120,
       render: (val: number) => <Text strong>{val?.toLocaleString()} ₫</Text>,
     },
     {
       title: 'HTTT',
       dataIndex: 'payment_method',
       align: 'center' as const,
+      width: 100,
       render: (val: string) => val === 'transfer' ? <Tag color="blue">CK</Tag> : <Tag color="orange">Tiền mặt</Tag>
     },
     {
-      title: 'Trạng thái nộp',
+      title: 'Nộp quỹ',
       dataIndex: 'remittance_status',
       align: 'center' as const,
+      width: 120,
       render: (status: string) => {
           if(status === 'deposited') return <Tag color="success" icon={<CheckCircleOutlined />}>Đã vào quỹ</Tag>;
           if(status === 'confirming') return <Tag color="processing" icon={<SyncOutlined spin />}>Chờ duyệt</Tag>;
           if(status === 'skipped') return <Tag>Nợ (Không nộp)</Tag>;
-          return <Tag color="error">Chưa nộp</Tag>; 
+          if(status === 'pending') return <Tag color="warning">Chưa nộp</Tag>;
+          return <Tag>{status}</Tag>; 
       }
     },
     {
         title: "Hóa Đơn",
         key: "invoice_action",
-        width: 140,
+        width: 120,
         align: "center" as const,
         render: (_: any, record: any) => (
             <VatActionButton 
-                // Lấy phần tử đầu tiên của mảng sales_invoices (do API trả về)
-                invoice={record.sales_invoices?.[0] || { id: null, status: 'pending' }}
-                orderItems={(record.order_items || []).map((i: any) => ({
-                    ...i,
-                    // [FIX CRITICAL] Map id = product_id (BigInt) cho Modal kho
-                    id: i.product_id,
-                    name: i.product?.name || i.product_name,
-                    unit: i.uom || i.product?.retail_unit || 'Cái',
-                    price: i.unit_price,
-                    qty: i.quantity
-                }))}
+                invoice={record.sales_invoice || { id: null, status: 'pending' }}
+                // Filter & Map ID an toàn
+                orderItems={(record.order_items || [])
+                    .filter((i:any) => i.product_id) // Ensure product_id exists
+                    .map((i: any) => ({
+                        ...i,
+                        // [FIX CRITICAL] Map id = product_id (BigInt) cho Modal kho
+                        id: Number(i.product_id),
+                        name: i.product?.name || i.product_name,
+                        unit: i.uom || i.product?.retail_unit || 'Cái',
+                        price: i.unit_price,
+                        qty: i.quantity
+                    }))}
                 customer={{
                     name: record.customer_name,
                     phone: record.customer_phone,
                     tax_code: record.tax_code || '', 
                     email: record.customer_email || ''
                 }}
-                onUpdate={() => refetch()} // Gọi hàm refresh của hook useSalesOrders
+                onUpdate={() => refresh()} 
             />
         )
     },
@@ -189,98 +230,118 @@ const B2COrderListPage = () => {
       width: 50,
       render: () => <Button type="text" icon={<PrinterOutlined />} />
     }
+  ], []);
+
+  // 4. Stat Items
+  const statItems = [
+    {
+      title: "Tổng doanh số (Tháng)",
+      value: `${(stats?.total_sales || 0).toLocaleString()} ₫`,
+      color: "#1890ff",
+      icon: <ShopOutlined />,
+    },
+    {
+      title: "Tiền mặt chờ nộp (Toàn CH)",
+      value: `${(stats?.total_cash_pending || 0).toLocaleString()} ₫`,
+      color: "#cf1322",
+      icon: <AlertOutlined />,
+    },
+    {
+      title: "Chưa nộp (Của bạn)",
+      value: `${pendingRevenue.toLocaleString()} ₫`,
+      color: pendingRevenue > 0 ? "#faad14" : "#52c41a",
+      icon: <BankOutlined />,
+      subTitle: pendingRevenue > 0 ? '(Cần nộp ngay)' : '(Đã sạch nợ)'
+    },
   ];
 
   return (
-    <div style={{ padding: 12, background: '#f0f2f5', minHeight: '100vh' }}>
-       {/* DASHBOARD STATS */}
-       <Row gutter={16} style={{ marginBottom: 12 }}>
-          {/* [WIDGET DOANH THU TREO - CẢ TIỀN MẶT & CK] */}
-          <Col span={8}>
-             <Card size="small" bordered={false} style={{borderLeft: '4px solid #faad14'}}>
-                <Space>
-                    <AlertOutlined style={{fontSize: 20, color: '#faad14'}} />
-                    <div style={{ color: '#888' }}>Số tiền chưa nộp (Của bạn)</div>
-                </Space>
-                <div style={{ fontSize: 24, fontWeight: 'bold', color: pendingRevenue > 0 ? '#faad14' : '#52c41a', marginTop: 4 }}>
-                   {pendingRevenue.toLocaleString()} ₫
-                </div>
-                <div style={{fontSize: 11, color: '#555'}}>
-                    {pendingRevenue > 0 ? '(Gồm Tiền mặt chưa nộp & CK chưa đối soát)' : '(Đã nộp + Đối soát toàn bộ)'}
-                </div>
-             </Card>
-          </Col>
+    <div style={{ padding: 8, background: "#e1e1dfff", minHeight: "100vh" }}>
+       
+       <StatHeader items={statItems} loading={tableProps.loading} />
 
-          {/* Doanh số chung */}
-          <Col span={8}>
-             <Card size="small" bordered={false}>
-                <div style={{ color: '#888' }}>Tổng doanh số POS (Tháng)</div>
-                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1890ff', marginTop: 4 }}>
-                   {stats?.total_sales?.toLocaleString()} ₫
-                </div>
-             </Card>
-          </Col>
-          
-          <Col span={8}>
-             <Card size="small" bordered={false}>
-                <div style={{ color: '#888' }}>Tiền mặt chưa nộp (Toàn CH)</div>
-                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#cf1322', marginTop: 4 }}>
-                   {stats?.total_cash_pending?.toLocaleString()} ₫
-                </div>
-             </Card>
-          </Col>
-       </Row>
-
-       {/* MAIN TABLE */}
-       <Card 
-          bodyStyle={{ padding: 0 }}
-          title={
-             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Space>
-                   <Title level={5} style={{ margin: 0 }}>Lịch sử Bán Lẻ</Title>
-                   <RangePicker style={{ width: 240 }} onChange={(dates) => {
-                       if(dates && dates[0] && dates[1]) {
-                           setFilters({ 
-                               dateFrom: dates[0].toISOString(),
-                               dateTo: dates[1].toISOString()
-                           });
-                       } else {
-                           setFilters({ dateFrom: undefined, dateTo: undefined });
-                       }
-                   }} />
-                </Space>
-                <Space>
-                   {selectedRowKeys.length > 0 && (
-                       <Button 
-                            type="primary" 
-                            danger 
-                            icon={<BankOutlined />}
-                            onClick={handleRemitCash}
-                       >
-                           Nộp tiền ({selectedRowKeys.length})
-                       </Button>
-                   )}
-                   <Button icon={<SyncOutlined />} onClick={refetch} />
-                </Space>
-             </div>
+       <FilterAction
+        {...filterProps}
+        searchPlaceholder="Tìm mã đơn, KH, SĐT, Sản phẩm..."
+        filterValues={currentFilters}
+        filters={[
+          {
+            key: "status",
+            placeholder: "Trạng thái Đơn",
+            options: [
+                { label: 'Hoàn thành', value: 'COMPLETED' },
+                { label: 'Đang giao', value: 'SHIPPING' },
+                { label: 'Đã xác nhận', value: 'CONFIRMED' },
+                { label: 'Đã hủy', value: 'CANCELLED' },
+            ],
+          },
+          {
+            key: "remittanceStatus",
+            placeholder: "Trạng thái Nộp tiền",
+            options: [
+                { label: 'Chưa nộp', value: 'pending' },
+                { label: 'Chờ duyệt', value: 'confirming' },
+                { label: 'Đã nộp', value: 'deposited' },
+            ],
+          },
+          // [NEW] Filter Kho xuất
+          {
+            key: "warehouseId",
+            placeholder: "Kho xuất bán",
+            options: warehouses.map(w => ({ label: w.name, value: w.id })),
+          },
+          // [NEW] Filter Payment Method
+          { 
+            key: 'paymentMethod', 
+            placeholder: 'Hình thức TT', 
+            options: [
+                { label: 'Tiền mặt', value: 'cash' },
+                { label: 'Chuyển khoản', value: 'transfer' },
+                { label: 'Công nợ', value: 'debt' },
+                { label: 'Thẻ / Khác', value: 'card' } // 'card' or others mapping to code if needed, assuming 'card' is value used in DB or mapped in code
+            ] 
+          },
+          {
+            key: "invoiceStatus",
+            placeholder: "Trạng thái VAT",
+            options: [
+                { label: 'Đã xuất', value: 'exported' },
+                { label: 'Chờ xuất', value: 'pending' },
+                { label: 'Chưa yêu cầu', value: 'none' },
+            ],
+          },
+          {
+            key: "creatorId",
+            placeholder: "Người bán",
+            options: creators.map(u => ({ label: u.full_name || u.email, value: u.id })),
           }
-       >
-          <Table 
-             dataSource={orders} 
-             columns={columns} 
-             rowKey="id" 
-             loading={loading}
-             pagination={{ pageSize: 10 }}
-             rowSelection={{
-                 selectedRowKeys,
-                 onChange: (keys) => setSelectedRowKeys(keys),
-                 getCheckboxProps: (r: any) => ({
-                     // Vẫn chỉ cho chọn đơn chưa nộp
-                     disabled: r.remittance_status !== 'pending', 
-                 }),
-             }}
-          />
-       </Card>
+        ]}
+        actions={[
+          {
+            label: `Nộp tiền (${selectedRowKeys.length})`,
+            icon: <BankOutlined />,
+            onClick: handleRemitCash,
+            type: "primary",
+            danger: true,
+            disabled: selectedRowKeys.length === 0
+          }
+        ]}
+      />
+
+      <SmartTable
+        {...tableProps}
+        columns={columns}
+        emptyText="Chưa có đơn hàng POS nào"
+        rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+            preserveSelectedRowKeys: true,
+            getCheckboxProps: (r: any) => ({
+                // Vẫn chỉ cho chọn đơn chưa nộp
+                disabled: r.remittance_status !== 'pending', 
+            }),
+        }}
+      />
     </div>
   );
 };
