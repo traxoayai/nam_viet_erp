@@ -22,67 +22,64 @@ export const PermissionGate: React.FC<{ children: React.ReactNode }> = ({ childr
     const requestAllPermissions = async () => {
         setLoading(true);
         try {
-            // 1. Xin quyền Thông báo (Notification) - Nếu lỗi thì bỏ qua, không chặn
+            // 1. Xin quyền Thông báo (Notification)
             if ('Notification' in window) {
                 try {
                     await Notification.requestPermission();
                 } catch (e) { console.warn("Lỗi xin quyền Noti:", e); }
             }
 
-            // 2. Xin quyền Vị trí (GPS) - Bắt buộc
+            // 2. Xin quyền Vị trí (GPS) - [FIX QUAN TRỌNG: KHÔNG CHẶN NẾU LỖI]
             try {
                 await new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, {
-                        timeout: 10000, // Timeout sau 10s tránh treo app
-                        enableHighAccuracy: false // Giảm độ khó để dễ được cấp quyền hơn
+                        timeout: 5000, // Giảm xuống 5s cho nhanh
+                        enableHighAccuracy: false
                     });
                 });
-            } catch (e) {
+            } catch (e: any) {
                 console.warn("Lỗi GPS:", e);
-                // Tùy quyết định Sếp: Có thể throw error để chặn, hoặc message warning rồi cho qua
-                // Ở đây ta throw để bắt buộc phải có GPS nếu nghiệp vụ cần
-                throw e; 
+                // Thay vì chặn (throw e), ta chỉ thông báo và cho qua
+                let gpsMsg = "Không lấy được vị trí. Một số tính năng Check-in có thể bị hạn chế.";
+                
+                if (e.code === 1) { // User denied
+                    gpsMsg = "Bạn đã chặn quyền Vị trí. Hãy bật lại trong Cài đặt Safari nếu cần chấm công.";
+                }
+                
+                message.warning({ content: gpsMsg, duration: 4 });
+                // KHÔNG throw e ở đây nữa!
             }
 
-            // 3. Xin quyền Mic & Camera (Media Stream) - XỬ LÝ MỀM DẺO
+            // 3. Xin quyền Mic & Camera (Media Stream)
             try {
-                // Thử xin cả 2
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-                // Stop ngay
                 stream.getTracks().forEach(track => track.stop());
             } catch (mediaError: any) {
                 console.error("Lỗi Media:", mediaError);
                 
-                // Phân loại lỗi
+                // Vẫn ưu tiên cảnh báo, nhưng không chặn cửa vào App trừ khi Sếp yêu cầu gắt gao
+                // Ở đây ta soft-fail luôn cho chắc ăn trên các dòng máy lạ
                 if (mediaError.name === 'NotAllowedError' || mediaError.name === 'PermissionDeniedError') {
-                    // Nếu User bấm "Từ chối" -> Chặn luôn, bắt vào cài đặt bật lại
-                    throw new Error("Bạn đã từ chối quyền Mic/Camera. Vui lòng vào Cài đặt để bật lại.");
+                     message.error("Thiếu quyền Mic/Camera. Tính năng Voice/Scan sẽ không hoạt động.");
                 } else if (mediaError.name === 'NotReadableError') {
-                    // [FIX LỖI CỦA SẾP]: Lỗi phần cứng/bận -> Cho qua nhưng cảnh báo
-                    message.warning("Không thể khởi động Camera/Mic lúc này (Có thể đang được dùng bởi app khác). Bạn vẫn có thể vào App.");
+                     message.warning("Thiết bị đang bận (Mic/Cam). Vui lòng thử lại sau.");
                 } else {
-                    // Lỗi khác (VD: Không có Camera) -> Cho qua
-                    message.warning("Thiết bị không hỗ trợ đầy đủ Mic/Camera.");
+                     message.warning("Không thể truy cập Mic/Camera.");
                 }
             }
 
-            // NẾU ĐẾN ĐƯỢC ĐÂY LÀ THÀNH CÔNG (Hoặc lỗi không nghiêm trọng)
+            // NẾU CHẠY ĐẾN ĐÂY LÀ ĐÃ CỐ GẮNG HẾT SỨC -> CHO VÀO APP
             localStorage.setItem('app_permissions_granted', 'true');
             message.success("Thiết lập hoàn tất! Đang vào ứng dụng...");
             
-            // Delay nhẹ để user đọc thông báo
             setTimeout(() => {
                  setIsGranted(true);
             }, 500);
 
         } catch (error: any) {
+            // Khối này chỉ chạy nếu có lỗi hệ thống nghiêm trọng khác ngoài các khối try/catch con ở trên
             console.error(error);
-            let msg = "Vui lòng cấp quyền để tiếp tục!";
-            
-            if (error.message) msg = error.message;
-            if (error.code === 1) msg = "Quyền Vị trí bị từ chối. Bắt buộc phải bật GPS để chấm công.";
-
-            message.error({ content: msg, duration: 5 });
+            message.error({ content: "Lỗi khởi tạo: " + (error.message || "Không xác định"), duration: 5 });
         } finally {
             setLoading(false);
         }

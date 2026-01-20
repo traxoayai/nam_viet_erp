@@ -1,3 +1,4 @@
+// src/features/sales/api/b2bService.ts
 import { supabase } from "@/shared/lib/supabaseClient";
 import {
   B2BOrderFilters,
@@ -17,7 +18,10 @@ export const b2bService = {
           id,
           name,              
           phone,             
-          shipping_address   
+          phone,             
+          shipping_address,
+          tax_code,
+          email
         ),
         order_items (
           id,
@@ -30,6 +34,9 @@ export const b2bService = {
             image_url,
             wholesale_unit   
           )
+        ),
+        sales_invoices (
+            id, status, invoice_number, created_at
         )
       `)
       .eq("id", id)
@@ -57,6 +64,8 @@ export const b2bService = {
       customer_phone: orderData.customer?.phone,
       delivery_address:
         orderData.delivery_address || orderData.customer?.shipping_address,
+      tax_code: orderData.customer?.tax_code,
+      customer_email: orderData.customer?.email,
 
       // Map Financials (Fix cột final_amount khớp DB)
       sub_total: orderData.total_amount || 0, // DB: total_amount là tổng tiền hàng
@@ -76,6 +85,7 @@ export const b2bService = {
         total_price: item.total_line || item.quantity * item.unit_price,
         unit_name: item.product?.wholesale_unit, // Dùng đơn vị buôn
       })),
+      sales_invoices: orderData.sales_invoices?.[0] || null, // Map invoice info
     };
   },
 

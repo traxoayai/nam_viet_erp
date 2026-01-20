@@ -200,6 +200,13 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
         render: (v: number) => <span className="text-gray-400">{v}</span> 
     },
     { 
+        title: 'ĐVT', 
+        dataIndex: 'unit', 
+        align: 'center' as const,
+        width: 80,
+        render: (u: string) => <Tag>{u || 'Cái'}</Tag>
+    },
+    { 
         title: 'SL Xuất VAT', 
         width: 140,
         render: (_: any, r: any, idx: number) => (
@@ -243,7 +250,7 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
        onCancel={onCancel}
        width={950}
        onOk={() => handleExportExcel()}
-       okText="Tải file Excel"
+       okText="Xác nhận & Tải file Excel"
     >
        <Form form={form} layout="vertical" className="mb-4">
           <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">

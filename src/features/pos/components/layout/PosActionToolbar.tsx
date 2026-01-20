@@ -1,3 +1,4 @@
+//src/features/pos/components/layout/PosActionToolbar.tsx
 import { useState } from "react";
 import { Row, Col, Button, message, notification } from "antd";
 import { WalletOutlined, QrcodeOutlined, PrinterOutlined, FileProtectOutlined, ReadOutlined } from "@ant-design/icons";

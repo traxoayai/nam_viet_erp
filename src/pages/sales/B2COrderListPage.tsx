@@ -1,9 +1,11 @@
+// src/pages/sales/B2COrderListPage.tsx
 import React, { useState, useEffect } from 'react';
 import { Table, Tag, Button, Space, Card, DatePicker, Typography, Row, Col, Modal, message } from 'antd';
 import { PrinterOutlined, BankOutlined, CheckCircleOutlined, SyncOutlined, ExclamationCircleOutlined, UserOutlined, AlertOutlined } from '@ant-design/icons';
 import { useSalesOrders } from '@/features/sales/hooks/useSalesOrders';
 import { posTransactionService } from '@/features/finance/api/posTransactionService'; 
 import { useAuth } from '@/app/contexts/AuthProvider';
+import { VatActionButton } from '@/features/pos/components/VatActionButton';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -152,6 +154,26 @@ const B2COrderListPage = () => {
           if(status === 'skipped') return <Tag>Nợ (Không nộp)</Tag>;
           return <Tag color="error">Chưa nộp</Tag>; 
       }
+    },
+    {
+        title: "Hóa Đơn",
+        key: "invoice_action",
+        width: 140,
+        align: "center" as const,
+        render: (_: any, record: any) => (
+            <VatActionButton 
+                // Lấy phần tử đầu tiên của mảng sales_invoices (do API trả về)
+                invoice={record.sales_invoices?.[0] || { id: null, status: 'pending' }}
+                orderItems={record.order_items || []} 
+                customer={{
+                    name: record.customer_name,
+                    phone: record.customer_phone,
+                    tax_code: record.tax_code, 
+                    email: record.customer_email
+                }}
+                onUpdate={() => refetch()} // Gọi hàm refresh của hook useSalesOrders
+            />
+        )
     },
     {
       title: '',

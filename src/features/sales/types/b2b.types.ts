@@ -66,6 +66,8 @@ export interface B2BOrderDetail {
   customer_name: string;
   customer_phone?: string;
   delivery_address?: string;
+  tax_code?: string;
+  customer_email?: string;
 
   // Tổng kết tài chính
   sub_total: number;
@@ -75,5 +77,13 @@ export interface B2BOrderDetail {
 
   // Danh sách sản phẩm
   items: B2BOrderDetailItem[];
+  
+  // Thông tin hóa đơn VAT
+  sales_invoices?: {
+      id: number;
+      status: 'pending' | 'processing' | 'issued' | 'verified';
+      invoice_number?: string;
+      created_at: string;
+  } | null;
 }
 

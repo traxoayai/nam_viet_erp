@@ -29,6 +29,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { b2bService } from "@/features/sales/api/b2bService";
 import { B2BOrderDetail } from "@/features/sales/types/b2b.types";
+import { VatActionButton } from "@/features/pos/components/VatActionButton";
 import {
   B2B_STATUS_COLOR,
   B2B_STATUS_LABEL,
@@ -272,15 +273,50 @@ const B2BOrderDetailPage = () => {
       <Affix offsetBottom={0}>
         <div
           style={{
-            padding: "12px 24px",
             background: "#fff",
-            boxShadow: "0 -2px 8px rgba(0,0,0,0.08)",
-            textAlign: "right",
+            padding: "10px 24px",
+            borderTop: "1px solid #f0f0f0",
             display: "flex",
             justifyContent: "flex-end",
-            gap: 12,
+            gap: 10,
           }}
         >
+          {/* [NEW] Nút Xuất VAT (Góc trái) */}
+          <div style={{ marginRight: 'auto' }}> 
+             {order && (
+               <VatActionButton 
+                  invoice={order.sales_invoices ? {
+                      id: order.sales_invoices.id,
+                      status: order.sales_invoices.status,
+                      code: order.sales_invoices.invoice_number || order.code // Map invoice_number to code, fallback to order code
+                  } : { id: -1, status: 'pending', code: order.code }} 
+                  orderItems={order.items.map((item: any) => ({
+                      ...item,
+                      name: item.product_name,
+                      qty: item.quantity,
+                      price: item.unit_price,
+                      unit: item.unit_name
+                  }))}
+                  customer={{
+                      name: order.customer_name,
+                      phone: order.customer_phone,
+                      tax_code: order.tax_code,
+                      address: order.delivery_address,
+                      email: order.customer_email
+                  }}
+                  onUpdate={() => {
+                       if(id) {
+                           setLoading(true);
+                           b2bService.getOrderDetail(id).then(data => {
+                               setOrder(data);
+                               setLoading(false);
+                           });
+                       }
+                  }}
+               />
+             )}
+          </div>
+
           {/* Conditional Buttons based on Status */}
           {(order?.status === "DRAFT" || order?.status === "QUOTE") && (
             <>
@@ -304,8 +340,11 @@ const B2BOrderDetailPage = () => {
 
           {order?.status === "CONFIRMED" && (
              <>
-               <Button icon={<PrinterOutlined />}>In phiếu</Button>
-               <Button type="primary">Giao hàng</Button>
+                <Button icon={<PrinterOutlined />}>In phiếu</Button>
+                
+                <Button
+                  onClick={() => handleUpdateStatus("DELIVERED")}
+                  type="primary">Giao hàng</Button>
              </>
           )}
            
