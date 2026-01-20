@@ -43,15 +43,42 @@ export const InventoryCheckDetail = () => {
     }, [activeItemId]);
 
     // --- VOICE LOGIC START ---
-    const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } = useSpeechRecognition();
+    const { 
+        transcript, 
+        listening, 
+        resetTranscript, 
+        browserSupportsSpeechRecognition,
+        isMicrophoneAvailable 
+    } = useSpeechRecognition();
+
+    // Thêm useEffect để debug trạng thái Mic khi vào trang
+    useEffect(() => {
+        if (!browserSupportsSpeechRecognition) {
+            console.error("Trình duyệt không hỗ trợ Speech Recognition");
+            message.error("Thiết bị này không hỗ trợ nhận diện giọng nói!");
+        }
+        if (!isMicrophoneAvailable) {
+            console.warn("Chưa tìm thấy Microphone hoặc chưa cấp quyền.");
+        }
+    }, [browserSupportsSpeechRecognition, isMicrophoneAvailable]);
     
     // Tự động bật Mic khi vào chế độ nghe
     const toggleListening = () => {
         if (listening) {
+            console.log("User: Stop Listening");
             SpeechRecognition.stopListening();
         } else {
-            SpeechRecognition.startListening({ language: 'vi-VN', continuous: true });
-            message.info("Đang nghe... Thử nói '5 hộp 2 vỉ' hoặc 'Đủ'");
+            console.log("User: Start Listening");
+            resetTranscript();
+            SpeechRecognition.startListening({ 
+                language: 'vi-VN', 
+                continuous: true 
+            }).catch((err) => {
+                console.error("Lỗi khởi động Mic:", err);
+                message.error("Không thể bật Mic. Vui lòng kiểm tra quyền truy cập.");
+            });
+            
+            message.info("Đang nghe... (Nói số lượng)");
         }
     };
 

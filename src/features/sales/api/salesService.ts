@@ -74,32 +74,49 @@ export const salesService = {
     dateFrom?: string; // ISO String
     dateTo?: string;   // ISO String
   }) {
-    const { data, error } = await supabase.rpc('get_sales_orders_view', {
-      p_page: params.page,
-      p_page_size: params.pageSize,
-      p_order_type: params.orderType || null,
-      p_search: params.search || null,
-      p_status: params.status || null,
-      p_remittance_status: params.remittanceStatus || null,
-      p_date_from: params.dateFrom || null,
-      p_date_to: params.dateTo || null
-    });
+    // [FIX] Chuyển từ RPC sang Direct Query để lấy được order_items & sales_invoices
+    // Mục đích: Phục vụ xuất hóa đơn VAT ngay tại danh sách
+    let query = supabase
+      .from('orders')
+      .select(`
+        *,
+        customer:customer_id ( name, phone, tax_code, email ),
+        sales_invoices ( id, status, invoice_number, created_at ),
+        order_items (
+          id, quantity, unit_price,
+          product:product_id ( name, description, unit, retail_unit ) 
+        )
+      `, { count: 'exact' });
+
+    // Filter
+    if (params.orderType) query = query.eq('type', params.orderType);
+    if (params.status) query = query.eq('status', params.status);
+    if (params.search) query = query.ilike('code', `%${params.search}%`); 
+    // Pending remittance logic (nếu cần chính xác hơn phải join bảng transactions, nhưng tạm thời dùng logic đơn giản nếu DB hỗ trợ)
+    // if (params.remittanceStatus) ...
+
+    if (params.page && params.pageSize) {
+      const from = (params.page - 1) * params.pageSize;
+      const to = from + params.pageSize - 1;
+      query = query.range(from, to);
+    }
+    
+    query = query.order('created_at', { ascending: false });
+
+    const { data, error, count } = await query;
 
     if (error) {
       console.error("Get Orders Error:", error);
       return { data: [], total: 0, stats: {} };
     }
 
-
-    
-    // Core trả về JSONB { data, total, stats }
-    return data as {
-        data: any[];
-        total: number;
+    return {
+        data: data || [],
+        total: count || 0,
         stats: {
-            total_sales: number;
-            count_pending_remittance: number;
-            total_cash_pending: number;
+            total_sales: 0, // Placeholder
+            count_pending_remittance: 0,
+            total_cash_pending: 0
         }
     };
   },

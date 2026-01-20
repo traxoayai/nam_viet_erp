@@ -43,7 +43,7 @@ export const PermissionGate: React.FC<{ children: React.ReactNode }> = ({ childr
                 let gpsMsg = "Không lấy được vị trí. Một số tính năng Check-in có thể bị hạn chế.";
                 
                 if (e.code === 1) { // User denied
-                    gpsMsg = "Bạn đã chặn quyền Vị trí. Hãy bật lại trong Cài đặt Safari nếu cần chấm công.";
+                    gpsMsg = "Bạn đã chặn quyền Vị trí. Hãy bật lại trong Cài đặt Safari.";
                 }
                 
                 message.warning({ content: gpsMsg, duration: 4 });

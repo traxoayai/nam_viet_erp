@@ -10,8 +10,9 @@ import {
   SyncOutlined,
   CarOutlined,
   ShopOutlined,
+  PrinterOutlined,
 } from "@ant-design/icons";
-import { Button, message, Tooltip, Modal, Select, Upload, Tag, Typography } from "antd";
+import { Button, message, Modal, Select, Upload, Tag, Typography } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useMemo, useState, useEffect } from "react";
 import dayjs from "dayjs";
@@ -23,10 +24,10 @@ import { StatHeader } from "@/shared/ui/listing/StatHeader";
 import { parseBankStatement } from "@/shared/utils/bankStatementParser";
 
 // --- MODULE HÓA ĐƠN & TÀI CHÍNH ---
-import { InvoiceRequestModal } from "@/shared/ui/sales/InvoiceRequestModal";
 import { generateInvoiceExcel } from "@/shared/utils/invoiceExcelGenerator";
 import { salesService } from "@/features/sales/api/salesService";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { VatActionButton } from '@/features/pos/components/VatActionButton';
 
 const { Text } = Typography;
 
@@ -37,8 +38,7 @@ const B2BOrderListPage = () => {
   const { tableProps, filterProps, stats, currentFilters, refresh } = useSalesOrders({ orderType: 'B2B' });
 
   // State Xuất Hóa Đơn
-  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
-  const [currentOrderForInvoice, setCurrentOrderForInvoice] = useState<any>(null);
+  // State Xuất Hóa Đơn
   const [exportInvoiceLoading, setExportInvoiceLoading] = useState(false);
   
   // State Chọn Hàng Loạt
@@ -100,23 +100,7 @@ const B2BOrderListPage = () => {
   };
   
   // B. Mở Modal Yêu cầu VAT
-  const handleRequestInvoice = (record: any) => {
-      setCurrentOrderForInvoice(record);
-      setIsInvoiceModalOpen(true);
-  };
 
-  // C. Lưu Yêu cầu VAT
-  const handleSaveInvoiceRequest = async (values: any) => {
-      if (!currentOrderForInvoice) return;
-      try {
-          await salesService.updateInvoiceRequest(currentOrderForInvoice.id, values);
-          message.success("Đã cập nhật yêu cầu xuất hóa đơn!");
-          setIsInvoiceModalOpen(false);
-          refresh();
-      } catch (err: any) {
-          message.error("Lỗi: " + err.message);
-      }
-  };
 
   // D. Xuất Excel Misa
   const handleExportInvoiceExcel = async () => {
@@ -233,37 +217,45 @@ const B2BOrderListPage = () => {
             return <Tag color="warning">Công nợ</Tag>;
         }
     },
-    // 9. Hóa đơn VAT
+    // 9. Hóa đơn VAT (Đã thay thế bằng VatActionButton)
     {
         title: "Hóa Đơn",
         key: "invoice_action",
-        width: 100,
+        width: 140,
         align: "center" as const,
-        render: (_: any, record: any) => {
-           const isPending = record.invoice_status === 'pending';
-           const isIssued = record.invoice_status === 'issued';
-           
-           if (isIssued) {
-             return <Tooltip title="Đã xuất HĐ"><CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18 }} /></Tooltip>;
-           }
-
-           return (
-             <Tooltip title={isPending ? "Đang chờ xuất (Click sửa)" : "Yêu cầu Xuất VAT"}>
-                <Button 
-                   size="small" 
-                   type={isPending ? "dashed" : "text"}
-                   style={{ color: isPending ? '#faad14' : undefined, borderColor: isPending ? '#faad14' : undefined }}
-                   icon={<CloudUploadOutlined />}
-                   onClick={(e) => {
-                       e.stopPropagation();
-                       handleRequestInvoice(record);
-                   }}
-                >
-                   {isPending ? "Chờ xuất" : ""}
-                </Button>
-             </Tooltip>
-           );
-        }
+        render: (_: any, record: any) => (
+            <VatActionButton 
+                invoice={record.sales_invoices?.[0] || { id: null, status: 'pending' }}
+                // Map items từ record.order_items
+                orderItems={(record.order_items || []).map((i: any) => ({
+                    ...i,
+                    name: i.product?.name || 'Sản phẩm',
+                    unit: i.product?.wholesale_unit || 'Cái', // B2B dùng đơn vị buôn
+                    price: i.unit_price,
+                    qty: i.quantity
+                }))}
+                customer={{
+                    name: record.customer_name,
+                    phone: record.customer_phone,
+                    // B2B thường lưu tax_code trong bảng customers_b2b
+                    tax_code: record.customer_tax_code || '', 
+                    email: record.customer_email || ''
+                }}
+                onUpdate={() => refresh()} 
+            />
+        )
+    },
+    // 10. Hành động
+    {
+        title: "",
+        key: 'action',
+        width: 60,
+        render: (_: any, _r: any) => (
+             <Button icon={<PrinterOutlined />} type="text" onClick={(e) => {
+                 e.stopPropagation();
+                 // handlePrint(r); 
+             }} />
+        )
     }
   ], []);
 
@@ -353,17 +345,7 @@ const B2BOrderListPage = () => {
       />
 
       {/* MODAL INVOICE */}
-      <InvoiceRequestModal 
-          visible={isInvoiceModalOpen}
-          onCancel={() => setIsInvoiceModalOpen(false)}
-          onSave={handleSaveInvoiceRequest}
-          loading={false}
-          initialData={
-            currentOrderForInvoice ? {
-                name: currentOrderForInvoice.customer_name, 
-            } : undefined
-          }
-      />
+
 
       {/* MODAL PAYMENT */}
       <Modal
