@@ -1,3 +1,4 @@
+// src/pages/sales/B2BOrderDetailPage.tsx
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
@@ -292,10 +293,13 @@ const B2BOrderDetailPage = () => {
                   } : { id: -1, status: 'pending', code: order.code }} 
                   orderItems={order.items.map((item: any) => ({
                       ...item,
+                      // [FIX] Map ID sản phẩm (BigInt) để Modal query kho đúng
+                      id: Number(item.product_id), 
                       name: item.product_name,
-                      qty: item.quantity,
-                      price: item.unit_price,
-                      unit: item.unit_name
+                      // Logic đơn vị: Ưu tiên đơn vị lưu -> Đơn vị buôn -> Đơn vị lẻ
+                      unit: item.unit_name || item.wholesale_unit || item.retail_unit || 'Cái',
+                      price: Number(item.unit_price) || 0,
+                      qty: Number(item.quantity) || 0
                   }))}
                   customer={{
                       name: order.customer_name,

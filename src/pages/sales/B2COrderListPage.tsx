@@ -164,12 +164,20 @@ const B2COrderListPage = () => {
             <VatActionButton 
                 // Lấy phần tử đầu tiên của mảng sales_invoices (do API trả về)
                 invoice={record.sales_invoices?.[0] || { id: null, status: 'pending' }}
-                orderItems={record.order_items || []} 
+                orderItems={(record.order_items || []).map((i: any) => ({
+                    ...i,
+                    // [FIX CRITICAL] Map id = product_id (BigInt) cho Modal kho
+                    id: i.product_id,
+                    name: i.product?.name || i.product_name,
+                    unit: i.uom || i.product?.retail_unit || 'Cái',
+                    price: i.unit_price,
+                    qty: i.quantity
+                }))}
                 customer={{
                     name: record.customer_name,
                     phone: record.customer_phone,
-                    tax_code: record.tax_code, 
-                    email: record.customer_email
+                    tax_code: record.tax_code || '', 
+                    email: record.customer_email || ''
                 }}
                 onUpdate={() => refetch()} // Gọi hàm refresh của hook useSalesOrders
             />

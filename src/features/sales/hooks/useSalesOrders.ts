@@ -22,7 +22,12 @@ export const useSalesOrders = ({ orderType }: UseSalesOrdersProps = {}) => {
       status: params.status,
       remittanceStatus: params.remittanceStatus, // Support for POS filtering
       orderType: orderType, // Pass logic type from Hook props
+      // New Filters from UI
+      creatorId: params.creatorId,
+      paymentStatus: params.paymentStatus,
+      invoiceStatus: params.invoiceStatus
     });
+
 
     if (response.stats) {
       setStats(response.stats);
@@ -39,6 +44,9 @@ export const useSalesOrders = ({ orderType }: UseSalesOrdersProps = {}) => {
       fetcher: fetcherAdapter,
       defaultFilters: {
         status: "",
+        paymentStatus: "",
+        invoiceStatus: "",
+        creatorId: "",
       },
     });
 

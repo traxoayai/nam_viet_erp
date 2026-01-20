@@ -1,4 +1,4 @@
-//src/features/pos/components/modals/VatInvoiceModal.tsx
+// src/features/pos/components/modals/VatInvoiceModal.tsx
 import React, { useEffect, useState } from "react";
 import { Modal, Form, Input, Table, InputNumber, message, Tag } from "antd";
 import { supabase } from "@/shared/lib/supabaseClient";
@@ -8,41 +8,35 @@ interface Props {
   visible: boolean;
   onCancel: () => void;
   orderItems: any[];
-  customer: any; // [NEW] Nhận object khách hàng từ POS
-  onOk?: () => void; // Callback khi xuất thành công
+  customer: any; 
+  onOk?: () => void;
 }
 
 export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems, customer, onOk }) => {
   const [form] = Form.useForm();
   const [vatItems, setVatItems] = useState<any[]>([]);
-  // const [loading, setLoading] = useState(false);
 
-  // 1. Tự động điền thông tin khi mở Modal
+  // 1. Auto-fill (Giữ nguyên)
   useEffect(() => {
     if (visible) {
-      // Auto-fill thông tin khách hàng
       if (customer) {
         form.setFieldsValue({
-            customer_name: customer.name, // Ưu tiên tên cty nếu là khách B2B
-            tax_code: customer.tax_code || "", // Nếu bảng customer có cột này
+            customer_name: customer.name, 
+            tax_code: customer.tax_code || "", 
             address: customer.address || "",
             email: customer.email || ""
         });
       } else {
         form.resetFields();
       }
-      
       checkVatBalance();
     }
   }, [visible, customer, orderItems]);
 
-  // 2. Check tồn kho VAT và Auto-fill số lượng
+  // 2. Check VAT Balance (Giữ nguyên logic)
   const checkVatBalance = async () => {
-    // setLoading(true);
     try {
       const productIds = orderItems.map(i => i.id);
-      
-      // Lấy tồn kho VAT thực tế
       const { data, error } = await supabase
         .from('vat_inventory_ledger')
         .select('product_id, quantity_balance, vat_rate')
@@ -52,52 +46,58 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
 
       const items = orderItems.map(item => {
         const vatInfo = data?.find(v => v.product_id === item.id);
-        
-        // Logic Rate: Nếu không có trong DB thì để 0 (User tự sửa nếu cần)
         const rate = vatInfo?.vat_rate ?? 0; 
         const balance = vatInfo?.quantity_balance ?? 0;
 
         return {
           ...item,
           max_vat_qty: balance, 
-          // Mặc định xuất bằng số lượng mua, nhưng không quá tồn kho VAT
           vat_qty: Math.min(item.qty, balance), 
           vat_rate: rate,
-          status: item.qty > balance ? 'shortage' : 'enough' // Cờ đánh dấu trạng thái
+          status: item.qty > balance ? 'shortage' : 'enough'
         };
       });
       setVatItems(items);
     } catch (err) {
       console.error(err);
       message.error("Lỗi kiểm tra kho VAT");
-    } finally {
-      // setLoading(false);
     }
   };
 
-  // 3. Tính toán tổng tiền
+  // 3. [UPDATE] Tính toán tổng tiền (BACK-CALCULATION LOGIC)
+  // Giá bán (item.price) là giá ĐÃ GỒM THUẾ.
+  // Đơn giá hóa đơn = Giá bán / (1 + VAT%)
   const totals = vatItems.reduce((acc, item) => {
-      const amt = item.price * item.vat_qty;
-      const tax = amt * (item.vat_rate / 100);
+      const vatPercent = item.vat_rate / 100;
+      
+      // Tổng thanh toán (Gross) của dòng này
+      const grossTotalLine = item.price * item.vat_qty; 
+      
+      // Thành tiền trước thuế (Net Total) = Gross / (1 + VAT)
+      const netTotalLine = grossTotalLine / (1 + vatPercent);
+      
+      // Tiền thuế = Gross - Net
+      const taxLine = grossTotalLine - netTotalLine;
+
       return { 
-          goods: acc.goods + amt, 
-          tax: acc.tax + tax, 
-          pay: acc.pay + amt + tax 
+          goods: acc.goods + netTotalLine, 
+          tax: acc.tax + taxLine, 
+          pay: acc.pay + grossTotalLine 
       };
   }, { goods: 0, tax: 0, pay: 0 });
 
-  // Helper 1: Map phương thức thanh toán sang Mã quy định
+  // Helper 1 (Giữ nguyên)
   const getPaymentMethodCode = (method: string) => {
       const m = (method || '').toLowerCase();
       if (m.includes('chuyển khoản') || m.includes('bank')) return '2';
       if (m.includes('thẻ') || m.includes('card')) return '4';
       if (m.includes('công nợ') || m.includes('debt')) return '5';
-      return '1'; // Mặc định Tiền mặt
+      return '1'; 
   };
 
-  // Hàm xử lý chính export excel
+  // [UPDATE] Export Excel với giá Net
   const handleExportExcel = async () => {
-    // Validate
+    // Validate (Giữ nguyên)
     const invalidItems = vatItems.filter(i => i.vat_qty > i.max_vat_qty);
     if (invalidItems.length > 0) {
         message.error("Có sản phẩm vượt quá tồn kho VAT cho phép!");
@@ -110,7 +110,7 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
     }
 
     try {
-        // 1. CHUẨN BỊ HEADER (24 Cột Bắt Buộc - Thứ tự A->X)
+        // Header (Giữ nguyên)
         const headers = [
             "Mã hóa đơn", "Mã số thuế", "Mã QHNSNN", "Tên đơn vị, tổ chức", "Người mua hàng", 
             "Số CCCD/Số hộ chiếu", "Địa chỉ", "Số điện thoại", "Email", "Hình thức thanh toán", 
@@ -119,69 +119,64 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
             "VAT", "Tổng tiền hàng", "Tổng tiền thuế", "Tổng tiền thanh toán"
         ];
 
-        // 2. CHUẨN BỊ DỮ LIỆU (Logic Dòng Cơ Sở / Dòng Con)
-        // Tạo mã hóa đơn duy nhất để group
-        const invoiceCode = `HD_${orderItems[0]?.order_code || Date.now()}`;
+        const invoiceCode = `HD_${orderItems[0]?.code || Date.now()}`; // Fix: order_code -> code (nếu item map từ RPC)
         const paymentMethod = getPaymentMethodCode(customer?.payment_method || 'cash'); 
         
-        // Lấy tổng từ state đã tính
-        const totalGoods = totals.goods;
-        const totalTax = totals.tax;
-        const totalPay = totals.pay;
-
         const excelRows = validItems.map((item, index) => {
-            const isBaseRow = index === 0; // [QUAN TRỌNG] Chỉ dòng đầu tiên chứa thông tin Tổng
+            const isBaseRow = index === 0;
 
-            // Map VAT Rate (0, 5, 8, 10)
             let vatStr = String(item.vat_rate);
             if (vatStr === '0') vatStr = '0';
 
+            // [LOGIC MỚI] Tính toán cho từng dòng Excel
+            const vatPercent = item.vat_rate / 100;
+            const grossPrice = item.price; // Giá bán lẻ (đã gồm thuế)
+            
+            // Đơn giá (Net Price) để in lên hóa đơn
+            const netPrice = grossPrice / (1 + vatPercent);
+            
+            // Thành tiền (Net Amount)
+            const netAmount = netPrice * item.vat_qty;
+
             return [
-                invoiceCode,                                // A: Mã hóa đơn (Chung cho cả nhóm)
-                customer?.tax_code || '',                   // B
-                '',                                         // C
-                customer?.customer_name || '',              // D
-                customer?.buyer_name || '',                 // E
-                '',                                         // F
-                customer?.address || '',                    // G
-                customer?.phone || '',                      // H
-                customer?.email || '',                      // I
+                invoiceCode,                            // A
+                customer?.tax_code || '',               // B
+                '',                                     // C
+                customer?.customer_name || '',          // D
+                customer?.buyer_name || '',             // E
+                '',                                     // F
+                customer?.address || '',                // G
+                customer?.phone || '',                  // H
+                customer?.email || '',                  // I
+                isBaseRow ? paymentMethod : '',         // J
+                '', '', 0, '', '0',                     // K, L, M, N, O
+                item.name,                              // P
+                item.unit || 'Cái',                     // Q
+                item.vat_qty,                           // R: Số lượng
                 
-                // [LOGIC] Chỉ dòng cơ sở mới có Payment Method
-                isBaseRow ? paymentMethod : '',             // J
-                '',                                         // K
-                '',                                         // L
-                0,                                          // M: Tiền chiết khấu
-                '',                                         // N: Ghi chú
+                // [FIX] Cột S: Xuất Đơn giá Net (Làm tròn 2 số lẻ nếu cần)
+                parseFloat(netPrice.toFixed(2)),        // S
                 
-                '0',                                        // O: Loại hàng hóa (0=Hàng hóa)
-                item.name,                                  // P
-                item.unit || 'Cái',                         // Q
-                item.vat_qty,                               // R: Số lượng
-                item.price,                                 // S: Đơn giá
-                item.price * item.vat_qty,                  // T: Thành tiền
-                vatStr,                                     // U: VAT
+                // [FIX] Cột T: Thành tiền Net
+                parseFloat(netAmount.toFixed(2)),       // T
                 
-                // [LOGIC] Chỉ dòng cơ sở mới có Tổng Tiền
-                isBaseRow ? totalGoods : '',                // V
-                isBaseRow ? totalTax : '',                  // W
-                isBaseRow ? totalPay : ''                   // X
+                vatStr,                                 // U
+                
+                // Tổng (Chỉ dòng đầu)
+                isBaseRow ? parseFloat(totals.goods.toFixed(0)) : '',  // V
+                isBaseRow ? parseFloat(totals.tax.toFixed(0)) : '',    // W
+                isBaseRow ? parseFloat(totals.pay.toFixed(0)) : ''     // X: Tổng thanh toán (Khớp giá bán)
             ];
         });
 
-        // 3. Tạo & Xuất File
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet([headers, ...excelRows]);
-
-        // Set độ rộng cột cho đẹp
         ws['!cols'] = [{wch:15}, {wch:15}, {wch:10}, {wch:30}, {wch:20}, {wch:15}, {wch:40}, {wch:15}, {wch:25}, {wch:10}, {wch:15}, {wch:15}, {wch:10}, {wch:20}, {wch:8}, {wch:30}, {wch:8}, {wch:10}, {wch:12}, {wch:15}, {wch:8}, {wch:15}, {wch:15}, {wch:15}];
 
         const fileName = `VAT_${invoiceCode}_${new Date().toISOString().slice(0,10)}.xlsx`;
         XLSX.writeFile(wb, fileName);
 
-        // 4. Callback thành công (Update DB status -> 'processing')
         if (onOk) onOk(); 
-        
         message.success("Đã xuất file Excel chuẩn định dạng!");
         onCancel();
 
@@ -191,6 +186,7 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
     }
   };
 
+  // 4. [UPDATE] Cấu hình cột hiển thị trên Modal
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'name' },
     { 
@@ -236,10 +232,29 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
         align: 'center' as const,
         render: (v: number) => <Tag color="blue">{v}%</Tag>
     },
+    
+    // [NEW COLUMN] Hiển thị đơn giá Net để User đối chiếu
     { 
-        title: 'Thành tiền', 
+        title: 'Đơn giá (Net)', 
         align: 'right' as const,
-        render: (_: any, r: any) => (r.price * r.vat_qty).toLocaleString() 
+        render: (_: any, r: any) => {
+            const netPrice = r.price / (1 + r.vat_rate/100);
+            return (
+                <div>
+                   <div className="font-medium">{netPrice.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                   <div className="text-[10px] text-gray-400">Giá bán: {r.price.toLocaleString()}</div>
+                </div>
+            )
+        }
+    },
+
+    { 
+        title: 'Thành tiền (Net)', 
+        align: 'right' as const,
+        render: (_: any, r: any) => {
+            const netPrice = r.price / (1 + r.vat_rate/100);
+            return (netPrice * r.vat_qty).toLocaleString(undefined, {maximumFractionDigits: 0})
+        }
     }
   ];
 
@@ -253,6 +268,7 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
        okText="Xác nhận & Tải file Excel"
     >
        <Form form={form} layout="vertical" className="mb-4">
+          {/* ... (Giữ nguyên form inputs) ... */}
           <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
               <Form.Item name="customer_name" label="Tên Đơn vị / Khách hàng" rules={[{ required: true }]}>
                   <Input placeholder="Nhập tên..." />
@@ -279,9 +295,13 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
        />
 
        <div className="flex justify-end mt-4 text-right gap-8 bg-blue-50 p-4 rounded-lg border border-blue-100">
-           <div><div className="text-xs text-gray-500">Tổng tiền hàng</div><div className="font-bold">{totals.goods.toLocaleString()}</div></div>
-           <div><div className="text-xs text-gray-500">Tiền thuế GTGT</div><div className="font-bold text-red-600">{totals.tax.toLocaleString()}</div></div>
-           <div><div className="text-xs text-gray-500">Tổng thanh toán</div><div className="font-bold text-xl text-blue-700">{totals.pay.toLocaleString()}</div></div>
+           <div><div className="text-xs text-gray-500">Tổng tiền hàng (Net)</div><div className="font-bold">{totals.goods.toLocaleString(undefined, {maximumFractionDigits: 0})}</div></div>
+           <div><div className="text-xs text-gray-500">Tiền thuế GTGT</div><div className="font-bold text-red-600">{totals.tax.toLocaleString(undefined, {maximumFractionDigits: 0})}</div></div>
+           <div>
+               <div className="text-xs text-gray-500">Tổng thanh toán</div>
+               <div className="font-bold text-xl text-blue-700">{totals.pay.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+               <div className="text-[10px] text-gray-400">(Khớp giá bán lẻ)</div>
+           </div>
        </div>
     </Modal>
   );

@@ -63,7 +63,7 @@ export const salesService = {
     return data; // Trả về UUID đơn hàng
   },
 
-  // 6. [NEW] Lấy danh sách đơn hàng (Unified)
+  // 6. [NEW] Lấy danh sách đơn hàng (Unified via RPC V8)
   async getOrders(params: {
     page: number;
     pageSize: number;
@@ -73,48 +73,36 @@ export const salesService = {
     remittanceStatus?: string; // 'pending' để lọc đơn chưa nộp tiền
     dateFrom?: string; // ISO String
     dateTo?: string;   // ISO String
+    // New Filters
+    creatorId?: string;
+    paymentStatus?: string;
+    invoiceStatus?: string;
   }) {
-    // [FIX] Chuyển từ RPC sang Direct Query để lấy được order_items & sales_invoices
-    // Mục đích: Phục vụ xuất hóa đơn VAT ngay tại danh sách
-    let query = supabase
-      .from('orders')
-      .select(`
-        *,
-        customer:customer_id ( name, phone, tax_code, email ),
-        sales_invoices ( id, status, invoice_number, created_at ),
-        order_items (
-          id, quantity, unit_price,
-          product:product_id ( name, description, unit, retail_unit ) 
-        )
-      `, { count: 'exact' });
-
-    // Filter
-    if (params.orderType) query = query.eq('type', params.orderType);
-    if (params.status) query = query.eq('status', params.status);
-    if (params.search) query = query.ilike('code', `%${params.search}%`); 
-    // Pending remittance logic (nếu cần chính xác hơn phải join bảng transactions, nhưng tạm thời dùng logic đơn giản nếu DB hỗ trợ)
-    // if (params.remittanceStatus) ...
-
-    if (params.page && params.pageSize) {
-      const from = (params.page - 1) * params.pageSize;
-      const to = from + params.pageSize - 1;
-      query = query.range(from, to);
-    }
-    
-    query = query.order('created_at', { ascending: false });
-
-    const { data, error, count } = await query;
+    const { data, error } = await supabase.rpc("get_sales_orders_view", {
+      p_page: params.page,
+      p_page_size: params.pageSize,
+      p_search: params.search || "",
+      p_status: params.status || null,
+      p_order_type: params.orderType || null,
+      p_remittance_status: params.remittanceStatus || null,
+      p_date_from: params.dateFrom || null,
+      p_date_to: params.dateTo || null,
+      p_creator_id: params.creatorId || null,
+      p_payment_status: params.paymentStatus || null,
+      p_invoice_status: params.invoiceStatus || null
+    });
 
     if (error) {
       console.error("Get Orders Error:", error);
       return { data: [], total: 0, stats: {} };
     }
 
+    // Data trả về từ RPC đã bao gồm total và stats
     return {
-        data: data || [],
-        total: count || 0,
-        stats: {
-            total_sales: 0, // Placeholder
+        data: data?.data || [],
+        total: data?.total || 0,
+        stats: data?.stats || {
+            total_sales: 0,
             count_pending_remittance: 0,
             total_cash_pending: 0
         }

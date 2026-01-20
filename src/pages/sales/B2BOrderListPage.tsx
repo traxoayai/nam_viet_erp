@@ -10,9 +10,9 @@ import {
   SyncOutlined,
   CarOutlined,
   ShopOutlined,
-  PrinterOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
-import { Button, message, Modal, Select, Upload, Tag, Typography } from "antd";
+import { Button, message, Modal, Select, Upload, Tag, Typography, Avatar } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useMemo, useState, useEffect } from "react";
 import dayjs from "dayjs";
@@ -38,7 +38,6 @@ const B2BOrderListPage = () => {
   const { tableProps, filterProps, stats, currentFilters, refresh } = useSalesOrders({ orderType: 'B2B' });
 
   // State Xuất Hóa Đơn
-  // State Xuất Hóa Đơn
   const [exportInvoiceLoading, setExportInvoiceLoading] = useState(false);
   
   // State Chọn Hàng Loạt
@@ -49,12 +48,22 @@ const B2BOrderListPage = () => {
   const [fundAccounts, setFundAccounts] = useState<any[]>([]); 
   const [selectedFundId, setSelectedFundId] = useState<number | null>(null);
 
-  // --- 2. EFFECT: LOAD QUỸ ---
+  // State Users (Sales Staff)
+  const [creators, setCreators] = useState<any[]>([]);
+
+  // --- 2. EFFECT: LOAD QUỸ & USERS ---
   useEffect(() => {
+    // Load Fund Accounts
     supabase.from('fund_accounts').select('id, name').eq('status', 'active')
       .then(({ data }) => {
         setFundAccounts(data || []);
         if (data && data.length > 0) setSelectedFundId(data[0].id);
+      });
+
+    // Load Sales Staff (Creators)
+    supabase.from('users').select('id, full_name, email')
+      .then(({ data }) => {
+        setCreators(data || []);
       });
   }, []);
 
@@ -99,9 +108,6 @@ const B2BOrderListPage = () => {
     return false;
   };
   
-  // B. Mở Modal Yêu cầu VAT
-
-
   // D. Xuất Excel Misa
   const handleExportInvoiceExcel = async () => {
       if (selectedRowKeys.length === 0) {
@@ -161,11 +167,23 @@ const B2BOrderListPage = () => {
             </Text>
         ),
     },
+    // Nhân viên (Creator)
+    {
+      title: "Nhân viên",
+      dataIndex: 'creator_name',
+      width: 150,
+      render: (name: string) => (
+         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+           <Avatar size="small" icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }} />
+           <span style={{ fontSize: 12 }}>{name}</span>
+         </div>
+      )
+    },
     // 6. Trạng thái đơn hàng (Lifecycle)
     {
-        title: "Trạng thái Đơn",
+        title: "TT Đơn",
         dataIndex: "status",
-        width: 140,
+        width: 120,
         render: (status: string) => {
             const map: any = {
                 DRAFT: { color: 'default', text: 'Nháp' },
@@ -179,65 +197,59 @@ const B2BOrderListPage = () => {
             return <Tag color={s.color}>{s.text}</Tag>;
         }
     },
-    // 7. Trạng thái vận chuyển (Realtime Logistics)
+    // 7. Vận chuyển
     {
         title: "Vận chuyển",
         key: "shipping_status",
-        width: 160,
+        width: 130,
         render: (_: any, record: any) => {
-            // Logic hiển thị vận chuyển dựa trên status và delivery_method
             if (record.delivery_method === 'self_shipping' || record.order_type === 'POS') {
                 return <Tag icon={<ShopOutlined />}>Tại quầy</Tag>;
             }
             if (record.status === 'CONFIRMED') return <Tag color="orange" icon={<SyncOutlined spin />}>Chờ đóng gói</Tag>;
-            if (record.status === 'SHIPPING') return <Tag color="geekblue" icon={<CarOutlined />}>Đang giao hàng</Tag>;
-            if (record.status === 'DELIVERED' || record.status === 'COMPLETED') return <Tag color="green">Khách đã nhận</Tag>;
-            if (record.status === 'CANCELLED') return <Text type="secondary">-</Text>;
-            return <Text type="secondary">Chờ xử lý</Text>;
+            if (record.status === 'SHIPPING') return <Tag color="geekblue" icon={<CarOutlined />}>Đang giao</Tag>;
+            if (record.status === 'DELIVERED' || record.status === 'COMPLETED') return <Tag color="green">Đã nhận</Tag>;
+            return <Text type="secondary">-</Text>;
         }
     },
-    // 8. Trạng thái thanh toán (Paid/Unpaid/Reconciled)
+    // 8. Thanh toán
     {
         title: "Thanh toán",
         key: "payment_status",
-        width: 150,
+        width: 130,
         render: (_: any, record: any) => {
-            // Ưu tiên check paid_amount đủ chưa
             const isPaid = record.payment_status === 'paid' || (record.paid_amount >= record.final_amount && record.final_amount > 0);
-            
-            if (isPaid) {
-                return <Tag color="success" icon={<CheckCircleOutlined />}>Đã thanh toán</Tag>;
-            }
-            
-            // Nếu chưa trả, check xem có phải đang chờ đối soát CK không
-            if (record.payment_method === 'bank_transfer' || record.payment_method === 'debt') {
-                return <Tag color="red">Chưa thanh toán</Tag>;
-            }
-            
-            return <Tag color="warning">Công nợ</Tag>;
+            if (isPaid) return <Tag color="success" icon={<CheckCircleOutlined />}>Đã TT</Tag>;
+            if (record.payment_method === 'debt') return <Tag color="warning">Công nợ</Tag>;
+            return <Tag color="red">Chưa TT</Tag>;
         }
     },
-    // 9. Hóa đơn VAT (Đã thay thế bằng VatActionButton)
+    // 9. VAT Action
     {
         title: "Hóa Đơn",
         key: "invoice_action",
-        width: 140,
+        width: 120,
         align: "center" as const,
         render: (_: any, record: any) => (
             <VatActionButton 
-                invoice={record.sales_invoices?.[0] || { id: null, status: 'pending' }}
-                // Map items từ record.order_items
+                invoice={record.sales_invoice || { id: null, status: 'pending' }}
+                // Map items từ JSON Array "order_items" của RPC
                 orderItems={(record.order_items || []).map((i: any) => ({
                     ...i,
-                    name: i.product?.name || 'Sản phẩm',
-                    unit: i.product?.wholesale_unit || 'Cái', // B2B dùng đơn vị buôn
+                    // [FIX CRITICAL] Map id = product_id (BigInt) cho Modal kho
+                    id: i.product_id,
+                    // RPC V8 returns "product" object nested inside item
+                    name: i.product?.name || i.product_name || 'Sản phẩm',
+                    // Logic Unit: Ưu tiên item.uom -> retail/wholesale
+                    unit: i.uom || i.product?.wholesale_unit || i.product?.retail_unit || 'Cái',
                     price: i.unit_price,
-                    qty: i.quantity
+                    qty: i.quantity,
+                    // Pass full product for context if needed
+                    product: i.product 
                 }))}
                 customer={{
                     name: record.customer_name,
                     phone: record.customer_phone,
-                    // B2B thường lưu tax_code trong bảng customers_b2b
                     tax_code: record.customer_tax_code || '', 
                     email: record.customer_email || ''
                 }}
@@ -245,18 +257,6 @@ const B2BOrderListPage = () => {
             />
         )
     },
-    // 10. Hành động
-    {
-        title: "",
-        key: 'action',
-        width: 60,
-        render: (_: any, _r: any) => (
-             <Button icon={<PrinterOutlined />} type="text" onClick={(e) => {
-                 e.stopPropagation();
-                 // handlePrint(r); 
-             }} />
-        )
-    }
   ], []);
 
   // --- 5. DATA PREP (STATS) ---
@@ -287,12 +287,12 @@ const B2BOrderListPage = () => {
 
       <FilterAction
         {...filterProps}
-        searchPlaceholder="Tìm mã đơn, tên khách..."
+        searchPlaceholder="Tìm mã đơn, SĐT, Tên SP..."
         filterValues={currentFilters}
         filters={[
           {
             key: "status",
-            placeholder: "Lọc trạng thái",
+            placeholder: "Trạng thái Đơn",
             options: [
                 { label: 'Hoàn thành', value: 'COMPLETED' },
                 { label: 'Đang giao', value: 'SHIPPING' },
@@ -300,6 +300,29 @@ const B2BOrderListPage = () => {
                 { label: 'Đã hủy', value: 'CANCELLED' },
             ],
           },
+          {
+            key: "paymentStatus",
+            placeholder: "Thanh toán",
+            options: [
+                { label: 'Đã thanh toán', value: 'paid' },
+                { label: 'Chưa thanh toán', value: 'unpaid' },
+                { label: 'Công nợ', value: 'debt' },
+            ],
+          },
+          {
+            key: "invoiceStatus",
+            placeholder: "Trạng thái VAT",
+            options: [
+                { label: 'Đã xuất', value: 'exported' },
+                { label: 'Chờ xuất', value: 'pending' },
+                { label: 'Chưa yêu cầu', value: 'none' },
+            ],
+          },
+          {
+            key: "creatorId",
+            placeholder: "Nhân viên",
+            options: creators.map(u => ({ label: u.full_name || u.email, value: u.id })),
+          }
         ]}
         actions={[
           {
@@ -343,9 +366,6 @@ const B2BOrderListPage = () => {
           style: { cursor: "pointer" },
         })}
       />
-
-      {/* MODAL INVOICE */}
-
 
       {/* MODAL PAYMENT */}
       <Modal
