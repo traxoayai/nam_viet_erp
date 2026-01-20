@@ -1,3 +1,4 @@
+// src/features/inventory/stores/useInventoryCheckStore.ts
 import { create } from 'zustand';
 import { inventoryService } from '../api/inventoryService';
 import { InventoryCheckItem, InventoryCheckSession } from '../types/inventory.types';
@@ -56,24 +57,28 @@ export const useInventoryCheckStore = create<InventoryCheckState>((set, get) => 
     updateItemQuantity: (itemId, boxQty, unitQty) => {
         const { items } = get();
         
-        // Cập nhật State Local ngay lập tức cho mượt
         const updatedItems = items.map(item => {
             if (item.id !== itemId) return item;
 
-            const rate = item.retail_unit_rate;
-            const newActualTotal = (boxQty * rate) + unitQty;
+            // [FIX] Đảm bảo rate luôn >= 1 để tránh lỗi chia cho 0
+            const rate = (item.retail_unit_rate && item.retail_unit_rate > 0) ? item.retail_unit_rate : 1;
+            
+            // Tính tổng
+            const newActualTotal = (Number(boxQty || 0) * rate) + Number(unitQty || 0);
 
             return {
                 ...item,
                 actual_quantity: newActualTotal,
-                diff_quantity: newActualTotal - item.system_quantity
+                // [FIX] Đảm bảo system_quantity có giá trị
+                diff_quantity: newActualTotal - (item.system_quantity || 0)
             };
         });
         
         set({ items: updatedItems });
 
-        // Debounce gọi API lưu xuống DB (tránh spam server khi gõ từng số)
-        saveToDbDebounced(itemId, (boxQty * (items.find(i=>i.id===itemId)?.retail_unit_rate || 1)) + unitQty);
+        // Debounce gọi API (Giữ nguyên)
+        const currentRate = items.find(i=>i.id===itemId)?.retail_unit_rate || 1;
+        saveToDbDebounced(itemId, (Number(boxQty || 0) * currentRate) + Number(unitQty || 0));
     },
 
     setActiveItem: (id) => set({ activeItemId: id }),

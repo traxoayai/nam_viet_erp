@@ -1262,6 +1262,7 @@ export type Database = {
       inventory_receipt_items: {
         Row: {
           created_at: string | null
+          discount_amount: number | null
           expiry_date: string | null
           id: number
           lot_number: string | null
@@ -1270,9 +1271,13 @@ export type Database = {
           quantity: number
           receipt_id: number
           serial_number: string | null
+          sub_total: number | null
+          unit_price: number
+          vat_rate: number | null
         }
         Insert: {
           created_at?: string | null
+          discount_amount?: number | null
           expiry_date?: string | null
           id?: number
           lot_number?: string | null
@@ -1281,9 +1286,13 @@ export type Database = {
           quantity: number
           receipt_id: number
           serial_number?: string | null
+          sub_total?: number | null
+          unit_price?: number
+          vat_rate?: number | null
         }
         Update: {
           created_at?: string | null
+          discount_amount?: number | null
           expiry_date?: string | null
           id?: number
           lot_number?: string | null
@@ -1292,6 +1301,9 @@ export type Database = {
           quantity?: number
           receipt_id?: number
           serial_number?: string | null
+          sub_total?: number | null
+          unit_price?: number
+          vat_rate?: number | null
         }
         Relationships: [
           {
@@ -1315,33 +1327,51 @@ export type Database = {
           code: string
           created_at: string | null
           creator_id: string | null
+          discount_order: number | null
+          final_amount: number | null
           id: number
           note: string | null
+          other_fee: number | null
           po_id: number | null
           receipt_date: string | null
+          shipping_fee: number | null
           status: string | null
+          total_goods_amount: number | null
+          updated_at: string | null
           warehouse_id: number
         }
         Insert: {
           code: string
           created_at?: string | null
           creator_id?: string | null
+          discount_order?: number | null
+          final_amount?: number | null
           id?: number
           note?: string | null
+          other_fee?: number | null
           po_id?: number | null
           receipt_date?: string | null
+          shipping_fee?: number | null
           status?: string | null
+          total_goods_amount?: number | null
+          updated_at?: string | null
           warehouse_id: number
         }
         Update: {
           code?: string
           created_at?: string | null
           creator_id?: string | null
+          discount_order?: number | null
+          final_amount?: number | null
           id?: number
           note?: string | null
+          other_fee?: number | null
           po_id?: number | null
           receipt_date?: string | null
+          shipping_fee?: number | null
           status?: string | null
+          total_goods_amount?: number | null
+          updated_at?: string | null
           warehouse_id?: number
         }
         Relationships: [
@@ -3395,6 +3425,10 @@ export type Database = {
         Args: { p_product_ids: number[]; p_strategy_type: string }
         Returns: undefined
       }
+      bulk_update_product_units_for_quick_unit_page: {
+        Args: { p_data: Json }
+        Returns: undefined
+      }
       bulk_upsert_customers_b2b: {
         Args: { p_customers_array: Json[] }
         Returns: undefined
@@ -4026,6 +4060,10 @@ export type Database = {
       get_my_permissions: { Args: never; Returns: string[] }
       get_outbound_order_detail: { Args: { p_order_id: string }; Returns: Json }
       get_outbound_stats: { Args: { p_warehouse_id: number }; Returns: Json }
+      get_partner_debt_live: {
+        Args: { p_partner_id: number; p_partner_type: string }
+        Returns: number
+      }
       get_pending_reconciliation_orders: {
         Args: never
         Returns: {
@@ -4418,6 +4456,18 @@ export type Database = {
       mark_notification_read: {
         Args: { p_noti_id: string }
         Returns: undefined
+      }
+      match_products_from_excel: {
+        Args: { p_data: Json }
+        Returns: {
+          excel_name: string
+          excel_sku: string
+          match_type: string
+          product_id: number
+          product_name: string
+          product_sku: string
+          similarity_score: number
+        }[]
       }
       notify_group: {
         Args: {

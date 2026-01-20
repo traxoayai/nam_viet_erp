@@ -1,80 +1,106 @@
+// src/shared/utils/voiceUtils.ts
 // Map số tiếng Việt sang số học
 const numberMap: { [key: string]: number } = {
-    'không': 0, 'một': 1, 'hai': 2, 'ba': 3, 'bốn': 4, 'năm': 5, 'lăm': 5,
+    'không': 0, 'một': 1, 'mốt': 1, 'hai': 2, 'ba': 3, 'bốn': 4, 'năm': 5, 'lăm': 5, 'nhăm': 5,
     'sáu': 6, 'bảy': 7, 'tám': 8, 'chín': 9, 'mười': 10, 'chục': 10,
-    'trăm': 100, 'nghìn': 1000
+    'trăm': 100, 'nghìn': 1000, 'ngàn': 1000, 'lẻ': 0
 };
 
-// Hàm chuyển chuỗi "ba mươi lăm" -> 35
 export const textToNumber = (text: string): number | null => {
-    const lowerText = text.toLowerCase();
+    if (!text) return null;
+    const lowerText = text.toLowerCase().trim();
     
-    // Nếu là số dạng "10", "5" -> Trả về luôn
-    if (!isNaN(Number(lowerText))) return Number(lowerText);
+    // 1. Nếu chuỗi chứa số (VD: "5", "10")
+    const matchNumber = lowerText.match(/\d+/);
+    if (matchNumber) return parseInt(matchNumber[0], 10);
 
-    // Xử lý văn bản
+    // 2. Xử lý văn bản (VD: "ba mươi lăm")
+    const words = lowerText.split(/\s+/);
     let total = 0;
     let current = 0;
-    const words = lowerText.split(' ');
     let hasNumber = false;
 
-    words.forEach(word => {
+    for (const word of words) {
         if (numberMap[word] !== undefined) {
             hasNumber = true;
             const val = numberMap[word];
             if (val === 100 || val === 1000) {
                 current = (current === 0 ? 1 : current) * val;
+                if (val === 1000) { // Khi gặp nghìn, cộng vào total và reset current
+                    total += current;
+                    current = 0;
+                }
             } else if (val === 10) {
                 current = (current === 0 ? 1 : current) * 10;
             } else {
                 current += val;
             }
-        } else if (current > 0) {
-            total += current;
-            current = 0;
+        } else if (current > 0 && word !== 'và') {
+             // Nếu gặp từ không phải số (mà ko phải 'và') -> Kết thúc cụm số
+             break; 
         }
-    });
+    }
     total += current;
-    
     return hasNumber ? total : null;
 };
 
-// Hàm phân tích ý định (Intent)
 export const parseVoiceCommand = (transcript: string) => {
     const text = transcript.toLowerCase();
 
     // 1. Lệnh điều hướng
-    if (text.includes('tiếp') || text.includes('bỏ qua') || text.includes('next')) return { type: 'NEXT' };
-    if (text.includes('đủ') || text.includes('ok') || text.includes('chuẩn') || text.includes('khớp')) return { type: 'CONFIRM' };
-    if (text.includes('xong') || text.includes('hoàn tất')) return { type: 'COMPLETE' };
+    if (text.includes('tiếp') || text.includes('bỏ qua') || text.includes('next') || text.includes('qua đi')) return { type: 'NEXT' };
+    if (text.includes('đủ') || text.includes('ok') || text.includes('chuẩn') || text.includes('khớp') || text.includes('xong')) return { type: 'CONFIRM' };
+    if (text.includes('hoàn tất kiểm kê') || text.includes('chốt phiếu')) return { type: 'COMPLETE' };
 
-    // 2. Lệnh nhập liệu (Hộp/Vỉ)
-    // Regex tìm mẫu: "5 hộp", "3 vỉ", "10 lọ"
-    // Hỗ trợ cả số (5) và chữ (năm)
-    let boxQty = null;
-    let unitQty = null;
+    // 2. Lệnh nhập liệu
+    let boxQty: number | null = null;
+    let unitQty: number | null = null;
 
-    // Tách câu thành các cụm để xử lý (VD: "3 hộp và 2 vỉ")
-    // Logic đơn giản: Tìm từ khóa đơn vị, rồi nhìn ngược lại từ phía trước để tìm số
+    // Chiến thuật: Tách câu theo từ khóa "lẻ" hoặc các đơn vị nhỏ
+    // Ví dụ: "5 hộp 3 vỉ" hoặc "5 hộp lẻ 3"
     
+    // Từ khóa đơn vị lớn (Mở rộng)
+    const largeKeywords = ['hộp', 'thùng', 'chai', 'lọ', 'tuýp', 'cái', 'chiếc', 'bộ', 'quyển', 'bao', 'kiện'];
+    // Từ khóa đơn vị nhỏ
+    const smallKeywords = ['viên', 'vỉ', 'ống', 'gói', 'lẻ', 'ml', 'gam', 'gram', 'miếng'];
+
     const words = text.split(' ');
-    
-    words.forEach((word, index) => {
-        // Tìm đơn vị chẵn
-        if (['hộp', 'thùng', 'chai', 'lọ', 'tuýp'].includes(word)) {
-            // Lấy 2 từ trước đó để check số (VD: "ba mươi" hộp, hoặc "5" hộp)
-            const prevWords = words.slice(Math.max(0, index - 3), index).join(' ');
-            const num = textToNumber(prevWords) || textToNumber(words[index-1]); // Check cụm hoặc check từ đơn
-            if (num !== null) boxQty = num;
-        }
+
+    for (let i = 0; i < words.length; i++) {
+        const word = words[i];
         
-        // Tìm đơn vị lẻ
-        if (['viên', 'vỉ', 'ống', 'gói', 'lẻ'].includes(word)) {
-            const prevWords = words.slice(Math.max(0, index - 3), index).join(' ');
-            const num = textToNumber(prevWords) || textToNumber(words[index-1]);
-            if (num !== null) unitQty = num;
+        // Kiểm tra đơn vị Lớn
+        if (largeKeywords.includes(word)) {
+            // Tìm số NGAY TRƯỚC nó (ưu tiên) hoặc 2 từ trước
+            const num1 = textToNumber(words[i-1] || '');
+            const num2 = textToNumber((words[i-2] || '') + ' ' + (words[i-1] || ''));
+            if (num2 !== null) boxQty = num2; // Ưu tiên cụm từ ghép (ba mươi)
+            else if (num1 !== null) boxQty = num1;
         }
-    });
+
+        // Kiểm tra đơn vị Nhỏ
+        if (smallKeywords.includes(word)) {
+            // Đặc biệt: Nếu nói "lẻ 3" -> số nằm SAU từ "lẻ"
+            if (word === 'lẻ') {
+                const numAfter = textToNumber(words[i+1] || '');
+                if (numAfter !== null) unitQty = numAfter;
+            } else {
+                // Logic cũ: Số nằm TRƯỚC đơn vị
+                const num1 = textToNumber(words[i-1] || '');
+                const num2 = textToNumber((words[i-2] || '') + ' ' + (words[i-1] || ''));
+                if (num2 !== null) unitQty = num2;
+                else if (num1 !== null) unitQty = num1;
+            }
+        }
+    }
+
+    // Fallback: Nếu chỉ nói 1 số duy nhất (VD: "năm") -> Mặc định là Hộp (Box)
+    if (boxQty === null && unitQty === null) {
+        const singleNum = textToNumber(text);
+        if (singleNum !== null) {
+            boxQty = singleNum;
+        }
+    }
 
     if (boxQty !== null || unitQty !== null) {
         return { type: 'UPDATE', box: boxQty, unit: unitQty };
