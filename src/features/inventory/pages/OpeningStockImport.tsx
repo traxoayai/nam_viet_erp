@@ -1,6 +1,7 @@
 // src/features/inventory/pages/OpeningStockImport.tsx
 import { useState, useEffect } from 'react';
-import { Table, Button, Upload, Card, Typography, Select, message, Tag, Steps, Space, Input, DatePicker } from 'antd';
+import { Link } from 'react-router-dom';
+import { Table, Button, Upload, Card, Typography, Select, message, Tag, Steps, Space, Input, DatePicker, InputNumber } from 'antd';
 import { CloudUploadOutlined, CheckCircleOutlined, DeleteOutlined, SaveOutlined, ImportOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
@@ -21,10 +22,36 @@ export const OpeningStockImport = () => {
     // State dữ liệu hệ thống
     const [systemProducts, setSystemProducts] = useState<any[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(false);
+    const [successResult, setSuccessResult] = useState<{ code: string, count: number } | null>(null);
 
     // State cho Modal tìm kiếm
     const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
     const [editingRowKey, setEditingRowKey] = useState<number | null>(null);
+
+    // State chọn kho
+    const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null);
+    const [warehouses, setWarehouses] = useState<any[]>([]); 
+
+    // Load kho
+    useEffect(() => {
+        const fetchWarehouses = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('warehouses')
+                    .select('id, name')
+                    .eq('status', 'active'); // Chỉ lấy kho đang hoạt động
+                
+                if (error) throw error;
+                setWarehouses(data || []);
+                // Tự động chọn kho đầu tiên nếu có
+                if (data && data.length > 0) setSelectedWarehouseId(data[0].id);
+            } catch (err) {
+                console.error("Lỗi tải kho:", err);
+                message.error("Không tải được danh sách kho");
+            }
+        };
+        fetchWarehouses();
+    }, []);
 
     // 1. [QUAN TRỌNG] Tải toàn bộ sản phẩm hệ thống (Fetch All - Cuốn chiếu)
     useEffect(() => {
@@ -123,7 +150,7 @@ export const OpeningStockImport = () => {
                 const excelName = row['TenSP'] || row['product_name'] || '';
                 const excelCode = row['MaSP'] || row['product_code'] || '';
                 const excelQty = Number(row['SoLuong'] || row['quantity'] || 0);
-                const excelCost = Number(row['GiaVon'] || row['cost_price'] || 0);
+                const excelCost = Number(row['GiaVon'] || row['DonGia'] || row['cost_price'] || row['price'] || 0);
                 const excelUnit = row['DonVi'] || row['unit'] || ''; 
                 const excelBatch = row['LoSanXuat'] || row['batch_name'] || '';
                 
@@ -214,6 +241,12 @@ export const OpeningStockImport = () => {
 
     // 4. Submit
     const handleSubmit = async () => {
+        // 1. Validate Kho
+        if (!selectedWarehouseId) {
+            message.error("Vui lòng chọn Kho cần nhập tồn!");
+            return;
+        }
+
         const validItems = data.filter(d => d.matched_product);
         if (validItems.length === 0) {
             message.error("Vui lòng chọn sản phẩm hệ thống cho ít nhất 1 dòng!");
@@ -224,22 +257,26 @@ export const OpeningStockImport = () => {
         try {
             const payload = validItems.map(d => ({
                 product_id: d.matched_product.id,
+                sku: d.matched_product.sku, // Thêm SKU để chắc chắn
                 quantity: d.quantity,
                 is_large_unit: d.is_large_unit,
-                cost_price: d.cost_price,
+                
+                cost_price: d.cost_price || 0, // [QUAN TRỌNG] Gửi giá vốn
+                
                 batch_name: d.batch_name,
                 expiry_date: d.expiry_date ? dayjs(d.expiry_date).format('YYYY-MM-DD') : null
             }));
 
-            // Gọi RPC V6 (Đã hỗ trợ Lô & Hạn)
+            // Gọi RPC V4 (Core đã cập nhật logic tài chính)
             const { data: res, error } = await supabase.rpc('import_opening_stock_v3_by_id', {
                 p_stock_array: payload,
                 p_user_id: user?.id,
-                p_warehouse_id: 1 
+                p_warehouse_id: selectedWarehouseId // [QUAN TRỌNG] Dùng ID kho đã chọn
             });
 
             if (error) throw error;
-            message.success(`Đã nhập kho thành công ${res.imported_count} dòng!`);
+            message.success(`Đã nhập kho và ghi nhận giá trị cho ${res.imported_count} dòng!`);
+            setSuccessResult({ code: res.receipt_code, count: res.imported_count });
             setCurrentStep(2);
         } catch (error: any) {
             console.error(error);
@@ -341,6 +378,42 @@ export const OpeningStockImport = () => {
             }
         },
         {
+            title: 'Giá Vốn',
+            width: 130,
+            dataIndex: 'cost_price',
+            render: (val: number, r: any) => (
+                <InputNumber 
+                    value={val}
+                    formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={value => value!.replace(/\$\s?|(,*)/g, '') as unknown as number}
+                    style={{ width: '100%' }}
+                    min={0}
+                    onChange={(newVal) => {
+                        const newData = [...data];
+                        const item = newData.find(i => i.key === r.key);
+                        if (item) item.cost_price = Number(newVal) || 0;
+                        setData(newData);
+                    }}
+                />
+            )
+        },
+        {
+            title: 'Thành Tiền',
+            width: 140,
+            align: 'right' as const,
+            render: (_: any, r: any) => {
+                // Giá vốn nhập vào thường là giá theo đơn vị nhập (ví dụ nhập Hộp giá 100k)
+                // Nên thành tiền = Số lượng nhập * Giá vốn nhập
+                const total = r.quantity * (r.cost_price || 0);
+                
+                return (
+                    <Text strong style={{ color: '#1890ff' }}>
+                        {total.toLocaleString()}
+                    </Text>
+                );
+            }
+        },
+        {
             title: 'Lô - Hạn SD',
             width: 220,
             render: (_:any, r:any) => (
@@ -384,6 +457,18 @@ export const OpeningStockImport = () => {
                 <Text type="secondary">Nhập dữ liệu Tồn kho, Lô và Hạn sử dụng từ Sapo</Text>
             </div>
             
+            {/* UI Chọn Kho */}
+            <div style={{ marginBottom: 16 }}>
+                <Text strong>Chọn Kho nhập liệu: </Text>
+                <Select 
+                    style={{ width: 250 }}
+                    placeholder="-- Chọn kho --"
+                    value={selectedWarehouseId}
+                    onChange={setSelectedWarehouseId}
+                    options={warehouses.map(w => ({ label: w.name, value: w.id }))}
+                />
+            </div>
+
             <Steps 
                 current={currentStep} 
                 items={[
@@ -451,8 +536,37 @@ export const OpeningStockImport = () => {
                 <Card style={{textAlign: 'center', padding: 60}}>
                     <CheckCircleOutlined style={{fontSize: 72, color: '#52c41a', marginBottom: 24}} />
                     <Title level={3}>Nhập kho thành công!</Title>
-                    <div style={{marginTop: 32}}>
-                        <Button type="primary" onClick={() => window.location.reload()}>Tiếp tục nhập</Button>
+                    
+                    <div style={{ marginBottom: 24 }}>
+                        <Text type="secondary" style={{ fontSize: 16 }}>
+                            Đã tạo phiếu nhập mã: <Text strong style={{ color: '#1890ff' }}>{successResult?.code}</Text>
+                        </Text>
+                        <br/>
+                        <Text type="secondary">
+                            Số lượng mục: <b>{successResult?.count}</b>
+                        </Text>
+                    </div>
+
+                    <Space size="middle">
+                        {/* Nút nhập tiếp */}
+                        <Button onClick={() => window.location.reload()}>
+                            Tiếp tục nhập file khác
+                        </Button>
+                        
+                        {/* Nút xem phiếu - Giả sử đường dẫn là /inventory/receipts */}
+                        <Button type="primary">
+                            {/* Nếu có Router thì dùng Link, hoặc window.location */}
+                            <Link to={`/inventory/receipts?search=${successResult?.code}`}>
+                                Xem Phiếu Nhập
+                            </Link>
+                        </Button>
+                    </Space>
+                    
+                    <div style={{ marginTop: 24, padding: 12, background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 4, maxWidth: 600, margin: '24px auto' }}>
+                        <Text type="warning">
+                            <b>Lưu ý:</b> Dữ liệu nhập tồn được <b>cộng dồn</b> vào kho. 
+                            Nếu nhập sai, vui lòng thực hiện <b>Kiểm kho</b> để điều chỉnh lại số lượng chính xác.
+                        </Text>
                     </div>
                 </Card>
             )}

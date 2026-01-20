@@ -459,6 +459,86 @@ $$;
 ALTER FUNCTION "public"."bulk_update_product_strategy"("p_product_ids" bigint[], "p_strategy_type" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."bulk_update_product_units_for_quick_unit_page"("p_data" "jsonb") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    item JSONB;
+    v_product_id BIGINT;
+    v_base_unit TEXT;
+    v_retail_unit TEXT;
+    v_retail_rate INT;
+    v_wholesale_unit TEXT;
+    v_wholesale_rate INT;
+    v_cost NUMERIC;
+BEGIN
+    FOR item IN SELECT value FROM jsonb_array_elements(p_data) AS t(value)
+    LOOP
+        -- 1. Tìm Product ID
+        v_product_id := (item->>'product_id')::BIGINT;
+        IF v_product_id IS NULL THEN
+            SELECT id INTO v_product_id FROM public.products 
+            WHERE sku = (item->>'sku') AND status = 'active' LIMIT 1;
+        END IF;
+
+        IF v_product_id IS NOT NULL THEN
+            -- Lấy dữ liệu
+            v_base_unit := COALESCE(NULLIF(TRIM(item->>'base_unit'), ''), 'Viên');
+            v_retail_unit := NULLIF(TRIM(item->>'retail_unit'), '');
+            v_retail_rate := COALESCE((item->>'retail_rate')::INT, 1);
+            v_wholesale_unit := NULLIF(TRIM(item->>'wholesale_unit'), '');
+            v_wholesale_rate := COALESCE((item->>'wholesale_rate')::INT, 1);
+            
+            SELECT actual_cost INTO v_cost FROM public.products WHERE id = v_product_id;
+
+            -- 2. XÓA SẠCH LÀM LẠI
+            DELETE FROM public.product_units WHERE product_id = v_product_id;
+
+            -- A. TẠO UNIT BASE
+            INSERT INTO public.product_units (
+                product_id, unit_name, conversion_rate, is_base, is_direct_sale, price_cost, unit_type
+            ) VALUES (
+                v_product_id, v_base_unit, 1, true, true, v_cost, 'base'
+            );
+
+            -- B. TẠO UNIT RETAIL (Chấp nhận trùng tên Base)
+            IF v_retail_unit IS NOT NULL AND v_retail_unit <> '' THEN
+                INSERT INTO public.product_units (
+                    product_id, unit_name, conversion_rate, is_base, is_direct_sale, price_cost, unit_type
+                ) VALUES (
+                    v_product_id, v_retail_unit, v_retail_rate, false, true, v_cost * v_retail_rate, 'retail'
+                );
+            END IF;
+
+            -- C. TẠO UNIT WHOLESALE (Chấp nhận Rate = 1)
+            -- [FIX V6]: Đã bỏ điều kiện (AND v_wholesale_rate > 1)
+            IF v_wholesale_unit IS NOT NULL AND v_wholesale_unit <> '' THEN
+                INSERT INTO public.product_units (
+                    product_id, unit_name, conversion_rate, is_base, is_direct_sale, price_cost, unit_type
+                ) VALUES (
+                    v_product_id, v_wholesale_unit, v_wholesale_rate, false, true, v_cost * v_wholesale_rate, 'wholesale'
+                );
+            END IF;
+
+            -- 3. CẬP NHẬT BẢNG PRODUCTS (Hiển thị)
+            UPDATE public.products
+            SET 
+                retail_unit = COALESCE(v_retail_unit, v_base_unit),
+                wholesale_unit = v_wholesale_unit,
+                -- Conversion factor lấy cái lớn nhất để hiển thị
+                conversion_factor = GREATEST(v_wholesale_rate, v_retail_rate),
+                updated_at = NOW()
+            WHERE id = v_product_id;
+        END IF;
+    END LOOP;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."bulk_update_product_units_for_quick_unit_page"("p_data" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."bulk_upsert_customers_b2b"("p_customers_array" "jsonb"[]) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -672,75 +752,158 @@ ALTER FUNCTION "public"."bulk_upsert_customers_b2c"("p_customers_array" "jsonb"[
 
 CREATE OR REPLACE FUNCTION "public"."bulk_upsert_products"("p_products_array" "jsonb") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 DECLARE
-  product_data JSONB;
-  v_product_id BIGINT;
-  v_warehouse_id BIGINT;
-  v_branch_key TEXT;
-  v_inventory_settings JSONB;
+    product_data JSONB;
+    v_product_id BIGINT;
+    v_warehouse_id BIGINT;
+    v_branch_key TEXT;
+    v_inventory_settings JSONB;
+    
+    -- Biến xử lý đơn vị
+    v_retail_unit TEXT;
+    v_wholesale_unit TEXT;
+    v_conversion_factor INT;
+    v_actual_cost NUMERIC;
 BEGIN
-  -- iterate JSONB array elements
-  FOR product_data IN SELECT value FROM jsonb_array_elements(p_products_array) AS t(value)
-  LOOP
-    -- Upsert into products
-    INSERT INTO public.products (
-      name, sku, barcode, active_ingredient, image_url,
-      category_name, manufacturer_name, distributor_id, status,
-      invoice_price, actual_cost, wholesale_unit, retail_unit, conversion_factor
-    )
-    VALUES (
-      product_data->>'name',
-      product_data->>'sku',
-      product_data->>'barcode',
-      product_data->>'active_ingredient',
-      product_data->>'image_url',
-      product_data->>'category_name',
-      product_data->>'manufacturer_name',
-      (product_data->>'distributor_id')::BIGINT,
-      product_data->>'status',
-      (product_data->>'invoice_price')::NUMERIC,
-      (product_data->>'actual_cost')::NUMERIC,
-      product_data->>'wholesale_unit',
-      product_data->>'retail_unit',
-      (product_data->>'conversion_factor')::INT
-    )
-    ON CONFLICT (sku)
-    DO UPDATE SET
-      name = EXCLUDED.name,
-      barcode = EXCLUDED.barcode,
-      active_ingredient = EXCLUDED.active_ingredient,
-      category_name = EXCLUDED.category_name,
-      manufacturer_name = EXCLUDED.manufacturer_name,
-      distributor_id = EXCLUDED.distributor_id,
-      status = EXCLUDED.status,
-      invoice_price = EXCLUDED.invoice_price,
-      actual_cost = EXCLUDED.actual_cost,
-      updated_at = now()
-    RETURNING id INTO v_product_id;
+    -- Loop qua từng sản phẩm trong mảng JSON từ Excel
+    FOR product_data IN SELECT value FROM jsonb_array_elements(p_products_array) AS t(value)
+    LOOP
+        v_retail_unit := product_data->>'retail_unit';
+        v_wholesale_unit := product_data->>'wholesale_unit';
+        v_conversion_factor := COALESCE((product_data->>'conversion_factor')::INT, 1);
+        v_actual_cost := COALESCE((product_data->>'actual_cost')::NUMERIC, 0);
 
-    -- handle inventory_settings if present
-    v_inventory_settings := product_data->'inventory_settings';
+        -- 1. UPSERT VÀO BẢNG CHÍNH (PRODUCTS)
+        INSERT INTO public.products (
+            name, sku, barcode, active_ingredient, image_url,
+            category_name, manufacturer_name, distributor_id, status,
+            invoice_price, actual_cost, 
+            wholesale_unit, retail_unit, conversion_factor,
+            updated_at
+        )
+        VALUES (
+            product_data->>'name',
+            product_data->>'sku',
+            product_data->>'barcode',
+            product_data->>'active_ingredient',
+            product_data->>'image_url',
+            product_data->>'category_name',
+            product_data->>'manufacturer_name',
+            (product_data->>'distributor_id')::BIGINT,
+            COALESCE(product_data->>'status', 'active'),
+            (product_data->>'invoice_price')::NUMERIC,
+            v_actual_cost,
+            v_wholesale_unit,
+            v_retail_unit,
+            v_conversion_factor,
+            NOW()
+        )
+        ON CONFLICT (sku)
+        DO UPDATE SET
+            name = EXCLUDED.name,
+            barcode = EXCLUDED.barcode,
+            active_ingredient = EXCLUDED.active_ingredient,
+            category_name = EXCLUDED.category_name,
+            manufacturer_name = EXCLUDED.manufacturer_name,
+            distributor_id = EXCLUDED.distributor_id,
+            status = EXCLUDED.status,
+            invoice_price = EXCLUDED.invoice_price,
+            actual_cost = EXCLUDED.actual_cost,
+            wholesale_unit = EXCLUDED.wholesale_unit,
+            retail_unit = EXCLUDED.retail_unit,
+            conversion_factor = EXCLUDED.conversion_factor,
+            updated_at = now()
+        RETURNING id INTO v_product_id;
 
-    IF v_inventory_settings IS NOT NULL THEN
-      -- loop keys of the object
-      FOR v_branch_key IN SELECT key FROM jsonb_object_keys(v_inventory_settings) AS t(key)
-      LOOP
-        SELECT id INTO v_warehouse_id FROM public.warehouses WHERE key = v_branch_key;
+        -- 2. TỰ ĐỘNG ĐỒNG BỘ 3 LOẠI ĐƠN VỊ VÀO BẢNG PRODUCT_UNITS
+        
+        -- A. TẠO ĐƠN VỊ BASE (HỆ THỐNG TỰ SINH)
+        -- Tên = Retail Unit, Rate = 1, Type = 'base', IsBase = True
+        IF v_retail_unit IS NOT NULL AND v_retail_unit <> '' THEN
+            UPDATE public.product_units 
+            SET unit_name = v_retail_unit, 
+                price_cost = v_actual_cost, -- Giá vốn base
+                updated_at = NOW()
+            WHERE product_id = v_product_id AND unit_type = 'base';
 
-        IF v_warehouse_id IS NOT NULL THEN
-          INSERT INTO public.product_inventory (product_id, warehouse_id, stock_quantity)
-          VALUES (
-            v_product_id,
-            v_warehouse_id,
-            (v_inventory_settings->>v_branch_key)::INT
-          )
-          ON CONFLICT (product_id, warehouse_id)
-          DO UPDATE SET stock_quantity = EXCLUDED.stock_quantity;
+            IF NOT FOUND THEN
+                INSERT INTO public.product_units (
+                    product_id, unit_name, conversion_rate, 
+                    is_base, is_direct_sale, 
+                    price_cost, price_sell, unit_type
+                ) VALUES (
+                    v_product_id, v_retail_unit, 1, 
+                    true, true, -- Base: true, Direct Sale: true
+                    v_actual_cost, 0, 'base'
+                );
+            END IF;
         END IF;
-      END LOOP;
-    END IF;
-  END LOOP;
+
+        -- B. TẠO ĐƠN VỊ RETAIL (TỪ EXCEL)
+        -- Tên = Retail Unit, Rate = 1, Type = 'retail', IsBase = False (để phân biệt với dòng base)
+        IF v_retail_unit IS NOT NULL AND v_retail_unit <> '' THEN
+            UPDATE public.product_units 
+            SET unit_name = v_retail_unit, 
+                price_cost = v_actual_cost,
+                updated_at = NOW()
+            WHERE product_id = v_product_id AND unit_type = 'retail';
+
+            IF NOT FOUND THEN
+                INSERT INTO public.product_units (
+                    product_id, unit_name, conversion_rate, 
+                    is_base, is_direct_sale, 
+                    price_cost, price_sell, unit_type
+                ) VALUES (
+                    v_product_id, v_retail_unit, 1, 
+                    false, true, -- Base: false
+                    v_actual_cost, 0, 'retail'
+                );
+            END IF;
+        END IF;
+
+        -- C. TẠO ĐƠN VỊ WHOLESALE (TỪ EXCEL)
+        -- Chỉ tạo nếu có tên và hệ số > 1
+        IF v_wholesale_unit IS NOT NULL AND v_wholesale_unit <> '' AND v_conversion_factor > 1 THEN
+            UPDATE public.product_units 
+            SET unit_name = v_wholesale_unit, 
+                conversion_rate = v_conversion_factor,
+                price_cost = v_actual_cost * v_conversion_factor, -- Giá vốn sỉ = Vốn base * hệ số
+                updated_at = NOW()
+            WHERE product_id = v_product_id AND unit_type = 'wholesale';
+
+            IF NOT FOUND THEN
+                INSERT INTO public.product_units (
+                    product_id, unit_name, conversion_rate, 
+                    is_base, is_direct_sale, 
+                    price_cost, price_sell, unit_type
+                ) VALUES (
+                    v_product_id, v_wholesale_unit, v_conversion_factor, 
+                    false, true, 
+                    v_actual_cost * v_conversion_factor, 0, 'wholesale'
+                );
+            END IF;
+        END IF;
+
+        -- 3. XỬ LÝ TỒN KHO (Giữ nguyên logic)
+        v_inventory_settings := product_data->'inventory_settings';
+        IF v_inventory_settings IS NOT NULL THEN
+            FOR v_branch_key IN SELECT key FROM jsonb_object_keys(v_inventory_settings) AS t(key)
+            LOOP
+                SELECT id INTO v_warehouse_id FROM public.warehouses WHERE key = v_branch_key;
+                IF v_warehouse_id IS NOT NULL THEN
+                    INSERT INTO public.product_inventory (product_id, warehouse_id, stock_quantity)
+                    VALUES (
+                        v_product_id, v_warehouse_id, (v_inventory_settings->>v_branch_key)::INT
+                    )
+                    ON CONFLICT (product_id, warehouse_id)
+                    DO UPDATE SET stock_quantity = EXCLUDED.stock_quantity;
+                END IF;
+            END LOOP;
+        END IF;
+        
+    END LOOP;
 END;
 $$;
 
@@ -821,6 +984,34 @@ $$;
 
 
 ALTER FUNCTION "public"."calculate_package_cost"("p_items" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."calculate_receipt_totals"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+    BEGIN
+        -- Cập nhật lại tổng tiền hàng trong Header
+        UPDATE public.inventory_receipts
+        SET 
+            total_goods_amount = (
+                SELECT COALESCE(SUM(sub_total), 0) 
+                FROM public.inventory_receipt_items 
+                WHERE receipt_id = COALESCE(NEW.receipt_id, OLD.receipt_id)
+            ),
+            updated_at = NOW()
+        WHERE id = COALESCE(NEW.receipt_id, OLD.receipt_id);
+        
+        -- Cập nhật Final Amount (Tổng hàng - CK + Ship + Phí)
+        UPDATE public.inventory_receipts
+        SET final_amount = total_goods_amount - discount_order + shipping_fee + other_fee
+        WHERE id = COALESCE(NEW.receipt_id, OLD.receipt_id);
+
+        RETURN NULL;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."calculate_receipt_totals"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."cancel_inventory_check"("p_check_id" bigint, "p_user_id" "uuid") RETURNS "void"
@@ -4360,6 +4551,42 @@ COMMENT ON FUNCTION "public"."get_outbound_stats"("p_warehouse_id" bigint) IS 'T
 
 
 
+CREATE OR REPLACE FUNCTION "public"."get_partner_debt_live"("p_partner_id" bigint, "p_partner_type" "text") RETURNS numeric
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_total_sales numeric := 0;
+    v_total_paid_via_finance numeric := 0;
+BEGIN
+    -- 1. TÍNH TỔNG PHẢI THU
+    -- Bao gồm cả đơn bán hàng bình thường VÀ đơn nợ ảo (status = COMPLETED, order_type = opening_debt)
+    SELECT COALESCE(SUM(final_amount), 0)
+    INTO v_total_sales
+    FROM public.orders
+    WHERE status IN ('CONFIRMED', 'PACKED', 'SHIPPING', 'DELIVERED', 'COMPLETED', 'PARTIAL')
+    AND (
+        (p_partner_type = 'customer' AND customer_b2c_id = p_partner_id)
+        OR
+        (p_partner_type = 'customer_b2b' AND customer_id = p_partner_id)
+    );
+
+    -- 2. TÍNH TỔNG ĐÃ THU (Qua phiếu thu)
+    SELECT COALESCE(SUM(amount), 0)
+    INTO v_total_paid_via_finance
+    FROM public.finance_transactions
+    WHERE flow = 'in' AND status = 'completed'
+    AND partner_id = p_partner_id::text
+    AND partner_type = p_partner_type;
+
+    -- 3. KẾT QUẢ: (Tổng phải thu - Tổng đã thu)
+    RETURN v_total_sales - v_total_paid_via_finance;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_partner_debt_live"("p_partner_id" bigint, "p_partner_type" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_pending_reconciliation_orders"() RETURNS TABLE("order_id" "uuid", "order_code" "text", "created_at" timestamp with time zone, "customer_code" "text", "customer_name" "text", "final_amount" numeric, "paid_amount" numeric, "remaining_amount" numeric, "payment_method" "text", "source" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -5926,47 +6153,107 @@ ALTER FUNCTION "public"."handle_order_inventory_deduction"() OWNER TO "postgres"
 
 CREATE OR REPLACE FUNCTION "public"."handle_sales_inventory_deduction"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
-    DECLARE
-        v_item RECORD;
-        v_current_stock INTEGER;
-        v_warehouse_id BIGINT;
-    BEGIN
-        -- [FIX]: Lấy ID kho từ đơn hàng (Nếu null fallback về 1 - Kho tổng)
-        v_warehouse_id := COALESCE(NEW.warehouse_id, 1);
+DECLARE
+    v_order_item RECORD;
+    v_consumable RECORD;
+    v_warehouse_id BIGINT;
+    v_is_service BOOLEAN;
+    v_current_stock INT;
+    v_product_name TEXT;
+    v_item_total_deduct INT;
+BEGIN
+    -- CHỈ CHẠY KHI: Trạng thái chuyển sang 'CONFIRMED' (Chốt đơn)
+    -- Và trạng thái cũ chưa từng là CONFIRMED (để tránh trừ kho 2 lần nếu update nhầm)
+    IF NEW.status = 'CONFIRMED' AND (OLD.status IS NULL OR OLD.status NOT IN ('CONFIRMED', 'PACKED', 'SHIPPING', 'DELIVERED')) THEN
 
-        -- Logic kích hoạt: Status là CONFIRMED (B2B) hoặc DELIVERED (POS)
-        IF (NEW.status = 'CONFIRMED' OR NEW.status = 'DELIVERED') 
-           AND (OLD.status IS NULL OR OLD.status NOT IN ('CONFIRMED', 'PACKED', 'SHIPPING', 'DELIVERED')) THEN
+        -- 1. Xác định Kho xuất hàng (Lấy từ đơn hàng, nếu null thì mặc định kho 1 - Cần cẩn thận)
+        v_warehouse_id := COALESCE(NEW.warehouse_id, 1); 
+
+        -- 2. Duyệt qua từng dòng sản phẩm trong đơn (Order Items)
+        FOR v_order_item IN 
+            SELECT oi.*, p.name as product_name, p.stock_management_type
+            FROM public.order_items oi
+            JOIN public.products p ON oi.product_id = p.id
+            WHERE oi.order_id = NEW.id 
+        LOOP
             
-            FOR v_item IN SELECT * FROM public.order_items WHERE order_id = NEW.id LOOP
-                -- 1. Kiểm tra tồn kho tại ĐÚNG KHO ĐÃ CHỌN
+            -- === BƯỚC 1: KIỂM TRA TRƯỜNG HỢP B (DỊCH VỤ CÓ ĐỊNH MỨC) ===
+            -- Check xem sản phẩm này có nằm trong bảng định mức tiêu hao không
+            SELECT EXISTS(SELECT 1 FROM public.service_consumables WHERE service_product_id = v_order_item.product_id)
+            INTO v_is_service;
+
+            IF v_is_service THEN
+                -- >> ĐÂY LÀ DỊCH VỤ (CASE B): Trừ các vật tư đi kèm <<
+                
+                FOR v_consumable IN 
+                    SELECT sc.consumable_product_id, sc.quantity, p_sub.name as sub_name
+                    FROM public.service_consumables sc
+                    JOIN public.products p_sub ON sc.consumable_product_id = p_sub.id
+                    WHERE sc.service_product_id = v_order_item.product_id
+                LOOP
+                    -- Tính tổng lượng vật tư cần trừ: (Số lượng dịch vụ đặt * Định mức 1 lần)
+                    -- Ví dụ: Đặt 2 Gói tiêm. Mỗi gói tốn 1 kim. => Tổng trừ 2 kim.
+                    v_item_total_deduct := v_order_item.quantity * v_consumable.quantity;
+
+                    -- Kiểm tra tồn kho vật tư
+                    SELECT stock_quantity INTO v_current_stock
+                    FROM public.product_inventory
+                    WHERE product_id = v_consumable.consumable_product_id 
+                    AND warehouse_id = v_warehouse_id
+                    FOR UPDATE; -- Khóa dòng để tránh tranh chấp (Concurrency)
+
+                    IF v_current_stock IS NULL OR v_current_stock < v_item_total_deduct THEN
+                        RAISE EXCEPTION 'Không đủ vật tư đi kèm! Dịch vụ "%" cần % cái "%", nhưng kho chỉ còn %.', 
+                            v_order_item.product_name, v_item_total_deduct, v_consumable.sub_name, COALESCE(v_current_stock, 0);
+                    END IF;
+
+                    -- Thực hiện trừ kho vật tư
+                    UPDATE public.product_inventory
+                    SET stock_quantity = stock_quantity - v_item_total_deduct,
+                        updated_at = NOW()
+                    WHERE product_id = v_consumable.consumable_product_id 
+                    AND warehouse_id = v_warehouse_id;
+                END LOOP;
+
+            -- === BƯỚC 2: KIỂM TRA TRƯỜNG HỢP A (HÀNG HÓA) ===
+            -- Nếu không phải dịch vụ có định mức, ta check xem nó có phải hàng hóa cần quản lý kho không
+            ELSIF v_order_item.stock_management_type <> 'simple' THEN 
+                -- (Giả định 'simple' hoặc null là dịch vụ thuần túy không kho - Case C)
+                -- Hoặc kiểm tra trực tiếp trong bảng inventory
+                
                 SELECT stock_quantity INTO v_current_stock
                 FROM public.product_inventory
-                WHERE product_id = v_item.product_id AND warehouse_id = v_warehouse_id;
+                WHERE product_id = v_order_item.product_id 
+                AND warehouse_id = v_warehouse_id
+                FOR UPDATE;
 
-                IF v_current_stock IS NULL OR v_current_stock < v_item.base_quantity THEN
-                    RAISE EXCEPTION 'Sản phẩm ID % không đủ tồn kho tại Kho #% (Tồn: %, Cần: %)', 
-                        v_item.product_id, v_warehouse_id, COALESCE(v_current_stock,0), v_item.base_quantity;
+                -- Nếu tìm thấy bản ghi tồn kho -> Xử lý như Hàng hóa (Case A)
+                IF v_current_stock IS NOT NULL THEN
+                    IF v_current_stock < v_order_item.base_quantity THEN
+                        RAISE EXCEPTION 'Sản phẩm "%" không đủ tồn kho (Cần: %, Tồn: %).', 
+                            v_order_item.product_name, v_order_item.base_quantity, v_current_stock;
+                    END IF;
+
+                    UPDATE public.product_inventory
+                    SET stock_quantity = stock_quantity - v_order_item.base_quantity,
+                        updated_at = NOW()
+                    WHERE product_id = v_order_item.product_id 
+                    AND warehouse_id = v_warehouse_id;
                 END IF;
+                -- Nếu không tìm thấy bản ghi tồn kho -> Rơi vào Case C (Dịch vụ thuần/Hàng không quản lý kho) -> Bỏ qua.
+            END IF;
 
-                -- 2. Trừ kho tại ĐÚNG KHO ĐÃ CHỌN
-                UPDATE public.product_inventory
-                SET stock_quantity = stock_quantity - v_item.base_quantity
-                WHERE product_id = v_item.product_id AND warehouse_id = v_warehouse_id;
-            END LOOP;
-        END IF;
-        
-        RETURN NEW;
-    END;
-    $$;
+        END LOOP;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."handle_sales_inventory_deduction"() OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."handle_sales_inventory_deduction"() IS 'Fixed V2: Trừ kho cho cả B2B (Confirmed) và POS (Delivered direct)';
-
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_updated_at"() RETURNS "trigger"
@@ -6160,140 +6447,140 @@ COMMENT ON FUNCTION "public"."import_customers_b2b"("p_customers_array" "jsonb"[
 
 
 
-CREATE OR REPLACE FUNCTION "public"."import_opening_stock_v3_by_id"("p_stock_array" "jsonb"[], "p_user_id" "uuid", "p_warehouse_id" bigint) RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."import_opening_stock_v3_by_id"("p_warehouse_id" bigint, "p_user_id" "uuid", "p_stock_array" "jsonb"[]) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
-DECLARE
-    v_item JSONB;
-    v_product_id BIGINT;
-    v_qty_input NUMERIC;
-    v_qty_final NUMERIC;
-    v_unit_price_input NUMERIC;
-    v_unit_price_base NUMERIC;
-    v_lot_code TEXT;
-    v_exp_date DATE;
-    v_batch_id BIGINT;
-    v_conversion_rate INTEGER;
-    v_total_items INTEGER := 0;
-    v_receipt_code TEXT;
-    v_receipt_id BIGINT;
-BEGIN
-    -- 1. Validate
-    IF p_warehouse_id IS NULL THEN
-        RAISE EXCEPTION 'Chưa chọn kho nhập liệu.';
-    END IF;
-
-    -- 2. Tạo Header
-    v_receipt_code := 'OPENING-' || TO_CHAR(NOW(), 'YYMMDD-HH24MI') || '-' || FLOOR(RANDOM() * 1000)::TEXT;
-    
-    INSERT INTO public.inventory_receipts (
-        code, warehouse_id, receipt_date, status, creator_id, created_at, note
-    ) VALUES (
-        v_receipt_code, p_warehouse_id, NOW(), 'completed', p_user_id, NOW(), 'Nhập tồn đầu kỳ'
-    ) RETURNING id INTO v_receipt_id;
-
-    -- 3. Loop Items
-    FOREACH v_item IN ARRAY p_stock_array
-    LOOP
-        v_product_id := (v_item->>'product_id')::BIGINT;
-        v_qty_input  := COALESCE((v_item->>'quantity')::NUMERIC, 0);
-        v_unit_price_input := COALESCE((v_item->>'cost_price')::NUMERIC, 0);
-        v_lot_code   := NULLIF(TRIM(v_item->>'batch_name'), '');
-        
-        -- A. Quy đổi đơn vị
-        IF (v_item->>'is_large_unit')::BOOLEAN = true THEN
-            SELECT conversion_rate INTO v_conversion_rate
-            FROM public.product_units
-            WHERE product_id = v_product_id AND conversion_rate > 1
-            ORDER BY conversion_rate DESC LIMIT 1;
-            v_conversion_rate := COALESCE(v_conversion_rate, 1);
-        ELSE
-            v_conversion_rate := 1;
+    DECLARE
+        v_item JSONB;
+        v_product_id BIGINT;
+        v_qty_input NUMERIC;
+        v_qty_final NUMERIC;
+        v_unit_price_input NUMERIC;
+        v_unit_price_base NUMERIC;
+        v_lot_code TEXT;
+        v_exp_date DATE;
+        v_batch_id BIGINT;
+        v_conversion_rate INTEGER;
+        v_total_items INTEGER := 0;
+        v_receipt_code TEXT;
+        v_receipt_id BIGINT;
+    BEGIN
+        -- 1. Validate
+        IF p_warehouse_id IS NULL THEN
+            RAISE EXCEPTION 'Chưa chọn kho nhập liệu.';
         END IF;
 
-        v_qty_final := v_qty_input * v_conversion_rate;
+        -- 2. Tạo Header (Phiếu Nhập Tồn)
+        v_receipt_code := 'OPENING-' || TO_CHAR(NOW(), 'YYMMDD-HH24MI') || '-' || FLOOR(RANDOM() * 1000)::TEXT;
         
-        -- Giá vốn cơ sở
-        IF v_conversion_rate > 0 THEN
-            v_unit_price_base := v_unit_price_input / v_conversion_rate;
-        ELSE
-            v_unit_price_base := v_unit_price_input;
-        END IF;
+        -- Lưu ý: Trigger calculate_receipt_totals sẽ tự động tính final_amount sau khi insert items
+        INSERT INTO public.inventory_receipts (
+            code, warehouse_id, receipt_date, status, creator_id, created_at, note
+        ) VALUES (
+            v_receipt_code, p_warehouse_id, NOW(), 'completed', p_user_id, NOW(), 'Nhập tồn đầu kỳ'
+        ) RETURNING id INTO v_receipt_id;
 
-        -- B. XỬ LÝ DATE (An toàn)
-        BEGIN
-            IF (v_item->>'expiry_date') IS NOT NULL AND (v_item->>'expiry_date') <> '' THEN
-                 v_exp_date := (v_item->>'expiry_date')::DATE;
+        -- 3. Loop Items
+        FOREACH v_item IN ARRAY p_stock_array
+        LOOP
+            v_product_id := (v_item->>'product_id')::BIGINT;
+            v_qty_input  := COALESCE((v_item->>'quantity')::NUMERIC, 0);
+            v_unit_price_input := COALESCE((v_item->>'cost_price')::NUMERIC, 0); -- Giá vốn đầu vào
+            v_lot_code   := NULLIF(TRIM(v_item->>'batch_name'), '');
+            
+            -- A. Quy đổi đơn vị (Số lượng & Giá)
+            IF (v_item->>'is_large_unit')::BOOLEAN = true THEN
+                SELECT conversion_rate INTO v_conversion_rate
+                FROM public.product_units
+                WHERE product_id = v_product_id AND conversion_rate > 1
+                ORDER BY conversion_rate DESC LIMIT 1;
+                v_conversion_rate := COALESCE(v_conversion_rate, 1);
             ELSE
-                 v_exp_date := NULL;
+                v_conversion_rate := 1;
             END IF;
-        EXCEPTION WHEN OTHERS THEN
-            v_exp_date := NULL;
-        END;
 
-        IF v_qty_final > 0 THEN
+            v_qty_final := v_qty_input * v_conversion_rate;
             
-            -- C. Xử lý Batch (Tìm hoặc Tạo)
-            -- Nếu không có lô, gán lô mặc định để hệ thống đồng nhất
-            IF v_lot_code IS NULL THEN v_lot_code := 'DEFAULT-OPENING'; END IF;
-
-            SELECT id INTO v_batch_id 
-            FROM public.batches 
-            WHERE product_id = v_product_id AND batch_code = v_lot_code;
-
-            IF v_batch_id IS NULL THEN
-                INSERT INTO public.batches (product_id, batch_code, expiry_date, inbound_price, created_at) 
-                VALUES (v_product_id, v_lot_code, COALESCE(v_exp_date, '2099-12-31'::DATE), v_unit_price_base, NOW()) 
-                RETURNING id INTO v_batch_id;
+            -- Tính giá vốn cơ sở (Base Cost) = Giá nhập / Hệ số
+            IF v_conversion_rate > 0 THEN
+                v_unit_price_base := v_unit_price_input / v_conversion_rate;
+            ELSE
+                v_unit_price_base := v_unit_price_input;
             END IF;
 
-            -- D. CẬP NHẬT TỒN KHO CHI TIẾT (Trigger sẽ tự động cập nhật kho tổng từ đây)
-            INSERT INTO public.inventory_batches (
-                warehouse_id, product_id, batch_id, quantity, updated_at
-            ) VALUES (
-                p_warehouse_id, v_product_id, v_batch_id, v_qty_final, NOW()
-            )
-            ON CONFLICT (warehouse_id, product_id, batch_id) 
-            DO UPDATE SET 
-                quantity = public.inventory_batches.quantity + EXCLUDED.quantity,
-                updated_at = NOW();
+            -- B. Xử lý Date
+            BEGIN
+                IF (v_item->>'expiry_date') IS NOT NULL AND (v_item->>'expiry_date') <> '' THEN
+                     v_exp_date := (v_item->>'expiry_date')::DATE;
+                ELSE
+                     v_exp_date := NULL;
+                END IF;
+            EXCEPTION WHEN OTHERS THEN
+                v_exp_date := NULL;
+            END;
 
-            -- [ĐÃ XÓA BƯỚC UPDATE THỦ CÔNG VÀO product_inventory TẠI ĐÂY]
+            IF v_qty_final > 0 THEN
+                
+                -- C. Xử lý Batch (Tìm hoặc Tạo & Cập nhật giá vốn lô)
+                IF v_lot_code IS NULL THEN v_lot_code := 'DEFAULT-OPENING'; END IF;
 
-            -- E. Ghi P&L Transaction
-            INSERT INTO public.inventory_transactions (
-                warehouse_id, product_id, batch_id, type, action_group, quantity, unit_price, ref_id, description, created_at, created_by
-            ) VALUES (
-                p_warehouse_id, v_product_id, v_batch_id, 'opening_stock', 'IMPORT', v_qty_final, v_unit_price_base, v_receipt_code, 'Nhập tồn đầu kỳ', NOW(), p_user_id
-            );
+                SELECT id INTO v_batch_id 
+                FROM public.batches 
+                WHERE product_id = v_product_id AND batch_code = v_lot_code;
 
-            -- F. Ghi chi tiết phiếu
-            INSERT INTO public.inventory_receipt_items (
-                receipt_id, product_id, quantity, lot_number, expiry_date
-            ) VALUES (
-                v_receipt_id, v_product_id, v_qty_final, v_lot_code, v_exp_date
-            );
-            
-            -- G. Cập nhật giá vốn (Nếu chưa có)
-            IF v_unit_price_base > 0 THEN
-                UPDATE public.products SET actual_cost = v_unit_price_base, updated_at = NOW()
-                WHERE id = v_product_id AND (actual_cost IS NULL OR actual_cost = 0);
+                IF v_batch_id IS NULL THEN
+                    INSERT INTO public.batches (product_id, batch_code, expiry_date, inbound_price, created_at) 
+                    VALUES (v_product_id, v_lot_code, COALESCE(v_exp_date, '2099-12-31'::DATE), v_unit_price_base, NOW()) 
+                    RETURNING id INTO v_batch_id;
+                ELSE
+                    -- Nếu lô đã có, cập nhật lại giá vốn
+                    UPDATE public.batches SET inbound_price = v_unit_price_base WHERE id = v_batch_id;
+                END IF;
+
+                -- D. Cập nhật Tồn kho chi tiết (Inventory Batches)
+                INSERT INTO public.inventory_batches (
+                    warehouse_id, product_id, batch_id, quantity, updated_at
+                ) VALUES (
+                    p_warehouse_id, v_product_id, v_batch_id, v_qty_final, NOW()
+                )
+                ON CONFLICT (warehouse_id, product_id, batch_id) 
+                DO UPDATE SET 
+                    quantity = public.inventory_batches.quantity + EXCLUDED.quantity,
+                    updated_at = NOW();
+
+                -- E. Ghi Sổ Cái (Inventory Transactions - Tài chính kho)
+                INSERT INTO public.inventory_transactions (
+                    warehouse_id, product_id, batch_id, type, action_group, quantity, unit_price, ref_id, description, created_at, created_by
+                ) VALUES (
+                    p_warehouse_id, v_product_id, v_batch_id, 'opening_stock', 'IMPORT', v_qty_final, v_unit_price_base, v_receipt_code, 'Nhập tồn đầu kỳ', NOW(), p_user_id
+                );
+
+                -- F. [QUAN TRỌNG NHẤT] Ghi chi tiết phiếu nhập kèm GIÁ (Phục vụ đối chiếu công nợ/tồn kho)
+                INSERT INTO public.inventory_receipt_items (
+                    receipt_id, product_id, quantity, lot_number, expiry_date, 
+                    unit_price, discount_amount
+                ) VALUES (
+                    v_receipt_id, v_product_id, v_qty_final, v_lot_code, v_exp_date,
+                    v_unit_price_base, 0 
+                );
+                
+                -- G. Cập nhật giá vốn tham khảo cho sản phẩm (Nếu chưa có)
+                IF v_unit_price_base > 0 THEN
+                    UPDATE public.products SET actual_cost = v_unit_price_base, updated_at = NOW()
+                    WHERE id = v_product_id AND (actual_cost IS NULL OR actual_cost = 0);
+                END IF;
+
+                v_total_items := v_total_items + 1;
             END IF;
+        END LOOP;
 
-            v_total_items := v_total_items + 1;
-        END IF;
-    END LOOP;
-
-    RETURN jsonb_build_object('success', true, 'imported_count', v_total_items, 'receipt_code', v_receipt_code);
-END;
-$$;
+        RETURN jsonb_build_object('success', true, 'imported_count', v_total_items, 'receipt_code', v_receipt_code);
+    END;
+    $$;
 
 
-ALTER FUNCTION "public"."import_opening_stock_v3_by_id"("p_stock_array" "jsonb"[], "p_user_id" "uuid", "p_warehouse_id" bigint) OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."import_opening_stock_v3_by_id"("p_stock_array" "jsonb"[], "p_user_id" "uuid", "p_warehouse_id" bigint) IS 'Core V7: Import Tồn Kho (Chuẩn hóa Batches Relation)';
-
+ALTER FUNCTION "public"."import_opening_stock_v3_by_id"("p_warehouse_id" bigint, "p_user_id" "uuid", "p_stock_array" "jsonb"[]) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") RETURNS bigint
@@ -6454,6 +6741,83 @@ CREATE OR REPLACE FUNCTION "public"."mark_notification_read"("p_noti_id" "uuid")
 
 
 ALTER FUNCTION "public"."mark_notification_read"("p_noti_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."match_products_from_excel"("p_data" "jsonb") RETURNS TABLE("excel_name" "text", "excel_sku" "text", "product_id" bigint, "product_name" "text", "product_sku" "text", "similarity_score" real, "match_type" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    -- 1. [QUAN TRỌNG] Thiết lập timeout an toàn
+    SET LOCAL statement_timeout = '60s';
+
+    -- 2. [FIX] Nâng ngưỡng tìm kiếm lên 0.3 (30%)
+    -- Ngưỡng 0.1 quá thấp khiến "Augmentin 500mg" khớp "Tavanic 500mg" chỉ vì chữ "500mg"
+    PERFORM set_limit(0.3); 
+
+    RETURN QUERY
+    WITH input_rows AS (
+        SELECT 
+            TRIM(BOTH FROM (elem->>'name')::text) AS raw_name,
+            NULLIF(TRIM(BOTH FROM (elem->>'sku')::text), '') AS raw_sku
+        FROM jsonb_array_elements(p_data) AS elem
+    )
+    SELECT 
+        i.raw_name AS excel_name,
+        i.raw_sku AS excel_sku,
+        match.id AS product_id,
+        match.name AS product_name,
+        match.sku AS product_sku,
+        COALESCE(match.score, 0)::real AS similarity_score,
+        match.type AS match_type
+    FROM input_rows i
+    LEFT JOIN LATERAL (
+        SELECT 
+            p.id, 
+            p.name,
+            p.sku,
+            CASE 
+                WHEN i.raw_sku IS NOT NULL AND (p.sku = i.raw_sku OR TRIM(p.sku) = i.raw_sku) THEN 1.0
+                WHEN p.name = i.raw_name OR TRIM(p.name) ILIKE i.raw_name THEN 0.95
+                ELSE similarity(p.name, i.raw_name) 
+            END AS score,
+            
+            CASE 
+                WHEN i.raw_sku IS NOT NULL AND (p.sku = i.raw_sku OR TRIM(p.sku) = i.raw_sku) THEN 'sku_exact'
+                WHEN p.name = i.raw_name OR TRIM(p.name) ILIKE i.raw_name THEN 'name_exact'
+                ELSE 'name_fuzzy'
+            END AS type
+        FROM public.products p
+        WHERE 
+            p.status = 'active'
+            AND (
+                -- 1. Tìm chính xác (SKU / Name)
+                (i.raw_sku IS NOT NULL AND p.sku = i.raw_sku) 
+                OR p.name = i.raw_name                        
+                
+                -- 2. Tìm gần đúng (Chỉ khi độ giống > 0.3 do set_limit ở trên)
+                OR p.name % i.raw_name
+                
+                -- 3. Fallback TRIM (Chậm nhưng chính xác)
+                OR (i.raw_sku IS NOT NULL AND TRIM(p.sku) = i.raw_sku)
+                OR TRIM(p.name) ILIKE i.raw_name
+            )
+        ORDER BY 
+            -- Sắp xếp: Chính xác -> Điểm cao
+            (i.raw_sku IS NOT NULL AND (p.sku = i.raw_sku OR TRIM(p.sku) = i.raw_sku)) DESC,
+            (TRIM(p.name) ILIKE i.raw_name) DESC,
+            similarity(p.name, i.raw_name) DESC
+        LIMIT 1
+    ) match ON true
+    -- [FIX CUỐI CÙNG] Lọc bỏ kết quả nếu điểm quá thấp (dù Postgres trả về)
+    -- Nếu là fuzzy match mà điểm < 0.3 thì coi như không tìm thấy (trả về NULL ở các cột product_...)
+    WHERE match.id IS NULL OR match.type != 'name_fuzzy' OR match.score >= 0.3;
+
+END;
+$$;
+
+
+ALTER FUNCTION "public"."match_products_from_excel"("p_data" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."notify_group"("p_permission_key" "text", "p_title" "text", "p_message" "text", "p_type" "text" DEFAULT 'info'::"text") RETURNS "void"
@@ -6750,6 +7114,19 @@ $$;
 
 
 ALTER FUNCTION "public"."reactivate_shipping_partner"("p_id" bigint) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."recalculate_final_amount"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+    BEGIN
+        NEW.final_amount := NEW.total_goods_amount - NEW.discount_order + NEW.shipping_fee + NEW.other_fee;
+        RETURN NEW;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."recalculate_final_amount"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) RETURNS "void"
@@ -7387,73 +7764,112 @@ ALTER FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") OWNER
 
 CREATE OR REPLACE FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer DEFAULT 20) RETURNS TABLE("id" bigint, "name" "text", "sku" "text", "retail_price" numeric, "image_url" "text", "unit" "text", "stock_quantity" integer, "location_cabinet" "text", "location_row" "text", "location_slot" "text", "usage_instructions" "jsonb", "similarity_score" real)
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
-    BEGIN
-        RETURN QUERY
-        SELECT 
-            p.id,
-            p.name,
-            p.sku,
-            
-            -- Lấy giá bán lẻ từ bảng Unit (nếu có set giá riêng) hoặc giá gốc
-            COALESCE(u_retail.price, 0) AS retail_price, -- Cần đảm bảo logic giá
-            p.image_url,
-            
-            -- Lấy tên đơn vị Retail. Nếu không có set 'retail' thì lấy 'base' làm fallback
-            COALESCE(u_retail.unit_name, u_base.unit_name, 'N/A') AS unit,
-            
-            -- Lấy tồn kho (ép kiểu về int cho an toàn)
-            COALESCE(inv.stock_quantity, 0)::INTEGER AS stock_quantity,
-            
-            -- Vị trí
-            inv.location_cabinet,
-            inv.location_row,
-            inv.location_slot,
-            
-            -- HDSD
-            p.usage_instructions,
-            
-            -- Tính điểm tương đồng (Similarity Score)
-            similarity(p.name, p_keyword)::REAL AS similarity_score
+DECLARE
+    v_clean_keyword text;
+    v_search_pattern text;
+BEGIN
+    -- 1. Làm sạch từ khóa
+    v_clean_keyword := TRIM(p_keyword);
+    
+    -- 2. Tạo mẫu tìm kiếm phân mảnh (VD: "para 500" -> "%para%500%")
+    v_search_pattern := '%' || REPLACE(v_clean_keyword, ' ', '%') || '%';
 
-        FROM public.products p
+    RETURN QUERY
+    SELECT 
+        p.id,
+        p.name,
+        p.sku,
         
-        -- 1. JOIN ĐỂ LẤY ĐƠN VỊ BÁN LẺ (Ưu tiên type='retail')
-        LEFT JOIN public.product_units u_retail 
-            ON p.id = u_retail.product_id AND u_retail.unit_type = 'retail'
-            
-        -- 2. JOIN ĐỂ LẤY ĐƠN VỊ CƠ SỞ (Dự phòng nếu chưa cấu hình retail)
-        LEFT JOIN public.product_units u_base 
-            ON p.id = u_base.product_id AND u_base.unit_type = 'base'
+        -- Lấy giá bán lẻ (Nếu chưa có thì = 0)
+        COALESCE(u_retail.price_sell, 0) AS retail_price, 
+        p.image_url,
+        
+        -- Lấy tên đơn vị (Ưu tiên lẻ -> base)
+        COALESCE(u_retail.unit_name, u_base.unit_name, 'N/A') AS unit,
+        
+        -- Lấy tồn kho (Null -> 0)
+        COALESCE(inv.stock_quantity, 0)::INTEGER AS stock_quantity,
+        
+        -- Vị trí kho
+        inv.location_cabinet,
+        inv.location_row,
+        inv.location_slot,
+        
+        -- Hướng dẫn sử dụng
+        p.usage_instructions,
+        
+        -- === TÍNH ĐIỂM TƯƠNG ĐỒNG (SMART SCORE) ===
+        -- Logic: 
+        -- 1. Trúng Barcode/SKU: 1.0 điểm (Tuyệt đối)
+        -- 2. Trúng tên hoặc Hoạt chất: Tính điểm similarity (0.0 -> 1.0)
+        --    Lấy điểm cao nhất giữa Tên và Hoạt chất để sắp xếp
+        CASE 
+            WHEN p.barcode = v_clean_keyword THEN 1.0
+            WHEN u_retail.barcode = v_clean_keyword THEN 1.0
+            WHEN u_base.barcode = v_clean_keyword THEN 1.0
+            WHEN p.sku ILIKE v_clean_keyword || '%' THEN 0.9
+            ELSE GREATEST(
+                similarity(p.name, v_clean_keyword), 
+                similarity(COALESCE(p.active_ingredient, ''), v_clean_keyword)
+            )::REAL
+        END AS similarity_score
 
-        -- 3. JOIN ĐỂ LẤY TỒN KHO & VỊ TRÍ TẠI CHI NHÁNH
-        LEFT JOIN public.product_inventory inv 
-            ON p.id = inv.product_id AND inv.warehouse_id = p_warehouse_id
+    FROM public.products p
+    
+    -- JOIN Đơn vị lẻ
+    LEFT JOIN public.product_units u_retail 
+        ON p.id = u_retail.product_id AND u_retail.unit_type = 'retail'
+        
+    -- JOIN Đơn vị cơ sở
+    LEFT JOIN public.product_units u_base 
+        ON p.id = u_base.product_id AND u_base.is_base = true
 
-        WHERE 
-            p.status = 'active'
-            AND (
-                -- Logic tìm kiếm thông minh:
-                -- 1. Trigram Similarity (Tìm gần đúng, sai chính tả, viết tắt)
-                p.name % p_keyword 
-                OR
-                -- 2. ILIKE phân mảnh (Tìm "effe" và "150" xuất hiện bất kỳ đâu trong tên)
-                -- (Đây là cách fix cho trường hợp "effe 150" tìm ra "Efferagal 150mg")
-                p.name ILIKE '%' || REPLACE(p_keyword, ' ', '%') || '%'
-                OR
-                -- 3. Tìm theo SKU
-                p.sku ILIKE p_keyword || '%'
-            )
+    -- JOIN Tồn kho
+    LEFT JOIN public.product_inventory inv 
+        ON p.id = inv.product_id AND inv.warehouse_id = p_warehouse_id
+
+    WHERE 
+        p.status = 'active'
+        AND (
+            -- 1. ƯU TIÊN TUYỆT ĐỐI: QUÉT MÃ VẠCH (Barcode Scanner)
+            p.barcode = v_clean_keyword
+            OR u_retail.barcode = v_clean_keyword
+            OR u_base.barcode = v_clean_keyword
             
-        -- Sắp xếp: Ưu tiên giống nhất -> Ưu tiên hàng có sẵn trong kho
-        ORDER BY 
-            similarity(p.name, p_keyword) DESC,
-            inv.stock_quantity DESC NULLS LAST
+            -- 2. TÌM THEO TÊN (Bao gồm gõ tắt, gõ không dấu)
+            OR p.name ILIKE v_search_pattern
+            OR p.name % v_clean_keyword 
             
-        LIMIT p_limit;
-    END;
-    $$;
+            -- 3. TÌM THEO HOẠT CHẤT (Active Ingredient) - [MỚI]
+            -- (Dược sĩ gõ "parace" -> tìm thấy thuốc chứa paracetamol)
+            OR COALESCE(p.active_ingredient, '') ILIKE v_search_pattern
+            OR COALESCE(p.active_ingredient, '') % v_clean_keyword
+
+            -- 4. TÌM THEO SKU
+            OR p.sku ILIKE v_clean_keyword || '%'
+        )
+        
+    -- SẮP XẾP KẾT QUẢ
+    ORDER BY 
+        -- Nhóm 1: Trúng Barcode đẩy lên đầu tiên
+        (CASE 
+            WHEN p.barcode = v_clean_keyword OR u_retail.barcode = v_clean_keyword OR u_base.barcode = v_clean_keyword THEN 1 
+            ELSE 0 
+        END) DESC,
+        
+        -- Nhóm 2: Điểm tương đồng cao nhất (Dựa trên cả Tên và Hoạt chất)
+        similarity_score DESC,
+        
+        -- Nhóm 3: Ưu tiên hàng đang có sẵn trong kho
+        inv.stock_quantity DESC NULLS LAST,
+        
+        -- Nhóm 4: Tên ngắn gọn lên trước (thường là kết quả chính xác hơn)
+        LENGTH(p.name) ASC
+        
+    LIMIT p_limit;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) OWNER TO "postgres";
@@ -9900,6 +10316,10 @@ CREATE TABLE IF NOT EXISTS "public"."inventory_receipt_items" (
     "created_at" timestamp with time zone DEFAULT "now"(),
     "serial_number" "text",
     "qc_status" "text" DEFAULT 'pass'::"text",
+    "unit_price" numeric DEFAULT 0 NOT NULL,
+    "discount_amount" numeric DEFAULT 0,
+    "vat_rate" numeric DEFAULT 0,
+    "sub_total" numeric GENERATED ALWAYS AS (((("quantity")::numeric * "unit_price") - "discount_amount")) STORED,
     CONSTRAINT "inventory_receipt_items_quantity_check" CHECK (("quantity" > 0))
 );
 
@@ -9927,7 +10347,13 @@ CREATE TABLE IF NOT EXISTS "public"."inventory_receipts" (
     "receipt_date" timestamp with time zone DEFAULT "now"(),
     "note" "text",
     "status" "text" DEFAULT 'completed'::"text",
-    "created_at" timestamp with time zone DEFAULT "now"()
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "total_goods_amount" numeric DEFAULT 0,
+    "discount_order" numeric DEFAULT 0,
+    "shipping_fee" numeric DEFAULT 0,
+    "other_fee" numeric DEFAULT 0,
+    "final_amount" numeric DEFAULT 0,
+    "updated_at" timestamp with time zone DEFAULT "now"()
 );
 
 
@@ -12011,7 +12437,19 @@ CREATE OR REPLACE TRIGGER "on_product_track" AFTER UPDATE ON "public"."products"
 
 
 
+CREATE OR REPLACE TRIGGER "on_receipt_header_change" BEFORE UPDATE OF "discount_order", "shipping_fee", "other_fee" ON "public"."inventory_receipts" FOR EACH ROW EXECUTE FUNCTION "public"."recalculate_final_amount"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_receipt_item_change" AFTER INSERT OR DELETE OR UPDATE ON "public"."inventory_receipt_items" FOR EACH ROW EXECUTE FUNCTION "public"."calculate_receipt_totals"();
+
+
+
 CREATE OR REPLACE TRIGGER "on_sales_invoice_updated" BEFORE UPDATE ON "public"."sales_invoices" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_sales_order_confirm" AFTER UPDATE ON "public"."orders" FOR EACH ROW EXECUTE FUNCTION "public"."handle_sales_inventory_deduction"();
 
 
 
@@ -13250,6 +13688,12 @@ GRANT ALL ON FUNCTION "public"."bulk_update_product_strategy"("p_product_ids" bi
 
 
 
+GRANT ALL ON FUNCTION "public"."bulk_update_product_units_for_quick_unit_page"("p_data" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."bulk_update_product_units_for_quick_unit_page"("p_data" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."bulk_update_product_units_for_quick_unit_page"("p_data" "jsonb") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."bulk_upsert_customers_b2b"("p_customers_array" "jsonb"[]) TO "anon";
 GRANT ALL ON FUNCTION "public"."bulk_upsert_customers_b2b"("p_customers_array" "jsonb"[]) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."bulk_upsert_customers_b2b"("p_customers_array" "jsonb"[]) TO "service_role";
@@ -13277,6 +13721,12 @@ GRANT ALL ON FUNCTION "public"."calculate_carton_breakdown"("p_product_id" bigin
 GRANT ALL ON FUNCTION "public"."calculate_package_cost"("p_items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."calculate_package_cost"("p_items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."calculate_package_cost"("p_items" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."calculate_receipt_totals"() TO "anon";
+GRANT ALL ON FUNCTION "public"."calculate_receipt_totals"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."calculate_receipt_totals"() TO "service_role";
 
 
 
@@ -13712,6 +14162,12 @@ GRANT ALL ON FUNCTION "public"."get_outbound_stats"("p_warehouse_id" bigint) TO 
 
 
 
+GRANT ALL ON FUNCTION "public"."get_partner_debt_live"("p_partner_id" bigint, "p_partner_type" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_partner_debt_live"("p_partner_id" bigint, "p_partner_type" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_partner_debt_live"("p_partner_id" bigint, "p_partner_type" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_pending_reconciliation_orders"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_pending_reconciliation_orders"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_pending_reconciliation_orders"() TO "service_role";
@@ -14013,9 +14469,9 @@ GRANT ALL ON FUNCTION "public"."import_customers_b2b"("p_customers_array" "jsonb
 
 
 
-GRANT ALL ON FUNCTION "public"."import_opening_stock_v3_by_id"("p_stock_array" "jsonb"[], "p_user_id" "uuid", "p_warehouse_id" bigint) TO "anon";
-GRANT ALL ON FUNCTION "public"."import_opening_stock_v3_by_id"("p_stock_array" "jsonb"[], "p_user_id" "uuid", "p_warehouse_id" bigint) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."import_opening_stock_v3_by_id"("p_stock_array" "jsonb"[], "p_user_id" "uuid", "p_warehouse_id" bigint) TO "service_role";
+GRANT ALL ON FUNCTION "public"."import_opening_stock_v3_by_id"("p_warehouse_id" bigint, "p_user_id" "uuid", "p_stock_array" "jsonb"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."import_opening_stock_v3_by_id"("p_warehouse_id" bigint, "p_user_id" "uuid", "p_stock_array" "jsonb"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."import_opening_stock_v3_by_id"("p_warehouse_id" bigint, "p_user_id" "uuid", "p_stock_array" "jsonb"[]) TO "service_role";
 
 
 
@@ -14034,6 +14490,12 @@ GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name"
 GRANT ALL ON FUNCTION "public"."mark_notification_read"("p_noti_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."mark_notification_read"("p_noti_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."mark_notification_read"("p_noti_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."match_products_from_excel"("p_data" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."match_products_from_excel"("p_data" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."match_products_from_excel"("p_data" "jsonb") TO "service_role";
 
 
 
@@ -14076,6 +14538,12 @@ GRANT ALL ON FUNCTION "public"."reactivate_customer_b2c"("p_id" bigint) TO "serv
 GRANT ALL ON FUNCTION "public"."reactivate_shipping_partner"("p_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."reactivate_shipping_partner"("p_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."reactivate_shipping_partner"("p_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recalculate_final_amount"() TO "anon";
+GRANT ALL ON FUNCTION "public"."recalculate_final_amount"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recalculate_final_amount"() TO "service_role";
 
 
 
