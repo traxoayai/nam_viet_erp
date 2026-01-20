@@ -56,6 +56,7 @@ export interface ProcessInboundPayload {
   p_items: Array<{
     product_id: number;
     quantity: number;
+    unit?: string; // [NEW] Added unit
     lot_number?: string;
     expiry_date?: string;
   }>;

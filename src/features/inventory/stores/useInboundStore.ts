@@ -116,6 +116,7 @@ export const useInboundStore = create<InboundState>((set, get) => ({
        .map(item => ({
           product_id: item.product_id,
           quantity: item.input_quantity || 0,
+          unit: item.unit, // [NEW] Gửi đơn vị để Backend xử lý quy đổi
           lot_number: item.input_lot,
           expiry_date: item.input_expiry
        }));

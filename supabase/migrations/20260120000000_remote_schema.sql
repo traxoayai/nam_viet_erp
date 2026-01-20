@@ -1503,84 +1503,105 @@ ALTER FUNCTION "public"."confirm_order_payment"("p_order_ids" "uuid"[], "p_fund_
 
 CREATE OR REPLACE FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
     DECLARE
         v_current_status TEXT;
-        v_warehouse_id BIGINT := 1; -- Hardcode kho B2B Tổng (V1)
+        v_warehouse_id BIGINT;
+        v_customer_id BIGINT;
+        v_order_code TEXT;
         
         v_item RECORD;
         v_batch RECORD;
-        v_qty_needed INTEGER;
+        v_qty_needed INTEGER; -- Số lượng theo Base Unit
         v_deduct_amount INTEGER;
+        v_conversion_factor INTEGER;
     BEGIN
-        -- 1. Kiểm tra trạng thái đơn hàng
-        SELECT status INTO v_current_status FROM public.orders WHERE id = p_order_id;
+        -- A. Lấy thông tin đơn hàng
+        SELECT status, warehouse_id, code, customer_id 
+        INTO v_current_status, v_warehouse_id, v_order_code, v_customer_id
+        FROM public.orders WHERE id = p_order_id;
 
-        IF v_current_status IS NULL THEN
-            RAISE EXCEPTION 'Không tìm thấy đơn hàng.';
-        END IF;
-
+        IF v_current_status IS NULL THEN RAISE EXCEPTION 'Không tìm thấy đơn hàng.'; END IF;
+        
+        -- Chỉ cho phép đóng gói khi đơn đang CONFIRMED (Đã duyệt)
         IF v_current_status != 'CONFIRMED' THEN
-            RAISE EXCEPTION 'Chỉ có thể đóng gói đơn hàng ở trạng thái Đã Duyệt (CONFIRMED). Trạng thái hiện tại: %', v_current_status;
+            RAISE EXCEPTION 'Đơn hàng không ở trạng thái chờ đóng gói (CONFIRMED).';
         END IF;
 
-        -- 2. LOOP: Duyệt qua từng sản phẩm trong đơn để trừ kho
-        FOR v_item IN 
-            SELECT product_id, quantity_picked 
-            FROM public.order_items 
-            WHERE order_id = p_order_id AND quantity_picked > 0
-        LOOP
-            v_qty_needed := v_item.quantity_picked;
+        IF v_warehouse_id IS NULL THEN v_warehouse_id := 1; END IF; -- Fallback an toàn
 
-            -- 3. FEFO LOOP: Tìm các lô còn hạn, sắp xếp hết hạn trước -> trừ trước
+        -- B. LOOP: Duyệt từng sản phẩm trong đơn
+        FOR v_item IN 
+            SELECT oi.product_id, oi.quantity, oi.uom, oi.conversion_factor, p.name as product_name, p.actual_cost
+            FROM public.order_items oi
+            JOIN public.products p ON oi.product_id = p.id
+            WHERE oi.order_id = p_order_id
+        LOOP
+            -- Tính tổng số lượng Base cần xuất (VD: 2 Thùng x 24 = 48 lon)
+            -- Ưu tiên lấy conversion_factor đã lưu lúc đặt hàng, nếu null thì tra bảng units
+            v_conversion_factor := COALESCE(v_item.conversion_factor, 1);
+            v_qty_needed := v_item.quantity * v_conversion_factor;
+
+            -- C. FEFO LOOP: Quét lô để trừ kho
             FOR v_batch IN 
-                SELECT ib.id, ib.quantity, b.batch_code, b.expiry_date
+                SELECT ib.id, ib.batch_id, ib.quantity, b.inbound_price -- [QUAN TRỌNG] Lấy giá vốn đích danh của lô
                 FROM public.inventory_batches ib
                 JOIN public.batches b ON ib.batch_id = b.id
                 WHERE ib.product_id = v_item.product_id 
                   AND ib.warehouse_id = v_warehouse_id
                   AND ib.quantity > 0
-                ORDER BY b.expiry_date ASC -- Quan trọng: Ưu tiên lô cũ nhất
-                FOR UPDATE -- Khóa dòng để tránh tranh chấp (Race Condition)
+                ORDER BY b.expiry_date ASC, b.created_at ASC -- Hết hạn trước -> Nhập trước -> Xuất trước
+                FOR UPDATE
             LOOP
-                -- Nếu đã trừ đủ thì thoát vòng lặp batch
                 EXIT WHEN v_qty_needed <= 0;
 
-                -- Tính số lượng trừ ở lô này
+                -- Tính lượng trừ tại lô này
                 IF v_batch.quantity >= v_qty_needed THEN
                     v_deduct_amount := v_qty_needed;
                 ELSE
                     v_deduct_amount := v_batch.quantity;
                 END IF;
 
-                -- Thực hiện Update trừ kho
+                -- 1. Trừ kho chi tiết (Inventory Batches)
                 UPDATE public.inventory_batches
-                SET quantity = quantity - v_deduct_amount,
-                    updated_at = NOW()
+                SET quantity = quantity - v_deduct_amount, updated_at = NOW()
                 WHERE id = v_batch.id;
 
-                -- Giảm số lượng cần tìm
+                -- 2. Ghi nhận giao dịch tài chính (Inventory Transactions) - [CHUẨN KẾ TOÁN]
+                -- Unit Price = Giá vốn thực tế của lô (inbound_price)
+                INSERT INTO public.inventory_transactions (
+                    warehouse_id, product_id, batch_id, 
+                    type, action_group, 
+                    quantity, unit_price, -- Lưu ý: Quantity âm để thể hiện xuất
+                    ref_id, description, partner_id, created_at, created_by
+                ) VALUES (
+                    v_warehouse_id, v_item.product_id, v_batch.batch_id,
+                    'sale_order', 'SALE',
+                    -v_deduct_amount, COALESCE(v_batch.inbound_price, v_item.actual_cost, 0), -- Giá vốn đích danh
+                    v_order_code, 'Xuất kho đơn ' || v_order_code, v_customer_id, NOW(), auth.uid()
+                );
+
                 v_qty_needed := v_qty_needed - v_deduct_amount;
             END LOOP;
 
-            -- 4. VALIDATION: Sau khi quét hết các lô mà vẫn chưa đủ hàng
+            -- D. Validation cuối cùng
             IF v_qty_needed > 0 THEN
-                RAISE EXCEPTION 'Kho không đủ hàng khả dụng để xuất sản phẩm ID %. Thiếu % (theo FEFO).', v_item.product_id, v_qty_needed;
+                RAISE EXCEPTION 'Kho không đủ hàng xuất cho sản phẩm "%". Thiếu % (đvcs). Vui lòng kiểm tra tồn kho.', v_item.product_name, v_qty_needed;
             END IF;
+
+            -- E. Cập nhật số lượng đã nhặt vào Order Items (Optional nhưng tốt cho tracking)
+            UPDATE public.order_items 
+            SET quantity_picked = (v_item.quantity * v_conversion_factor) -- Lưu số lượng base đã nhặt
+            WHERE order_id = p_order_id AND product_id = v_item.product_id;
 
         END LOOP;
 
-        -- 5. Cập nhật trạng thái đơn -> PACKED (Đã đóng gói & Trừ kho)
+        -- F. Chuyển trạng thái đơn -> PACKED
         UPDATE public.orders
-        SET status = 'PACKED',
-            updated_at = NOW()
+        SET status = 'PACKED', updated_at = NOW()
         WHERE id = p_order_id;
 
-        RETURN jsonb_build_object(
-            'success', true, 
-            'message', 'Đóng gói hoàn tất. Đã trừ tồn kho (FEFO).'
-        );
+        RETURN jsonb_build_object('success', true, 'message', 'Đã xuất kho và đóng gói thành công.');
     END;
     $$;
 
@@ -6042,6 +6063,47 @@ $$;
 ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."handle_order_cancellation"("p_order_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+    DECLARE
+        v_trans RECORD;
+    BEGIN
+        -- 1. Tìm tất cả các giao dịch xuất kho của đơn hàng này
+        FOR v_trans IN 
+            SELECT * FROM public.inventory_transactions 
+            WHERE ref_id = (SELECT code FROM public.orders WHERE id = p_order_id)
+              AND type = 'sale_order'
+        LOOP
+            -- 2. Cộng ngược lại vào kho (Inventory Batches)
+            -- Lưu ý: v_trans.quantity là số âm (xuất kho), nên trừ đi số âm là cộng (-(-5) = +5)
+            -- Hoặc đơn giản là lấy ABS()
+            UPDATE public.inventory_batches
+            SET quantity = quantity + ABS(v_trans.quantity), updated_at = NOW()
+            WHERE warehouse_id = v_trans.warehouse_id
+              AND product_id = v_trans.product_id
+              AND batch_id = v_trans.batch_id;
+
+            -- 3. Tạo Transaction bù trừ (Reversal Entry)
+            INSERT INTO public.inventory_transactions (
+                warehouse_id, product_id, batch_id, 
+                type, action_group, quantity, unit_price, 
+                ref_id, description, partner_id, created_by
+            ) VALUES (
+                v_trans.warehouse_id, v_trans.product_id, v_trans.batch_id,
+                'import', 'RETURN', -- Type là Import để thể hiện hàng vào
+                ABS(v_trans.quantity), v_trans.unit_price,
+                v_trans.ref_id, 'Hoàn kho do hủy đơn ' || v_trans.ref_id, 
+                v_trans.partner_id, auth.uid()
+            );
+        END LOOP;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."handle_order_cancellation"("p_order_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."handle_order_inventory_deduction"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -6153,104 +6215,14 @@ ALTER FUNCTION "public"."handle_order_inventory_deduction"() OWNER TO "postgres"
 
 CREATE OR REPLACE FUNCTION "public"."handle_sales_inventory_deduction"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
-DECLARE
-    v_order_item RECORD;
-    v_consumable RECORD;
-    v_warehouse_id BIGINT;
-    v_is_service BOOLEAN;
-    v_current_stock INT;
-    v_product_name TEXT;
-    v_item_total_deduct INT;
-BEGIN
-    -- CHỈ CHẠY KHI: Trạng thái chuyển sang 'CONFIRMED' (Chốt đơn)
-    -- Và trạng thái cũ chưa từng là CONFIRMED (để tránh trừ kho 2 lần nếu update nhầm)
-    IF NEW.status = 'CONFIRMED' AND (OLD.status IS NULL OR OLD.status NOT IN ('CONFIRMED', 'PACKED', 'SHIPPING', 'DELIVERED')) THEN
-
-        -- 1. Xác định Kho xuất hàng (Lấy từ đơn hàng, nếu null thì mặc định kho 1 - Cần cẩn thận)
-        v_warehouse_id := COALESCE(NEW.warehouse_id, 1); 
-
-        -- 2. Duyệt qua từng dòng sản phẩm trong đơn (Order Items)
-        FOR v_order_item IN 
-            SELECT oi.*, p.name as product_name, p.stock_management_type
-            FROM public.order_items oi
-            JOIN public.products p ON oi.product_id = p.id
-            WHERE oi.order_id = NEW.id 
-        LOOP
-            
-            -- === BƯỚC 1: KIỂM TRA TRƯỜNG HỢP B (DỊCH VỤ CÓ ĐỊNH MỨC) ===
-            -- Check xem sản phẩm này có nằm trong bảng định mức tiêu hao không
-            SELECT EXISTS(SELECT 1 FROM public.service_consumables WHERE service_product_id = v_order_item.product_id)
-            INTO v_is_service;
-
-            IF v_is_service THEN
-                -- >> ĐÂY LÀ DỊCH VỤ (CASE B): Trừ các vật tư đi kèm <<
-                
-                FOR v_consumable IN 
-                    SELECT sc.consumable_product_id, sc.quantity, p_sub.name as sub_name
-                    FROM public.service_consumables sc
-                    JOIN public.products p_sub ON sc.consumable_product_id = p_sub.id
-                    WHERE sc.service_product_id = v_order_item.product_id
-                LOOP
-                    -- Tính tổng lượng vật tư cần trừ: (Số lượng dịch vụ đặt * Định mức 1 lần)
-                    -- Ví dụ: Đặt 2 Gói tiêm. Mỗi gói tốn 1 kim. => Tổng trừ 2 kim.
-                    v_item_total_deduct := v_order_item.quantity * v_consumable.quantity;
-
-                    -- Kiểm tra tồn kho vật tư
-                    SELECT stock_quantity INTO v_current_stock
-                    FROM public.product_inventory
-                    WHERE product_id = v_consumable.consumable_product_id 
-                    AND warehouse_id = v_warehouse_id
-                    FOR UPDATE; -- Khóa dòng để tránh tranh chấp (Concurrency)
-
-                    IF v_current_stock IS NULL OR v_current_stock < v_item_total_deduct THEN
-                        RAISE EXCEPTION 'Không đủ vật tư đi kèm! Dịch vụ "%" cần % cái "%", nhưng kho chỉ còn %.', 
-                            v_order_item.product_name, v_item_total_deduct, v_consumable.sub_name, COALESCE(v_current_stock, 0);
-                    END IF;
-
-                    -- Thực hiện trừ kho vật tư
-                    UPDATE public.product_inventory
-                    SET stock_quantity = stock_quantity - v_item_total_deduct,
-                        updated_at = NOW()
-                    WHERE product_id = v_consumable.consumable_product_id 
-                    AND warehouse_id = v_warehouse_id;
-                END LOOP;
-
-            -- === BƯỚC 2: KIỂM TRA TRƯỜNG HỢP A (HÀNG HÓA) ===
-            -- Nếu không phải dịch vụ có định mức, ta check xem nó có phải hàng hóa cần quản lý kho không
-            ELSIF v_order_item.stock_management_type <> 'simple' THEN 
-                -- (Giả định 'simple' hoặc null là dịch vụ thuần túy không kho - Case C)
-                -- Hoặc kiểm tra trực tiếp trong bảng inventory
-                
-                SELECT stock_quantity INTO v_current_stock
-                FROM public.product_inventory
-                WHERE product_id = v_order_item.product_id 
-                AND warehouse_id = v_warehouse_id
-                FOR UPDATE;
-
-                -- Nếu tìm thấy bản ghi tồn kho -> Xử lý như Hàng hóa (Case A)
-                IF v_current_stock IS NOT NULL THEN
-                    IF v_current_stock < v_order_item.base_quantity THEN
-                        RAISE EXCEPTION 'Sản phẩm "%" không đủ tồn kho (Cần: %, Tồn: %).', 
-                            v_order_item.product_name, v_order_item.base_quantity, v_current_stock;
-                    END IF;
-
-                    UPDATE public.product_inventory
-                    SET stock_quantity = stock_quantity - v_order_item.base_quantity,
-                        updated_at = NOW()
-                    WHERE product_id = v_order_item.product_id 
-                    AND warehouse_id = v_warehouse_id;
-                END IF;
-                -- Nếu không tìm thấy bản ghi tồn kho -> Rơi vào Case C (Dịch vụ thuần/Hàng không quản lý kho) -> Bỏ qua.
-            END IF;
-
-        END LOOP;
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
+    BEGIN
+        -- [CORE FIX]: Đã vô hiệu hóa logic trừ kho tại đây.
+        -- Việc trừ kho và ghi nhận giá vốn sẽ được thực hiện tại hàm confirm_outbound_packing (lúc đóng gói).
+        -- Trigger này hiện tại chỉ đóng vai trò placeholder để không gây lỗi hệ thống.
+        RETURN NEW;
+    END;
+    $$;
 
 
 ALTER FUNCTION "public"."handle_sales_inventory_deduction"() OWNER TO "postgres";
@@ -6867,121 +6839,122 @@ ALTER FUNCTION "public"."notify_users_by_permission"("p_permission_key" "text", 
 
 CREATE OR REPLACE FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
     DECLARE
         v_receipt_id BIGINT;
         v_item JSONB;
         v_product_id BIGINT;
-        v_qty_input INTEGER;
+        v_qty_input NUMERIC;
+        v_qty_base INTEGER;
+        v_conversion_rate INTEGER;
+        v_unit_name TEXT;
+        v_unit_price NUMERIC;
+        
         v_lot_no TEXT;
         v_exp_date DATE;
         v_batch_id BIGINT;
+        v_po_code TEXT;
+        v_po_supplier_id BIGINT;
         
-        -- Biến để check status
         v_total_ordered NUMERIC;
         v_total_received NUMERIC;
         v_new_status TEXT;
     BEGIN
-        -- 1. Validate
-        IF jsonb_array_length(p_items) = 0 THEN
-            RAISE EXCEPTION 'Danh sách nhập kho trống.';
-        END IF;
+        -- A. Lấy thông tin PO
+        SELECT code, supplier_id INTO v_po_code, v_po_supplier_id FROM public.purchase_orders WHERE id = p_po_id;
 
-        -- 2. Tạo Phiếu Nhập (Receipt Header)
+        -- B. Tạo Phiếu Nhập
         INSERT INTO public.inventory_receipts (
-            code, po_id, warehouse_id, receipt_date, status, creator_id
+            code, po_id, warehouse_id, receipt_date, status, creator_id, created_at
         ) VALUES (
             'PNK-' || to_char(now(), 'YYMMDD') || '-' || floor(random() * 10000)::text,
-            p_po_id,
-            p_warehouse_id,
-            now(),
-            'completed',
-            auth.uid()
+            p_po_id, p_warehouse_id, now(), 'completed', auth.uid(), now()
         ) RETURNING id INTO v_receipt_id;
 
-        -- 3. Loop qua từng item
+        -- C. Loop Items
         FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
         LOOP
             v_product_id := (v_item->>'product_id')::BIGINT;
-            v_qty_input  := (v_item->>'quantity')::INTEGER;
+            v_qty_input  := COALESCE((v_item->>'quantity')::NUMERIC, 0);
+            v_unit_name  := v_item->>'unit';
             v_lot_no     := NULLIF(trim(v_item->>'lot_number'), '');
             v_exp_date   := (v_item->>'expiry_date')::DATE;
+            v_unit_price := COALESCE((v_item->>'unit_price')::NUMERIC, 0); -- Giá nhập
 
             IF v_qty_input <= 0 THEN CONTINUE; END IF;
 
-            -- A. Xử lý BATCH (Find or Create)
-            -- Chỉ xử lý nếu có số lô (hoặc bắt buộc logic sản phẩm có quản lý lô)
-            IF v_lot_no IS NOT NULL THEN
-                SELECT id INTO v_batch_id 
-                FROM public.batches 
-                WHERE product_id = v_product_id AND batch_code = v_lot_no;
+            -- 1. TÌM TỶ LỆ QUY ĐỔI (QUAN TRỌNG)
+            -- Tìm trong bảng product_units xem đơn vị nhập vào (Thùng) đổi ra bao nhiêu Base (Viên)
+            SELECT conversion_rate INTO v_conversion_rate
+            FROM public.product_units
+            WHERE product_id = v_product_id AND unit_name = v_unit_name
+            LIMIT 1;
 
-                IF v_batch_id IS NULL THEN
-                    INSERT INTO public.batches (product_id, batch_code, expiry_date, inbound_price)
-                    VALUES (v_product_id, v_lot_no, COALESCE(v_exp_date, '2099-12-31'::DATE), 0)
-                    RETURNING id INTO v_batch_id;
-                END IF;
+            -- Fallback: Nếu không tìm thấy hoặc là Base Unit, rate = 1
+            IF v_conversion_rate IS NULL THEN v_conversion_rate := 1; END IF;
 
-                -- B. Upsert Tồn kho chi tiết (Inventory Batches)
-                INSERT INTO public.inventory_batches (warehouse_id, product_id, batch_id, quantity)
-                VALUES (p_warehouse_id, v_product_id, v_batch_id, v_qty_input)
-                ON CONFLICT (warehouse_id, product_id, batch_id)
-                DO UPDATE SET quantity = inventory_batches.quantity + EXCLUDED.quantity, updated_at = now();
-                
-                -- (Trigger 'on_inventory_batch_change' sẽ tự động đồng bộ sang product_inventory)
+            -- Tính số lượng Base để lưu kho
+            v_qty_base := (v_qty_input * v_conversion_rate)::INTEGER;
+
+            -- 2. Xử lý Lô (Batch) & Giá vốn
+            -- Giá vốn lưu vào lô phải là Giá Base (Giá 1 viên)
+            IF v_lot_no IS NULL THEN v_lot_no := 'DEFAULT-' || to_char(now(), 'YYYYMMDD'); END IF;
+
+            SELECT id INTO v_batch_id FROM public.batches 
+            WHERE product_id = v_product_id AND batch_code = v_lot_no;
+
+            IF v_batch_id IS NULL THEN
+                INSERT INTO public.batches (product_id, batch_code, expiry_date, inbound_price, created_at)
+                VALUES (v_product_id, v_lot_no, COALESCE(v_exp_date, '2099-12-31'::DATE), (v_unit_price / v_conversion_rate), NOW())
+                RETURNING id INTO v_batch_id;
             ELSE
-                -- Trường hợp sản phẩm không quản lý lô (Simple), ta vẫn cần update vào product_inventory (cũ)
-                -- Hoặc tạo 1 lô mặc định? Theo V2 strict, nên tạo 1 batch 'DEFAULT'. 
-                -- Tuy nhiên để an toàn cho V1 Hybrid, ta update thẳng bảng tổng nếu không có batch.
-                -- UPDATE: Quyết định tạo Batch ảo 'NO-LOT' để nhất quán dữ liệu V2.
-                -- (Tạm thời bỏ qua logic này để tránh phức tạp, chỉ update PO item và Receipt Item)
-                -- LƯU Ý: Trigger V2 chỉ chạy khi update inventory_batches. Nếu không update inventory_batches thì bảng tổng không tăng.
-                -- FIX: Bắt buộc tạo batch nếu chưa có.
-                NULL; -- Placeholder
+                -- Update giá vốn mới nhất
+                UPDATE public.batches SET inbound_price = (v_unit_price / v_conversion_rate) WHERE id = v_batch_id;
             END IF;
 
-            -- C. Tạo dòng chi tiết Phiếu Nhập
-            INSERT INTO public.inventory_receipt_items (
-                receipt_id, product_id, quantity, lot_number, expiry_date
+            -- 3. Cộng Tồn kho (Inventory Batches) - Luôn cộng số Base
+            INSERT INTO public.inventory_batches (warehouse_id, product_id, batch_id, quantity)
+            VALUES (p_warehouse_id, v_product_id, v_batch_id, v_qty_base)
+            ON CONFLICT (warehouse_id, product_id, batch_id)
+            DO UPDATE SET quantity = inventory_batches.quantity + EXCLUDED.quantity, updated_at = now();
+
+            -- 4. Ghi Sổ Kho (Transactions)
+            INSERT INTO public.inventory_transactions (
+                warehouse_id, product_id, batch_id, type, action_group, quantity, unit_price, ref_id, description, partner_id, created_by
             ) VALUES (
-                v_receipt_id, v_product_id, v_qty_input, v_lot_no, v_exp_date
+                p_warehouse_id, v_product_id, v_batch_id, 'purchase_order', 'IMPORT', 
+                v_qty_base, (v_unit_price / v_conversion_rate), 
+                v_po_code, 'Nhập kho PO', v_po_supplier_id, auth.uid()
             );
 
-            -- D. Update số lượng đã nhận trong PO Items
-            UPDATE public.purchase_order_items
-            SET quantity_received = COALESCE(quantity_received, 0) + v_qty_input
-            WHERE po_id = p_po_id AND product_id = v_product_id;
+            -- 5. Lưu chi tiết phiếu nhập (Receipt Items) - Lưu cả SL nhập và SL quy đổi
+            -- Schema inventory_receipt_items cần có cột quantity (base). Ta tạm lưu quantity base.
+            -- (Tốt nhất nên mở rộng bảng này sau, nhưng hiện tại lưu Base là chuẩn nhất để tính toán)
+            INSERT INTO public.inventory_receipt_items (
+                receipt_id, product_id, quantity, lot_number, expiry_date, unit_price
+            ) VALUES (
+                v_receipt_id, v_product_id, v_qty_base, v_lot_no, v_exp_date, (v_unit_price / v_conversion_rate)
+            );
 
+            -- 6. Update PO Items (Số lượng đã nhận) - Lưu ý PO Items thường lưu Base Quantity nếu thiết kế chuẩn
+            UPDATE public.purchase_order_items
+            SET quantity_received = COALESCE(quantity_received, 0) + v_qty_input -- Cộng theo đơn vị đặt hàng (nếu PO items lưu theo đơn vị đặt)
+            WHERE po_id = p_po_id AND product_id = v_product_id;
+            
         END LOOP;
 
-        -- 4. Cập nhật Trạng thái PO (Toàn cục)
-        -- Tính tổng đặt và tổng nhận của TOÀN BỘ đơn hàng
+        -- D. Cập nhật trạng thái PO
         SELECT SUM(quantity_ordered), SUM(COALESCE(quantity_received, 0))
         INTO v_total_ordered, v_total_received
-        FROM public.purchase_order_items
-        WHERE po_id = p_po_id;
+        FROM public.purchase_order_items WHERE po_id = p_po_id;
 
-        IF v_total_received >= v_total_ordered THEN
-            v_new_status := 'delivered'; -- Hoàn tất
-        ELSIF v_total_received > 0 THEN
-            v_new_status := 'partial';   -- Một phần
-        ELSE
-            v_new_status := 'pending';
-        END IF;
+        IF v_total_received >= v_total_ordered THEN v_new_status := 'delivered';
+        ELSIF v_total_received > 0 THEN v_new_status := 'partial';
+        ELSE v_new_status := 'pending'; END IF;
 
-        UPDATE public.purchase_orders
-        SET delivery_status = v_new_status,
-            -- Nếu hoàn tất thì update cả status kinh doanh
-            status = CASE WHEN v_new_status = 'delivered' THEN 'COMPLETED' ELSE status END,
-            updated_at = now()
-        WHERE id = p_po_id;
+        UPDATE public.purchase_orders SET delivery_status = v_new_status, updated_at = now() WHERE id = p_po_id;
 
-        RETURN jsonb_build_object(
-            'success', true, 
-            'receipt_id', v_receipt_id,
-            'po_status', v_new_status
-        );
+        RETURN jsonb_build_object('success', true, 'receipt_id', v_receipt_id);
     END;
     $$;
 
@@ -8481,6 +8454,22 @@ CREATE OR REPLACE FUNCTION "public"."trigger_notify_warehouse_po"() RETURNS "tri
 
 
 ALTER FUNCTION "public"."trigger_notify_warehouse_po"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."trigger_order_cancel_restore_stock"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+    BEGIN
+        -- Khi đơn chuyển sang CANCELLED và trước đó đã PACKED/SHIPPING/DELIVERED (đã trừ kho)
+        IF NEW.status = 'CANCELLED' AND OLD.status IN ('PACKED', 'SHIPPING', 'DELIVERED', 'COMPLETED') THEN
+            PERFORM public.handle_order_cancellation(NEW.id);
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."trigger_order_cancel_restore_stock"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."trigger_refresh_on_criteria_change"() RETURNS "trigger"
@@ -12421,6 +12410,10 @@ CREATE OR REPLACE TRIGGER "on_invoice_updated" BEFORE UPDATE ON "public"."financ
 
 
 
+CREATE OR REPLACE TRIGGER "on_order_cancel" AFTER UPDATE ON "public"."orders" FOR EACH ROW EXECUTE FUNCTION "public"."trigger_order_cancel_restore_stock"();
+
+
+
 CREATE OR REPLACE TRIGGER "on_order_status_deduct_inventory" AFTER UPDATE ON "public"."orders" FOR EACH ROW EXECUTE FUNCTION "public"."handle_order_inventory_deduction"();
 
 
@@ -14439,6 +14432,12 @@ GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."handle_order_cancellation"("p_order_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_order_cancellation"("p_order_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_order_cancellation"("p_order_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."handle_order_inventory_deduction"() TO "anon";
 GRANT ALL ON FUNCTION "public"."handle_order_inventory_deduction"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."handle_order_inventory_deduction"() TO "service_role";
@@ -14759,6 +14758,12 @@ GRANT ALL ON FUNCTION "public"."trigger_notify_finance_approval"() TO "service_r
 GRANT ALL ON FUNCTION "public"."trigger_notify_warehouse_po"() TO "anon";
 GRANT ALL ON FUNCTION "public"."trigger_notify_warehouse_po"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."trigger_notify_warehouse_po"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."trigger_order_cancel_restore_stock"() TO "anon";
+GRANT ALL ON FUNCTION "public"."trigger_order_cancel_restore_stock"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."trigger_order_cancel_restore_stock"() TO "service_role";
 
 
 
