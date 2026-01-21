@@ -620,7 +620,7 @@ const QuickPricePage: React.FC = () => {
                 />
             </Card>
 
-            <Modal title="Kết quả Excel" width={800} open={reviewModalVisible} onCancel={() => setReviewModalVisible(false)} onOk={applyExcelMatches}>
+            <Modal title="Kết quả Excel" width={800} zIndex={9999} open={reviewModalVisible} onCancel={() => setReviewModalVisible(false)} onOk={applyExcelMatches}>
                 <Table 
                     dataSource={matchedData} 
                     rowKey="rowIndex"
