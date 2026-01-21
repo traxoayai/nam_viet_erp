@@ -2660,6 +2660,7 @@ export type Database = {
           note: string | null
           order_id: string | null
           payment_method: string | null
+          status: string
           total_amount_pre_tax: number | null
           updated_at: string | null
           vat_amount: number | null
@@ -2683,6 +2684,7 @@ export type Database = {
           note?: string | null
           order_id?: string | null
           payment_method?: string | null
+          status?: string
           total_amount_pre_tax?: number | null
           updated_at?: string | null
           vat_amount?: number | null
@@ -2706,6 +2708,7 @@ export type Database = {
           note?: string | null
           order_id?: string | null
           payment_method?: string | null
+          status?: string
           total_amount_pre_tax?: number | null
           updated_at?: string | null
           vat_amount?: number | null
@@ -3149,6 +3152,7 @@ export type Database = {
           status: Database["public"]["Enums"]["employee_status"]
           strengths: string | null
           updated_at: string | null
+          work_state: string | null
         }
         Insert: {
           address?: string | null
@@ -3179,6 +3183,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["employee_status"]
           strengths?: string | null
           updated_at?: string | null
+          work_state?: string | null
         }
         Update: {
           address?: string | null
@@ -3209,6 +3214,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["employee_status"]
           strengths?: string | null
           updated_at?: string | null
+          work_state?: string | null
         }
         Relationships: []
       }
@@ -4189,14 +4195,20 @@ export type Database = {
       }
       get_sales_orders_view: {
         Args: {
+          p_creator_id?: string
+          p_customer_id?: number
           p_date_from?: string
           p_date_to?: string
+          p_invoice_status?: string
           p_order_type?: string
           p_page?: number
           p_page_size?: number
+          p_payment_method?: string
+          p_payment_status?: string
           p_remittance_status?: string
           p_search?: string
           p_status?: string
+          p_warehouse_id?: number
         }
         Returns: Json
       }
@@ -4231,6 +4243,7 @@ export type Database = {
           status: Database["public"]["Enums"]["employee_status"]
           strengths: string | null
           updated_at: string | null
+          work_state: string | null
         }[]
         SetofOptions: {
           from: "*"
@@ -4335,6 +4348,7 @@ export type Database = {
           transaction_date: string
         }[]
       }
+      get_user_pending_revenue: { Args: { p_user_id: string }; Returns: number }
       get_users_with_roles: {
         Args: never
         Returns: {

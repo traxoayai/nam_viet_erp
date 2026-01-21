@@ -5230,7 +5230,7 @@ CREATE OR REPLACE FUNCTION "public"."get_purchase_orders_master"("p_page" intege
 ALTER FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_search" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_order_type" "text" DEFAULT NULL::"text", "p_remittance_status" "text" DEFAULT NULL::"text", "p_creator_id" "uuid" DEFAULT NULL::"uuid", "p_payment_status" "text" DEFAULT NULL::"text", "p_invoice_status" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_search" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_order_type" "text" DEFAULT NULL::"text", "p_remittance_status" "text" DEFAULT NULL::"text", "p_creator_id" "uuid" DEFAULT NULL::"uuid", "p_payment_status" "text" DEFAULT NULL::"text", "p_invoice_status" "text" DEFAULT NULL::"text", "p_payment_method" "text" DEFAULT NULL::"text", "p_warehouse_id" bigint DEFAULT NULL::bigint, "p_customer_id" bigint DEFAULT NULL::bigint) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -5239,17 +5239,25 @@ CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEF
         v_result JSONB;
         v_stats JSONB;
     BEGIN
-        -- A. STATS
+        -- A. STATS (Tính toán thống kê theo bộ lọc hiện tại để chính xác hơn)
+        -- Lưu ý: Stats này tính trên TOÀN BỘ dữ liệu thỏa mãn filter (không bị paging)
+        WITH stats_filter AS (
+            SELECT final_amount, paid_amount, remittance_status, payment_method, status
+            FROM public.orders o
+            WHERE 
+                (p_order_type IS NULL OR o.order_type = p_order_type)
+                AND (p_status IS NULL OR o.status = p_status)
+                AND (p_date_from IS NULL OR o.created_at >= p_date_from)
+                AND (p_date_to IS NULL OR o.created_at <= p_date_to)
+                AND (p_creator_id IS NULL OR o.creator_id = p_creator_id)
+                AND (p_warehouse_id IS NULL OR o.warehouse_id = p_warehouse_id) -- Filter kho
+        )
         SELECT jsonb_build_object(
             'total_sales', COALESCE(SUM(final_amount) FILTER (WHERE status NOT IN ('DRAFT', 'CANCELLED')), 0),
             'count_pending_remittance', COUNT(*) FILTER (WHERE remittance_status = 'pending' AND payment_method = 'cash'),
             'total_cash_pending', COALESCE(SUM(paid_amount) FILTER (WHERE remittance_status = 'pending' AND payment_method = 'cash'), 0)
         ) INTO v_stats
-        FROM public.orders o
-        WHERE 
-            (p_order_type IS NULL OR o.order_type = p_order_type)
-            AND (p_date_from IS NULL OR o.created_at >= p_date_from)
-            AND (p_date_to IS NULL OR o.created_at <= p_date_to);
+        FROM stats_filter;
 
         -- B. MAIN QUERY
         WITH filtered_data AS (
@@ -5258,6 +5266,9 @@ CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEF
                 o.final_amount, o.paid_amount, o.payment_method, 
                 o.remittance_status, o.payment_status, o.invoice_status,
                 o.note,
+                o.warehouse_id,
+                
+                COALESCE(w.name, 'Kho mặc định') as warehouse_name,
                 
                 -- Customer Info
                 COALESCE(cb.name, cc.name, 'Khách lẻ') as customer_name,
@@ -5269,27 +5280,15 @@ CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEF
                 COALESCE(u.full_name, u.email) as creator_name,
                 o.creator_id,
 
-                -- Invoice Info (Lấy json trực tiếp)
-                (
-                    SELECT to_jsonb(inv) FROM public.sales_invoices inv 
-                    WHERE inv.order_id = o.id ORDER BY inv.created_at DESC LIMIT 1
-                ) as sales_invoice,
+                -- Invoice Info
+                (SELECT to_jsonb(inv) FROM public.sales_invoices inv WHERE inv.order_id = o.id ORDER BY inv.created_at DESC LIMIT 1) as sales_invoice,
 
                 -- Items Info
                 (
                     SELECT jsonb_agg(jsonb_build_object(
-                        'id', oi.id,
-                        'product_id', oi.product_id,
-                        'quantity', oi.quantity,
-                        'unit_price', oi.unit_price,
-                        'uom', oi.uom,
-                        'discount', oi.discount,
-                        'total_line', (oi.quantity * oi.unit_price - COALESCE(oi.discount, 0)),
-                        'product', jsonb_build_object(
-                            'id', p.id, 'name', p.name, 'sku', p.sku, 
-                            'retail_unit', p.retail_unit, 'wholesale_unit', p.wholesale_unit,
-                            'image_url', p.image_url -- Thêm ảnh cho đẹp
-                        )
+                        'id', oi.id, 'product_id', oi.product_id, 'quantity', oi.quantity, 
+                        'unit_price', oi.unit_price, 'uom', oi.uom, 'discount', oi.discount,
+                        'product', jsonb_build_object('id', p.id, 'name', p.name, 'retail_unit', p.retail_unit, 'wholesale_unit', p.wholesale_unit)
                     ))
                     FROM public.order_items oi
                     JOIN public.products p ON oi.product_id = p.id
@@ -5300,6 +5299,7 @@ CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEF
             LEFT JOIN public.customers_b2b cb ON o.customer_id = cb.id
             LEFT JOIN public.customers cc ON o.customer_b2c_id = cc.id
             LEFT JOIN public.users u ON o.creator_id = u.id
+            LEFT JOIN public.warehouses w ON o.warehouse_id = w.id
             WHERE 
                 (p_order_type IS NULL OR o.order_type = p_order_type)
                 AND (p_status IS NULL OR o.status = p_status)
@@ -5310,17 +5310,20 @@ CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEF
                 AND (p_payment_status IS NULL OR o.payment_status = p_payment_status)
                 AND (p_invoice_status IS NULL OR o.invoice_status::text = p_invoice_status)
                 
-                -- [FIXED AMBIGUITY HERE - Alias changed to 'prod']
+                -- [NEW FILTERS V9.2]
+                AND (p_payment_method IS NULL OR o.payment_method = p_payment_method)
+                AND (p_warehouse_id IS NULL OR o.warehouse_id = p_warehouse_id)
+                AND (p_customer_id IS NULL OR (o.customer_id = p_customer_id OR o.customer_b2c_id = p_customer_id))
+
+                -- SEARCH
                 AND (
                     p_search IS NULL OR p_search = '' 
                     OR o.code ILIKE '%' || p_search || '%'
                     OR cb.name ILIKE '%' || p_search || '%'
                     OR cc.name ILIKE '%' || p_search || '%'
                     OR cc.phone ILIKE '%' || p_search || '%'
-                    -- Subquery tìm sản phẩm
                     OR EXISTS (
-                        SELECT 1 
-                        FROM public.order_items oi_search
+                        SELECT 1 FROM public.order_items oi_search
                         JOIN public.products prod ON oi_search.product_id = prod.id 
                         WHERE oi_search.order_id = o.id 
                           AND (prod.name ILIKE '%' || p_search || '%' OR prod.sku ILIKE '%' || p_search || '%')
@@ -5344,7 +5347,7 @@ CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEF
     $$;
 
 
-ALTER FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text", "p_creator_id" "uuid", "p_payment_status" "text", "p_invoice_status" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text", "p_creator_id" "uuid", "p_payment_status" "text", "p_invoice_status" "text", "p_payment_method" "text", "p_warehouse_id" bigint, "p_customer_id" bigint) OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."users" (
@@ -5375,7 +5378,9 @@ CREATE TABLE IF NOT EXISTS "public"."users" (
     "needs" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "profile_updated_at" timestamp with time zone
+    "profile_updated_at" timestamp with time zone,
+    "work_state" "text" DEFAULT 'working'::"text",
+    CONSTRAINT "users_work_state_check" CHECK (("work_state" = ANY (ARRAY['working'::"text", 'on_leave'::"text", 'resigned'::"text", 'test'::"text"])))
 );
 
 
@@ -12554,6 +12559,10 @@ CREATE INDEX "idx_users_phone_trgm" ON "public"."users" USING "gin" ("phone" "pu
 
 
 
+CREATE INDEX "idx_users_work_state" ON "public"."users" USING "btree" ("work_state");
+
+
+
 CREATE INDEX "idx_vacc_items_template_id" ON "public"."vaccination_template_items" USING "btree" ("template_id");
 
 
@@ -14421,9 +14430,9 @@ GRANT ALL ON FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p
 
 
 
-GRANT ALL ON FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text", "p_creator_id" "uuid", "p_payment_status" "text", "p_invoice_status" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text", "p_creator_id" "uuid", "p_payment_status" "text", "p_invoice_status" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text", "p_creator_id" "uuid", "p_payment_status" "text", "p_invoice_status" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text", "p_creator_id" "uuid", "p_payment_status" "text", "p_invoice_status" "text", "p_payment_method" "text", "p_warehouse_id" bigint, "p_customer_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text", "p_creator_id" "uuid", "p_payment_status" "text", "p_invoice_status" "text", "p_payment_method" "text", "p_warehouse_id" bigint, "p_customer_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_sales_orders_view"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_order_type" "text", "p_remittance_status" "text", "p_creator_id" "uuid", "p_payment_status" "text", "p_invoice_status" "text", "p_payment_method" "text", "p_warehouse_id" bigint, "p_customer_id" bigint) TO "service_role";
 
 
 

@@ -61,7 +61,11 @@ const B2BOrderListPage = () => {
       });
 
     // Load Sales Staff (Creators)
-    supabase.from('users').select('id, full_name, email')
+    supabase
+      .from('users')
+      .select('id, full_name, email, work_state')
+      .neq('work_state', 'test') 
+      .order('full_name', { ascending: true })
       .then(({ data }) => {
         setCreators(data || []);
       });
@@ -321,7 +325,10 @@ const B2BOrderListPage = () => {
           {
             key: "creatorId",
             placeholder: "Nhân viên",
-            options: creators.map(u => ({ label: u.full_name || u.email, value: u.id })),
+            options: creators.map(u => ({ 
+                label: u.work_state === 'resigned' ? `${u.full_name || u.email} (Đã nghỉ)` : (u.full_name || u.email), 
+                value: u.id 
+            })),
           }
         ]}
         actions={[

@@ -37,7 +37,13 @@ const B2COrderListPage = () => {
         posTransactionService.getUserPendingRevenue(user.id).then(setPendingRevenue);
     }
     // Load Users for Filter
-    supabase.from('users').select('id, full_name, email').then(({ data }) => setCreators(data || []));
+    supabase
+      .from('users')
+      .select('id, full_name, email, work_state')
+      .neq('work_state', 'test')
+      .order('full_name', { ascending: true })
+      .then(({ data }) => setCreators(data || []));
+    
     // Load Warehouses for Filter
     supabase.from('warehouses').select('id, name').then(({ data }) => setWarehouses(data || []));
   }, [user, currentFilters]); // Reload revenue khi filter thay đổi (có thể đơn mới tạo)
@@ -313,7 +319,10 @@ const B2COrderListPage = () => {
           {
             key: "creatorId",
             placeholder: "Người bán",
-            options: creators.map(u => ({ label: u.full_name || u.email, value: u.id })),
+            options: creators.map(u => ({ 
+                label: u.work_state === 'resigned' ? `${u.full_name || u.email} (Đã nghỉ)` : (u.full_name || u.email), 
+                value: u.id 
+            })),
           }
         ]}
         actions={[
