@@ -76,6 +76,7 @@ const QuickPricePage: React.FC = () => {
                 .from('products')
                 .select(`
                     id, name, sku, image_url, actual_cost,
+                    retail_margin_value, retail_margin_type, wholesale_margin_value, wholesale_margin_type,
                     units:product_units ( id, unit_name, conversion_rate, price, is_base, unit_type, price_cost )
                 `, { count: 'exact' })
                 .order('created_at', { ascending: false });
@@ -117,12 +118,12 @@ const QuickPricePage: React.FC = () => {
 
                     actual_cost: displayCost,
                     
-                    retail_margin: 0,
-                    retail_margin_type: 'amount',
+                    retail_margin: p.retail_margin_value || 0,
+                    retail_margin_type: p.retail_margin_type || 'amount',
                     retail_price: retailUnitObj?.price || 0,
 
-                    wholesale_margin: 0,
-                    wholesale_margin_type: 'amount',
+                    wholesale_margin: p.wholesale_margin_value || 0,
+                    wholesale_margin_type: p.wholesale_margin_type || 'amount',
                     wholesale_price: wholesaleUnitObj?.price || 0,
 
                     is_dirty: false
@@ -188,7 +189,11 @@ const QuickPricePage: React.FC = () => {
                 product_id: row.id,
                 actual_cost: baseCost,
                 retail_price: row.retail_price,
-                wholesale_price: row.wholesale_price
+                wholesale_price: row.wholesale_price,
+                retail_margin: row.retail_margin,
+                retail_margin_type: row.retail_margin_type,
+                wholesale_margin: row.wholesale_margin,
+                wholesale_margin_type: row.wholesale_margin_type
             }];
 
             const { error } = await supabase.rpc('bulk_update_product_prices', { p_data: payload });
@@ -328,70 +333,124 @@ const QuickPricePage: React.FC = () => {
         }
     };
 
+    // --- [REPLACED] EXCEL APPLY LOGIC ---
     const applyExcelMatches = async () => {
         setLoading(true);
         try {
-            const payload: any[] = [];
-            
-            // Duyệt qua các dòng đã khớp
-            matchedData.filter(m => m.match?.id).forEach(item => {
-                const pid = item.match.id;
-                
-                // [TRICK] Tìm sản phẩm này trong state 'products' hiện tại để lấy wholesale_rate
-                const currentProd = products.find(p => p.id === pid);
-                const rate = currentProd?.wholesale_rate || 1;
-
-                // 1. Tính Giá Vốn Cơ Sở (Base Cost)
-                // Excel nhập Giá Vốn (đơn vị Buôn) -> Chia cho Rate
-                const baseCost = (item.excel.cost || 0) / rate;
-
-                // 2. Tính Giá Bán Lẻ (Retail Price)
-                let retailPrice = 0;
-                if (item.excel.retailUnit === 'percent') {
-                     // Lãi % (trên giá buôn) -> Cộng vào rồi chia rate
-                    const marginAmount = (item.excel.cost || 0) * (item.excel.retailMargin / 100);
-                    retailPrice = ((item.excel.cost || 0) + marginAmount) / rate;
-                } else {
-                     // Lãi tiền (trên đơn vị buôn) -> Cộng vào rồi chia rate
-                    retailPrice = ((item.excel.cost || 0) + item.excel.retailMargin) / rate;
-                }
-
-                // 3. Tính Giá Bán Buôn (Wholesale Price)
-                let wholesalePrice = 0;
-                if (item.excel.wholesaleUnit === 'percent') {
-                     const marginAmount = (item.excel.cost || 0) * (item.excel.wholesaleMargin / 100);
-                     wholesalePrice = (item.excel.cost || 0) + marginAmount;
-                } else {
-                     wholesalePrice = (item.excel.cost || 0) + item.excel.wholesaleMargin;
-                }
-
-                // Push vào payload
-                payload.push({
-                    product_id: pid,
-                    actual_cost: Math.round(baseCost),
-                    retail_price: Math.round(retailPrice),
-                    wholesale_price: Math.round(wholesalePrice)
-                });
-            });
-
-            if (payload.length === 0) {
-                message.warning("Không có dữ liệu hợp lệ để lưu.");
+            // 1. Lấy danh sách ID từ các dòng đã khớp
+            const matchedItems = matchedData.filter(m => m.match?.id);
+            if (matchedItems.length === 0) {
+                message.warning("Không có dữ liệu khớp để xử lý.");
                 setLoading(false);
                 return;
             }
 
-            // Gọi RPC Bulk Update
+            const productIds = matchedItems.map(m => m.match.id);
+
+            // 2. [CRITICAL] Fetch dữ liệu Unit từ DB để lấy Rate chính xác
+            // (Không dùng state 'products' vì Excel có thể chứa SP ở trang khác)
+            const { data: dbUnits, error: unitError } = await supabase
+                .from('product_units')
+                .select('product_id, unit_type, is_base, conversion_rate')
+                .in('product_id', productIds);
+
+            if (unitError) throw unitError;
+
+            const payload: any[] = [];
+            
+            // Map để update ngược lại vào State hiển thị (UI)
+            const uiUpdates = new Map<number, Partial<ProductPriceRow>>();
+
+            // 3. Duyệt từng dòng Excel và Tính toán
+            matchedItems.forEach(item => {
+                const pid = item.match.id;
+                
+                // A. Tìm Rate (Quy đổi từ Buôn -> Lẻ)
+                // Logic: Tìm unit wholesale hoặc unit có rate > 1
+                const pUnits = dbUnits?.filter((u:any) => u.product_id === pid) || [];
+                const wholesaleUnit = pUnits.find((u:any) => u.unit_type === 'wholesale') 
+                                   || pUnits.find((u:any) => !u.is_base && u.conversion_rate > 1);
+                
+                const rate = wholesaleUnit?.conversion_rate || 1; // Rate chuẩn từ DB
+
+                // B. Parse dữ liệu từ Excel
+                const excelCost = Number(item.excel.cost) || 0; // Giá Vốn (Hộp)
+                
+                // Lãi Lẻ
+                const retailMarginRaw = Number(item.excel.retailMargin) || 0;
+                const isRetailPercent = item.excel.retailUnit === 'percent';
+                
+                // Lãi Buôn
+                const wholesaleMarginRaw = Number(item.excel.wholesaleMargin) || 0;
+                const isWholesalePercent = item.excel.wholesaleUnit === 'percent';
+
+                // C. TÍNH GIÁ BÁN (Theo công thức Sếp)
+                
+                // C1. Giá Bán Lẻ (Net 1 Viên)
+                // Công thức: (Giá Vốn Hộp + Lãi Lẻ Hộp) / Rate
+                let retailMarginAmount = retailMarginRaw;
+                if (isRetailPercent) {
+                    retailMarginAmount = excelCost * (retailMarginRaw / 100);
+                }
+                const retailPrice = Math.ceil((excelCost + retailMarginAmount) / rate);
+
+                // C2. Giá Bán Buôn (Net 1 Hộp)
+                // Công thức: Giá Vốn Hộp + Lãi Buôn Hộp
+                let wholesaleMarginAmount = wholesaleMarginRaw;
+                if (isWholesalePercent) {
+                    wholesaleMarginAmount = excelCost * (wholesaleMarginRaw / 100);
+                }
+                const wholesalePrice = Math.ceil(excelCost + wholesaleMarginAmount);
+
+                // D. Tính Giá Vốn Cơ Bản (Base Cost - 1 Viên) để lưu DB
+                const baseCost = excelCost / rate;
+
+                // E. Đẩy vào Payload gửi Server
+                payload.push({
+                    product_id: pid,
+                    actual_cost: baseCost,      // Server cần giá Base
+                    retail_price: retailPrice,
+                    wholesale_price: wholesalePrice,
+                    retail_margin: retailMarginRaw,
+                    retail_margin_type: isRetailPercent ? 'percent' : 'amount',
+                    wholesale_margin: wholesaleMarginRaw,
+                    wholesale_margin_type: isWholesalePercent ? 'percent' : 'amount'
+                });
+
+                // F. Chuẩn bị data update UI (Hiển thị lại đúng cái User nhập)
+                uiUpdates.set(pid, {
+                    actual_cost: excelCost, // UI hiển thị giá Buôn
+                    retail_margin: retailMarginRaw,
+                    retail_margin_type: isRetailPercent ? 'percent' : 'amount',
+                    retail_price: retailPrice,
+                    wholesale_margin: wholesaleMarginRaw,
+                    wholesale_margin_type: isWholesalePercent ? 'percent' : 'amount',
+                    wholesale_price: wholesalePrice,
+                    is_dirty: false // Đã lưu xong
+                });
+            });
+
+            // 4. Gửi RPC
             const { error } = await supabase.rpc('bulk_update_product_prices', { p_data: payload });
             if (error) throw error;
 
-            message.success(`Đã cập nhật giá cho ${payload.length} sản phẩm!`);
+            message.success(`Đã cập nhật giá thành công cho ${payload.length} sản phẩm!`);
             setReviewModalVisible(false);
+
+            // 5. [NEW] Cập nhật UI ngay lập tức (Không cần reload trang nếu SP đang hiển thị)
+            setProducts(prev => prev.map(p => {
+                if (uiUpdates.has(p.id)) {
+                    return { ...p, ...uiUpdates.get(p.id) };
+                }
+                return p;
+            }));
             
-            // Reload lại bảng để thấy giá mới
-            loadProducts(pagination.current, pagination.pageSize);
+            // Nếu muốn chắc chắn, reload lại sau 1s (Optional)
+            // setTimeout(() => loadProducts(pagination.current, pagination.pageSize), 1000);
 
         } catch (err: any) {
-            message.error("Lỗi lưu giá: " + err.message);
+            console.error(err);
+            message.error("Lỗi cập nhật: " + err.message);
         } finally {
             setLoading(false);
         }
