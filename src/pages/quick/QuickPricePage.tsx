@@ -273,6 +273,8 @@ const QuickPricePage: React.FC = () => {
         return false; 
     };
 
+    // ... (Giữ nguyên phần trên)
+
     const processExcelData = async (rows: any[]) => {
         // 1. Map dữ liệu từ Header Tiếng Việt sang Object chuẩn
         const itemsToMatch = rows.map(r => ({
@@ -295,26 +297,50 @@ const QuickPricePage: React.FC = () => {
             return;
         }
 
-        message.loading("Đang đối chiếu dữ liệu...", 1);
+        // =================================================================
+        // [CORE FIX]: BATCHING LOGIC (Chia nhỏ để trị)
+        // =================================================================
+        const BATCH_SIZE = 10; // Kích thước gói nhỏ (10 item/lần)
+        const totalBatches = Math.ceil(itemsToMatch.length / BATCH_SIZE);
+        let allServerMatches: any[] = [];
         
-        try {
-            // 2. Gọi RPC đối chiếu
-            const { data: matches, error } = await supabase.rpc('match_products_from_excel', { 
-                p_data: itemsToMatch.map(i => ({ name: i.name, sku: i.sku })) 
-            });
-            
-            if (error) throw error;
+        const hideLoading = message.loading(`Đang khởi động đối chiếu (0/${itemsToMatch.length})...`, 0);
 
-            // 3. Ghép kết quả Match với Dữ liệu Excel đã đọc
+        try {
+            // Loop từng Batch
+            for (let i = 0; i < totalBatches; i++) {
+                const start = i * BATCH_SIZE;
+                const end = start + BATCH_SIZE;
+                // Cắt lấy 10 item
+                const batchItems = itemsToMatch.slice(start, end); 
+
+                // Cập nhật thông báo tiến độ cho user đỡ sốt ruột
+                hideLoading(); 
+                message.loading(`Đang đối chiếu: ${Math.min(end, itemsToMatch.length)}/${itemsToMatch.length} sản phẩm...`, 0);
+
+                // Gọi RPC với gói nhỏ
+                const { data: batchResults, error } = await supabase.rpc('match_products_from_excel', { 
+                    p_data: batchItems.map(item => ({ name: item.name, sku: item.sku })) 
+                });
+
+                if (error) throw error;
+
+                // Gom kết quả lại
+                if (batchResults) {
+                    allServerMatches = [...allServerMatches, ...batchResults];
+                }
+            }
+
+            // 3. Ghép kết quả Match (Logic cũ nhưng dùng allServerMatches đã gom đủ)
             const result = itemsToMatch.map((excelItem, idx) => {
-                const match = matches?.find((m: any) => 
+                const match = allServerMatches.find((m: any) => 
                     (excelItem.sku && m.excel_sku === excelItem.sku) || 
                     (m.excel_name === excelItem.name)
                 );
 
                 return {
                     rowIndex: idx,
-                    excel: excelItem, // Lưu nguyên cục data excel đã map ở bước 1
+                    excel: excelItem,
                     match: match ? { 
                         id: match.product_id, 
                         name: match.product_name, 
@@ -326,12 +352,17 @@ const QuickPricePage: React.FC = () => {
 
             setMatchedData(result);
             setReviewModalVisible(true);
+            message.success("Đối chiếu hoàn tất!");
 
         } catch (err: any) {
             console.error(err);
             message.error("Lỗi đối chiếu: " + err.message);
+        } finally {
+            hideLoading(); // Tắt loading
         }
     };
+
+    // ... (Giữ nguyên phần dưới)
 
     // --- [REPLACED] EXCEL APPLY LOGIC ---
     const applyExcelMatches = async () => {
