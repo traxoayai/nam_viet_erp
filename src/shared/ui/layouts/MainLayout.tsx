@@ -241,6 +241,11 @@ const finalMenuItems: MenuItem[] = [
       <ThunderboltOutlined />
     ),
     getItem(
+      <Link to="/quick/price-edit">Sửa giá Sản Phẩm nhanh</Link>,
+      "/quick/price-edit",
+      <DollarCircleOutlined />
+    ),
+    getItem(
       <Link to="/quick/min-max">Cài Min/Max & Tồn kho (Voice)</Link>,
       "/quick/min-max",
       <AudioOutlined />
@@ -249,11 +254,6 @@ const finalMenuItems: MenuItem[] = [
       <Link to="/quick/product-location">Cài nhanh Vị trí Sản phẩm</Link>,
       "/quick/product-location",
       <BarcodeOutlined />
-    ),
-    getItem(
-      <Link to="/quick/price-edit">Sửa giá Sản Phẩm nhanh</Link>,
-      "/quick/price-edit",
-      <DollarCircleOutlined />
     ),
     getItem(
       <Link to="/quick/promo-code">Tạo nhanh Mã Giảm Giá</Link>,

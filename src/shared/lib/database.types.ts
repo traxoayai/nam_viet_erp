@@ -3427,6 +3427,7 @@ export type Database = {
     Functions: {
       approve_user: { Args: { p_user_id: string }; Returns: undefined }
       auto_create_purchase_orders_min_max: { Args: never; Returns: number }
+      bulk_update_product_prices: { Args: { p_data: Json }; Returns: undefined }
       bulk_update_product_strategy: {
         Args: { p_product_ids: number[]; p_strategy_type: string }
         Returns: undefined

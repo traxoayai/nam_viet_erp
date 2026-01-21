@@ -61,6 +61,7 @@ import InventoryCheckDetail from '@/features/inventory/pages/InventoryCheckDetai
 import OpeningStockImport from "@/features/inventory/pages/OpeningStockImport";
 import QuickUnitPage from "@/pages/quick/QuickUnitPage";
 import QuickMinMaxPage from "@/pages/quick/QuickMinMaxPage";
+import QuickPricePage from "@/pages/quick/QuickPricePage";
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -259,7 +260,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "quick/price-edit",
-            element: <PagePlaceholder title="Sửa giá Sản Phẩm nhanh" />,
+            element: <QuickPricePage />,
           },
           {
             path: "quick/promo-code",
