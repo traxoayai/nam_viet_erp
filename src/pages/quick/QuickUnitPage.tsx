@@ -286,7 +286,7 @@ const QuickUnitPage: React.FC = () => {
         }
 
         // 2. Cấu hình Batching
-        const BATCH_SIZE = 50; 
+        const BATCH_SIZE = 10; 
         const totalBatches = Math.ceil(itemsToMatch.length / BATCH_SIZE);
         let allServerMatches: any[] = [];
         
