@@ -444,6 +444,83 @@ $$;
 ALTER FUNCTION "public"."auto_create_purchase_orders_min_max"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."bulk_update_product_prices"("p_data" "jsonb") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    item jsonb;
+    v_product_id BIGINT;
+    v_new_base_cost NUMERIC;
+    v_retail_price NUMERIC;
+    v_wholesale_price NUMERIC;
+    
+    v_wholesale_unit_name TEXT;
+    v_retail_unit_name TEXT;
+BEGIN
+    FOR item IN SELECT * FROM jsonb_array_elements(p_data)
+    LOOP
+        v_product_id := (item->>'product_id')::BIGINT;
+        v_new_base_cost := COALESCE((item->>'actual_cost')::NUMERIC, 0);
+        v_retail_price := COALESCE((item->>'retail_price')::NUMERIC, 0);
+        v_wholesale_price := COALESCE((item->>'wholesale_price')::NUMERIC, 0);
+
+        -- 1. Lấy thông tin đơn vị mặc định
+        SELECT wholesale_unit, retail_unit 
+        INTO v_wholesale_unit_name, v_retail_unit_name
+        FROM public.products WHERE id = v_product_id;
+
+        -- 2. CẬP NHẬT BẢNG PRODUCTS (Lưu cả Giá Vốn và Cấu hình Margin để hiển thị lại)
+        UPDATE public.products 
+        SET actual_cost = v_new_base_cost,
+            retail_margin_value = COALESCE((item->>'retail_margin')::NUMERIC, 0),
+            retail_margin_type = COALESCE(item->>'retail_margin_type', 'amount'),
+            wholesale_margin_value = COALESCE((item->>'wholesale_margin')::NUMERIC, 0),
+            wholesale_margin_type = COALESCE(item->>'wholesale_margin_type', 'amount'),
+            updated_at = NOW()
+        WHERE id = v_product_id;
+
+        -- 3. ĐỒNG BỘ GIÁ VỐN CHO TẤT CẢ ĐƠN VỊ (Price Cost = Base Cost * Rate)
+        UPDATE public.product_units
+        SET price_cost = v_new_base_cost * conversion_rate,
+            updated_at = NOW()
+        WHERE product_id = v_product_id;
+
+        -- 4. CẬP NHẬT GIÁ BÁN LẺ (Cho unit trùng tên với Retail Unit hoặc là Base)
+        UPDATE public.product_units
+        SET price_sell = v_retail_price,
+            updated_at = NOW()
+        WHERE product_id = v_product_id 
+          AND (unit_name = v_retail_unit_name OR is_base = true);
+
+        -- 5. CẬP NHẬT GIÁ BÁN BUÔN (Cho unit trùng tên với Wholesale Unit)
+        IF v_wholesale_price > 0 THEN
+            UPDATE public.product_units
+            SET price_sell = v_wholesale_price,
+                updated_at = NOW()
+            WHERE product_id = v_product_id 
+              AND unit_name = v_wholesale_unit_name;
+        END IF;
+
+        -- [BONUS] TỰ ĐỘNG TÍNH GIÁ CHO CÁC ĐƠN VỊ KHÁC (Tránh bán lỗ)
+        -- Logic: Các đơn vị còn lại (không phải lẻ, không phải sỉ chính) sẽ có giá bán = Giá Lẻ * Hệ số
+        -- (Để an toàn, ta set giá bán của chúng dựa trên giá lẻ, trừ khi chúng đã được set giá sỉ riêng)
+        UPDATE public.product_units
+        SET price_sell = v_retail_price * conversion_rate,
+            updated_at = NOW()
+        WHERE product_id = v_product_id 
+          AND unit_name <> v_retail_unit_name 
+          AND unit_name <> v_wholesale_unit_name
+          AND price_sell = 0; -- Chỉ update nếu chưa có giá (để tránh ghi đè cấu hình tay cũ)
+
+    END LOOP;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."bulk_update_product_prices"("p_data" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."bulk_update_product_strategy"("p_product_ids" bigint[], "p_strategy_type" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -6790,74 +6867,75 @@ CREATE OR REPLACE FUNCTION "public"."match_products_from_excel"("p_data" "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-BEGIN
-    -- 1. [QUAN TRỌNG] Thiết lập timeout an toàn
-    SET LOCAL statement_timeout = '60s';
+    BEGIN
+        -- Tăng timeout lên 5 phút cho chắc ăn với file lớn
+        SET LOCAL statement_timeout = '300s';
 
-    -- 2. [FIX] Nâng ngưỡng tìm kiếm lên 0.3 (30%)
-    -- Ngưỡng 0.1 quá thấp khiến "Augmentin 500mg" khớp "Tavanic 500mg" chỉ vì chữ "500mg"
-    PERFORM set_limit(0.3); 
+        -- Ngưỡng tìm kiếm 0.4 (Dưới mức này coi như không giống)
+        PERFORM set_limit(0.4); 
 
-    RETURN QUERY
-    WITH input_rows AS (
-        SELECT 
-            TRIM(BOTH FROM (elem->>'name')::text) AS raw_name,
-            NULLIF(TRIM(BOTH FROM (elem->>'sku')::text), '') AS raw_sku
-        FROM jsonb_array_elements(p_data) AS elem
-    )
-    SELECT 
-        i.raw_name AS excel_name,
-        i.raw_sku AS excel_sku,
-        match.id AS product_id,
-        match.name AS product_name,
-        match.sku AS product_sku,
-        COALESCE(match.score, 0)::real AS similarity_score,
-        match.type AS match_type
-    FROM input_rows i
-    LEFT JOIN LATERAL (
-        SELECT 
-            p.id, 
-            p.name,
-            p.sku,
-            CASE 
-                WHEN i.raw_sku IS NOT NULL AND (p.sku = i.raw_sku OR TRIM(p.sku) = i.raw_sku) THEN 1.0
-                WHEN p.name = i.raw_name OR TRIM(p.name) ILIKE i.raw_name THEN 0.95
-                ELSE similarity(p.name, i.raw_name) 
-            END AS score,
-            
-            CASE 
-                WHEN i.raw_sku IS NOT NULL AND (p.sku = i.raw_sku OR TRIM(p.sku) = i.raw_sku) THEN 'sku_exact'
-                WHEN p.name = i.raw_name OR TRIM(p.name) ILIKE i.raw_name THEN 'name_exact'
-                ELSE 'name_fuzzy'
-            END AS type
-        FROM public.products p
-        WHERE 
-            p.status = 'active'
-            AND (
-                -- 1. Tìm chính xác (SKU / Name)
-                (i.raw_sku IS NOT NULL AND p.sku = i.raw_sku) 
-                OR p.name = i.raw_name                        
-                
-                -- 2. Tìm gần đúng (Chỉ khi độ giống > 0.3 do set_limit ở trên)
-                OR p.name % i.raw_name
-                
-                -- 3. Fallback TRIM (Chậm nhưng chính xác)
-                OR (i.raw_sku IS NOT NULL AND TRIM(p.sku) = i.raw_sku)
-                OR TRIM(p.name) ILIKE i.raw_name
-            )
-        ORDER BY 
-            -- Sắp xếp: Chính xác -> Điểm cao
-            (i.raw_sku IS NOT NULL AND (p.sku = i.raw_sku OR TRIM(p.sku) = i.raw_sku)) DESC,
-            (TRIM(p.name) ILIKE i.raw_name) DESC,
-            similarity(p.name, i.raw_name) DESC
-        LIMIT 1
-    ) match ON true
-    -- [FIX CUỐI CÙNG] Lọc bỏ kết quả nếu điểm quá thấp (dù Postgres trả về)
-    -- Nếu là fuzzy match mà điểm < 0.3 thì coi như không tìm thấy (trả về NULL ở các cột product_...)
-    WHERE match.id IS NULL OR match.type != 'name_fuzzy' OR match.score >= 0.3;
+        RETURN QUERY
+        WITH input_rows AS (
+            SELECT 
+                TRIM(BOTH FROM (elem->>'name')::text) AS raw_name,
+                NULLIF(TRIM(BOTH FROM (elem->>'sku')::text), '') AS raw_sku
+            FROM jsonb_array_elements(p_data) AS elem
+        ),
+        
+        -- TẦNG 1: KHỚP SKU TUYỆT ĐỐI (Chỉ active)
+        exact_sku_match AS (
+            SELECT 
+                i.raw_name, i.raw_sku, 
+                p.id, p.name, p.sku, 
+                1.0::real as score, 'sku_exact'::text as type
+            FROM input_rows i
+            JOIN public.products p ON LOWER(p.sku) = LOWER(i.raw_sku)
+            WHERE i.raw_sku IS NOT NULL 
+              AND p.status = 'active' -- [CHECKPOINT 1]
+        ),
+        
+        -- TẦNG 2: KHỚP TÊN TUYỆT ĐỐI (Chỉ active & chưa khớp SKU)
+        exact_name_match AS (
+            SELECT 
+                i.raw_name, i.raw_sku, 
+                p.id, p.name, p.sku, 
+                0.95::real as score, 'name_exact'::text as type
+            FROM input_rows i
+            JOIN public.products p ON LOWER(p.name) = LOWER(i.raw_name)
+            WHERE p.status = 'active' -- [CHECKPOINT 2]
+              AND NOT EXISTS (SELECT 1 FROM exact_sku_match m WHERE m.raw_name = i.raw_name)
+        ),
+        
+        -- TẦNG 3: KHỚP MỜ (FUZZY) - Dùng Index mới tạo ở trên
+        fuzzy_match AS (
+            SELECT 
+                i.raw_name, i.raw_sku, 
+                p.id, p.name, p.sku, 
+                similarity(p.name, i.raw_name)::real as score, 
+                'name_fuzzy'::text as type
+            FROM input_rows i
+            JOIN LATERAL (
+                SELECT p_sub.id, p_sub.name, p_sub.sku
+                FROM public.products p_sub
+                WHERE p_sub.status = 'active' -- [CHECKPOINT 3]
+                  -- Toán tử % sẽ tự động dùng Index "idx_products_name_active_trgm"
+                  AND p_sub.name % i.raw_name
+                ORDER BY similarity(p_sub.name, i.raw_name) DESC
+                LIMIT 1
+            ) p ON true
+            WHERE NOT EXISTS (SELECT 1 FROM exact_sku_match m WHERE m.raw_name = i.raw_name)
+              AND NOT EXISTS (SELECT 1 FROM exact_name_match m WHERE m.raw_name = i.raw_name)
+        )
+        
+        -- TỔNG HỢP
+        SELECT * FROM exact_sku_match
+        UNION ALL
+        SELECT * FROM exact_name_match
+        UNION ALL
+        SELECT * FROM fuzzy_match;
 
-END;
-$$;
+    END;
+    $$;
 
 
 ALTER FUNCTION "public"."match_products_from_excel"("p_data" "jsonb") OWNER TO "postgres";
@@ -12463,6 +12541,10 @@ CREATE INDEX "idx_products_manufacturer" ON "public"."products" USING "btree" ("
 
 
 
+CREATE INDEX "idx_products_name_active_trgm" ON "public"."products" USING "gin" ("name" "public"."gin_trgm_ops") WHERE ("status" = 'active'::"text");
+
+
+
 CREATE INDEX "idx_products_name_trgm" ON "public"."products" USING "gin" ("name" "public"."gin_trgm_ops");
 
 
@@ -13869,6 +13951,12 @@ GRANT ALL ON FUNCTION "public"."approve_user"("p_user_id" "uuid") TO "service_ro
 GRANT ALL ON FUNCTION "public"."auto_create_purchase_orders_min_max"() TO "anon";
 GRANT ALL ON FUNCTION "public"."auto_create_purchase_orders_min_max"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."auto_create_purchase_orders_min_max"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."bulk_update_product_prices"("p_data" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."bulk_update_product_prices"("p_data" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."bulk_update_product_prices"("p_data" "jsonb") TO "service_role";
 
 
 

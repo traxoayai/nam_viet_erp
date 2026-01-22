@@ -211,7 +211,7 @@ const QuickPricePage: React.FC = () => {
     // --- EXCEL & TEMPLATE ---
     const handleDownloadTemplate = () => {
         try {
-            // 1. Header chuẩn 7 Cột
+            // 1. Header chuẩn 8 Cột (Thêm Giá Cố Định)
             const header = [
                 'SKU',                     // Cột A: Bắt buộc
                 'Tên sản phẩm',            // Cột B: Bắt buộc
@@ -219,16 +219,17 @@ const QuickPricePage: React.FC = () => {
                 'Lãi Lẻ',                  // Cột D: User nhập số
                 'Đơn vị Lãi Lẻ (%/VNĐ)',   // Cột E: User nhập '%' hoặc 'VNĐ'
                 'Lãi Buôn',                // Cột F: User nhập số
-                'Đơn vị Lãi Buôn (%/VNĐ)'  // Cột G: User nhập '%' hoặc 'VNĐ'
+                'Đơn vị Lãi Buôn (%/VNĐ)', // Cột G: User nhập '%' hoặc 'VNĐ'
+                'Giá Bán Lẻ (Cố định)'     // [NEW] Cột H: User nhập giá chốt cứng
             ];
 
             // 2. Dữ liệu mẫu (Sample Data) minh họa cả 2 trường hợp
             const sampleData = [
-                // Dòng 1: Ví dụ dùng Phần trăm (%)
-                ['PAN001', 'Panadol Extra (Ví dụ %)', 100000, 20, '%', 5, '%'],
+                // Dòng 1: Ví dụ Chốt giá cứng 15.000đ (Dù vốn là 10.000)
+                ['PAN001', 'Panadol Extra (Ví dụ Cố định)', 100000, 20, '%', 5, '%', 15000],
                 
-                // Dòng 2: Ví dụ dùng Số tiền cố định (VNĐ)
-                ['EFF001', 'Efferalgan (Ví dụ Tiền)', 50000, 5000, 'VNĐ', 2000, 'VNĐ']
+                // Dòng 2: Ví dụ Tính theo công thức (Để trống cột giá cố định)
+                ['EFF001', 'Efferalgan (Ví dụ Công thức)', 50000, 5000, 'VNĐ', 2000, 'VNĐ', '']
             ];
 
             // 3. Tạo Workbook
@@ -245,14 +246,15 @@ const QuickPricePage: React.FC = () => {
                 { wch: 10 }, // Lãi Lẻ
                 { wch: 20 }, // Đơn vị Lẻ
                 { wch: 10 }, // Lãi Buôn
-                { wch: 20 }  // Đơn vị Buôn
+                { wch: 20 }, // Đơn vị Buôn
+                { wch: 20 }  // Giá Cố Định
             ];
 
-            // 6. [QUAN TRỌNG] Append sheet vào workbook (Fix lỗi Empty)
+            // 6. Append sheet vào workbook
             XLSX.utils.book_append_sheet(wb, ws, "Mau_Cap_Nhat_Gia");
 
             // 7. Xuất file
-            XLSX.writeFile(wb, "Mau_Cap_Nhat_Gia_V2.xlsx");
+            XLSX.writeFile(wb, "Mau_Cap_Nhat_Gia_V3.xlsx");
 
         } catch (error: any) {
             console.error("Download Error:", error);
@@ -273,7 +275,11 @@ const QuickPricePage: React.FC = () => {
         return false; 
     };
 
-    // ... (Giữ nguyên phần trên)
+    const parseNumber = (val: any) => {
+        if (val === undefined || val === null || String(val).trim() === '') return undefined;
+        const num = Number(val);
+        return isNaN(num) ? undefined : num;
+    };
 
     const processExcelData = async (rows: any[]) => {
         // 1. Map dữ liệu từ Header Tiếng Việt sang Object chuẩn
@@ -282,14 +288,17 @@ const QuickPricePage: React.FC = () => {
             name: r['Tên sản phẩm'], 
             sku: String(r['SKU'] || '').trim(),
             
-            // Map các cột giá & lãi
-            cost: Number(r['Giá Vốn']) || 0,
+            // Map các cột giá & lãi (Sử dụng parseNumber để hỗ trợ Partial Update)
+            cost: parseNumber(r['Giá Vốn']),
             
-            retailMargin: Number(r['Lãi Lẻ']) || 0,
+            retailMargin: parseNumber(r['Lãi Lẻ']),
             retailUnit: parseUnitType(r['Đơn vị Lãi Lẻ (%/VNĐ)']),
             
-            wholesaleMargin: Number(r['Lãi Buôn']) || 0,
-            wholesaleUnit: parseUnitType(r['Đơn vị Lãi Buôn (%/VNĐ)'])
+            wholesaleMargin: parseNumber(r['Lãi Buôn']),
+            wholesaleUnit: parseUnitType(r['Đơn vị Lãi Buôn (%/VNĐ)']),
+
+            // [NEW] Map cột giá cố định
+            fixedRetailPrice: parseNumber(r['Giá Bán Lẻ (Cố định)'])
         })).filter(i => i.name || i.sku); // Lọc dòng rỗng
 
         if (itemsToMatch.length === 0) {
@@ -397,87 +406,94 @@ const QuickPricePage: React.FC = () => {
                 const pid = item.match.id;
                 
                 // A. Tìm Rate (Quy đổi từ Buôn -> Lẻ)
-                // Logic: Tìm unit wholesale hoặc unit có rate > 1
                 const pUnits = dbUnits?.filter((u:any) => u.product_id === pid) || [];
                 const wholesaleUnit = pUnits.find((u:any) => u.unit_type === 'wholesale') 
                                    || pUnits.find((u:any) => !u.is_base && u.conversion_rate > 1);
                 
                 const rate = wholesaleUnit?.conversion_rate || 1; // Rate chuẩn từ DB
 
-                // B. Parse dữ liệu từ Excel
-                const excelCost = Number(item.excel.cost) || 0; // Giá Vốn (Hộp)
+                // B. Parse dữ liệu từ Excel (Có thể undefined)
+                const excelCost = item.excel.cost; // undefined nếu không nhập
                 
-                // Lãi Lẻ
-                const retailMarginRaw = Number(item.excel.retailMargin) || 0;
-                const isRetailPercent = item.excel.retailUnit === 'percent';
-                
-                // Lãi Buôn
-                const wholesaleMarginRaw = Number(item.excel.wholesaleMargin) || 0;
-                const isWholesalePercent = item.excel.wholesaleUnit === 'percent';
-
-                // C. TÍNH GIÁ BÁN (Theo công thức Sếp)
-                
-                // C1. Giá Bán Lẻ (Net 1 Viên)
-                // Công thức: (Giá Vốn Hộp + Lãi Lẻ Hộp) / Rate
-                let retailMarginAmount = retailMarginRaw;
-                if (isRetailPercent) {
-                    retailMarginAmount = excelCost * (retailMarginRaw / 100);
+                // C. TÍNH GIÁ VỐN BASE (Để lưu DB)
+                let baseCost = undefined;
+                if (excelCost !== undefined) {
+                    baseCost = excelCost / rate;
                 }
-                const retailPrice = Math.ceil((excelCost + retailMarginAmount) / rate);
 
-                // C2. Giá Bán Buôn (Net 1 Hộp)
-                // Công thức: Giá Vốn Hộp + Lãi Buôn Hộp
-                let wholesaleMarginAmount = wholesaleMarginRaw;
-                if (isWholesalePercent) {
-                    wholesaleMarginAmount = excelCost * (wholesaleMarginRaw / 100);
+                // D. TÍNH GIÁ BÁN LẺ (LOGIC MỚI ƯU TIÊN FIXED PRICE)
+                let retailPrice = undefined;
+
+                // [FIX Partial Mode]
+                if (item.excel.fixedRetailPrice !== undefined) {
+                    // CASE 1: Có giá cố định -> Dùng luôn (Ưu tiên cao nhất)
+                    retailPrice = item.excel.fixedRetailPrice;
+
+                } else if (excelCost !== undefined && item.excel.retailMargin !== undefined) {
+                    // CASE 2: Không có giá cố định, nhưng CÓ công thức đi kèm (Có Vốn Mới + Margin Mới)
+                    
+                    const isRetailPercent = item.excel.retailUnit === 'percent';
+                    let retailMarginAmount = item.excel.retailMargin;
+                    
+                    if (isRetailPercent) {
+                        retailMarginAmount = excelCost * (item.excel.retailMargin / 100);
+                    }
+                    retailPrice = Math.ceil((excelCost + retailMarginAmount) / rate);
+                } 
+                // CASE 3: Không có cả 2 -> Để undefined (Backend giữ nguyên giá cũ)
+
+                // E. TÍNH GIÁ BÁN BUÔN
+                let wholesalePrice = undefined;
+                
+                if (excelCost !== undefined && item.excel.wholesaleMargin !== undefined) {
+                    const isWholesalePercent = item.excel.wholesaleUnit === 'percent';
+                    let wholesaleMarginAmount = item.excel.wholesaleMargin;
+                    
+                    if (isWholesalePercent) {
+                        wholesaleMarginAmount = excelCost * (item.excel.wholesaleMargin / 100);
+                    }
+                    wholesalePrice = Math.ceil(excelCost + wholesaleMarginAmount);
                 }
-                const wholesalePrice = Math.ceil(excelCost + wholesaleMarginAmount);
 
-                // D. Tính Giá Vốn Cơ Bản (Base Cost - 1 Viên) để lưu DB
-                const baseCost = excelCost / rate;
-
-                // E. Đẩy vào Payload gửi Server
+                // F. Payload (Gửi undefined để Backend biết mà COALESCE)
                 payload.push({
                     product_id: pid,
-                    actual_cost: baseCost,      // Server cần giá Base
-                    retail_price: retailPrice,
+                    actual_cost: baseCost,    
+                    retail_price: retailPrice, 
                     wholesale_price: wholesalePrice,
-                    retail_margin: retailMarginRaw,
-                    retail_margin_type: isRetailPercent ? 'percent' : 'amount',
-                    wholesale_margin: wholesaleMarginRaw,
-                    wholesale_margin_type: isWholesalePercent ? 'percent' : 'amount'
+                    
+                    // Margin cũng gửi undefined nếu không nhập
+                    retail_margin: item.excel.retailMargin,
+                    retail_margin_type: item.excel.retailUnit ? (item.excel.retailUnit === 'percent' ? 'percent' : 'amount') : undefined,
+                    wholesale_margin: item.excel.wholesaleMargin,
+                    wholesale_margin_type: item.excel.wholesaleUnit ? (item.excel.wholesaleUnit === 'percent' ? 'percent' : 'amount') : undefined
                 });
 
-                // F. Chuẩn bị data update UI (Hiển thị lại đúng cái User nhập)
-                uiUpdates.set(pid, {
-                    actual_cost: excelCost, // UI hiển thị giá Buôn
-                    retail_margin: retailMarginRaw,
-                    retail_margin_type: isRetailPercent ? 'percent' : 'amount',
-                    retail_price: retailPrice,
-                    wholesale_margin: wholesaleMarginRaw,
-                    wholesale_margin_type: isWholesalePercent ? 'percent' : 'amount',
-                    wholesale_price: wholesalePrice,
-                    is_dirty: false // Đã lưu xong
-                });
+                // F. Chuẩn bị data update UI (Chỉ update cái gì có thay đổi)
+                // Lưu ý: Update UI phía client sẽ chỉ hiển thị những gì Excel có.
+                const updateObj: any = { is_dirty: false };
+                if (excelCost !== undefined) updateObj.actual_cost = excelCost;
+                if (retailPrice !== undefined) updateObj.retail_price = retailPrice;
+                if (wholesalePrice !== undefined) updateObj.wholesale_price = wholesalePrice;
+                if (item.excel.retailMargin !== undefined) updateObj.retail_margin = item.excel.retailMargin;
+                
+                uiUpdates.set(pid, updateObj);
             });
 
             // 4. Gửi RPC
             const { error } = await supabase.rpc('bulk_update_product_prices', { p_data: payload });
             if (error) throw error;
 
-            message.success(`Đã cập nhật giá thành công cho ${payload.length} sản phẩm!`);
+            message.success(`Đã cập nhật giá (Partial) thành công cho ${payload.length} sản phẩm!`);
             setReviewModalVisible(false);
 
-            // 5. [NEW] Cập nhật UI ngay lập tức (Không cần reload trang nếu SP đang hiển thị)
+            // 5. Cập nhật UI ngay lập tức
             setProducts(prev => prev.map(p => {
                 if (uiUpdates.has(p.id)) {
                     return { ...p, ...uiUpdates.get(p.id) };
                 }
                 return p;
             }));
-            
-            // Nếu muốn chắc chắn, reload lại sau 1s (Optional)
-            // setTimeout(() => loadProducts(pagination.current, pagination.pageSize), 1000);
 
         } catch (err: any) {
             console.error(err);
