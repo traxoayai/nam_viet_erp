@@ -108,3 +108,25 @@ export const parseVoiceCommand = (transcript: string) => {
 
     return { type: 'UNKNOWN' };
 };
+
+export const parseLocationVoice = (transcript: string) => {
+    const text = transcript.toLowerCase();
+    
+    // Regex bắt các pattern phổ biến
+    // Ví dụ: "Tủ A tầng 2 ô 3", "Kệ 5 hàng 1 hộc 10"
+    
+    const cabinetRegex = /(?:tủ|kệ|khu|cabinet)\s*([a-z0-9\-\.]+)/i;
+    const rowRegex = /(?:tầng|hàng|dãy|row)\s*([a-z0-9\-\.]+)/i;
+    const slotRegex = /(?:ô|hộc|vị trí|slot)\s*([a-z0-9\-\.]+)/i;
+
+    const cabinetMatch = text.match(cabinetRegex);
+    const rowMatch = text.match(rowRegex);
+    const slotMatch = text.match(slotRegex);
+
+    return {
+        cabinet: cabinetMatch ? cabinetMatch[1].toUpperCase() : null, // Tự uppercase cho đẹp
+        row: rowMatch ? rowMatch[1].toUpperCase() : null,
+        slot: slotMatch ? slotMatch[1].toUpperCase() : null,
+        hasMatch: !!(cabinetMatch || rowMatch || slotMatch)
+    };
+};

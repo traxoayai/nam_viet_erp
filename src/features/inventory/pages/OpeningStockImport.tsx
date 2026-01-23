@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Table, Button, Upload, Card, Typography, Select, message, Tag, Steps, Space, Input, DatePicker, InputNumber } from 'antd';
-import { CloudUploadOutlined, CheckCircleOutlined, DeleteOutlined, SaveOutlined, ImportOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
+import { CloudUploadOutlined, CheckCircleOutlined, DeleteOutlined, SaveOutlined, ImportOutlined, EditOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 import { supabase } from '@/shared/lib/supabaseClient';
@@ -124,6 +124,49 @@ export const OpeningStockImport = () => {
 
         fetchAllProducts();
     }, []);
+
+    // --- [NEW] DOWNLOAD TEMPLATE ---
+    const handleDownloadTemplate = () => {
+        try {
+            // Header chuẩn theo logic đọc file
+            const header = [
+                'MaSP',         // A
+                'TenSP',        // B
+                'SoLuong',      // C
+                'GiaVon',       // D
+                'DonVi',        // E
+                'LoSanXuat',    // F
+                'HanSuDung'     // G
+            ];
+
+            // Dữ liệu mẫu (Sample)
+            const sampleData = [
+                ['SP001', 'Paracetamol 500mg', 100, 5000, 'Hộp', 'LO001', '2026-12-31'],
+                ['SP002', 'Vitamin C (Ví dụ)', 50, 2000, 'Lọ', '', '']
+            ];
+
+            // Tạo Workbook
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet([header, ...sampleData]);
+
+            // Set độ rộng cột cho đẹp
+            ws['!cols'] = [
+                { wch: 15 }, // MaSP
+                { wch: 30 }, // TenSP
+                { wch: 10 }, // SoLuong
+                { wch: 15 }, // GiaVon
+                { wch: 10 }, // DonVi
+                { wch: 15 }, // Lo
+                { wch: 15 }  // HSD
+            ];
+
+            XLSX.utils.book_append_sheet(wb, ws, "Mau_Nhap_Ton");
+            XLSX.writeFile(wb, "Mau_Nhap_Ton_Dau_Ky.xlsx");
+        } catch (error) {
+            console.error("Download Error:", error);
+            message.error("Lỗi tạo file mẫu");
+        }
+    };
 
     // 2. Xử lý File Excel
     const handleFileUpload = (file: File) => {
@@ -488,11 +531,20 @@ export const OpeningStockImport = () => {
                             <ImportOutlined style={{fontSize: 64, color: '#1890ff'}} />
                             <div>
                                 <Title level={4}>Tải lên file Excel</Title>
-                                <Text type="secondary">Cột: TenSP, SoLuong, GiaVon, DonVi, LoSanXuat, HanSuDung</Text>
+                                <Text type="secondary">Cột: MaSP, TenSP, SoLuong, GiaVon, DonVi, LoSanXuat, HanSuDung</Text>
                             </div>
-                            <Upload beforeUpload={handleFileUpload} showUploadList={false} accept=".xlsx,.xls">
-                                <Button type="primary" size="large">Chọn File Excel</Button>
-                            </Upload>
+                            
+                            {/* [NEW] Button Group */}
+                            <Space>
+                                <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+                                    Tải File Mẫu
+                                </Button>
+                                <Upload beforeUpload={handleFileUpload} showUploadList={false} accept=".xlsx,.xls">
+                                    <Button type="primary" icon={<CloudUploadOutlined />}>
+                                        Chọn File Excel
+                                    </Button>
+                                </Upload>
+                            </Space>
                         </Space>
                     )}
                 </Card>

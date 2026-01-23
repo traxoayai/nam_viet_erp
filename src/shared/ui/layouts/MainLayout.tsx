@@ -14,6 +14,7 @@ import {
   GlobalOutlined,
   MedicineBoxOutlined,
   SendOutlined,
+  AimOutlined,
   PlusOutlined,
   StockOutlined,
   DollarCircleOutlined,
@@ -253,7 +254,7 @@ const finalMenuItems: MenuItem[] = [
     getItem(
       <Link to="/quick/product-location">Cài nhanh Vị trí Sản phẩm</Link>,
       "/quick/product-location",
-      <BarcodeOutlined />
+      <AimOutlined />
     ),
     getItem(
       <Link to="/quick/barcode-edit">Cập nhật Mã Vạch Nhanh</Link>,

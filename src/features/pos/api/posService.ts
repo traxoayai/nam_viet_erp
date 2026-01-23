@@ -26,6 +26,7 @@ export const posService = {
       image_url: item.image_url,
       unit: item.unit,
       stock_quantity: item.stock_quantity,
+      status: item.status,
       location: {
         cabinet: item.location_cabinet,
         row: item.location_row,
