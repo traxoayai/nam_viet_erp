@@ -1,3 +1,4 @@
+// src/features/inventory/pages/InventoryCheckDetail.tsx
 import { useEffect, useRef } from 'react';
 import { Layout, Button, Typography, InputNumber, Row, Col, Tag, Space, message, Modal } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, AudioOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';

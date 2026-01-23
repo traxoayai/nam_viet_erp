@@ -1,3 +1,4 @@
+// src/features/inventory/components/CreateCheckModal.tsx
 import { useEffect, useState } from 'react';
 import { Modal, Form, Select, Input, Radio, message } from 'antd';
 import { posService } from '@/features/pos/api/posService';
@@ -48,7 +49,16 @@ export const CreateCheckModal = ({ open, onCancel }: any) => {
     useEffect(() => {
         if (warehouseId) {
             inventoryService.getCabinets(warehouseId)
-                .then(setCabinets)
+                .then(data => {
+                    // [FIX] Nếu data là mảng object, map lấy location/name. Nếu là string[] thì giữ nguyên.
+                    // Giả sử API trả về [{ shelf_location: 'Kệ A' }, ...]
+                    const cabinetNames = Array.isArray(data) 
+                        ? data.map((item: any) => typeof item === 'string' ? item : (item.shelf_location || item.name))
+                        : [];
+                    // Lọc trùng và bỏ null
+                    const uniqueNames = [...new Set(cabinetNames.filter(Boolean))];
+                    setCabinets(uniqueNames);
+                })
                 .catch(() => setCabinets([]));
         } else {
             setCabinets([]);
@@ -151,11 +161,15 @@ export const CreateCheckModal = ({ open, onCancel }: any) => {
                             name="cabinet_name" 
                             label={`Chọn Tủ / Kệ (Tại kho ${activeWarehouses.find(w => w.id === warehouseId)?.name || '...'})`}
                             rules={[{ required: true, message: 'Vui lòng chọn vị trí tủ/kệ' }]}
-                            style={{animation: 'fadeIn 0.3s'}}
-                            help={cabinets.length === 0 ? "Kho này chưa được cấu hình vị trí (Cabinet/Row)." : null}
+                            // ...
                         >
                             <Select showSearch placeholder="Tìm vị trí tủ/kệ..." size="large">
-                                {cabinets.map(c => <Select.Option key={c} value={c}>{c}</Select.Option>)}
+                                {cabinets.map((c, index) => (
+                                    // [FIX] Dùng index làm key dự phòng nếu c trùng (dù đã Set)
+                                    <Select.Option key={`${c}-${index}`} value={c}>
+                                        {c}
+                                    </Select.Option>
+                                ))}
                             </Select>
                         </Form.Item>
                     )}

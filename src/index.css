@@ -171,3 +171,12 @@ button:focus-visible {
   background-color: #722ed1; 
   box-shadow: 0 0 0 1px #ffffff;
 }
+
+/* --- ROW FLASH ANIMATION --- */
+@keyframes flashRow {
+  0% { background-color: #e6f7ff; }
+  100% { background-color: transparent; }
+}
+.flash-row {
+  animation: flashRow 1.5s ease-out;
+}

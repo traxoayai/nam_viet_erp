@@ -21,6 +21,7 @@ export interface InboundDetailItem {
   product_id: number;
   product_name: string;
   sku: string;
+  barcode?: string; // [NEW] Supported barcode
   image_url: string;
   unit: string;
   stock_management_type: 'lot_date' | 'serial' | 'simple';

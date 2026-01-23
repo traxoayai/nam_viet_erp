@@ -1,17 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    Table, Input, Button, Typography, Card, Space, Upload, Modal, Tag, message, Row, Col 
+    Table, Input, Button, Typography, Card, Space, Upload, Modal, Tag, message, Row, Col, List, Grid, Pagination
 } from 'antd';
 import { 
     UploadOutlined, BarcodeOutlined, CheckCircleOutlined, SyncOutlined, 
-    DownloadOutlined, WarningOutlined 
+    DownloadOutlined, CameraOutlined 
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/shared/lib/supabaseClient';
 import { useDebounce } from '@/shared/hooks/useDebounce'; 
+import { Html5QrcodeScanner } from "html5-qrcode"; // Đảm bảo đã install: npm i html5-qrcode
 
 const { Title } = Typography;
 const { Search } = Input;
+const { useBreakpoint } = Grid;
+
+// --- CAMERA COMPONENT (INLINE FOR CONVENIENCE) ---
+// Có thể tách ra file riêng: src/shared/ui/common/CameraScanModal.tsx
+const CameraScanModal = ({ open, onCancel, onScan }: any) => {
+    useEffect(() => {
+        let scanner: any;
+        let timeout: any;
+
+        if (open) {
+            // [FIX] Wait for Modal DOM to be ready
+            timeout = setTimeout(() => {
+                if (document.getElementById('reader')) {
+                    scanner = new Html5QrcodeScanner(
+                        "reader", { fps: 10, qrbox: 250 }, false
+                    );
+                    scanner.render((decodedText: any) => {
+                        scanner.clear();
+                        onScan(decodedText);
+                    }, (error: any) => console.warn(error));
+                }
+            }, 300); // 300ms delay safely
+        }
+
+        return () => { 
+            clearTimeout(timeout);
+            try { if(scanner) scanner.clear(); } catch(e) {} 
+        };
+    }, [open]);
+
+    return (
+        <Modal open={open} onCancel={onCancel} footer={null} title="Quét mã vạch" destroyOnClose>
+            <div id="reader" style={{ width: '100%' }}></div>
+        </Modal>
+    );
+};
 
 interface ProductBarcodeRow {
     key: number;
@@ -19,27 +56,28 @@ interface ProductBarcodeRow {
     name: string;
     sku: string;
     imageUrl?: string;
-    
     base_unit: string;
     wholesale_unit: string;
-    
-    base_barcode: string;      // Mã vạch lẻ
-    wholesale_barcode: string; // Mã vạch buôn
-
+    base_barcode: string;
+    wholesale_barcode: string;
     is_dirty?: boolean;
 }
 
 const QuickBarcodePage: React.FC = () => {
-    // --- STATE ---
+    const screens = useBreakpoint(); // Check màn hình (Mobile vs Desktop)
     const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
     const [products, setProducts] = useState<ProductBarcodeRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [savingId, setSavingId] = useState<number | null>(null);
     const [searchText, setSearchText] = useState('');
     
-    // Excel Match
+    // Excel State
     const [reviewModalVisible, setReviewModalVisible] = useState(false);
     const [matchedData, setMatchedData] = useState<any[]>([]);
+
+    // Camera State
+    const [cameraOpen, setCameraOpen] = useState(false);
+    const [scanTarget, setScanTarget] = useState<{ id: number, field: 'base_barcode' | 'wholesale_barcode' } | null>(null);
 
     const debouncedSearch = useDebounce(searchText, 500);
 
@@ -69,42 +107,30 @@ const QuickBarcodePage: React.FC = () => {
 
             const rows = (data || []).map((p: any) => {
                 const units = p.units || [];
-                
-                // Logic tìm Unit Lẻ (Base/Retail)
                 const retailObj = units.find((u: any) => u.is_base || u.unit_type === 'retail') || {};
-                
-                // Logic tìm Unit Buôn (Wholesale)
-                // Ưu tiên type='wholesale', sau đó đến unit trùng tên wholesale_unit
                 const wholesaleObj = units.find((u: any) => u.unit_type === 'wholesale') 
                                   || units.find((u: any) => !u.is_base && u.unit_name === p.wholesale_unit) || {};
 
                 return {
-                    key: p.id,
-                    id: p.id,
-                    name: p.name,
-                    sku: p.sku,
-                    imageUrl: p.image_url,
+                    key: p.id, id: p.id, name: p.name, sku: p.sku, imageUrl: p.image_url,
                     base_unit: p.retail_unit || '---',
                     wholesale_unit: p.wholesale_unit || '---',
-                    
                     base_barcode: retailObj.barcode || '',
                     wholesale_barcode: wholesaleObj.barcode || '',
-                    
                     is_dirty: false
                 };
             });
             
             setProducts(rows);
             setPagination(prev => ({ ...prev, current: page, pageSize, total: count || 0 }));
-
         } catch (error: any) {
-            message.error("Lỗi tải dữ liệu: " + error.message);
+            message.error("Lỗi tải: " + error.message);
         } finally {
             setLoading(false);
         }
     };
 
-    // --- 2. HANDLE INPUT ---
+    // --- 2. HANDLE INPUT & SCAN ---
     const handleCellChange = (key: number, field: string, value: string) => {
         setProducts(prev => prev.map(item => {
             if (item.key === key) {
@@ -112,6 +138,29 @@ const QuickBarcodePage: React.FC = () => {
             }
             return item;
         }));
+    };
+
+    // Mở Camera
+    const openScan = (id: number, field: 'base_barcode' | 'wholesale_barcode') => {
+        setScanTarget({ id, field });
+        setCameraOpen(true);
+    };
+
+    // Xử lý kết quả quét
+    const handleScanResult = (code: string) => {
+        setCameraOpen(false);
+        if (scanTarget) {
+            // 1. Update UI
+            handleCellChange(scanTarget.id, scanTarget.field, code);
+            
+            // 2. Auto Save (UX Optimization: Quét xong lưu luôn)
+            const product = products.find(p => p.id === scanTarget.id);
+            if (product) {
+                const updatedProduct = { ...product, [scanTarget.field]: code };
+                handleSaveRow(updatedProduct);
+                message.success(`Đã gán mã: ${code}`);
+            }
+        }
     };
 
     // --- 3. SAVE ---
@@ -123,15 +172,13 @@ const QuickBarcodePage: React.FC = () => {
                 base_barcode: row.base_barcode,
                 wholesale_barcode: row.wholesale_barcode
             }];
-
             const { error } = await supabase.rpc('bulk_update_product_barcodes', { p_data: payload });
             if (error) throw error;
 
-            message.success("Đã cập nhật mã vạch!");
             setProducts(prev => prev.map(p => p.id === row.id ? { ...p, is_dirty: false } : p));
         } catch (e: any) {
             if (e.message?.includes('unique') || e.message?.includes('duplicate')) {
-                message.error("Lỗi: Mã vạch này đã tồn tại ở sản phẩm khác!");
+                message.error("Lỗi: Mã này đã thuộc về sản phẩm khác!");
             } else {
                 message.error("Lỗi lưu: " + e.message);
             }
@@ -233,90 +280,114 @@ const QuickBarcodePage: React.FC = () => {
         }
     };
 
-    // --- COLUMNS ---
-    const columns = [
-        { 
-            title: 'Sản phẩm', dataIndex: 'name', width: 250, fixed: 'left' as const,
-            render: (t: string, r: any) => (
-                <div>
-                    <div style={{fontWeight:600}}>{t}</div>
-                    <Tag>{r.sku}</Tag>
+    // --- RENDERERS ---
+    
+    // [NEW] MOBILE CARD VIEW
+    const renderMobileItem = (item: ProductBarcodeRow) => (
+        <Card style={{ marginBottom: 12 }} bodyStyle={{ padding: 12 }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                <div style={{ width: 60, height: 60, background: '#f5f5f5', borderRadius: 4, overflow: 'hidden' }}>
+                    <img src={item.imageUrl || "https://placehold.co/60"} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
-            )
+                <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 15 }}>{item.name}</div>
+                    <Tag color="blue">{item.sku}</Tag>
+                </div>
+                <div>
+                    {item.is_dirty ? (
+                        <Button type="primary" shape="circle" icon={<SyncOutlined spin />} onClick={() => handleSaveRow(item)} />
+                    ) : (
+                        <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+                    )}
+                </div>
+            </div>
+
+            <Space direction="vertical" style={{ width: '100%' }}>
+                {/* Mã Lẻ */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <Tag style={{ width: 60, textAlign: 'center' }}>{item.base_unit}</Tag>
+                    <Input 
+                        placeholder="Mã lẻ..." 
+                        value={item.base_barcode}
+                        onChange={e => handleCellChange(item.id, 'base_barcode', e.target.value)}
+                        onBlur={() => item.is_dirty && handleSaveRow(item)}
+                        suffix={<CameraOutlined style={{fontSize: 18, color: '#1890ff'}} onClick={() => openScan(item.id, 'base_barcode')} />}
+                    />
+                </div>
+
+                {/* Mã Buôn */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <Tag color="orange" style={{ width: 60, textAlign: 'center' }}>{item.wholesale_unit}</Tag>
+                    <Input 
+                        placeholder="Mã buôn..." 
+                        value={item.wholesale_barcode}
+                        onChange={e => handleCellChange(item.id, 'wholesale_barcode', e.target.value)}
+                        onBlur={() => item.is_dirty && handleSaveRow(item)}
+                        suffix={<CameraOutlined style={{fontSize: 18, color: '#faad14'}} onClick={() => openScan(item.id, 'wholesale_barcode')} />}
+                    />
+                </div>
+            </Space>
+        </Card>
+    );
+
+    // DESKTOP TABLE COLUMNS
+    const columns = [
+        { title: 'Sản phẩm', dataIndex: 'name', width: 250, render: (t:any, r:any) => <div><b>{t}</b><br/><Tag>{r.sku}</Tag></div> },
+        { 
+            title: `Mã Lẻ (${products[0]?.base_unit || 'Unit'})`, dataIndex: 'base_barcode', width: 200,
+            render: (v:any, r:any) => <Input value={v} onChange={e => handleCellChange(r.id, 'base_barcode', e.target.value)} suffix={<CameraOutlined onClick={() => openScan(r.id, 'base_barcode')} />} onBlur={() => r.is_dirty && handleSaveRow(r)} />
         },
-        {
-            title: () => <span style={{color: '#1890ff'}}><BarcodeOutlined/> Mã Lẻ (/{products[0]?.base_unit})</span>,
-            dataIndex: 'base_barcode',
-            width: 200,
-            render: (val: string, r: ProductBarcodeRow) => (
-                <Input 
-                    value={val}
-                    onChange={e => handleCellChange(r.id, 'base_barcode', e.target.value)}
-                    onBlur={() => { if(r.is_dirty) handleSaveRow(r) }}
-                    placeholder="Quét mã lẻ..."
-                    suffix={<BarcodeOutlined style={{color: '#ccc'}}/>}
-                />
-            )
+        { 
+            title: `Mã Buôn (${products[0]?.wholesale_unit || 'Unit'})`, dataIndex: 'wholesale_barcode', width: 200,
+            render: (v:any, r:any) => <Input value={v} onChange={e => handleCellChange(r.id, 'wholesale_barcode', e.target.value)} suffix={<CameraOutlined onClick={() => openScan(r.id, 'wholesale_barcode')} />} onBlur={() => r.is_dirty && handleSaveRow(r)} />
         },
-        {
-            title: () => <span style={{color: '#52c41a'}}><BarcodeOutlined/> Mã Buôn (/{products[0]?.wholesale_unit})</span>,
-            dataIndex: 'wholesale_barcode',
-            width: 200,
-            render: (val: string, r: ProductBarcodeRow) => (
-                <Input 
-                    value={val}
-                    onChange={e => handleCellChange(r.id, 'wholesale_barcode', e.target.value)}
-                    onBlur={() => { if(r.is_dirty) handleSaveRow(r) }}
-                    placeholder="Quét mã buôn..."
-                    suffix={<BarcodeOutlined style={{color: '#ccc'}}/>}
-                />
-            )
-        },
-        {
-            title: '', width: 50, fixed: 'right' as const,
-            render: (_:any, r:any) => r.is_dirty ? 
-                <Button 
-                    type="primary" 
-                    size="small" 
-                    loading={savingId === r.id}
-                    icon={<SyncOutlined />} 
-                    onClick={() => handleSaveRow(r)} 
-                /> 
-                : <CheckCircleOutlined style={{color:'#52c41a'}} />
-        }
+        { title: '', width: 60, render: (_:any, r:any) => r.is_dirty ? <Button type="primary" icon={<SyncOutlined spin={savingId === r.id}/>} onClick={() => handleSaveRow(r)}/> : <CheckCircleOutlined style={{color: '#52c41a'}}/> }
     ];
 
     return (
-        <div style={{ padding: 12 }}>
+        <div style={{ 
+            paddingTop: screens.md ? 24 : 12,
+            paddingLeft: screens.md ? 24 : 12,
+            paddingRight: screens.md ? 24 : 12,
+            paddingBottom: 80, 
+            background: '#f0f2f5', 
+            minHeight: '100vh' 
+        }}>
             <Card bodyStyle={{padding: 16}}>
-                <Row gutter={16} align="middle" style={{marginBottom:16}}>
-                    <Col span={8}><Title level={4} style={{margin:0}}><BarcodeOutlined/> Cập nhật Barcode</Title></Col>
-                    <Col span={8}><Search placeholder="Tìm sản phẩm, barcode..." onSearch={val => setSearchText(val)} onChange={e => setSearchText(e.target.value)} /></Col>
-                    <Col span={8} style={{textAlign:'right'}}>
-                        <Space>
-                            <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>Tải Mẫu</Button>
-                            <Upload showUploadList={false} beforeUpload={handleFileUpload} accept=".xlsx">
-                                <Button type="primary" icon={<UploadOutlined />}>Nhập Excel</Button>
-                            </Upload>
-                        </Space>
-                    </Col>
+                {/* TOOLBAR */}
+                <Row gutter={[16, 16]} align="middle" style={{marginBottom: 16}}>
+                    <Col xs={24} md={8}><Title level={4} style={{margin:0}}><BarcodeOutlined/> Cập nhật Barcode</Title></Col>
+                    <Col xs={24} md={8}><Search placeholder="Tìm sản phẩm..." onSearch={val => setSearchText(val)} onChange={e => setSearchText(e.target.value)} /></Col>
+                    {screens.md && (
+                        <Col span={8} style={{textAlign:'right'}}>
+                            <Space><Button icon={<DownloadOutlined/>} onClick={handleDownloadTemplate}>Tải Mẫu</Button><Upload showUploadList={false} beforeUpload={handleFileUpload}><Button icon={<UploadOutlined/>}>Import</Button></Upload></Space>
+                        </Col>
+                    )}
                 </Row>
 
-                <div style={{background:'#fffbe6', padding:8, marginBottom:12, borderRadius:4, border:'1px solid #ffe58f'}}>
-                    <WarningOutlined style={{color:'#faad14'}}/> <b>Mẹo:</b> Đặt con trỏ chuột vào ô nhập và sử dụng máy quét mã vạch để nhập liệu siêu tốc.
-                </div>
+                {/* VIEW SWITCHER */}
+                {screens.md ? (
+                    <Table dataSource={products} columns={columns} rowKey="id" loading={loading} pagination={false} scroll={{y: 600}} bordered size="small"/>
+                ) : (
+                    <List 
+                        dataSource={products} 
+                        renderItem={renderMobileItem} 
+                        loading={loading}
+                        locale={{ emptyText: "Không tìm thấy sản phẩm" }}
+                    />
+                )}
 
-                <Table 
-                    dataSource={products} columns={columns} rowKey="id" loading={loading}
-                    pagination={{
-                        current: pagination.current, pageSize: pagination.pageSize, total: pagination.total,
-                        onChange: (p, s) => loadProducts(p, s)
-                    }}
-                    scroll={{x: 800, y: 600}} size="small" bordered
-                />
+                {/* PAGINATION */}
+                <div style={{ marginTop: 16, textAlign: 'right' }}>
+                    <Pagination 
+                        current={pagination.current} pageSize={pagination.pageSize} total={pagination.total} 
+                        onChange={(p, s) => loadProducts(p, s)} 
+                    />
+                </div>
             </Card>
 
-            <Modal title="Kết quả Excel Barcode" width={700} open={reviewModalVisible} onCancel={() => setReviewModalVisible(false)} onOk={applyExcelMatches}>
+            {/* MODALS */}
+            <Modal title="Kết quả Excel" open={reviewModalVisible} onCancel={() => setReviewModalVisible(false)} onOk={applyExcelMatches} width={700}>
                 <Table 
                     dataSource={matchedData} rowKey="rowIndex" pagination={false} scroll={{y:400}}
                     columns={[
@@ -325,6 +396,12 @@ const QuickBarcodePage: React.FC = () => {
                     ]} 
                 />
             </Modal>
+
+            <CameraScanModal 
+                open={cameraOpen} 
+                onCancel={() => setCameraOpen(false)} 
+                onScan={handleScanResult} 
+            />
         </div>
     );
 };

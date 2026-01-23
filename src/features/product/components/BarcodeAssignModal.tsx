@@ -1,3 +1,4 @@
+// src/features/product/components/BarcodeAssignModal.tsx
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Select, message, Typography, Tag } from 'antd';
 import { BarcodeOutlined } from '@ant-design/icons';

@@ -36,6 +36,7 @@ import { PutawayListTemplate } from "@/features/inventory/components/print/Putaw
 import { supabase } from "@/shared/lib/supabaseClient"; 
 import { ScannerListener } from "@/shared/ui/warehouse-tools/ScannerListener"; // [NEW]
 import { BarcodeAssignModal } from "@/features/product/components/BarcodeAssignModal"; // [NEW]
+import { useRowFlasher } from "@/shared/hooks/useRowFlasher"; // [NEW]
 
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
@@ -44,6 +45,9 @@ const WarehouseReceiptPage = () => {
   const params = useParams();
   const navigate = useNavigate();
   const screens = useBreakpoint();
+  
+  // [NEW] Row Flasher Hook
+  const { highlightedKey, flash } = useRowFlasher();
 
   // FIX ID LOGIC: Handle id, poId, taskId
   const idStr = params.id || params.poId || params.taskId;
@@ -66,10 +70,22 @@ const WarehouseReceiptPage = () => {
   const [unknownBarcode, setUnknownBarcode] = useState("");
 
   const handleScan = async (code: string) => {
+      // 1. Kiểm tra Local trước (Ưu tiên sản phẩm đã có trong phiếu)
+      // Tìm theo Barcode hoặc SKU
+      const existingItem = workingItems.find(i => i.barcode === code || i.sku === code);
+
+      if (existingItem) {
+          // [LOGIC] Tự động tăng số lượng
+          const newQty = (existingItem.input_quantity || 0) + 1;
+          updateWorkingItem(existingItem.product_id, { input_quantity: newQty });
+          
+          message.success(`Đã nhập thêm: ${existingItem.product_name}`);
+          flash(existingItem.product_id); // [NEW] Flash UI
+          return;
+      }
+
       const hide = message.loading("Tra cứu...", 0);
       try {
-          // 1. Check in workingItems (Local Optimization) - Skip if no barcode data in workingItems
-          
           // 2. Lookup via RPC
           const { data } = await supabase.rpc('search_products_pos', {
              p_keyword: code,
@@ -79,10 +95,12 @@ const WarehouseReceiptPage = () => {
 
           if (data && data.length > 0) {
               const product = data[0];
+              // Check again by ID in case barcode mismatch locally
               const item = workingItems.find(i => i.product_id === product.id);
               if (item) {
                   updateWorkingItem(item.product_id, { input_quantity: (item.input_quantity || 0) + 1 });
                   message.success(`Đã +1: ${product.name}`);
+                  flash(item.product_id);
               } else {
                   message.warning(`Sản phẩm "${product.name}" không có trong phiếu nhập này!`);
               }
@@ -103,9 +121,10 @@ const WarehouseReceiptPage = () => {
         const item = workingItems.find(i => i.product_id === product.id);
         if (item) {
             updateWorkingItem(item.product_id, { input_quantity: (item.input_quantity || 0) + 1 });
-            message.success(`Đã +1: ${product.name}`);
+            message.success(`Đã gán mã & Nhập thêm: ${product.name}`);
+            flash(item.product_id);
         } else {
-            message.warning(`Sản phẩm "${product.name}" không có trong phiếu nhập này!`);
+            message.warning(`Đã gán mã cho "${product.name}", nhưng sản phẩm này không nằm trong phiếu nhập!`);
         }
   };
 
@@ -251,6 +270,8 @@ const WarehouseReceiptPage = () => {
                 rowKey="product_id"
                 pagination={false}
                 scroll={{ x: 1000 }}
+                // [NEW] Highlight row animation
+                rowClassName={(record) => String(record.product_id) === highlightedKey ? "flash-row" : ""}
             />
         </Card>
 
