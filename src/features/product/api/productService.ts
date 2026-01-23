@@ -142,7 +142,7 @@ export const upsertProduct = async (formValues: any) => {
   // 1. CHUẨN BỊ PAYLOAD PRODUCT (Tham số 1)
   const productJson = {
     id: formValues.id, 
-    code: formValues.sku, // Map SKU -> Code
+    sku: formValues.sku,
     name: formValues.productName,
     barcode: formValues.barcode,
     registration_number: formValues.registrationNumber,
