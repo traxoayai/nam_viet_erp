@@ -14,6 +14,7 @@ import { PosLeftSection } from "../../features/pos/components/layout/PosLeftSect
 import { PosCustomerCard } from "../../features/pos/components/layout/PosCustomerCard";
 import { PosPaymentSection } from "../../features/pos/components/layout/PosPaymentSection";
 import { PosActionToolbar } from "../../features/pos/components/layout/PosActionToolbar";
+import { BarcodeAssignModal } from "@/features/product/components/BarcodeAssignModal"; // [NEW]
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -39,6 +40,8 @@ const PosPage = () => {
   // const searchRef = useRef<any>(null); // Không cần ref nữa vì dùng ScannerListener
 
   const [warehouses, setWarehouses] = useState<WarehousePosData[]>([]);
+  const [assignModalVisible, setAssignModalVisible] = useState(false); // [NEW]
+  const [unknownBarcode, setUnknownBarcode] = useState(''); // [NEW]
 
   // --- LOGIC 1: AUTO SELECT WAREHOUSE ---
   useEffect(() => {
@@ -109,8 +112,15 @@ const PosPage = () => {
               const product = data[0];
               addToCart(product); // Hàm này đã được fix lỗi map data ở trên
               // message.success(`Đã thêm: ${product.name}`); // addToCart đã báo rồi
+              // message.success(`Đã thêm: ${product.name}`); // addToCart đã báo rồi
           } else {
-              message.error(`Không tìm thấy mã: ${code}`);
+              // message.error(`Không tìm thấy mã: ${code}`);
+              // [NEW] Trigger Quick Assign
+              // setUnknownBarcode(code);
+              // setAssignModalVisible(true);
+               // Play error sound ?
+               setUnknownBarcode(code);
+               setAssignModalVisible(true);
           }
       } catch (err) {
           console.error(err);
@@ -155,6 +165,21 @@ const PosPage = () => {
             setWarehouseId(newId);
         }
      });
+  };
+
+  // [NEW] Callback sau khi gán mã thành công
+  const handleAssignSuccess = (product: any) => {
+      setAssignModalVisible(false);
+      // Data product từ RPC returns: { id, name, sku, unit, barcode, price }
+      addToCart({
+          id: product.id,
+          name: product.name,
+          sku: product.sku,
+          image_url: product.image_url, 
+          price: product.price,
+          unit: product.unit,
+      } as any);
+      message.success(`Đã thêm ${product.name} vào đơn!`);
   };
 
   return (
@@ -227,6 +252,15 @@ const PosPage = () => {
               </div>
           </Content>
        </Layout>
+
+
+        {/* [NEW] Quick Assign Modal */}
+        <BarcodeAssignModal 
+            visible={assignModalVisible}
+            scannedBarcode={unknownBarcode}
+            onCancel={() => setAssignModalVisible(false)}
+            onSuccess={handleAssignSuccess}
+        />
     </Layout>
   );
 };

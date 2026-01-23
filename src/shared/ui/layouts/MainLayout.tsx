@@ -256,6 +256,11 @@ const finalMenuItems: MenuItem[] = [
       <BarcodeOutlined />
     ),
     getItem(
+      <Link to="/quick/barcode-edit">Cập nhật Mã Vạch Nhanh</Link>,
+      "/quick/barcode-edit",
+      <BarcodeOutlined />
+    ),
+    getItem(
       <Link to="/quick/promo-code">Tạo nhanh Mã Giảm Giá</Link>,
       "/quick/promo-code",
       <GiftOutlined />

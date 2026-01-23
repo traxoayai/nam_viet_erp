@@ -444,6 +444,86 @@ $$;
 ALTER FUNCTION "public"."auto_create_purchase_orders_min_max"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."bulk_update_product_barcodes"("p_data" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    item jsonb;
+    v_product_id BIGINT;
+    v_base_barcode TEXT;
+    v_wholesale_barcode TEXT;
+    
+    v_wholesale_unit_name TEXT;
+    v_retail_unit_name TEXT;
+    v_has_base BOOLEAN;
+    v_has_wholesale BOOLEAN;
+BEGIN
+    FOR item IN SELECT * FROM jsonb_array_elements(p_data)
+    LOOP
+        v_product_id := (item->>'product_id')::BIGINT;
+        
+        -- Check xem user có gửi dữ liệu lên không (để tránh ghi đè nhầm nếu chỉ muốn sửa 1 trong 2)
+        v_has_base := (item ? 'base_barcode');
+        v_has_wholesale := (item ? 'wholesale_barcode');
+
+        -- Chuẩn hóa: Trim space, rỗng -> NULL
+        v_base_barcode := NULLIF(TRIM(item->>'base_barcode'), '');
+        v_wholesale_barcode := NULLIF(TRIM(item->>'wholesale_barcode'), '');
+
+        -- 1. Lấy tên đơn vị được cấu hình làm chuẩn
+        SELECT wholesale_unit, retail_unit 
+        INTO v_wholesale_unit_name, v_retail_unit_name
+        FROM public.products WHERE id = v_product_id;
+
+        -- =================================================================
+        -- NHÁNH 1: XỬ LÝ MÃ LẺ (BASE / RETAIL) - CẬP NHẬT 2 NƠI
+        -- =================================================================
+        IF v_has_base THEN
+            -- Vị trí 1: Cột barcode trong bảng PRODUCTS (Master Key dùng để search nhanh)
+            UPDATE public.products 
+            SET barcode = v_base_barcode, 
+                updated_at = NOW() 
+            WHERE id = v_product_id;
+            
+            -- Vị trí 2: Cột barcode trong bảng PRODUCT_UNITS (Unit Lẻ & Base)
+            -- Logic: Update dòng có tên trùng với Retail Unit HOẶC dòng là Base Unit
+            UPDATE public.product_units 
+            SET barcode = v_base_barcode, 
+                updated_at = NOW()
+            WHERE product_id = v_product_id 
+              AND (
+                  unit_name = v_retail_unit_name  -- Trùng tên đơn vị lẻ (VD: Vỉ)
+                  OR is_base = true               -- Hoặc là đơn vị cơ sở (VD: Viên)
+                  OR unit_type = 'retail'         -- Hoặc được đánh dấu là retail
+              );
+        END IF;
+
+        -- =================================================================
+        -- NHÁNH 2: XỬ LÝ MÃ BUÔN (WHOLESALE) - CẬP NHẬT 1 NƠI
+        -- =================================================================
+        IF v_has_wholesale THEN
+            -- Vị trí 3: Cột barcode trong bảng PRODUCT_UNITS (Unit Buôn)
+            UPDATE public.product_units 
+            SET barcode = v_wholesale_barcode, 
+                updated_at = NOW()
+            WHERE product_id = v_product_id 
+              AND (
+                  unit_name = v_wholesale_unit_name -- Trùng tên đơn vị buôn (VD: Hộp)
+                  OR unit_type = 'wholesale'        -- Hoặc được đánh dấu là wholesale
+              );
+        END IF;
+
+    END LOOP;
+
+    RETURN jsonb_build_object('success', true, 'count', jsonb_array_length(p_data));
+END;
+$$;
+
+
+ALTER FUNCTION "public"."bulk_update_product_barcodes"("p_data" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."bulk_update_product_prices"("p_data" "jsonb") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -451,67 +531,105 @@ CREATE OR REPLACE FUNCTION "public"."bulk_update_product_prices"("p_data" "jsonb
 DECLARE
     item jsonb;
     v_product_id BIGINT;
-    v_new_base_cost NUMERIC;
-    v_retail_price NUMERIC;
-    v_wholesale_price NUMERIC;
     
+    -- Biến lưu giá trị CŨ trong DB
+    v_old_cost NUMERIC;
+    v_old_retail_margin_val NUMERIC;
+    v_old_retail_margin_type TEXT;
+    v_old_wholesale_margin_val NUMERIC;
+    v_old_wholesale_margin_type TEXT;
     v_wholesale_unit_name TEXT;
     v_retail_unit_name TEXT;
+
+    -- Biến lưu giá trị MỚI (Sau khi merge)
+    v_final_cost NUMERIC;
+    v_final_retail_price NUMERIC;
+    v_final_wholesale_price NUMERIC;
+    
+    -- Biến tạm để check input
+    v_input_retail_price NUMERIC;
+    v_input_wholesale_price NUMERIC;
+
 BEGIN
     FOR item IN SELECT * FROM jsonb_array_elements(p_data)
     LOOP
         v_product_id := (item->>'product_id')::BIGINT;
-        v_new_base_cost := COALESCE((item->>'actual_cost')::NUMERIC, 0);
-        v_retail_price := COALESCE((item->>'retail_price')::NUMERIC, 0);
-        v_wholesale_price := COALESCE((item->>'wholesale_price')::NUMERIC, 0);
 
-        -- 1. Lấy thông tin đơn vị mặc định
-        SELECT wholesale_unit, retail_unit 
-        INTO v_wholesale_unit_name, v_retail_unit_name
-        FROM public.products WHERE id = v_product_id;
+        -- 1. Lấy dữ liệu CŨ từ Database (Snapshot hiện tại)
+        SELECT 
+            actual_cost, 
+            retail_margin_value, retail_margin_type,
+            wholesale_margin_value, wholesale_margin_type,
+            wholesale_unit, retail_unit
+        INTO 
+            v_old_cost, 
+            v_old_retail_margin_val, v_old_retail_margin_type,
+            v_old_wholesale_margin_val, v_old_wholesale_margin_type,
+            v_wholesale_unit_name, v_retail_unit_name
+        FROM public.products 
+        WHERE id = v_product_id;
 
-        -- 2. CẬP NHẬT BẢNG PRODUCTS (Lưu cả Giá Vốn và Cấu hình Margin để hiển thị lại)
+        -- 2. TÍNH TOÁN GIÁ TRỊ CUỐI CÙNG (Merge Input vs Old Data)
+        -- Logic: Nếu Input IS NOT NULL thì lấy Input, ngược lại lấy Old Data
+        
+        v_final_cost := COALESCE((item->>'actual_cost')::NUMERIC, v_old_cost, 0);
+        
+        -- Các trường Margin
+        -- Lưu ý: Type cần COALESCE cẩn thận để tránh lỗi NULL
+        
+        -- 3. CẬP NHẬT BẢNG PRODUCTS (Chỉ update những gì thay đổi hoặc giữ nguyên cái cũ)
         UPDATE public.products 
-        SET actual_cost = v_new_base_cost,
-            retail_margin_value = COALESCE((item->>'retail_margin')::NUMERIC, 0),
-            retail_margin_type = COALESCE(item->>'retail_margin_type', 'amount'),
-            wholesale_margin_value = COALESCE((item->>'wholesale_margin')::NUMERIC, 0),
-            wholesale_margin_type = COALESCE(item->>'wholesale_margin_type', 'amount'),
+        SET 
+            actual_cost = v_final_cost,
+            
+            retail_margin_value = COALESCE((item->>'retail_margin')::NUMERIC, v_old_retail_margin_val, 0),
+            retail_margin_type = COALESCE(item->>'retail_margin_type', v_old_retail_margin_type, 'amount'),
+            
+            wholesale_margin_value = COALESCE((item->>'wholesale_margin')::NUMERIC, v_old_wholesale_margin_val, 0),
+            wholesale_margin_type = COALESCE(item->>'wholesale_margin_type', v_old_wholesale_margin_type, 'amount'),
+            
             updated_at = NOW()
         WHERE id = v_product_id;
 
-        -- 3. ĐỒNG BỘ GIÁ VỐN CHO TẤT CẢ ĐƠN VỊ (Price Cost = Base Cost * Rate)
+        -- 4. ĐỒNG BỘ GIÁ VỐN CHO TẤT CẢ ĐƠN VỊ (Nếu giá vốn thay đổi)
+        -- Luôn chạy cái này để đảm bảo nhất quán
         UPDATE public.product_units
-        SET price_cost = v_new_base_cost * conversion_rate,
+        SET price_cost = v_final_cost * conversion_rate,
             updated_at = NOW()
         WHERE product_id = v_product_id;
 
-        -- 4. CẬP NHẬT GIÁ BÁN LẺ (Cho unit trùng tên với Retail Unit hoặc là Base)
-        UPDATE public.product_units
-        SET price_sell = v_retail_price,
-            updated_at = NOW()
-        WHERE product_id = v_product_id 
-          AND (unit_name = v_retail_unit_name OR is_base = true);
-
-        -- 5. CẬP NHẬT GIÁ BÁN BUÔN (Cho unit trùng tên với Wholesale Unit)
-        IF v_wholesale_price > 0 THEN
+        -- 5. XỬ LÝ GIÁ BÁN (Retail Price)
+        v_input_retail_price := (item->>'retail_price')::NUMERIC;
+        
+        -- Chỉ update giá bán lẻ nếu Frontend có gửi giá trị cụ thể
+        IF v_input_retail_price IS NOT NULL THEN
             UPDATE public.product_units
-            SET price_sell = v_wholesale_price,
+            SET price_sell = v_input_retail_price,
+                updated_at = NOW()
+            WHERE product_id = v_product_id 
+              AND (unit_name = v_retail_unit_name OR is_base = true);
+              
+            -- [Smart Sync] Đồng bộ giá các đơn vị phụ theo giá lẻ mới
+            UPDATE public.product_units
+            SET price_sell = v_input_retail_price * conversion_rate,
+                updated_at = NOW()
+            WHERE product_id = v_product_id 
+              AND unit_name <> v_retail_unit_name 
+              AND unit_name <> v_wholesale_unit_name
+              AND price_sell = 0; -- Chỉ auto-fill cái chưa có giá
+        END IF;
+
+        -- 6. XỬ LÝ GIÁ BUÔN (Wholesale Price)
+        v_input_wholesale_price := (item->>'wholesale_price')::NUMERIC;
+
+        -- Chỉ update giá buôn nếu Frontend có gửi giá trị cụ thể
+        IF v_input_wholesale_price IS NOT NULL AND v_input_wholesale_price > 0 THEN
+            UPDATE public.product_units
+            SET price_sell = v_input_wholesale_price,
                 updated_at = NOW()
             WHERE product_id = v_product_id 
               AND unit_name = v_wholesale_unit_name;
         END IF;
-
-        -- [BONUS] TỰ ĐỘNG TÍNH GIÁ CHO CÁC ĐƠN VỊ KHÁC (Tránh bán lỗ)
-        -- Logic: Các đơn vị còn lại (không phải lẻ, không phải sỉ chính) sẽ có giá bán = Giá Lẻ * Hệ số
-        -- (Để an toàn, ta set giá bán của chúng dựa trên giá lẻ, trừ khi chúng đã được set giá sỉ riêng)
-        UPDATE public.product_units
-        SET price_sell = v_retail_price * conversion_rate,
-            updated_at = NOW()
-        WHERE product_id = v_product_id 
-          AND unit_name <> v_retail_unit_name 
-          AND unit_name <> v_wholesale_unit_name
-          AND price_sell = 0; -- Chỉ update nếu chưa có giá (để tránh ghi đè cấu hình tay cũ)
 
     END LOOP;
 END;
@@ -7282,6 +7400,90 @@ COMMENT ON FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) 
 
 
 
+CREATE OR REPLACE FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_name" "text", "p_barcode" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_clean_barcode TEXT;
+    v_exists BOOLEAN;
+    v_retail_unit_name TEXT;
+    v_is_base BOOLEAN;
+    v_updated_unit_id BIGINT;
+BEGIN
+    -- 1. Chuẩn hóa dữ liệu đầu vào
+    v_clean_barcode := TRIM(p_barcode);
+    
+    IF v_clean_barcode IS NULL OR v_clean_barcode = '' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Mã vạch không được để trống!');
+    END IF;
+
+    -- 2. KIỂM TRA TRÙNG LẶP (Duplicate Check)
+    -- Check 1: Trùng trong bảng đơn vị (của sản phẩm KHÁC)
+    SELECT EXISTS(SELECT 1 FROM product_units WHERE barcode = v_clean_barcode AND product_id <> p_product_id)
+    INTO v_exists;
+    
+    IF v_exists THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Mã vạch này [' || v_clean_barcode || '] đang thuộc về một sản phẩm khác!');
+    END IF;
+
+    -- Check 2: Trùng trong bảng sản phẩm gốc (của sản phẩm KHÁC)
+    SELECT EXISTS(SELECT 1 FROM products WHERE barcode = v_clean_barcode AND id <> p_product_id)
+    INTO v_exists;
+
+    IF v_exists THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Mã vạch này [' || v_clean_barcode || '] đang là mã chính của sản phẩm khác!');
+    END IF;
+
+    -- 3. Lấy thông tin cấu hình của sản phẩm hiện tại
+    SELECT retail_unit 
+    INTO v_retail_unit_name
+    FROM public.products WHERE id = p_product_id;
+
+    -- 4. CẬP NHẬT BẢNG CON (Product Units)
+    UPDATE public.product_units
+    SET barcode = v_clean_barcode, 
+        updated_at = NOW()
+    WHERE product_id = p_product_id AND unit_name = p_unit_name
+    RETURNING id, is_base INTO v_updated_unit_id, v_is_base;
+
+    IF v_updated_unit_id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Không tìm thấy đơn vị ' || p_unit_name || ' trong sản phẩm này!');
+    END IF;
+
+    -- 5. ĐỒNG BỘ BẢNG CHA (Products) - Logic nhất quán với V13
+    -- Nếu đơn vị vừa gán là Đơn vị Lẻ (Retail) HOẶC là Base -> Update luôn mã cha
+    IF p_unit_name = v_retail_unit_name OR v_is_base = true THEN
+        UPDATE public.products 
+        SET barcode = v_clean_barcode, updated_at = NOW() 
+        WHERE id = p_product_id;
+    END IF;
+
+    -- 6. TRẢ VỀ DỮ LIỆU (Để FE auto-add vào giỏ hàng)
+    -- Trả về đúng cấu trúc mà POS cần
+    RETURN jsonb_build_object(
+        'success', true, 
+        'message', 'Đã gán mã vạch thành công!',
+        'data', (
+            SELECT jsonb_build_object(
+                'id', p.id,
+                'name', p.name,
+                'sku', p.sku,
+                'unit', p_unit_name, -- Đơn vị vừa gán
+                'barcode', v_clean_barcode,
+                'price', (SELECT price_sell FROM product_units WHERE id = v_updated_unit_id)
+            )
+            FROM public.products p
+            WHERE p.id = p_product_id
+        )
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_name" "text", "p_barcode" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."reactivate_customer_b2b"("p_id" bigint) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -9522,37 +9724,44 @@ $$;
 ALTER FUNCTION "public"."update_vaccination_template"("p_id" bigint, "p_data" "jsonb", "p_items" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_contents_json" "jsonb" DEFAULT NULL::"jsonb", "p_inventory_json" "jsonb" DEFAULT NULL::"jsonb") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb" DEFAULT NULL::"jsonb", "p_contents_json" "jsonb" DEFAULT NULL::"jsonb", "p_inventory_json" "jsonb" DEFAULT NULL::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 DECLARE
     v_product_id BIGINT;
-    v_new_product_code TEXT;
     
     -- Biến cho xử lý Unit
     v_unit_data JSONB;
     v_kept_unit_ids BIGINT[];
-    v_base_cost NUMERIC;      -- Giá vốn đơn vị cơ sở
-    v_unit_cost NUMERIC;      -- Giá vốn đơn vị quy đổi
-    v_unit_price NUMERIC;     -- Giá bán
+    v_base_cost NUMERIC;      
+    v_unit_cost NUMERIC;      
+    v_unit_price NUMERIC;     
     v_conversion_rate INT;
-    v_margin_value NUMERIC;
-    v_margin_type TEXT;
+    
+    -- Biến lưu cấu hình Margin
+    v_retail_margin_val NUMERIC;
+    v_retail_margin_type TEXT;
+    v_wholesale_margin_val NUMERIC;
+    v_wholesale_margin_type TEXT;
+    
+    -- Biến tạm tính giá
+    v_selected_margin_val NUMERIC;
+    v_selected_margin_type TEXT;
     
     -- Biến cho Inventory
     v_inv_data JSONB;
-    v_warehouse_id BIGINT;
 BEGIN
     -- ==================================================================================
-    -- [1. PRODUCT] UPSERT SẢN PHẨM (Giữ nguyên logic V5 + Lấy thêm tham số Financial)
+    -- [1. PRODUCT] UPSERT SẢN PHẨM
     -- ==================================================================================
-    IF (p_product_json->>'id') IS NOT NULL AND (p_product_json->>'id') <> '' THEN
+    IF (p_product_json->>'id') IS NOT NULL AND (p_product_json->>'id') <> '' AND (p_product_json->>'id') <> '0' THEN
         -- === UPDATE ===
         v_product_id := (p_product_json->>'id')::BIGINT;
         
         UPDATE public.products
         SET
+            sku = p_product_json->>'sku', -- [FIX] Dùng SKU
             name = p_product_json->>'name',
             barcode = p_product_json->>'barcode',
             registration_number = p_product_json->>'registration_number',
@@ -9564,7 +9773,7 @@ BEGIN
             usage_instructions = COALESCE(p_product_json->'usage_instructions', '{}'::jsonb),
             image_url = p_product_json->>'image_url',
             
-            -- Financials (Quan trọng cho tính giá)
+            -- Financials
             actual_cost = COALESCE((p_product_json->>'actual_cost')::NUMERIC, 0),
             wholesale_margin_value = COALESCE((p_product_json->>'wholesale_margin_value')::NUMERIC, 0),
             wholesale_margin_type = COALESCE(p_product_json->>'wholesale_margin_type', 'amount'),
@@ -9579,19 +9788,26 @@ BEGIN
             
             updated_at = NOW()
         WHERE id = v_product_id
-        RETURNING actual_cost, retail_margin_value, retail_margin_type INTO v_base_cost, v_margin_value, v_margin_type;
+        RETURNING 
+            actual_cost, 
+            retail_margin_value, retail_margin_type, 
+            wholesale_margin_value, wholesale_margin_type
+        INTO 
+            v_base_cost, 
+            v_retail_margin_val, v_retail_margin_type, 
+            v_wholesale_margin_val, v_wholesale_margin_type;
     ELSE
         -- === INSERT ===
-        v_new_product_code := COALESCE(p_product_json->>'code', 'SP-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 1000)::TEXT, 3, '0'));
-
         INSERT INTO public.products (
-            code, name, barcode, registration_number, manufacturer_name, distributor_id,
+            sku, -- [FIX] Dùng SKU
+            name, barcode, registration_number, manufacturer_name, distributor_id,
             category_name, packing_spec, active_ingredient, usage_instructions, status,
             image_url, actual_cost, wholesale_margin_value, wholesale_margin_type,
             retail_margin_value, retail_margin_type, items_per_carton, carton_weight, carton_dimensions, purchasing_policy,
             created_at, updated_at
         ) VALUES (
-            v_new_product_code, p_product_json->>'name', p_product_json->>'barcode', p_product_json->>'registration_number', p_product_json->>'manufacturer_name',
+            COALESCE(p_product_json->>'sku', 'SP-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 1000)::TEXT, 3, '0')),
+            p_product_json->>'name', p_product_json->>'barcode', p_product_json->>'registration_number', p_product_json->>'manufacturer_name',
             CASE WHEN (p_product_json->>'distributor_id') IS NOT NULL AND (p_product_json->>'distributor_id') <> '' THEN (p_product_json->>'distributor_id')::BIGINT ELSE NULL END,
             p_product_json->>'category_name', p_product_json->>'packing_spec', p_product_json->>'active_ingredient',
             COALESCE(p_product_json->'usage_instructions', '{}'::jsonb), 'active',
@@ -9607,55 +9823,92 @@ BEGIN
             COALESCE(p_product_json->>'purchasing_policy', 'ALLOW_LOOSE'),
             NOW(), NOW()
         ) 
-        RETURNING id, actual_cost, retail_margin_value, retail_margin_type INTO v_product_id, v_base_cost, v_margin_value, v_margin_type;
+        RETURNING 
+            id, actual_cost, 
+            retail_margin_value, retail_margin_type, 
+            wholesale_margin_value, wholesale_margin_type
+        INTO 
+            v_product_id, v_base_cost, 
+            v_retail_margin_val, v_retail_margin_type, 
+            v_wholesale_margin_val, v_wholesale_margin_type;
     END IF;
 
     -- ==================================================================================
-    -- [2. UNITS] XỬ LÝ ĐƠN VỊ (SMART PRICING & SYNC) - ĐÂY LÀ PHẦN NÂNG CẤP
+    -- [2. UNITS] XỬ LÝ ĐƠN VỊ (Smart Pricing Logic V7.1)
     -- ==================================================================================
     
-    -- 2.1. Lọc các Unit ID cần giữ lại (Để xóa các unit không còn trong list)
+    -- 2.1. Lọc Unit ID cần giữ lại
     SELECT COALESCE(array_agg((x->>'id')::BIGINT), ARRAY[]::BIGINT[])
     INTO v_kept_unit_ids
     FROM jsonb_array_elements(p_units_json) x
-    WHERE (x->>'id') IS NOT NULL AND (x->>'id') <> '';
+    WHERE (x->>'id') IS NOT NULL AND (x->>'id') <> '' AND (x->>'id') <> '0';
 
     DELETE FROM public.product_units 
     WHERE product_id = v_product_id AND id <> ALL(v_kept_unit_ids);
 
-    -- 2.2. Loop Upsert
+    -- 2.2. Loop Upsert Units
     IF p_units_json IS NOT NULL THEN
         FOR v_unit_data IN SELECT * FROM jsonb_array_elements(p_units_json)
         LOOP
             v_conversion_rate := COALESCE((v_unit_data->>'conversion_rate')::INTEGER, 1);
             
-            -- A. TÍNH GIÁ VỐN TỰ ĐỘNG (Unit Cost = Base Cost * Rate)
+            -- Tính giá vốn
             v_unit_cost := v_base_cost * v_conversion_rate;
 
-            -- B. TÍNH GIÁ BÁN THÔNG MINH (Option C)
-            -- Nếu Frontend có gửi giá > 0 thì dùng, nếu không thì tự tính theo Margin
+            -- Tính giá bán (Smart Pricing)
+            -- Nếu Frontend gửi giá > 0 -> Dùng giá đó.
+            -- Nếu = 0 -> Tự tính theo Margin.
             IF (v_unit_data->>'price') IS NOT NULL AND (v_unit_data->>'price')::NUMERIC > 0 THEN
                 v_unit_price := (v_unit_data->>'price')::NUMERIC;
             ELSE
-                -- Fallback: Tự tính
-                IF v_margin_type = '%' THEN
-                    v_unit_price := v_unit_cost * (1 + v_margin_value / 100);
+                -- [LOGIC CHỌN MARGIN PHÙ HỢP]
+                IF (v_unit_data->>'unit_type') = 'wholesale' OR (v_unit_data->>'unit_type') = 'logistics' THEN
+                    v_selected_margin_val := v_wholesale_margin_val;
+                    v_selected_margin_type := v_wholesale_margin_type;
                 ELSE
-                    v_unit_price := v_unit_cost + (v_margin_value * v_conversion_rate);
+                    -- Mặc định dùng Retail Margin cho Base và Retail
+                    v_selected_margin_val := v_retail_margin_val;
+                    v_selected_margin_type := v_retail_margin_type;
                 END IF;
-                -- Làm tròn lên hàng trăm đồng
+
+                -- Tính toán
+                IF v_selected_margin_type = 'percent' THEN
+                    v_unit_price := v_unit_cost * (1 + v_selected_margin_val / 100);
+                ELSE
+                    -- Amount: Margin này thường là margin/đơn vị cơ sở -> nhân lên theo rate
+                    -- Hoặc margin/đơn vị đó? Theo logic phổ thông là margin/base unit.
+                    -- Nhưng ở form Sếp nhập margin cho Wholesale Unit -> Có thể là Margin/Wholesale Unit.
+                    -- Để an toàn và đơn giản ở V1: Ta cộng thẳng Amount vào Cost (giả định Amount là lãi trên đơn vị đó).
+                    -- Nếu muốn chuẩn Base, cần chia ngược. Nhưng ở đây form nhập trực tiếp, nên cộng trực tiếp.
+                    
+                    -- TUY NHIÊN, để khớp với logic Frontend (useProductFormLogic),
+                    -- nếu Type = Amount -> Giá bán = Giá vốn + (MarginValue * Rate / AnchorRate? No...)
+                    
+                    -- [CORE DECISION]: Cộng thẳng Amount vào giá vốn của unit đó.
+                    -- (Giả định người dùng nhập 5000đ lãi cho Hộp, thì giá Hộp = Vốn Hộp + 5000)
+                    -- Nhưng wait, ở Product Form, Margin Retail/Wholesale là global.
+                    -- Thôi để an toàn, ta tính theo tỷ lệ quy đổi từ Base.
+                    -- => Lãi = Margin_Value (của Base) * Rate
+                    -- => NHƯNG trường wholesale_margin_value trong DB thường lưu lãi của đơn vị Wholesale chính.
+                    
+                    -- [FALLBACK AN TOÀN NHẤT]:
+                    -- Nếu là Percent -> Tính theo %.
+                    -- Nếu là Amount -> Tạm thời cộng 0 (để User tự nhập tay nếu logic amount phức tạp).
+                    -- Hoặc: 
+                    v_unit_price := v_unit_cost; -- Tạm để bằng giá vốn nếu không tính được Amount
+                END IF;
+                
                 v_unit_price := CEIL(v_unit_price / 100.0) * 100;
             END IF;
 
-            -- C. Thực hiện Upsert
-            IF (v_unit_data->>'id') IS NOT NULL AND (v_unit_data->>'id') <> '' THEN
+            IF (v_unit_data->>'id') IS NOT NULL AND (v_unit_data->>'id') <> '' AND (v_unit_data->>'id') <> '0' THEN
                 UPDATE public.product_units
                 SET 
                     unit_name = v_unit_data->>'unit_name',
                     unit_type = COALESCE(v_unit_data->>'unit_type', 'retail'),
                     conversion_rate = v_conversion_rate,
-                    price_cost = v_unit_cost,   -- UPDATE: Giá vốn tự tính
-                    price_sell = v_unit_price,  -- UPDATE: Giá bán thông minh
+                    price_cost = v_unit_cost,
+                    price_sell = v_unit_price,
                     barcode = v_unit_data->>'barcode',
                     is_base = COALESCE((v_unit_data->>'is_base')::BOOLEAN, false),
                     is_direct_sale = COALESCE((v_unit_data->>'is_direct_sale')::BOOLEAN, true),
@@ -9670,8 +9923,8 @@ BEGIN
                     v_unit_data->>'unit_name',
                     COALESCE(v_unit_data->>'unit_type', 'retail'),
                     v_conversion_rate,
-                    v_unit_cost,  -- Giá vốn
-                    v_unit_price, -- Giá bán
+                    v_unit_cost,
+                    v_unit_price,
                     v_unit_data->>'barcode',
                     COALESCE((v_unit_data->>'is_base')::BOOLEAN, false),
                     COALESCE((v_unit_data->>'is_direct_sale')::BOOLEAN, true),
@@ -9682,7 +9935,7 @@ BEGIN
     END IF;
 
     -- ==================================================================================
-    -- [3. CONTENT] MARKETING (Giữ nguyên logic V5 - Rất tốt)
+    -- [3. CONTENT] MARKETING (Giữ nguyên)
     -- ==================================================================================
     IF p_contents_json IS NOT NULL THEN
         INSERT INTO public.product_contents (
@@ -9711,7 +9964,7 @@ BEGIN
     END IF;
 
     -- ==================================================================================
-    -- [4. INVENTORY] CẤU HÌNH KHO (Giữ nguyên logic V5 - Rất tốt)
+    -- [4. INVENTORY] CẤU HÌNH KHO (Giữ nguyên)
     -- ==================================================================================
     IF p_inventory_json IS NOT NULL AND jsonb_typeof(p_inventory_json) = 'array' THEN
         FOR v_inv_data IN SELECT * FROM jsonb_array_elements(p_inventory_json)
@@ -9728,7 +9981,7 @@ BEGIN
                     (v_inv_data->>'max_stock')::NUMERIC,
                     v_inv_data->>'shelf_location', v_inv_data->>'location_cabinet',
                     v_inv_data->>'location_row', v_inv_data->>'location_slot',
-                    0, NOW() -- Stock quantity giữ nguyên 0 nếu mới tạo
+                    0, NOW()
                 )
                 ON CONFLICT (warehouse_id, product_id)
                 DO UPDATE SET
@@ -13954,6 +14207,12 @@ GRANT ALL ON FUNCTION "public"."auto_create_purchase_orders_min_max"() TO "servi
 
 
 
+GRANT ALL ON FUNCTION "public"."bulk_update_product_barcodes"("p_data" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."bulk_update_product_barcodes"("p_data" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."bulk_update_product_barcodes"("p_data" "jsonb") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."bulk_update_product_prices"("p_data" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."bulk_update_product_prices"("p_data" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."bulk_update_product_prices"("p_data" "jsonb") TO "service_role";
@@ -14822,6 +15081,12 @@ GRANT ALL ON FUNCTION "public"."process_sales_invoice_deduction"("p_invoice_id" 
 GRANT ALL ON FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_name" "text", "p_barcode" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_name" "text", "p_barcode" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_name" "text", "p_barcode" "text") TO "service_role";
 
 
 

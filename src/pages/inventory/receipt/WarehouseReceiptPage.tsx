@@ -1,4 +1,4 @@
-// src/pages/inventory/receipt/WarehouseReceiptPage.tsx
+import { useState } from "react";
 import {
   ArrowLeft,
   Camera,
@@ -25,6 +25,7 @@ import {
   Typography,
   Result,
   Empty,
+  message, // [NEW]
 } from "antd";
 import { useParams, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -32,6 +33,9 @@ import dayjs from "dayjs";
 import { useInboundDetail } from "@/features/inventory/hooks/useInboundDetail";
 import { InboundDetailItem } from "@/features/inventory/types/inbound";
 import { PutawayListTemplate } from "@/features/inventory/components/print/PutawayListTemplate";
+import { supabase } from "@/shared/lib/supabaseClient"; 
+import { ScannerListener } from "@/shared/ui/warehouse-tools/ScannerListener"; // [NEW]
+import { BarcodeAssignModal } from "@/features/product/components/BarcodeAssignModal"; // [NEW]
 
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
@@ -56,6 +60,54 @@ const WarehouseReceiptPage = () => {
       handleCameraScan,
       handleDocUpload
   } = useInboundDetail(idStr);
+
+  // [NEW] Integration Logic
+  const [assignModalVisible, setAssignModalVisible] = useState(false);
+  const [unknownBarcode, setUnknownBarcode] = useState("");
+
+  const handleScan = async (code: string) => {
+      const hide = message.loading("Tra cứu...", 0);
+      try {
+          // 1. Check in workingItems (Local Optimization) - Skip if no barcode data in workingItems
+          
+          // 2. Lookup via RPC
+          const { data } = await supabase.rpc('search_products_pos', {
+             p_keyword: code,
+             p_limit: 1,
+             p_warehouse_id: 0 // Global search or use proper ID if available
+          });
+
+          if (data && data.length > 0) {
+              const product = data[0];
+              const item = workingItems.find(i => i.product_id === product.id);
+              if (item) {
+                  updateWorkingItem(item.product_id, { input_quantity: (item.input_quantity || 0) + 1 });
+                  message.success(`Đã +1: ${product.name}`);
+              } else {
+                  message.warning(`Sản phẩm "${product.name}" không có trong phiếu nhập này!`);
+              }
+          } else {
+               // Not found -> Quick Assign
+               setUnknownBarcode(code);
+               setAssignModalVisible(true);
+          }
+      } catch (err) {
+          console.error(err);
+      } finally {
+          hide();
+      }
+  };
+
+  const handleAssignSuccess = (product: any) => {
+        setAssignModalVisible(false);
+        const item = workingItems.find(i => i.product_id === product.id);
+        if (item) {
+            updateWorkingItem(item.product_id, { input_quantity: (item.input_quantity || 0) + 1 });
+            message.success(`Đã +1: ${product.name}`);
+        } else {
+            message.warning(`Sản phẩm "${product.name}" không có trong phiếu nhập này!`);
+        }
+  };
 
   // --- COLUMNS ---
   const columns = [
@@ -235,6 +287,15 @@ const WarehouseReceiptPage = () => {
         <PutawayListTemplate 
             items={workingItems.filter(i => (i.input_quantity || 0) > 0)} 
             poCode={detail.po_info.code}
+        />
+
+        {/* [NEW] Tools */}
+        <ScannerListener onScan={handleScan} enabled={true} />
+        <BarcodeAssignModal 
+            visible={assignModalVisible}
+            scannedBarcode={unknownBarcode}
+            onCancel={() => setAssignModalVisible(false)}
+            onSuccess={handleAssignSuccess}
         />
     </div>
   );

@@ -62,6 +62,7 @@ import OpeningStockImport from "@/features/inventory/pages/OpeningStockImport";
 import QuickUnitPage from "@/pages/quick/QuickUnitPage";
 import QuickMinMaxPage from "@/pages/quick/QuickMinMaxPage";
 import QuickPricePage from "@/pages/quick/QuickPricePage";
+import QuickBarcodePage from "@/pages/quick/QuickBarcodePage";
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -261,6 +262,10 @@ const routes: RouteObject[] = [
           {
             path: "quick/price-edit",
             element: <QuickPricePage />,
+          },
+          {
+            path: "quick/barcode-edit",
+            element: <QuickBarcodePage />,
           },
           {
             path: "quick/promo-code",
