@@ -361,19 +361,8 @@ export const OpeningStockImport = () => {
                 const currentRate = r.is_large_unit ? prod.conversion_rate : 1;
                 const totalBase = r.quantity * currentRate;
                 
-                // Tạo options cho Select
-                const unitOptions = [
-                    { label: prod.base_unit, value: false }
-                ];
-                
-                // Nếu có Retail Unit khác Base
-                if (prod.retail_unit && prod.retail_unit !== prod.base_unit && prod.retail_rate > 1) {
-                     // Logic frontend hiện tại chỉ support boolean (True/False) cho is_large_unit.
-                     // Để đơn giản, nếu chọn Retail Unit (Lớn hơn Base), ta coi là Large Unit tạm thời
-                     // Nhưng cần cẩn thận vì conversion_rate đang bind chặt.
-                     // Tạm thời chỉ hiển thị Wholesale Unit vào option Large nếu có.
-                }
-                
+                // Logic tạo Options cho Select (Giữ nguyên)
+                const unitOptions = [{ label: prod.base_unit, value: false }];
                 if (prod.has_large_unit && prod.wholesale_unit) {
                     unitOptions.push({ label: prod.wholesale_unit, value: true });
                 }
@@ -396,18 +385,23 @@ export const OpeningStockImport = () => {
                                     const newData = [...data];
                                     const item = newData.find(i => i.key === r.key);
                                     item.is_large_unit = val;
-                                    // Update lại conversion rate tương ứng để hiển thị đúng
-                                    if (val && prod.wholesale_rate) {
-                                        item.matched_product.conversion_rate = prod.wholesale_rate;
-                                    }
                                     setData(newData);
                                 }}
                                 disabled={!prod.has_large_unit}
                                 options={unitOptions}
                             />
                         </div>
+                        
+                        {/* [CORE UPDATE] Phần hiển thị quy đổi chi tiết */}
                         <div style={{fontSize: 12, color: '#faad14', fontWeight: 500}}>
                             = {totalBase.toLocaleString()} {prod.base_unit}
+                            
+                            {/* Hiển thị công thức nếu đang chọn Đơn vị Lớn */}
+                            {r.is_large_unit && (
+                                <span style={{color: '#888', fontWeight: 'normal', marginLeft: 5}}>
+                                    (1 {prod.large_unit_name || prod.wholesale_unit} = {prod.conversion_rate} {prod.base_unit})
+                                </span>
+                            )}
                         </div>
                     </div>
                 );
