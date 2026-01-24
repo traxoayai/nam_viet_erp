@@ -2201,6 +2201,84 @@ COMMENT ON FUNCTION "public"."create_auto_replenishment_request"("p_dest_warehou
 
 
 
+CREATE OR REPLACE FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text" DEFAULT NULL::"text", "p_int_val" bigint DEFAULT NULL::bigint, "p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS bigint
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_check_id BIGINT;
+    v_code TEXT;
+BEGIN
+    -- A. Tạo mã phiếu KK-YYMMDD-HHMMSS
+    v_code := 'KK-' || TO_CHAR(NOW(), 'YYMMDD-HH24MISS');
+
+    -- B. Insert Header
+    INSERT INTO public.inventory_checks (
+        code, warehouse_id, status, note, created_by, total_system_value
+    )
+    VALUES (
+        v_code, p_warehouse_id, 'DRAFT', p_note, p_user_id, 0
+    )
+    RETURNING id INTO v_check_id;
+
+    -- C. Insert Items (SNAPSHOT)
+    INSERT INTO public.inventory_check_items (
+        check_id, product_id, batch_code, expiry_date, 
+        system_quantity, actual_quantity, cost_price, location_snapshot
+    )
+    SELECT 
+        v_check_id,
+        ib.product_id,
+        b.batch_code,
+        b.expiry_date,
+        ib.quantity, -- System Quantity
+        ib.quantity, -- Actual Default = System (Ban đầu coi như khớp)
+        p.actual_cost,
+        
+        -- [CORE OPTIMIZATION] Snapshot vị trí đầy đủ
+        -- Nếu có cả Tủ và Kệ -> "Tủ A - Kệ 01"
+        -- Nếu chỉ có Tủ -> "Tủ A"
+        -- Nếu rỗng -> NULL
+        TRIM(BOTH ' - ' FROM COALESCE(inv.location_cabinet, '') || CASE WHEN inv.shelf_location IS NOT NULL AND inv.shelf_location <> '' THEN ' - ' || inv.shelf_location ELSE '' END)
+    FROM public.inventory_batches ib
+    JOIN public.batches b ON ib.batch_id = b.id
+    JOIN public.products p ON ib.product_id = p.id
+    LEFT JOIN public.product_inventory inv ON ib.product_id = inv.product_id AND ib.warehouse_id = inv.warehouse_id
+    
+    WHERE ib.warehouse_id = p_warehouse_id 
+      AND ib.quantity > 0 -- Chỉ kiểm những lô còn hàng
+      
+      -- [LOGIC LỌC ĐA NĂNG]
+      AND (
+          (p_scope = 'ALL') 
+          OR
+          (p_scope = 'CATEGORY' AND p.category_name = p_text_val) 
+          OR
+          (p_scope = 'MANUFACTURER' AND p.manufacturer_name = p_text_val) 
+          OR
+          -- [FIXED] Tìm kiếm linh hoạt trong cả Cabinet và Shelf
+          (p_scope = 'CABINET' AND (
+              inv.location_cabinet = p_text_val 
+              OR inv.shelf_location = p_text_val
+          ))
+      );
+
+    -- D. Cập nhật tổng tiền sổ sách (Total System Value)
+    UPDATE public.inventory_checks 
+    SET total_system_value = (
+        SELECT COALESCE(SUM(system_quantity * cost_price), 0) 
+        FROM public.inventory_check_items WHERE check_id = v_check_id
+    )
+    WHERE id = v_check_id;
+
+    RETURN v_check_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."create_customer_b2b"("p_customer_data" "jsonb", "p_contacts" "jsonb"[]) RETURNS bigint
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -7400,67 +7478,71 @@ COMMENT ON FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint) 
 
 
 
-CREATE OR REPLACE FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_name" "text", "p_barcode" "text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_id" bigint, "p_barcode" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 DECLARE
     v_clean_barcode TEXT;
     v_exists BOOLEAN;
-    v_retail_unit_name TEXT;
+    
+    -- Biến để hứng dữ liệu sau update
+    v_unit_name TEXT;
     v_is_base BOOLEAN;
-    v_updated_unit_id BIGINT;
+    v_price NUMERIC;
+    
+    -- Biến để check logic đồng bộ bảng cha
+    v_product_retail_unit TEXT;
 BEGIN
-    -- 1. Chuẩn hóa dữ liệu đầu vào
     v_clean_barcode := TRIM(p_barcode);
     
     IF v_clean_barcode IS NULL OR v_clean_barcode = '' THEN
         RETURN jsonb_build_object('success', false, 'message', 'Mã vạch không được để trống!');
     END IF;
 
-    -- 2. KIỂM TRA TRÙNG LẶP (Duplicate Check)
-    -- Check 1: Trùng trong bảng đơn vị (của sản phẩm KHÁC)
-    SELECT EXISTS(SELECT 1 FROM product_units WHERE barcode = v_clean_barcode AND product_id <> p_product_id)
+    -- A. CHECK TRÙNG LẶP (An toàn tuyệt đối)
+    -- Check 1: Trùng với Unit khác (không tính chính nó)
+    SELECT EXISTS(SELECT 1 FROM product_units WHERE barcode = v_clean_barcode AND id <> p_unit_id)
     INTO v_exists;
     
     IF v_exists THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Mã vạch này [' || v_clean_barcode || '] đang thuộc về một sản phẩm khác!');
+        RETURN jsonb_build_object('success', false, 'message', 'Mã vạch này đang thuộc về một đơn vị khác!');
     END IF;
 
-    -- Check 2: Trùng trong bảng sản phẩm gốc (của sản phẩm KHÁC)
+    -- Check 2: Trùng với Product khác
     SELECT EXISTS(SELECT 1 FROM products WHERE barcode = v_clean_barcode AND id <> p_product_id)
     INTO v_exists;
 
     IF v_exists THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Mã vạch này [' || v_clean_barcode || '] đang là mã chính của sản phẩm khác!');
+        RETURN jsonb_build_object('success', false, 'message', 'Mã vạch này đang là mã chính của sản phẩm khác!');
     END IF;
 
-    -- 3. Lấy thông tin cấu hình của sản phẩm hiện tại
-    SELECT retail_unit 
-    INTO v_retail_unit_name
-    FROM public.products WHERE id = p_product_id;
+    -- B. LẤY THÔNG TIN SẢN PHẨM (Để phục vụ logic đồng bộ)
+    SELECT retail_unit INTO v_product_retail_unit
+    FROM products WHERE id = p_product_id;
 
-    -- 4. CẬP NHẬT BẢNG CON (Product Units)
+    -- C. CẬP NHẬT BẢNG CON (Product Units) - Dùng ID
     UPDATE public.product_units
     SET barcode = v_clean_barcode, 
         updated_at = NOW()
-    WHERE product_id = p_product_id AND unit_name = p_unit_name
-    RETURNING id, is_base INTO v_updated_unit_id, v_is_base;
+    WHERE id = p_unit_id
+    RETURNING unit_name, is_base, price_sell INTO v_unit_name, v_is_base, v_price;
 
-    IF v_updated_unit_id IS NULL THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Không tìm thấy đơn vị ' || p_unit_name || ' trong sản phẩm này!');
+    IF v_unit_name IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Không tìm thấy ID đơn vị này! Có thể đã bị xóa.');
     END IF;
 
-    -- 5. ĐỒNG BỘ BẢNG CHA (Products) - Logic nhất quán với V13
-    -- Nếu đơn vị vừa gán là Đơn vị Lẻ (Retail) HOẶC là Base -> Update luôn mã cha
-    IF p_unit_name = v_retail_unit_name OR v_is_base = true THEN
+    -- D. ĐỒNG BỘ BẢNG CHA (Products) - Logic thông minh
+    -- Cập nhật bảng cha nếu:
+    -- 1. Unit vừa gán là Base (Viên)
+    -- 2. HOẶC Unit vừa gán trùng tên với Retail Unit (Vỉ)
+    IF v_is_base = true OR v_unit_name = v_product_retail_unit THEN
         UPDATE public.products 
         SET barcode = v_clean_barcode, updated_at = NOW() 
         WHERE id = p_product_id;
     END IF;
 
-    -- 6. TRẢ VỀ DỮ LIỆU (Để FE auto-add vào giỏ hàng)
-    -- Trả về đúng cấu trúc mà POS cần
+    -- E. TRẢ VỀ DỮ LIỆU (Để FE auto-add vào giỏ hàng)
     RETURN jsonb_build_object(
         'success', true, 
         'message', 'Đã gán mã vạch thành công!',
@@ -7469,9 +7551,9 @@ BEGIN
                 'id', p.id,
                 'name', p.name,
                 'sku', p.sku,
-                'unit', p_unit_name, -- Đơn vị vừa gán
+                'unit', v_unit_name, 
                 'barcode', v_clean_barcode,
-                'price', (SELECT price_sell FROM product_units WHERE id = v_updated_unit_id)
+                'price', v_price
             )
             FROM public.products p
             WHERE p.id = p_product_id
@@ -7481,7 +7563,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_name" "text", "p_barcode" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_id" bigint, "p_barcode" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."reactivate_customer_b2b"("p_id" bigint) RETURNS "void"
@@ -8172,121 +8254,100 @@ $$;
 ALTER FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer DEFAULT 20) RETURNS TABLE("id" bigint, "name" "text", "sku" "text", "retail_price" numeric, "image_url" "text", "unit" "text", "stock_quantity" integer, "location_cabinet" "text", "location_row" "text", "location_slot" "text", "usage_instructions" "jsonb", "similarity_score" real)
+CREATE OR REPLACE FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer DEFAULT 20) RETURNS TABLE("id" bigint, "name" "text", "sku" "text", "barcode" "text", "retail_price" numeric, "image_url" "text", "unit" "text", "stock_quantity" integer, "location_cabinet" "text", "location_row" "text", "location_slot" "text", "usage_instructions" "jsonb", "status" "text", "similarity_score" real)
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
-DECLARE
-    v_clean_keyword text;
-    v_search_pattern text;
-BEGIN
-    -- 1. Làm sạch từ khóa
-    v_clean_keyword := TRIM(p_keyword);
-    
-    -- 2. Tạo mẫu tìm kiếm phân mảnh (VD: "para 500" -> "%para%500%")
-    v_search_pattern := '%' || REPLACE(v_clean_keyword, ' ', '%') || '%';
+    DECLARE
+        v_clean_keyword text;
+        v_search_pattern text;
+    BEGIN
+        -- A. Chuẩn hóa từ khóa
+        v_clean_keyword := TRIM(p_keyword);
+        
+        IF v_clean_keyword IS NULL OR v_clean_keyword = '' THEN
+            RETURN;
+        END IF;
 
-    RETURN QUERY
-    SELECT 
-        p.id,
-        p.name,
-        p.sku,
-        
-        -- Lấy giá bán lẻ (Nếu chưa có thì = 0)
-        COALESCE(u_retail.price_sell, 0) AS retail_price, 
-        p.image_url,
-        
-        -- Lấy tên đơn vị (Ưu tiên lẻ -> base)
-        COALESCE(u_retail.unit_name, u_base.unit_name, 'N/A') AS unit,
-        
-        -- Lấy tồn kho (Null -> 0)
-        COALESCE(inv.stock_quantity, 0)::INTEGER AS stock_quantity,
-        
-        -- Vị trí kho
-        inv.location_cabinet,
-        inv.location_row,
-        inv.location_slot,
-        
-        -- Hướng dẫn sử dụng
-        p.usage_instructions,
-        
-        -- === TÍNH ĐIỂM TƯƠNG ĐỒNG (SMART SCORE) ===
-        -- Logic: 
-        -- 1. Trúng Barcode/SKU: 1.0 điểm (Tuyệt đối)
-        -- 2. Trúng tên hoặc Hoạt chất: Tính điểm similarity (0.0 -> 1.0)
-        --    Lấy điểm cao nhất giữa Tên và Hoạt chất để sắp xếp
-        CASE 
-            WHEN p.barcode = v_clean_keyword THEN 1.0
-            WHEN u_retail.barcode = v_clean_keyword THEN 1.0
-            WHEN u_base.barcode = v_clean_keyword THEN 1.0
-            WHEN p.sku ILIKE v_clean_keyword || '%' THEN 0.9
-            ELSE GREATEST(
-                similarity(p.name, v_clean_keyword), 
-                similarity(COALESCE(p.active_ingredient, ''), v_clean_keyword)
-            )::REAL
-        END AS similarity_score
+        -- B. Tạo mẫu tìm kiếm phân mảnh (Logic Vàng: "Effe 150" -> "%Effe%150%")
+        v_search_pattern := '%' || REPLACE(v_clean_keyword, ' ', '%') || '%';
 
-    FROM public.products p
-    
-    -- JOIN Đơn vị lẻ
-    LEFT JOIN public.product_units u_retail 
-        ON p.id = u_retail.product_id AND u_retail.unit_type = 'retail'
-        
-    -- JOIN Đơn vị cơ sở
-    LEFT JOIN public.product_units u_base 
-        ON p.id = u_base.product_id AND u_base.is_base = true
-
-    -- JOIN Tồn kho
-    LEFT JOIN public.product_inventory inv 
-        ON p.id = inv.product_id AND inv.warehouse_id = p_warehouse_id
-
-    WHERE 
-        p.status = 'active'
-        AND (
-            -- 1. ƯU TIÊN TUYỆT ĐỐI: QUÉT MÃ VẠCH (Barcode Scanner)
-            p.barcode = v_clean_keyword
-            OR u_retail.barcode = v_clean_keyword
-            OR u_base.barcode = v_clean_keyword
+        -- C. TRUY VẤN CHÍNH
+        RETURN QUERY
+        SELECT 
+            p.id,
+            p.name,
+            p.sku,
+            p.barcode,
             
-            -- 2. TÌM THEO TÊN (Bao gồm gõ tắt, gõ không dấu)
-            OR p.name ILIKE v_search_pattern
-            OR p.name % v_clean_keyword 
+            COALESCE(u_retail.price_sell, 0) AS retail_price, 
+            p.image_url,
+            COALESCE(u_retail.unit_name, u_base.unit_name, 'N/A') AS unit,
+            COALESCE(inv.stock_quantity, 0)::INTEGER AS stock_quantity,
             
-            -- 3. TÌM THEO HOẠT CHẤT (Active Ingredient) - [MỚI]
-            -- (Dược sĩ gõ "parace" -> tìm thấy thuốc chứa paracetamol)
-            OR COALESCE(p.active_ingredient, '') ILIKE v_search_pattern
-            OR COALESCE(p.active_ingredient, '') % v_clean_keyword
+            inv.location_cabinet,
+            inv.location_row,
+            inv.location_slot,
+            p.usage_instructions,
+            p.status,
+            
+            -- [FEATURE] TÍNH ĐIỂM THÔNG MINH (SMART SCORE)
+            CASE 
+                -- 1. Barcode (Tuyệt đối - 100 điểm)
+                WHEN p.barcode = v_clean_keyword THEN 1.0::REAL
+                WHEN u_retail.barcode = v_clean_keyword THEN 1.0::REAL
+                WHEN u_base.barcode = v_clean_keyword THEN 1.0::REAL
+                
+                -- 2. SKU (90 điểm)
+                WHEN p.sku ILIKE v_clean_keyword || '%' THEN 0.9::REAL
+                
+                -- 3. Tên & Hoạt chất (Fuzzy Score)
+                ELSE GREATEST(
+                    similarity(p.name, v_clean_keyword), 
+                    similarity(COALESCE(p.active_ingredient, ''), v_clean_keyword)
+                )::REAL
+            END AS similarity_score
 
-            -- 4. TÌM THEO SKU
-            OR p.sku ILIKE v_clean_keyword || '%'
-        )
+        FROM public.products p
         
-    -- SẮP XẾP KẾT QUẢ
-    ORDER BY 
-        -- Nhóm 1: Trúng Barcode đẩy lên đầu tiên
-        (CASE 
-            WHEN p.barcode = v_clean_keyword OR u_retail.barcode = v_clean_keyword OR u_base.barcode = v_clean_keyword THEN 1 
-            ELSE 0 
-        END) DESC,
-        
-        -- Nhóm 2: Điểm tương đồng cao nhất (Dựa trên cả Tên và Hoạt chất)
-        similarity_score DESC,
-        
-        -- Nhóm 3: Ưu tiên hàng đang có sẵn trong kho
-        inv.stock_quantity DESC NULLS LAST,
-        
-        -- Nhóm 4: Tên ngắn gọn lên trước (thường là kết quả chính xác hơn)
-        LENGTH(p.name) ASC
-        
-    LIMIT p_limit;
-END;
-$$;
+        -- JOIN các bảng liên quan
+        LEFT JOIN public.product_units u_retail ON p.id = u_retail.product_id AND u_retail.unit_type = 'retail'
+        LEFT JOIN public.product_units u_base ON p.id = u_base.product_id AND u_base.is_base = true
+        LEFT JOIN public.product_inventory inv ON p.id = inv.product_id AND inv.warehouse_id = p_warehouse_id
+
+        WHERE 
+            p.status IN ('active', 'inactive') -- [FEATURE] Tìm cả hàng Inactive
+            AND (
+                -- 1. Barcode
+                p.barcode = v_clean_keyword
+                OR u_retail.barcode = v_clean_keyword
+                OR u_base.barcode = v_clean_keyword
+                
+                -- 2. SKU
+                OR p.sku ILIKE v_clean_keyword || '%'
+                
+                -- 3. TÌM KIẾM VIẾT TẮT & THÔNG MINH
+                -- [FEATURE] "Effe 150" -> Ra Efferalgan 150mg
+                OR p.name ILIKE v_search_pattern          
+                OR p.name % v_clean_keyword               
+                
+                OR COALESCE(p.active_ingredient, '') ILIKE v_search_pattern
+                OR COALESCE(p.active_ingredient, '') % v_clean_keyword
+            )
+            
+        ORDER BY 
+            -- Ưu tiên Barcode -> Điểm giống -> Tồn kho -> Tên ngắn
+            (CASE WHEN p.barcode = v_clean_keyword OR u_retail.barcode = v_clean_keyword OR u_base.barcode = v_clean_keyword THEN 1 ELSE 0 END) DESC,
+            similarity_score DESC,
+            inv.stock_quantity DESC NULLS LAST,
+            LENGTH(p.name) ASC
+            
+        LIMIT p_limit;
+    END;
+    $$;
 
 
 ALTER FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) IS 'Tìm kiếm POS: Hỗ trợ viết tắt (effe 150), trả về Unit Retail, Vị trí và HDSD';
-
 
 
 CREATE OR REPLACE FUNCTION "public"."search_products_v2"("p_keyword" "text" DEFAULT NULL::"text", "p_category" "text" DEFAULT NULL::"text", "p_manufacturer" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 20, "p_offset" integer DEFAULT 0) RETURNS "jsonb"
@@ -14369,6 +14430,12 @@ GRANT ALL ON FUNCTION "public"."create_auto_replenishment_request"("p_dest_wareh
 
 
 
+GRANT ALL ON FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."create_customer_b2b"("p_customer_data" "jsonb", "p_contacts" "jsonb"[]) TO "anon";
 GRANT ALL ON FUNCTION "public"."create_customer_b2b"("p_customer_data" "jsonb", "p_contacts" "jsonb"[]) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_customer_b2b"("p_customer_data" "jsonb", "p_contacts" "jsonb"[]) TO "service_role";
@@ -15084,9 +15151,9 @@ GRANT ALL ON FUNCTION "public"."process_vat_invoice_entry"("p_invoice_id" bigint
 
 
 
-GRANT ALL ON FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_name" "text", "p_barcode" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_name" "text", "p_barcode" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_name" "text", "p_barcode" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_id" bigint, "p_barcode" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_id" bigint, "p_barcode" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."quick_assign_barcode"("p_product_id" bigint, "p_unit_id" bigint, "p_barcode" "text") TO "service_role";
 
 
 
