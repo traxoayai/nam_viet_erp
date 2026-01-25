@@ -1261,9 +1261,11 @@ export type Database = {
       }
       inventory_receipt_items: {
         Row: {
+          allocated_cost: number | null
           created_at: string | null
           discount_amount: number | null
           expiry_date: string | null
+          final_unit_cost: number | null
           id: number
           lot_number: string | null
           product_id: number
@@ -1276,9 +1278,11 @@ export type Database = {
           vat_rate: number | null
         }
         Insert: {
+          allocated_cost?: number | null
           created_at?: string | null
           discount_amount?: number | null
           expiry_date?: string | null
+          final_unit_cost?: number | null
           id?: number
           lot_number?: string | null
           product_id: number
@@ -1291,9 +1295,11 @@ export type Database = {
           vat_rate?: number | null
         }
         Update: {
+          allocated_cost?: number | null
           created_at?: string | null
           discount_amount?: number | null
           expiry_date?: string | null
+          final_unit_cost?: number | null
           id?: number
           lot_number?: string | null
           product_id?: number
@@ -2446,6 +2452,7 @@ export type Database = {
           conversion_factor: number | null
           created_at: string | null
           id: number
+          is_bonus: boolean | null
           po_id: number
           product_id: number
           quantity_ordered: number
@@ -2459,6 +2466,7 @@ export type Database = {
           conversion_factor?: number | null
           created_at?: string | null
           id?: number
+          is_bonus?: boolean | null
           po_id: number
           product_id: number
           quantity_ordered: number
@@ -2472,6 +2480,7 @@ export type Database = {
           conversion_factor?: number | null
           created_at?: string | null
           id?: number
+          is_bonus?: boolean | null
           po_id?: number
           product_id?: number
           quantity_ordered?: number
@@ -3425,8 +3434,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      allocate_inbound_costs: { Args: { p_receipt_id: number }; Returns: Json }
       approve_user: { Args: { p_user_id: string }; Returns: undefined }
       auto_create_purchase_orders_min_max: { Args: never; Returns: number }
+      bulk_update_product_barcodes: { Args: { p_data: Json }; Returns: Json }
       bulk_update_product_prices: { Args: { p_data: Json }; Returns: undefined }
       bulk_update_product_strategy: {
         Args: { p_product_ids: number[]; p_strategy_type: string }
@@ -3537,6 +3548,17 @@ export type Database = {
       create_auto_replenishment_request: {
         Args: { p_dest_warehouse_id: number; p_note?: string }
         Returns: Json
+      }
+      create_check_session: {
+        Args: {
+          p_int_val?: number
+          p_note: string
+          p_scope: string
+          p_text_val?: string
+          p_user_id?: string
+          p_warehouse_id: number
+        }
+        Returns: number
       }
       create_customer_b2b: {
         Args: { p_contacts: Json[]; p_customer_data: Json }
@@ -4134,6 +4156,15 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_product_available_stock: {
+        Args: { p_product_ids: number[]; p_warehouse_id: number }
+        Returns: {
+          available_stock: number
+          committed_stock: number
+          product_id: number
+          real_stock: number
+        }[]
+      }
       get_product_details: { Args: { p_id: number }; Returns: Json }
       get_products_list: {
         Args: {
@@ -4487,13 +4518,18 @@ export type Database = {
       match_products_from_excel: {
         Args: { p_data: Json }
         Returns: {
+          base_unit: string
           excel_name: string
           excel_sku: string
           match_type: string
           product_id: number
           product_name: string
           product_sku: string
+          retail_conversion_rate: number
+          retail_unit: string
           similarity_score: number
+          wholesale_conversion_rate: number
+          wholesale_unit: string
         }[]
       }
       notify_group: {
@@ -4525,6 +4561,10 @@ export type Database = {
       process_vat_invoice_entry: {
         Args: { p_invoice_id: number }
         Returns: undefined
+      }
+      quick_assign_barcode: {
+        Args: { p_barcode: string; p_product_id: number; p_unit_id: number }
+        Returns: Json
       }
       reactivate_customer_b2b: { Args: { p_id: number }; Returns: undefined }
       reactivate_customer_b2c: { Args: { p_id: number }; Returns: undefined }
@@ -4643,6 +4683,7 @@ export type Database = {
       search_products_pos: {
         Args: { p_keyword: string; p_limit?: number; p_warehouse_id: number }
         Returns: {
+          barcode: string
           id: number
           image_url: string
           location_cabinet: string
@@ -4652,6 +4693,7 @@ export type Database = {
           retail_price: number
           similarity_score: number
           sku: string
+          status: string
           stock_quantity: number
           unit: string
           usage_instructions: Json
@@ -4835,7 +4877,7 @@ export type Database = {
           p_contents_json?: Json
           p_inventory_json?: Json
           p_product_json: Json
-          p_units_json: Json
+          p_units_json?: Json
         }
         Returns: Json
       }

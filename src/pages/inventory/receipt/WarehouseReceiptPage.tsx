@@ -1,3 +1,4 @@
+// src/pages/inventory/receipt/WarehouseReceiptPage.tsx
 import { useState } from "react";
 import {
   ArrowLeft,
@@ -25,8 +26,9 @@ import {
   Typography,
   Result,
   Empty,
-  message, // [NEW]
+  message, 
 } from "antd";
+import { inboundService } from "@/features/inventory/api/inboundService"; // [NEW]
 import { useParams, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 
@@ -62,8 +64,26 @@ const WarehouseReceiptPage = () => {
       handleSubmit,
       handleVoiceCommand,
       handleCameraScan,
-      handleDocUpload
+      handleDocUpload,
+      refetch // [NEW]
   } = useInboundDetail(idStr);
+  
+  const [costLoading, setCostLoading] = useState(false);
+
+  const handleAllocateCosts = async () => {
+    if (!idStr) return;
+    setCostLoading(true);
+    try {
+        await inboundService.allocateCosts(parseInt(idStr));
+        message.success("Đã phân bổ chi phí và cập nhật giá vốn!");
+        refetch();
+    } catch (err: any) {
+        console.error(err);
+        message.error("Lỗi phân bổ: " + err.message);
+    } finally {
+        setCostLoading(false);
+    }
+  };
 
   // [NEW] Integration Logic
   const [assignModalVisible, setAssignModalVisible] = useState(false);
@@ -140,7 +160,11 @@ const WarehouseReceiptPage = () => {
                   <img src={record.image_url || "https://placehold.co/48"} alt="" style={{width: "100%", height: "100%", objectFit: "cover"}}/>
               </div>
               <div>
-                  <div style={{ fontWeight: 600 }}>{text}</div>
+                  <div style={{ fontWeight: 600 }}>
+                      {text}
+                      {/* THÊM DÒNG NÀY: */}
+                      {(record as any).is_bonus && <Tag color="purple" style={{marginLeft: 8}}>🎁 Tặng</Tag>}
+                  </div>
                   <div style={{ fontSize: 12, color: "#666" }}>{record.sku}</div>
               </div>
           </Space>
@@ -151,6 +175,21 @@ const WarehouseReceiptPage = () => {
        dataIndex: "unit",
        width: 80,
        align: "center" as const
+    },
+    // [NEW] Landed Cost Columns
+    {
+        title: "Phí PB",
+        dataIndex: "allocated_cost",
+        width: 100,
+        align: "right" as const,
+        render: (val: number) => val ? <Text type="secondary">{val.toLocaleString()}</Text> : "-"
+    },
+    {
+        title: "Giá Vốn",
+        dataIndex: "final_unit_cost",
+        width: 110,
+        align: "right" as const,
+        render: (val: number) => val ? <Text strong>{val.toLocaleString()}</Text> : "-"
     },
     {
       title: "Tiến độ",
@@ -299,6 +338,14 @@ const WarehouseReceiptPage = () => {
                         disabled={detail.po_info.status === 'completed'}
                     >
                         Hoàn tất Nhập Kho
+                    </Button>
+                    <Button 
+                        type="default"
+                        onClick={handleAllocateCosts}
+                        loading={costLoading}
+                        disabled={detail.po_info.status !== 'pending' && detail.po_info.status !== 'partial'}
+                    >
+                        Phân bổ chi phí
                     </Button>
                 </Space>
             </div>

@@ -16,3 +16,11 @@ export const getSuppliers = async () => {
   }
   return data || [];
 };
+
+export const supplierService = {
+  getQuickInfo: async (id: number) => {
+    const { data, error } = await supabase.rpc('get_supplier_quick_info', { p_supplier_id: id });
+    if (error) throw error;
+    return data; 
+  }
+};

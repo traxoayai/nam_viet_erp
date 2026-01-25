@@ -1,3 +1,4 @@
+// src/features/inventory/api/inboundService.ts
 import { supabase } from "@/shared/lib/supabaseClient";
 import { InboundTask, InboundFilter, InboundDetailResponse, ProcessInboundPayload } from "../types/inbound";
 
@@ -42,6 +43,14 @@ export const inboundService = {
         p_po_id: payload.p_po_id,
         p_warehouse_id: payload.p_warehouse_id,
         p_items: payload.p_items
+    });
+    if (error) throw error;
+  },
+
+  // 4. Allocate Costs (Landed Cost)
+  async allocateCosts(receiptId: number): Promise<void> {
+    const { error } = await supabase.rpc("allocate_inbound_costs", {
+      p_receipt_id: receiptId
     });
     if (error) throw error;
   }

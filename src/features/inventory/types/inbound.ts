@@ -33,6 +33,9 @@ export interface InboundDetailItem {
   input_quantity?: number;
   input_lot?: string;
   input_expiry?: string; 
+  // Landed Cost Fields
+  allocated_cost?: number; // Phí phân bổ
+  final_unit_cost?: number; // Giá vốn thực tế sau phân bổ
 }
 
 export interface InboundDetailResponse {

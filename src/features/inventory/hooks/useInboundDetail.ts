@@ -105,6 +105,7 @@ export const useInboundDetail = (id?: string) => {
     // AI Tools
     handleVoiceCommand,
     handleCameraScan,
-    handleDocUpload
+    handleDocUpload,
+    refetch: () => id && fetchDetail(parseInt(id, 10))
   };
 };

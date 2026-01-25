@@ -42,7 +42,8 @@ interface Props {
   open: boolean;
   onCancel: () => void;
   initialFlow: "in" | "out";
-  initialValues?: any; // [NEW]
+  initialValues?: any; 
+  onSuccess?: () => void;
 }
 
 export const FinanceFormModal: React.FC<Props> = ({
@@ -50,6 +51,7 @@ export const FinanceFormModal: React.FC<Props> = ({
   onCancel,
   initialFlow,
   initialValues,
+  onSuccess,
 }) => {
   const { funds, fetchFunds } = useFinanceStore();
   const { banks, fetchBanks } = useBankStore();
@@ -113,7 +115,16 @@ export const FinanceFormModal: React.FC<Props> = ({
     };
 
     checkPendingTransactions();
+    checkPendingTransactions();
   }, [initialValues, open]);
+
+  // [NEW] Auto-fill Partner Details when Opened with Initial Values
+  useEffect(() => {
+    if (open && initialValues?.partner_id && initialValues?.partner_type) {
+        // Trigger select partner to load bank info etc.
+        handleSelectPartner(Number(initialValues.partner_id), initialValues.partner_type);
+    }
+  }, [open, initialValues]); // Run once when opening with values
 
   const amount = Form.useWatch("amount", form);
   const desc = Form.useWatch("description", form);
@@ -139,7 +150,10 @@ export const FinanceFormModal: React.FC<Props> = ({
       maskClosable={false}
       centered
     >
-      <Form form={form} layout="vertical" onFinish={handleFinish} initialValues={initialValues}>
+      <Form form={form} layout="vertical" onFinish={async (values) => {
+         const success = await handleFinish(values);
+         if (success && onSuccess) onSuccess();
+      }} initialValues={initialValues}>
         {/* Hidden Fields for Ref & Partner */}
         <Form.Item name="ref_type" hidden><Input /></Form.Item>
         <Form.Item name="ref_id" hidden><Input /></Form.Item>

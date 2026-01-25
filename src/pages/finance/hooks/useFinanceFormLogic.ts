@@ -347,8 +347,10 @@ export const useFinanceFormLogic = (
 
       const success = await createTransaction(payload);
       if (success) onCancel();
+      return success;
     } catch (error: any) {
       message.error(error.message || "Có lỗi xảy ra");
+      return false;
     } finally {
       setLoading(false);
     }

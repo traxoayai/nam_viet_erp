@@ -22,6 +22,8 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
     set({ loading: true });
     try {
       const { filters, page, pageSize } = get();
+      
+      // [CORE UPDATE]: Gọi RPC mới có trả về cột 'debt'
       const { data, error } = await supabase.rpc("get_suppliers_list", {
         search_query: filters.search_query || null,
         status_filter: filters.status_filter || null,
@@ -31,8 +33,16 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
 
       if (error) throw error;
 
+      // Map dữ liệu từ RPC vào State
+      // Lưu ý: data trả về từ RPC đã khớp với interface Supplier mở rộng (có thêm cột debt)
+      const mappedSuppliers = (data || []).map((item: any) => ({
+        ...item,
+        // Đảm bảo debt luôn là số
+        debt: item.debt ? Number(item.debt) : 0 
+      }));
+
       const totalCount = data && data.length > 0 ? data[0].total_count : 0;
-      set({ suppliers: data || [], totalCount, loading: false });
+      set({ suppliers: mappedSuppliers, totalCount, loading: false });
     } catch (error) {
       console.error("Lỗi khi tải Nhà Cung Cấp:", error);
       set({ loading: false });
@@ -70,7 +80,6 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
     set({ loading: true });
     try {
       const { data, error } = await supabase.rpc("create_supplier", {
-        // SỬA LỖI: Đổi từ camelCase sang snake_case để khớp với Form
         p_name: values.name,
         p_tax_code: values.tax_code || null,
         p_contact_person: values.contact_person || null,
@@ -78,13 +87,11 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
         p_email: values.email || null,
         p_address: values.address || null,
         p_payment_term: values.payment_term || null,
-
         p_bank_account: values.bank_account || null,
         p_bank_name: values.bank_name || null,
         p_bank_holder: values.bank_holder || null,
         p_delivery_method: values.delivery_method || null,
         p_lead_time: values.lead_time || null,
-
         p_status: values.status,
         p_notes: values.notes || null,
       });
@@ -93,7 +100,7 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
 
       await get().fetchSuppliers();
       set({ loading: false });
-      return data;
+      return data; // Trả về ID mới tạo
     } catch (error: any) {
       console.error("Lỗi khi thêm NCC:", error.message);
       set({ loading: false });
@@ -106,7 +113,6 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
     try {
       const { error } = await supabase.rpc("update_supplier", {
         p_id: id,
-        // SỬA LỖI: Đổi từ camelCase sang snake_case để khớp với Form
         p_name: values.name,
         p_tax_code: values.tax_code || null,
         p_contact_person: values.contact_person || null,
@@ -114,13 +120,11 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
         p_email: values.email || null,
         p_address: values.address || null,
         p_payment_term: values.payment_term || null,
-
         p_bank_account: values.bank_account || null,
         p_bank_name: values.bank_name || null,
         p_bank_holder: values.bank_holder || null,
         p_delivery_method: values.delivery_method || null,
         p_lead_time: values.lead_time || null,
-
         p_status: values.status,
         p_notes: values.notes || null,
       });

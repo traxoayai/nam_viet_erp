@@ -327,6 +327,91 @@ CREATE TYPE "public"."transaction_type" AS ENUM (
 ALTER TYPE "public"."transaction_type" OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."allocate_inbound_costs"("p_receipt_id" bigint) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    DECLARE
+        v_shipping_fee NUMERIC;
+        v_other_fee NUMERIC;
+        v_total_fee NUMERIC;
+        v_total_value NUMERIC;
+        v_total_quantity NUMERIC;
+        v_allocation_method TEXT;
+        v_item RECORD;
+        v_ratio NUMERIC;
+        v_allocated_amt NUMERIC;
+        v_final_cost NUMERIC;
+    BEGIN
+        -- 1. Lấy thông tin Phí từ Header
+        SELECT COALESCE(shipping_fee, 0), COALESCE(other_fee, 0)
+        INTO v_shipping_fee, v_other_fee
+        FROM public.inventory_receipts
+        WHERE id = p_receipt_id;
+
+        v_total_fee := v_shipping_fee + v_other_fee;
+
+        -- Nếu không có phí thì reset về 0 và thoát
+        IF v_total_fee = 0 THEN
+            UPDATE public.inventory_receipt_items
+            SET allocated_cost = 0, final_unit_cost = unit_price
+            WHERE receipt_id = p_receipt_id;
+            
+            RETURN jsonb_build_object('success', true, 'message', 'Không có chi phí phụ để phân bổ.');
+        END IF;
+
+        -- 2. Tính Tổng Giá Trị và Tổng Số Lượng của phiếu
+        SELECT 
+            SUM(quantity * unit_price), 
+            SUM(quantity)
+        INTO v_total_value, v_total_quantity
+        FROM public.inventory_receipt_items
+        WHERE receipt_id = p_receipt_id;
+
+        -- 3. Quyết định phương pháp phân bổ
+        IF v_total_value > 0 THEN
+            v_allocation_method := 'VALUE'; -- Chia theo giá trị (Mặc định)
+        ELSE
+            v_allocation_method := 'QUANTITY'; -- Fallback: Chia theo số lượng (nếu toàn hàng tặng)
+        END IF;
+
+        -- 4. Thực hiện phân bổ từng dòng
+        FOR v_item IN SELECT id, quantity, unit_price FROM public.inventory_receipt_items WHERE receipt_id = p_receipt_id
+        LOOP
+            IF v_allocation_method = 'VALUE' THEN
+                -- Tỷ lệ = (Giá trị dòng / Tổng giá trị phiếu)
+                v_ratio := (v_item.quantity * v_item.unit_price) / v_total_value;
+            ELSE
+                -- Tỷ lệ = (Số lượng dòng / Tổng số lượng phiếu)
+                v_ratio := v_item.quantity / v_total_quantity;
+            END IF;
+
+            -- Tính tiền phí cho cả dòng -> Chia lại cho số lượng để ra đơn giá phí
+            v_allocated_amt := (v_total_fee * v_ratio) / v_item.quantity;
+            
+            -- Giá vốn cuối = Giá nhập + Giá phí phân bổ
+            v_final_cost := v_item.unit_price + v_allocated_amt;
+
+            -- Update
+            UPDATE public.inventory_receipt_items
+            SET allocated_cost = v_allocated_amt,
+                final_unit_cost = v_final_cost
+            WHERE id = v_item.id;
+        END LOOP;
+
+        RETURN jsonb_build_object(
+            'success', true, 
+            'method', v_allocation_method,
+            'total_fee_allocated', v_total_fee,
+            'message', 'Đã phân bổ chi phí thành công theo phương pháp: ' || v_allocation_method
+        );
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."allocate_inbound_costs"("p_receipt_id" bigint) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."approve_user"("p_user_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -2525,83 +2610,91 @@ ALTER FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_da
 CREATE OR REPLACE FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text" DEFAULT 'internal'::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_shipping_fee" numeric DEFAULT 0, "p_items" "jsonb" DEFAULT '[]'::"jsonb") RETURNS bigint
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-DECLARE
-    v_po_id BIGINT;
-    v_item JSONB;
-    v_product_record RECORD;
-    v_conversion_factor INTEGER;
-    v_base_quantity INTEGER;
-    v_total_amount NUMERIC := 0;
-    v_items_per_carton_db INTEGER;
-    v_wholesale_unit_db TEXT;
-    v_qty_ordered INTEGER; -- Biến tạm để xử lý logic fallback
-BEGIN
-    -- Insert Header
-    INSERT INTO public.purchase_orders (
-        code, supplier_id, creator_id, status, delivery_status, payment_status,
-        expected_delivery_date, note, total_amount, final_amount,
-        delivery_method, shipping_partner_id, shipping_fee
-    )
-    VALUES (
-        'PO-' || to_char(now(), 'YYMMDD') || '-' || floor(random() * 10000)::text,
-        p_supplier_id, auth.uid(), 'DRAFT', 'pending', 'unpaid',
-        p_expected_date, p_note, 0, 0,
-        p_delivery_method, p_shipping_partner_id, COALESCE(p_shipping_fee, 0)
-    )
-    RETURNING id INTO v_po_id;
-
-    -- Insert Items
-    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-    LOOP
-        -- FIX QUAN TRỌNG: Đọc cả 2 key 'quantity_ordered' và 'quantity', fallback = 1
-        v_qty_ordered := COALESCE(
-            (v_item->>'quantity_ordered')::INTEGER, 
-            (v_item->>'quantity')::INTEGER, 
-            1
-        );
-
-        -- Lấy thông tin sản phẩm để tính quy đổi
-        SELECT items_per_carton, wholesale_unit INTO v_product_record
-        FROM public.products WHERE id = (v_item->>'product_id')::BIGINT;
-
-        -- Tính toán quy đổi (Fallback cả uom_ordered và uom)
-        v_items_per_carton_db := COALESCE(v_product_record.items_per_carton, 1);
-        v_wholesale_unit_db := v_product_record.wholesale_unit;
-
-        IF (COALESCE(v_item->>'uom_ordered', v_item->>'uom')) = v_wholesale_unit_db THEN
-            v_conversion_factor := v_items_per_carton_db;
-        ELSE
-            v_conversion_factor := 1;
-        END IF;
-
-        -- Tính số lượng cơ sở (lẻ)
-        v_base_quantity := v_qty_ordered * v_conversion_factor;
-
-        INSERT INTO public.purchase_order_items (
-            po_id, product_id, quantity_ordered, uom_ordered, unit, unit_price, conversion_factor, base_quantity
+    DECLARE
+        v_po_id BIGINT;
+        v_item JSONB;
+        v_product_record RECORD;
+        v_conversion_factor INTEGER;
+        v_base_quantity INTEGER;
+        v_total_amount NUMERIC := 0;
+        v_items_per_carton_db INTEGER;
+        v_wholesale_unit_db TEXT;
+        v_qty_ordered INTEGER;
+        v_unit_price NUMERIC;
+        v_is_bonus BOOLEAN;
+    BEGIN
+        -- Insert Header
+        INSERT INTO public.purchase_orders (
+            code, supplier_id, creator_id, status, delivery_status, payment_status,
+            expected_delivery_date, note, total_amount, final_amount,
+            delivery_method, shipping_partner_id, shipping_fee
         )
         VALUES (
-            v_po_id,
-            (v_item->>'product_id')::BIGINT,
-            v_qty_ordered, -- Sử dụng biến đã fix lỗi NULL
-            COALESCE(v_item->>'uom_ordered', v_item->>'uom'), -- Fallback cho Unit
-            COALESCE(v_item->>'uom_ordered', v_item->>'uom'), -- Fallback cho Unit (legacy column)
-            (v_item->>'unit_price')::NUMERIC,
-            v_conversion_factor,
-            v_base_quantity
-        );
+            'PO-' || to_char(now(), 'YYMMDD') || '-' || floor(random() * 10000)::text,
+            p_supplier_id, auth.uid(), 'DRAFT', 'pending', 'unpaid',
+            p_expected_date, p_note, 0, 0,
+            p_delivery_method, p_shipping_partner_id, COALESCE(p_shipping_fee, 0)
+        )
+        RETURNING id INTO v_po_id;
 
-        v_total_amount := v_total_amount + (v_qty_ordered * (v_item->>'unit_price')::NUMERIC);
-    END LOOP;
+        -- Insert Items
+        FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+        LOOP
+            v_qty_ordered := COALESCE((v_item->>'quantity_ordered')::INTEGER, (v_item->>'quantity')::INTEGER, 1);
+            
+            -- [CORE UPDATE] Xử lý is_bonus
+            v_is_bonus := COALESCE((v_item->>'is_bonus')::BOOLEAN, false);
+            
+            -- Nếu là hàng tặng, ép giá về 0 (để an toàn dữ liệu)
+            IF v_is_bonus THEN
+                v_unit_price := 0;
+            ELSE
+                v_unit_price := (v_item->>'unit_price')::NUMERIC;
+            END IF;
 
-    -- Update Header Total
-    UPDATE public.purchase_orders
-    SET total_amount = v_total_amount, final_amount = v_total_amount + COALESCE(p_shipping_fee, 0)
-    WHERE id = v_po_id;
+            -- Lấy quy cách
+            SELECT items_per_carton, wholesale_unit INTO v_product_record
+            FROM public.products WHERE id = (v_item->>'product_id')::BIGINT;
 
-    RETURN v_po_id;
-END;
-$$;
+            -- Tính quy đổi
+            v_items_per_carton_db := COALESCE(v_product_record.items_per_carton, 1);
+            v_wholesale_unit_db := v_product_record.wholesale_unit;
+
+            IF (COALESCE(v_item->>'uom_ordered', v_item->>'uom')) = v_wholesale_unit_db THEN
+                v_conversion_factor := v_items_per_carton_db;
+            ELSE
+                v_conversion_factor := 1;
+            END IF;
+
+            v_base_quantity := v_qty_ordered * v_conversion_factor;
+
+            INSERT INTO public.purchase_order_items (
+                po_id, product_id, quantity_ordered, uom_ordered, unit, unit_price, 
+                conversion_factor, base_quantity, is_bonus -- [NEW FIELD]
+            )
+            VALUES (
+                v_po_id,
+                (v_item->>'product_id')::BIGINT,
+                v_qty_ordered,
+                COALESCE(v_item->>'uom_ordered', v_item->>'uom'),
+                COALESCE(v_item->>'uom_ordered', v_item->>'uom'),
+                v_unit_price,
+                v_conversion_factor,
+                v_base_quantity,
+                v_is_bonus
+            );
+
+            v_total_amount := v_total_amount + (v_qty_ordered * v_unit_price);
+        END LOOP;
+
+        -- Update Header
+        UPDATE public.purchase_orders
+        SET total_amount = v_total_amount, final_amount = v_total_amount + COALESCE(p_shipping_fee, 0)
+        WHERE id = v_po_id;
+
+        RETURN v_po_id;
+    END;
+    $$;
 
 
 ALTER FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb") OWNER TO "postgres";
@@ -5144,6 +5237,44 @@ $$;
 ALTER FUNCTION "public"."get_prescription_templates"("p_search" "text", "p_status" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_product_available_stock"("p_warehouse_id" bigint, "p_product_ids" bigint[]) RETURNS TABLE("product_id" bigint, "real_stock" integer, "committed_stock" integer, "available_stock" integer)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+    BEGIN
+        RETURN QUERY
+        WITH real_inv AS (
+            -- Lấy tồn kho thực tế
+            SELECT pi.product_id, pi.stock_quantity
+            FROM public.product_inventory pi
+            WHERE pi.warehouse_id = p_warehouse_id 
+              AND pi.product_id = ANY(p_product_ids)
+        ),
+        committed_inv AS (
+            -- Tính hàng đang bị giữ (Chỉ tính đơn CONFIRMED)
+            SELECT oi.product_id, SUM(oi.quantity * COALESCE(oi.conversion_factor, 1))::INT as qty_held
+            FROM public.order_items oi
+            JOIN public.orders o ON oi.order_id = o.id
+            WHERE o.warehouse_id = p_warehouse_id
+              AND o.status = 'CONFIRMED' -- [CORE FIXED]: Chỉ trừ CONFIRMED
+              AND oi.product_id = ANY(p_product_ids)
+            GROUP BY oi.product_id
+        )
+        SELECT 
+            id as product_id,
+            COALESCE(r.stock_quantity, 0) as real_stock,
+            COALESCE(c.qty_held, 0) as committed_stock,
+            (COALESCE(r.stock_quantity, 0) - COALESCE(c.qty_held, 0)) as available_stock
+        FROM unnest(p_product_ids) as id
+        LEFT JOIN real_inv r ON r.product_id = id
+        LEFT JOIN committed_inv c ON c.product_id = id;
+    END;
+    $$;
+
+
+ALTER FUNCTION "public"."get_product_available_stock"("p_warehouse_id" bigint, "p_product_ids" bigint[]) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_product_details"("p_id" bigint) RETURNS "jsonb"
     LANGUAGE "plpgsql"
     AS $$
@@ -5266,106 +5397,52 @@ ALTER FUNCTION "public"."get_products_list"("search_query" "text", "category_fil
 
 CREATE OR REPLACE FUNCTION "public"."get_purchase_order_detail"("p_po_id" bigint) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
-DECLARE
-    v_result JSONB;
-BEGIN
-    SELECT
-        jsonb_build_object(
-            -- 1. THÔNG TIN HEADER (CƠ BẢN)
-            'id', po.id,
-            'code', po.code,
-            'status', po.status,
-            'delivery_status', po.delivery_status,
-            'payment_status', po.payment_status,
-            'expected_delivery_date', po.expected_delivery_date,
-            'created_at', po.created_at,
-            'note', po.note,
-            'total_amount', po.total_amount,
-            'final_amount', po.final_amount,
-            'discount_amount', po.discount_amount,
+    DECLARE
+        v_result JSONB;
+    BEGIN
+        SELECT jsonb_build_object(
+            -- Header fields (giữ nguyên)
+            'id', po.id, 'code', po.code, 'status', po.status, 'delivery_status', po.delivery_status,
+            'payment_status', po.payment_status, 'expected_delivery_date', po.expected_delivery_date,
+            'created_at', po.created_at, 'note', po.note, 'total_amount', po.total_amount,
+            'final_amount', po.final_amount, 'discount_amount', po.discount_amount,
+            'delivery_method', po.delivery_method, 'shipping_fee', po.shipping_fee,
+            'shipping_partner_id', po.shipping_partner_id, 'total_packages', po.total_packages,
+            'carrier_name', po.carrier_name, 'carrier_contact', po.carrier_contact,
+            'carrier_phone', po.carrier_phone, 'expected_delivery_time', po.expected_delivery_time,
             
-            -- 2. THÔNG TIN VẬN CHUYỂN (LOGISTICS - MỚI BỔ SUNG)
-            'delivery_method', po.delivery_method,
-            'shipping_fee', po.shipping_fee,
-            'shipping_partner_id', po.shipping_partner_id,
-            'total_packages', po.total_packages,       -- [NEW]
-            'carrier_name', po.carrier_name,           -- [NEW]
-            'carrier_contact', po.carrier_contact,     -- [NEW]
-            'carrier_phone', po.carrier_phone,         -- [NEW]
-            'expected_delivery_time', po.expected_delivery_time, -- [NEW]
+            'supplier', jsonb_build_object('id', s.id, 'name', s.name, 'phone', s.phone, 'address', s.address, 'tax_code', s.tax_code, 'debt', 0),
 
-            -- 3. THÔNG TIN NHÀ CUNG CẤP
-            'supplier', jsonb_build_object(
-                'id', s.id,
-                'name', s.name,
-                'phone', s.phone,
-                'address', s.address,
-                'tax_code', s.tax_code,
-                'debt', 0 -- (Có thể tính real-time nếu cần, hiện tại để 0 cho nhẹ)
-            ),
-
-            -- 4. DANH SÁCH SẢN PHẨM (ITEMS)
-            'items', COALESCE(
-                (
-                    SELECT jsonb_agg(
-                        jsonb_build_object(
-                            'key', poi.id,
-                            'id', poi.id,
-                            'quantity_ordered', poi.quantity_ordered,
-                            'quantity_received', COALESCE(poi.quantity_received, 0),
-                            'uom_ordered', poi.uom_ordered, -- Đơn vị đặt hàng
-                            'unit', poi.unit,               -- (Legacy column fallback)
-                            'unit_price', poi.unit_price,
-                            'total_line', (poi.quantity_ordered * poi.unit_price),
-                            'conversion_factor', poi.conversion_factor,
-                            'base_quantity', poi.base_quantity,
-                            
-                            -- Thông tin sản phẩm
-                            'product_id', p.id,
-                            'product_name', p.name,
-                            'sku', p.sku,
-                            'image_url', p.image_url,
-                            'stock_management_type', p.stock_management_type, -- Để UI biết có cần nhập lô/date không
-                            
-                            -- [QUAN TRỌNG] AVAILABLE UNITS (Lấy từ bảng product_units)
-                            -- Giúp Frontend render dropdown chọn đơn vị
-                            'available_units', COALESCE(
-                                (
-                                    SELECT jsonb_agg(
-                                        jsonb_build_object(
-                                            'id', pu.id,
-                                            'unit_name', pu.unit_name,
-                                            'conversion_rate', pu.conversion_rate,
-                                            'is_base', pu.is_base,
-                                            'barcode', pu.barcode,
-                                            'price_sell', pu.price_sell 
-                                        ) ORDER BY pu.conversion_rate ASC
-                                    )
-                                    FROM public.product_units pu
-                                    WHERE pu.product_id = p.id
-                                ),
-                                '[]'::jsonb
-                            )
-                        ) 
-                        ORDER BY poi.id ASC
-                    )
-                    FROM public.purchase_order_items poi
-                    JOIN public.products p ON poi.product_id = p.id
-                    WHERE poi.po_id = po.id
-                ),
-                '[]'::jsonb
-            )
+            'items', COALESCE((
+                SELECT jsonb_agg(jsonb_build_object(
+                    'key', poi.id, 'id', poi.id, 
+                    'quantity_ordered', poi.quantity_ordered, 'quantity_received', COALESCE(poi.quantity_received, 0),
+                    'uom_ordered', poi.uom_ordered, 'unit', poi.unit, 
+                    'unit_price', poi.unit_price, 'total_line', (poi.quantity_ordered * poi.unit_price),
+                    'conversion_factor', poi.conversion_factor, 'base_quantity', poi.base_quantity,
+                    
+                    'is_bonus', poi.is_bonus, -- [NEW FIELD RETURN]
+                    
+                    'product_id', p.id, 'product_name', p.name, 'sku', p.sku, 'image_url', p.image_url,
+                    'stock_management_type', p.stock_management_type,
+                    'available_units', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', pu.id, 'unit_name', pu.unit_name, 'conversion_rate', pu.conversion_rate, 'is_base', pu.is_base, 'barcode', pu.barcode, 'price_sell', pu.price_sell) ORDER BY pu.conversion_rate ASC) FROM public.product_units pu WHERE pu.product_id = p.id), '[]'::jsonb)
+                ) ORDER BY poi.id ASC)
+                FROM public.purchase_order_items poi
+                JOIN public.products p ON poi.product_id = p.id
+                WHERE poi.po_id = po.id
+            ), '[]'::jsonb)
         )
-    INTO v_result
-    FROM public.purchase_orders po
-    LEFT JOIN public.suppliers s ON po.supplier_id = s.id
-    WHERE po.id = p_po_id;
+        INTO v_result
+        FROM public.purchase_orders po
+        LEFT JOIN public.suppliers s ON po.supplier_id = s.id
+        WHERE po.id = p_po_id;
 
-    IF v_result IS NULL THEN RETURN NULL; END IF;
-    RETURN v_result;
-END;
-$$;
+        IF v_result IS NULL THEN RETURN NULL; END IF;
+        RETURN v_result;
+    END;
+    $$;
 
 
 ALTER FUNCTION "public"."get_purchase_order_detail"("p_po_id" bigint) OWNER TO "postgres";
@@ -7059,79 +7136,105 @@ CREATE OR REPLACE FUNCTION "public"."mark_notification_read"("p_noti_id" "uuid")
 ALTER FUNCTION "public"."mark_notification_read"("p_noti_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."match_products_from_excel"("p_data" "jsonb") RETURNS TABLE("excel_name" "text", "excel_sku" "text", "product_id" bigint, "product_name" "text", "product_sku" "text", "similarity_score" real, "match_type" "text")
+CREATE OR REPLACE FUNCTION "public"."match_products_from_excel"("p_data" "jsonb") RETURNS TABLE("excel_name" "text", "excel_sku" "text", "product_id" bigint, "product_name" "text", "product_sku" "text", "similarity_score" real, "match_type" "text", "base_unit" "text", "retail_unit" "text", "wholesale_unit" "text", "retail_conversion_rate" integer, "wholesale_conversion_rate" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-    BEGIN
-        -- Tăng timeout lên 5 phút cho chắc ăn với file lớn
-        SET LOCAL statement_timeout = '300s';
+BEGIN
+    -- 1. Cấu hình môi trường (Giữ nguyên)
+    SET LOCAL statement_timeout = '300s';
+    PERFORM set_limit(0.4); 
 
-        -- Ngưỡng tìm kiếm 0.4 (Dưới mức này coi như không giống)
-        PERFORM set_limit(0.4); 
-
-        RETURN QUERY
-        WITH input_rows AS (
-            SELECT 
-                TRIM(BOTH FROM (elem->>'name')::text) AS raw_name,
-                NULLIF(TRIM(BOTH FROM (elem->>'sku')::text), '') AS raw_sku
-            FROM jsonb_array_elements(p_data) AS elem
-        ),
+    RETURN QUERY
+    WITH input_rows AS (
+        SELECT 
+            TRIM(BOTH FROM (elem->>'name')::text) AS raw_name,
+            NULLIF(TRIM(BOTH FROM (elem->>'sku')::text), '') AS raw_sku
+        FROM jsonb_array_elements(p_data) AS elem
+    ),
+    
+    -- === GIỮ NGUYÊN 100% THUẬT TOÁN TÌM KIẾM CŨ ===
+    matches AS (
+        -- Tầng 1: SKU (Chỉ active)
+        SELECT 
+            i.raw_name, i.raw_sku, 
+            p.id, p.name, p.sku, 
+            1.0::real as score, 'sku_exact'::text as type
+        FROM input_rows i
+        JOIN public.products p ON LOWER(p.sku) = LOWER(i.raw_sku)
+        WHERE i.raw_sku IS NOT NULL AND p.status = 'active'
         
-        -- TẦNG 1: KHỚP SKU TUYỆT ĐỐI (Chỉ active)
-        exact_sku_match AS (
-            SELECT 
-                i.raw_name, i.raw_sku, 
-                p.id, p.name, p.sku, 
-                1.0::real as score, 'sku_exact'::text as type
-            FROM input_rows i
-            JOIN public.products p ON LOWER(p.sku) = LOWER(i.raw_sku)
-            WHERE i.raw_sku IS NOT NULL 
-              AND p.status = 'active' -- [CHECKPOINT 1]
-        ),
-        
-        -- TẦNG 2: KHỚP TÊN TUYỆT ĐỐI (Chỉ active & chưa khớp SKU)
-        exact_name_match AS (
-            SELECT 
-                i.raw_name, i.raw_sku, 
-                p.id, p.name, p.sku, 
-                0.95::real as score, 'name_exact'::text as type
-            FROM input_rows i
-            JOIN public.products p ON LOWER(p.name) = LOWER(i.raw_name)
-            WHERE p.status = 'active' -- [CHECKPOINT 2]
-              AND NOT EXISTS (SELECT 1 FROM exact_sku_match m WHERE m.raw_name = i.raw_name)
-        ),
-        
-        -- TẦNG 3: KHỚP MỜ (FUZZY) - Dùng Index mới tạo ở trên
-        fuzzy_match AS (
-            SELECT 
-                i.raw_name, i.raw_sku, 
-                p.id, p.name, p.sku, 
-                similarity(p.name, i.raw_name)::real as score, 
-                'name_fuzzy'::text as type
-            FROM input_rows i
-            JOIN LATERAL (
-                SELECT p_sub.id, p_sub.name, p_sub.sku
-                FROM public.products p_sub
-                WHERE p_sub.status = 'active' -- [CHECKPOINT 3]
-                  -- Toán tử % sẽ tự động dùng Index "idx_products_name_active_trgm"
-                  AND p_sub.name % i.raw_name
-                ORDER BY similarity(p_sub.name, i.raw_name) DESC
-                LIMIT 1
-            ) p ON true
-            WHERE NOT EXISTS (SELECT 1 FROM exact_sku_match m WHERE m.raw_name = i.raw_name)
-              AND NOT EXISTS (SELECT 1 FROM exact_name_match m WHERE m.raw_name = i.raw_name)
-        )
-        
-        -- TỔNG HỢP
-        SELECT * FROM exact_sku_match
         UNION ALL
-        SELECT * FROM exact_name_match
+        
+        -- Tầng 2: Tên chính xác (Chưa khớp SKU)
+        SELECT 
+            i.raw_name, i.raw_sku, 
+            p.id, p.name, p.sku, 
+            0.95::real as score, 'name_exact'::text as type
+        FROM input_rows i
+        JOIN public.products p ON LOWER(p.name) = LOWER(i.raw_name)
+        WHERE p.status = 'active'
+          AND NOT EXISTS (SELECT 1 FROM public.products p2 WHERE LOWER(p2.sku) = LOWER(i.raw_sku))
+        
         UNION ALL
-        SELECT * FROM fuzzy_match;
+        
+        -- Tầng 3: Fuzzy (Chưa khớp SKU và Tên)
+        SELECT 
+            i.raw_name, i.raw_sku, 
+            p.id, p.name, p.sku, 
+            similarity(p.name, i.raw_name)::real as score, 
+            'name_fuzzy'::text as type
+        FROM input_rows i
+        JOIN LATERAL (
+            SELECT p_sub.id, p_sub.name, p_sub.sku
+            FROM public.products p_sub
+            WHERE p_sub.status = 'active' AND p_sub.name % i.raw_name
+            ORDER BY similarity(p_sub.name, i.raw_name) DESC LIMIT 1
+        ) p ON true
+        WHERE NOT EXISTS (SELECT 1 FROM public.products p2 WHERE LOWER(p2.sku) = LOWER(i.raw_sku))
+          AND NOT EXISTS (SELECT 1 FROM public.products p3 WHERE LOWER(p3.name) = LOWER(i.raw_name))
+    )
 
-    END;
-    $$;
+    -- === KẾT HỢP DỮ LIỆU ĐƠN VỊ CHI TIẾT (ENRICH DATA) ===
+    SELECT 
+        m.raw_name,
+        m.raw_sku,
+        m.id,
+        m.name,
+        m.sku,
+        m.score,
+        m.type,
+        
+        -- 1. Base Unit
+        COALESCE(p.retail_unit, 'Đơn vị') as base_unit, 
+                
+        -- 2. Retail Unit (Đơn vị Lẻ)
+        p.retail_unit, 
+        
+        -- 3. Wholesale Unit (Đơn vị Buôn)
+        p.wholesale_unit, 
+        
+        -- 4. Rate Retail (Tìm trong bảng product_units)
+        COALESCE((
+            SELECT conversion_rate 
+            FROM public.product_units u 
+            WHERE u.product_id = p.id AND u.unit_name = p.retail_unit 
+            LIMIT 1
+        ), 1) as retail_rate,
+
+        -- 5. Rate Wholesale (Tìm trong bảng product_units)
+        COALESCE((
+            SELECT conversion_rate 
+            FROM public.product_units u 
+            WHERE u.product_id = p.id AND u.unit_name = p.wholesale_unit 
+            LIMIT 1
+        ), 1) as wholesale_rate
+
+    FROM matches m
+    JOIN public.products p ON m.id = p.id;
+
+END;
+$$;
 
 
 ALTER FUNCTION "public"."match_products_from_excel"("p_data" "jsonb") OWNER TO "postgres";
@@ -10878,6 +10981,8 @@ CREATE TABLE IF NOT EXISTS "public"."inventory_receipt_items" (
     "discount_amount" numeric DEFAULT 0,
     "vat_rate" numeric DEFAULT 0,
     "sub_total" numeric GENERATED ALWAYS AS (((("quantity")::numeric * "unit_price") - "discount_amount")) STORED,
+    "allocated_cost" numeric DEFAULT 0,
+    "final_unit_cost" numeric DEFAULT 0,
     CONSTRAINT "inventory_receipt_items_quantity_check" CHECK (("quantity" > 0))
 );
 
@@ -11457,6 +11562,7 @@ CREATE TABLE IF NOT EXISTS "public"."purchase_order_items" (
     "uom_ordered" "text",
     "conversion_factor" integer DEFAULT 1,
     "base_quantity" integer,
+    "is_bonus" boolean DEFAULT false,
     CONSTRAINT "check_conversion_factor_positive" CHECK (("conversion_factor" > 0)),
     CONSTRAINT "purchase_order_items_quantity_ordered_check" CHECK (("quantity_ordered" > 0)),
     CONSTRAINT "purchase_order_items_quantity_received_check" CHECK (("quantity_received" >= 0)),
@@ -14256,6 +14362,12 @@ GRANT ALL ON FUNCTION "public"."gtrgm_out"("public"."gtrgm") TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."allocate_inbound_costs"("p_receipt_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."allocate_inbound_costs"("p_receipt_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."allocate_inbound_costs"("p_receipt_id" bigint) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."approve_user"("p_user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."approve_user"("p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."approve_user"("p_user_id" "uuid") TO "service_role";
@@ -14811,6 +14923,12 @@ GRANT ALL ON TABLE "public"."prescription_templates" TO "service_role";
 GRANT ALL ON FUNCTION "public"."get_prescription_templates"("p_search" "text", "p_status" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_prescription_templates"("p_search" "text", "p_status" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_prescription_templates"("p_search" "text", "p_status" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_product_available_stock"("p_warehouse_id" bigint, "p_product_ids" bigint[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_product_available_stock"("p_warehouse_id" bigint, "p_product_ids" bigint[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_product_available_stock"("p_warehouse_id" bigint, "p_product_ids" bigint[]) TO "service_role";
 
 
 
