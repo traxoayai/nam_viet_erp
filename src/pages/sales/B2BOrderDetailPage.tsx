@@ -35,6 +35,7 @@ import {
   B2B_STATUS_COLOR,
   B2B_STATUS_LABEL,
 } from "@/shared/utils/b2bConstants";
+import { useOrderPrint } from "@/features/sales/hooks/useOrderPrint"; // [NEW]
 
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
@@ -43,6 +44,7 @@ const B2BOrderDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const screens = useBreakpoint();
+  const { printOrder } = useOrderPrint(); // [NEW]
 
   const [order, setOrder] = useState<B2BOrderDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -344,7 +346,12 @@ const B2BOrderDetailPage = () => {
 
           {order?.status === "CONFIRMED" && (
              <>
-                <Button icon={<PrinterOutlined />}>In phiếu</Button>
+                <Button 
+                    icon={<PrinterOutlined />} 
+                    onClick={() => order && printOrder(order)}
+                >
+                    In phiếu
+                </Button>
                 
                 <Button
                   onClick={() => handleUpdateStatus("DELIVERED")}

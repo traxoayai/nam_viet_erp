@@ -21,6 +21,9 @@ import { ShippingForm } from "@/features/sales/components/Header/ShippingForm";
 import { SalesOrderTable } from "@/features/sales/components/ProductGrid/SalesOrderTable";
 import { useCreateOrderB2B } from "@/features/sales/hooks/useCreateOrderB2B";
 import { ActionButtons } from "@/features/sales/components/Footer/ActionButtons";
+import { generateB2BOrderHTML } from "@/shared/utils/printTemplates"; // [NEW]
+import { printHTML } from "@/shared/utils/printUtils"; // [NEW]
+
 //import { ProductSearchB2B } from "@/components/search/ProductSearchB2B";
 
 const { Content } = Layout;
@@ -94,6 +97,36 @@ const CreateB2BOrderPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // [NEW] Print Preview Logic
+  const handlePrintPreview = () => {
+    if (!customer) return message.warning("Chưa chọn khách hàng");
+    if (items.length === 0) return message.warning("Chưa có sản phẩm");
+
+    const mockOrder = {
+        code: "BÁO GIÁ",
+        created_at: new Date().toISOString(),
+        customer_name: customer.name,
+        customer_phone: customer.phone,
+        delivery_address: customer.shipping_address,
+        note: note,
+        items: items.map(i => ({
+            product_name: i.name,
+            uom: i.wholesale_unit,
+            quantity: i.quantity,
+            unit_price: i.price_wholesale,
+            total_line: (i.quantity * i.price_wholesale) - (i.discount || 0)
+        })),
+        total_amount: financials.subTotal,
+        discount_amount: financials.discountAmount,
+        shipping_fee: shippingFee,
+        final_amount: financials.finalTotal,
+        old_debt: financials.oldDebt // [NEW]
+    };
+
+    const html = generateB2BOrderHTML(mockOrder);
+    printHTML(html);
   };
 
   return (
@@ -225,6 +258,7 @@ const CreateB2BOrderPage = () => {
                 loading={loading}
                 isOverLimit={financials.isOverLimit}
                 onSubmit={handleSubmit}
+                onPrint={handlePrintPreview}
               />
             </div>
           </Col>

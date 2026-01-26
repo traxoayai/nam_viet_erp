@@ -193,11 +193,11 @@ const QuickPricePage: React.FC = () => {
 
     // --- 4. EXCEL LOGIC (Full Fix) ---
     const handleDownloadTemplate = () => {
-        const header = ['SKU', 'Tên sản phẩm', 'Giá Vốn', 'Lãi Lẻ', 'Đơn vị Lãi Lẻ (%/VNĐ)', 'Lãi Buôn', 'Đơn vị Lãi Buôn (%/VNĐ)', 'Giá Bán Lẻ (Cố định)'];
-        const sampleData = [['PAN001', 'Panadol Extra', 100000, 20, '%', 5, '%', 15000], ['EFF001', 'Efferalgan', 50000, 5000, 'VNĐ', 2000, 'VNĐ', '']];
+        const header = ['SKU', 'Tên sản phẩm', 'Giá Vốn', 'Lãi Lẻ', 'Đơn vị Lãi Lẻ (%/VNĐ)', 'Lãi Buôn', 'Đơn vị Lãi Buôn (%/VNĐ)', 'Giá Bán Lẻ (Cố định)', 'Giá Bán Buôn (Cố định)'];
+        const sampleData = [['PAN001', 'Panadol Extra', 100000, 20, '%', 5, '%', 15000, 12000], ['EFF001', 'Efferalgan', 50000, 5000, 'VNĐ', 2000, 'VNĐ', '', 48000]];
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet([header, ...sampleData]);
-        ws['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 10 }, { wch: 20 }, { wch: 10 }, { wch: 20 }, { wch: 20 }];
+        ws['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 10 }, { wch: 20 }, { wch: 10 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(wb, ws, "Mau_Cap_Nhat_Gia");
         XLSX.writeFile(wb, "Mau_Cap_Nhat_Gia_V3.xlsx");
     };
@@ -230,7 +230,8 @@ const QuickPricePage: React.FC = () => {
             retailUnit: parseUnitType(r['Đơn vị Lãi Lẻ (%/VNĐ)']),
             wholesaleMargin: parseNumber(r['Lãi Buôn']),
             wholesaleUnit: parseUnitType(r['Đơn vị Lãi Buôn (%/VNĐ)']),
-            fixedRetailPrice: parseNumber(r['Giá Bán Lẻ (Cố định)'])
+            fixedRetailPrice: parseNumber(r['Giá Bán Lẻ (Cố định)']),
+            fixedWholesalePrice: parseNumber(r['Giá Bán Buôn (Cố định)'])
         })).filter(i => i.name || i.sku);
 
         if (itemsToMatch.length === 0) return message.warning("File rỗng");
@@ -307,7 +308,10 @@ const QuickPricePage: React.FC = () => {
 
                 // Tính Giá Buôn
                 let wholesalePrice = undefined;
-                if (excelCost !== undefined && item.excel.wholesaleMargin !== undefined) {
+
+                if (item.excel.fixedWholesalePrice !== undefined) {
+                    wholesalePrice = item.excel.fixedWholesalePrice;
+                } else if (excelCost !== undefined && item.excel.wholesaleMargin !== undefined) {
                     let mAmount = item.excel.wholesaleMargin;
                     if (item.excel.wholesaleUnit === 'percent') mAmount = excelCost * (item.excel.wholesaleMargin / 100);
                     wholesalePrice = Math.ceil(excelCost + mAmount);
@@ -550,7 +554,18 @@ const QuickPricePage: React.FC = () => {
                                 return (
                                     <Space direction="vertical" size={0} style={{fontSize: 11}}>
                                         {record.excel.cost && <div>Vốn: {record.excel.cost.toLocaleString()}</div>}
-                                        {record.excel.fixedRetailPrice && <div style={{color: 'blue'}}>Lẻ (Chốt): {record.excel.fixedRetailPrice.toLocaleString()}</div>}
+                                        {/* Hiển thị Giá Lẻ */}
+                                        {record.excel.fixedRetailPrice ? (
+                                            <div style={{color: 'blue'}}>Lẻ (Chốt): {record.excel.fixedRetailPrice.toLocaleString()}</div>
+                                        ) : (
+                                            record.excel.retailMargin && <div>Lẻ (Tính): ...</div>
+                                        )}
+                                        {/* Hiển thị Giá Buôn [NEW] */}
+                                        {record.excel.fixedWholesalePrice ? (
+                                            <div style={{color: 'green', fontWeight: 'bold'}}>Buôn (Chốt): {record.excel.fixedWholesalePrice.toLocaleString()}</div>
+                                        ) : (
+                                            record.excel.wholesaleMargin && <div>Buôn (Tính): ...</div>
+                                        )}
                                     </Space>
                                 )
                             }

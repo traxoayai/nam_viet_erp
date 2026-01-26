@@ -1,9 +1,10 @@
 // src/features/sales-b2b/create/components/Footer/ActionButtons.tsx
 import {
-  SaveOutlined,
   SendOutlined,
   CloseOutlined,
   FileTextOutlined,
+  PrinterOutlined,
+  SaveOutlined
 } from "@ant-design/icons";
 import { Button, Space, Popconfirm, Alert } from "antd";
 import { useNavigate } from "react-router-dom";
@@ -12,9 +13,10 @@ interface Props {
   loading: boolean;
   isOverLimit: boolean;
   onSubmit: (status: "DRAFT" | "QUOTE" | "CONFIRMED") => void;
+  onPrint?: () => void;
 }
 
-export const ActionButtons = ({ loading, isOverLimit, onSubmit }: Props) => {
+export const ActionButtons = ({ loading, isOverLimit, onSubmit, onPrint }: Props) => {
   const navigate = useNavigate();
 
   return (
@@ -48,6 +50,14 @@ export const ActionButtons = ({ loading, isOverLimit, onSubmit }: Props) => {
         </Popconfirm>
 
         <Space>
+          <Button
+            icon={<PrinterOutlined />}
+            size="large"
+            onClick={onPrint}
+            loading={loading}
+          >
+            In Báo Giá
+          </Button>
           <Button
             icon={<FileTextOutlined />}
             size="large"

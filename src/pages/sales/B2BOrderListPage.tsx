@@ -11,13 +11,16 @@ import {
   CarOutlined,
   ShopOutlined,
   UserOutlined,
+  PrinterOutlined,
 } from "@ant-design/icons";
-import { Button, message, Modal, Select, Upload, Tag, Typography, Avatar } from "antd";
+import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders";
+import { Button, message, Modal, Select, Upload, Tag, Typography, Avatar, Space } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useMemo, useState, useEffect } from "react";
 import dayjs from "dayjs";
 
-import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders";
+// import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders"; // Duplicate removed
+import { useOrderPrint } from "@/features/sales/hooks/useOrderPrint"; // [NEW]
 import { FilterAction } from "@/shared/ui/listing/FilterAction";
 import { SmartTable } from "@/shared/ui/listing/SmartTable";
 import { StatHeader } from "@/shared/ui/listing/StatHeader";
@@ -36,6 +39,7 @@ const B2BOrderListPage = () => {
 
   // --- 1. STATE & HOOKS ---
   const { tableProps, filterProps, stats, currentFilters, refresh } = useSalesOrders({ orderType: 'B2B' });
+  const { printOrder } = useOrderPrint(); // [NEW]
 
   // State Xuất Hóa Đơn
   const [exportInvoiceLoading, setExportInvoiceLoading] = useState(false);
@@ -139,6 +143,24 @@ const B2BOrderListPage = () => {
         dataIndex: "created_at",
         width: 140,
         render: (date: string) => dayjs(date).format("DD/MM/YYYY HH:mm"),
+    },
+    {
+        title: "Hành động",
+        key: "action",
+        width: 80,
+        align: "center" as const,
+        render: (_: any, record: any) => (
+            <Space>
+                 <Button 
+                    type="text" 
+                    icon={<PrinterOutlined />} 
+                    onClick={(e) => {
+                        e.stopPropagation(); // Tránh click vào row nhảy sang trang chi tiết
+                        printOrder(record);
+                    }}
+                />
+            </Space>
+        )
     },
     // 3. Mã đơn hàng
     {

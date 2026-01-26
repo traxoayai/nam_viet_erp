@@ -32,6 +32,7 @@ import {
 } from "antd";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useOrderPrint } from "@/features/sales/hooks/useOrderPrint"; // [NEW]
 
 
 import { useOutboundStore } from "@/features/inventory/stores/useOutboundStore";
@@ -73,7 +74,9 @@ const WarehouseOutboundPage = () => {
   // Print State
   const [printData, setPrintData] = useState<OutboundDetailResponse | null>(null);
   const [printingTaskId, setPrintingTaskId] = useState<string | null>(null);
-  const [printMode, setPrintMode] = useState<'picking' | 'label' | null>(null);
+  const [printMode, setPrintMode] = useState<'picking' | 'label' | 'b2b' | null>(null);
+
+  const { printOrder } = useOrderPrint(); // [NEW]
 
   // Initial Fetch
   useEffect(() => {
@@ -111,21 +114,31 @@ const WarehouseOutboundPage = () => {
       }
   };
   
-  const handlePrint = async (taskId: string, mode: 'picking' | 'label') => {
+  const handlePrint = async (taskId: string, mode: 'picking' | 'label' | 'b2b') => {
       setPrintingTaskId(taskId);
       try {
-          // If we already have the data for this task, re-use it (optimization)
-          // But simpler to just fetch to ensure fresh data
           const detail = await outboundService.getOrderDetail(taskId);
+
+          if (mode === 'b2b') {
+              // Map Outbound Detail -> B2B Order format
+              const orderData = {
+                  ...detail.order_info,
+                  items: detail.items,
+                  customer_id: (detail.order_info as any).customer_id, // Ensure debt fetch works
+                  final_amount: (detail.order_info as any).final_amount // Ensure total calculation works
+              };
+              await printOrder(orderData); // Use the Hook
+              setPrintingTaskId(null);
+              return;
+          }
+
           setPrintData(detail);
           setPrintMode(mode);
           
-          // Wait for render
           setTimeout(() => {
               window.print();
               setPrintingTaskId(null);
               setPrintMode(null);
-              // setPrintData(null); // Optional: clear data or keep it
           }, 500);
       } catch (error) {
           message.error("Lỗi chuẩn bị in");
@@ -248,6 +261,15 @@ const WarehouseOutboundPage = () => {
                 size="small" 
                 loading={printingTaskId === record.task_id && printMode === 'label'}
                 onClick={() => handlePrint(record.task_id, 'label')}
+             />
+           </Tooltip>
+           <Tooltip title="In Hóa Đơn B2B">
+             <Button 
+                icon={<Printer size={16} />} 
+                size="small" 
+                loading={printingTaskId === record.task_id && printMode === 'b2b'}
+                onClick={() => handlePrint(record.task_id, 'b2b')}
+                style={{ color: '#1890ff', borderColor: '#1890ff' }}
              />
            </Tooltip>
            <Tooltip title="Hủy đơn">
