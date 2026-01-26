@@ -141,8 +141,8 @@ const CustomerB2BPage: React.FC = () => {
     importCustomers,
     setPage,
     showListView,
-    showFormView, // importCustomers, (Sẽ làm sau)
-    // exportToExcel, (Sẽ làm sau)
+    showFormView,
+    
   } = useCustomerB2BStore(); // Lấy NVKD từ UserStore
 
   const { users, fetchUsers } = useUserStore(); // State cục bộ

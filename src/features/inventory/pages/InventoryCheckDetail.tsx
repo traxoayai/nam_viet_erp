@@ -1,7 +1,7 @@
 // src/features/inventory/pages/InventoryCheckDetail.tsx
 import { useEffect, useRef } from 'react';
 import { Layout, Button, Typography, InputNumber, Row, Col, Tag, Space, message, Modal } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, AudioOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, AudioOutlined, CheckCircleOutlined, CloseCircleOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useInventoryCheckStore } from '../stores/useInventoryCheckStore';
 import { useAuth } from '@/app/contexts/AuthProvider';
@@ -127,6 +127,42 @@ export const InventoryCheckDetail = () => {
         return () => clearTimeout(timer);
     }, [transcript, activeItemId, items]);
     // --- VOICE LOGIC END ---
+    
+    // [NEW] Helper Component: Quantity Input with +/- Buttons
+    const QuantityInput = ({ label, value, onChange, max }: any) => (
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 500 }}>{label}</div>
+        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #d9d9d9', borderRadius: 8, overflow:'hidden' }}>
+          <Button 
+            type="text" 
+            icon={<MinusOutlined />} 
+            onClick={() => onChange(Math.max(0, value - 1))}
+            style={{ height: 40, width: 40, background: '#f5f5f5', borderRadius: 0 }}
+          />
+          <InputNumber
+            value={value}
+            onChange={onChange}
+            min={0}
+            max={max}
+            controls={false} // Tắt nút spinner mặc định bé xíu
+            style={{ flex: 1, textAlign: 'center', border: 'none', boxShadow: 'none', fontSize: 16, fontWeight: 'bold' }}
+            onFocus={() => {
+                // [Logic] Tắt Mic khi focus để tránh nhiễu
+                if (listening) {
+                    message.info("Tạm tắt Mic để nhập liệu");
+                    SpeechRecognition.stopListening();
+                }
+            }}
+          />
+          <Button 
+            type="text" 
+            icon={<PlusOutlined />} 
+            onClick={() => onChange(value + 1)}
+            style={{ height: 40, width: 40, background: '#f5f5f5', borderRadius: 0 }}
+          />
+        </div>
+      </div>
+    );
 
     // --- SUB-COMPONENT: CARD SẢN PHẨM ---
     const ItemCard = ({ item }: { item: any }) => {
@@ -176,35 +212,21 @@ export const InventoryCheckDetail = () => {
                         <span><b>{sysBox}</b> {item.large_unit} {sysUnit > 0 && ` - ${sysUnit} ${item.unit}`}</span>
                     </div>
 
-                    {/* Dòng Input (Nhập liệu kép) */}
+                    {/* Dòng Input (Nhập liệu kép) - [UPDATED with QuantityInput] */}
                     <Row gutter={12}>
                         <Col span={12}>
-                            <div style={{fontSize: 12, marginBottom: 4, fontWeight: 500}}>
-                                SL {item.large_unit} (Chẵn)
-                            </div>
-                            <InputNumber 
-                                type="number"
-                                size="large" // Nút to dễ bấm
-                                style={{width: '100%'}} 
+                            <QuantityInput 
+                                label={`SL ${item.large_unit} (Chẵn)`}
                                 value={boxQty}
-                                min={0}
-                                onChange={(val) => updateItemQuantity(item.id, val || 0, unitQty)}
-                                // Khi active thì ô nhập sáng lên
-                                className={isActive ? "input-active-glow" : ""}
+                                onChange={(val: number) => updateItemQuantity(item.id, val, unitQty)}
                             />
                         </Col>
                         <Col span={12}>
-                             <div style={{fontSize: 12, marginBottom: 4, fontWeight: 500}}>
-                                SL {item.unit} (Lẻ)
-                            </div>
-                            <InputNumber 
-                                type="number"
-                                size="large" 
-                                style={{width: '100%'}} 
+                            <QuantityInput 
+                                label={`SL ${item.unit} (Lẻ)`}
                                 value={unitQty}
-                                min={0}
-                                max={rate - 1} // Không cho nhập quá quy đổi lẻ
-                                onChange={(val) => updateItemQuantity(item.id, boxQty, val || 0)}
+                                max={rate - 1}
+                                onChange={(val: number) => updateItemQuantity(item.id, boxQty, val)}
                             />
                         </Col>
                     </Row>
