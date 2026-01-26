@@ -11,6 +11,7 @@ import {
   AuditOutlined,
   DeleteOutlined,
   StopOutlined,
+  PrinterOutlined, // [NEW]
 } from "@ant-design/icons";
 import {
   Layout,
@@ -41,6 +42,8 @@ import { useFinanceTransactionLogic } from "./hooks/useFinanceTransactionLogic";
 import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 import { TransactionRecord } from "@/features/finance/types/finance";
+import { generatePaymentVoucherHTML } from "@/shared/utils/printTemplates"; // [NEW]
+import { printHTML } from "@/shared/utils/printUtils"; // [NEW]
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -70,6 +73,12 @@ const FinanceTransactionPage = () => {
   const handleDelete = async (id: number) => {
     const success = await deleteTransaction(id);
     if (success) message.success("Đã xóa phiếu");
+  };
+
+  // [NEW] Print Handler
+  const handlePrint = (record: TransactionRecord) => {
+      const html = generatePaymentVoucherHTML(record);
+      printHTML(html);
   };
 
   const columns = [
@@ -178,6 +187,15 @@ const FinanceTransactionPage = () => {
       align: "center" as const,
       render: (_: any, record: TransactionRecord) => (
         <Space size="small">
+          {/* [NEW] Print Button */}
+          <Tooltip title="In Phiếu">
+              <Button 
+                size="small" 
+                icon={<PrinterOutlined />} 
+                onClick={() => handlePrint(record)} 
+              />
+          </Tooltip>
+
           {/* --- LOGIC NÚT DUYỆT THÔNG MINH --- */}
 
           {/* TRƯỜNG HỢP 1: PHIẾU THU (Mới -> Đã Thu) - Cần quyền Execute */}

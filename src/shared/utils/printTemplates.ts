@@ -153,9 +153,12 @@ export const generateB2BOrderHTML = (order: any) => {
     taxCode: "4900886412"
   };
 
+  // Logic hiển thị tiền (Ưu tiên biến total_payable_display truyền từ Hook)
   const oldDebt = Number(order.old_debt || 0);
   const currentTotal = Number(order.final_amount || 0);
-  const totalPayable = currentTotal + oldDebt;
+  const totalPayable = order.total_payable_display !== undefined 
+      ? Number(order.total_payable_display) 
+      : (currentTotal + oldDebt);
 
   const qrAmount = totalPayable > 0 ? totalPayable : currentTotal;
   const qrContent = `TT ${order.code}`; 
@@ -165,41 +168,44 @@ export const generateB2BOrderHTML = (order: any) => {
     <tr>
       <td style="text-align: center;">${index + 1}</td>
       <td>
-        <div style="font-weight: bold;">${item.product_name || item.product?.name || item.name || 'Sản phẩm'}</div>
-        ${item.note ? `<div style="font-style: italic; font-size: 11px;">(${item.note})</div>` : ''}
+        <div style="font-weight: bold;">${item.product_name}</div>
+        <div style="font-size: 10px; color: #444;">
+             ${item.batch_no ? `Lô: ${item.batch_no}` : ''} 
+             ${item.expiry_date ? `| HSD: ${dayjs(item.expiry_date).format('DD/MM/YY')}` : ''}
+        </div>
+        ${item.note ? `<div style="font-style: italic; font-size: 10px;">(${item.note})</div>` : ''}
       </td>
       <td style="text-align: center;">${item.uom || item.unit}</td>
-      <td style="text-align: center;">${item.quantity}</td>
-      <td style="text-align: right;">${Number(item.unit_price || item.price).toLocaleString()}</td>
-      <td style="text-align: right;">${Number(item.total_line || (item.quantity * (item.unit_price || item.price))).toLocaleString()}</td>
+      <td style="text-align: center; font-weight: bold;">${item.quantity}</td>
+      <td style="text-align: right;">${Number(item.unit_price).toLocaleString()}</td>
+      <td style="text-align: right;">${Number(item.total_line).toLocaleString()}</td>
     </tr>
   `).join('') || '';
 
   return `
     <html>
       <head>
-        <title>In Đơn Hàng ${order.code}</title>
+        <title>In Đơn ${order.code}</title>
         <style>
-          body { font-family: 'Times New Roman', serif; font-size: 12px; line-height: 1.3; padding: 20px; }
-          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-          .company-name { font-size: 14px; font-weight: bold; text-transform: uppercase; color: #000; }
-          .title { text-align: center; font-size: 26px; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
+          /* [NEW] Tối ưu font size cho A4 */
+          body { font-family: 'Times New Roman', serif; font-size: 13px; line-height: 1.3; padding: 15px; }
+          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px; }
+          .company-name { font-size: 16px; font-weight: bold; text-transform: uppercase; color: #000; }
+          .title { text-align: center; font-size: 20px; font-weight: bold; margin: 10px 0; text-transform: uppercase; letter-spacing: 1px; }
           
-          /* Bố cục 2 cột ở Footer */
-          .bottom-section { display: flex; gap: 20px; margin-top: 20px; border-top: 2px solid #ddd; padding-top: 15px; }
-          .qr-col { width: 40%; text-align: center; border-right: 1px dashed #ccc; }
-          .total-col { width: 60%; }
+          /* Table tối ưu khoảng cách */
+          .product-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          .product-table th, .product-table td { border: 1px solid #515151ff; padding: 4px 6px; font-size: 13px; }
+          .product-table th { background-color: #eee; text-align: center; }
           
-          .total-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; }
-          .final-row { font-weight: bold; font-size: 18px; border-top: 1px solid #000; padding-top: 10px; margin-top: 5px; color: #003a78; }
+          /* Layout 2 cột Footer */
+          .bottom-section { display: flex; gap: 20px; margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px; }
+          .total-row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 13px; }
+          .final-row { font-size: 16px; font-weight: bold; border-top: 1px solid #000; padding-top: 5px; margin-top: 5px; }
           
-          /* Table styles giữ nguyên */
+          .footer { margin-top: 40px; display: flex; justify-content: space-between; text-align: center; }
           .info-table { width: 100%; margin-bottom: 15px; }
           .info-table td { padding: 4px 0; vertical-align: top; }
-          .product-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          .product-table th, .product-table td { border: 1px solid #000; padding: 6px; }
-          .product-table th { background-color: #f0f0f0; text-align: center; font-weight: bold; }
-          .footer { margin-top: 40px; display: flex; justify-content: space-between; text-align: center; }
         </style>
       </head>
       <body>
@@ -217,9 +223,9 @@ export const generateB2BOrderHTML = (order: any) => {
           </div>
         </div>
 
-        <div class="title">ĐƠN ĐẶT HÀNG / PHIẾU GIAO HÀNG</div>
+         <div class="title">ĐƠN ĐẶT HÀNG / PHIẾU GIAO HÀNG</div>
 
-        <table class="info-table">
+         <table class="info-table">
           <tr>
             <td width="15%"><b>Khách hàng:</b></td>
             <td>${order.customer_name}</td>
@@ -236,24 +242,22 @@ export const generateB2BOrderHTML = (order: any) => {
           </tr>
         </table>
 
-        <table class="product-table">
-          <thead>
-            <tr>
-              <th width="5%">STT</th>
-              <th>Tên hàng hóa, quy cách</th>
-              <th width="10%">ĐVT</th>
-              <th width="10%">SL</th>
-              <th width="15%">Đơn giá</th>
-              <th width="15%">Thành tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
+         <table class="product-table" width="100%" cellspacing="0">
+            <thead>
+              <tr>
+                <th width="5%">STT</th>
+                <th>Tên hàng hóa, quy cách</th>
+                <th width="8%">ĐVT</th>
+                <th width="8%">SL</th>
+                <th width="12%">Đơn giá</th>
+                <th width="15%">Thành tiền</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+         </table>
 
-        <div class="bottom-section">
-            <div class="qr-col">
+         <div class="bottom-section">
+            <div class="qr-col" style="width: 40%; text-align: center;">
                 <div style="font-weight: bold; margin-bottom: 5px; font-size: 12px;">QUÉT MÃ THANH TOÁN</div>
                 <img src="${qrUrl}" width="120" height="120" style="border: 1px solid #ddd; padding: 2px;"/>
                 <div style="font-size: 11px; margin-top: 5px; color: #666;">
@@ -261,32 +265,30 @@ export const generateB2BOrderHTML = (order: any) => {
                     ${ACCOUNT_NAME}
                 </div>
             </div>
+            <div class="total-col" style="width: 60%;">
+               <div class="total-row"><span>Cộng tiền hàng:</span> <span>${Number(order.total_amount || 0).toLocaleString()} ₫</span></div>
+               <div class="total-row"><span>Chiết khấu:</span> <span>- ${Number(order.discount_amount || 0).toLocaleString()} ₫</span></div>
+               <div class="total-row"><span>Phí vận chuyển:</span> <span>+ ${Number(order.shipping_fee || 0).toLocaleString()} ₫</span></div>
+               
+               <div style="border-top: 1px dashed #ccc; margin: 5px 0;"></div>
 
-            <div class="total-col">
-                <div class="total-row"><span>Cộng tiền hàng:</span> <span>${Number(order.total_amount || 0).toLocaleString()} ₫</span></div>
-                <div class="total-row"><span>Chiết khấu:</span> <span>- ${Number(order.discount_amount || 0).toLocaleString()} ₫</span></div>
-                <div class="total-row"><span>Phí vận chuyển:</span> <span>+ ${Number(order.shipping_fee || 0).toLocaleString()} ₫</span></div>
-                
-                <div style="border-top: 1px dashed #ccc; margin: 10px 0;"></div>
-                
-                <div class="total-row" style="font-weight: bold;">
-                    <span>Thanh toán đơn này:</span> 
-                    <span>${Number(order.final_amount || 0).toLocaleString()} ₫</span>
-                </div>
+               <div class="total-row"><span>Thanh toán đơn này:</span> <b>${currentTotal.toLocaleString()} ₫</b></div>
+               
+               ${oldDebt !== 0 ? `
+                   <div class="total-row" style="color: #d4380d;">
+                       <span>${oldDebt > 0 ? 'Nợ cũ (Cộng dồn):' : 'Thanh toán khác:'}</span> 
+                       <span>${Math.abs(oldDebt).toLocaleString()} ₫</span>
+                   </div>
+               ` : ''}
 
-                <div class="total-row" style="color: ${Number(order.old_debt || 0) > 0 ? '#d4380d' : '#888'};">
-                    <span>Nợ cũ (Cộng dồn):</span> 
-                    <span>${Number(order.old_debt || 0).toLocaleString()} ₫</span>
-                </div>
-                
-                <div class="total-row final-row" style="font-size: 16px; border-top: 2px solid #000; margin-top: 8px; padding-top: 8px;">
-                    <span>TỔNG CỘNG PHẢI TRẢ:</span> 
-                    <span>${(Number(order.final_amount || 0) + Number(order.old_debt || 0)).toLocaleString()} ₫</span>
-                </div>
+               <div class="total-row final-row">
+                   <span>TỔNG CỘNG PHẢI TRẢ:</span> 
+                   <span>${totalPayable.toLocaleString()} ₫</span>
+               </div>
             </div>
-        </div>
-
-        <div class="footer">
+         </div>
+         
+         <div class="footer">
           <div style="width: 30%">
             <b>Người lập phiếu</b><br/>(Ký, họ tên)
           </div>
@@ -297,6 +299,54 @@ export const generateB2BOrderHTML = (order: any) => {
             <b>Khách hàng</b><br/>(Ký, họ tên)<br/><br/><br/><br/>
             ${order.customer_name}
           </div>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+// 4. IN PHIẾU THU / CHI
+export const generatePaymentVoucherHTML = (trans: any) => {
+  const isReceipt = trans.flow === 'in';
+  const title = isReceipt ? 'PHIẾU THU TIỀN' : 'PHIẾU CHI TIỀN';
+  
+  return `
+    <html>
+      <head>
+        <title>${title} ${trans.code}</title>
+        <style>
+            body { font-family: 'Times New Roman', serif; font-size: 14px; padding: 40px; }
+            .header { text-align: left; margin-bottom: 20px; }
+            .company { font-weight: bold; font-size: 16px; text-transform: uppercase;}
+            .title { text-align: center; font-size: 24px; font-weight: bold; margin: 20px 0; }
+            .row { margin-bottom: 10px; display: flex; }
+            .label { width: 150px; font-weight: bold; }
+            .value { flex: 1; border-bottom: 1px dotted #000; }
+            .footer { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+            <div class="company">CÔNG TY TNHH DƯỢC - TBYT NAM VIỆT</div>
+            <div>Số 17, Đường Bắc Sơn, Xã Hữu Lũng, Lạng Sơn</div>
+        </div>
+        
+        <div class="title">${title}</div>
+        <div style="text-align: center; margin-bottom: 20px;">Ngày ... tháng ... năm ...</div>
+
+        <div class="row"><div class="label">Mã phiếu:</div><div class="value">${trans.code}</div></div>
+        <div class="row"><div class="label">${isReceipt ? 'Người nộp tiền' : 'Người nhận tiền'}:</div><div class="value">${trans.partner_name_cache || trans.partner_name || '...'}</div></div>
+        <div class="row"><div class="label">Địa chỉ:</div><div class="value">...</div></div>
+        <div class="row"><div class="label">Lý do:</div><div class="value">${trans.description}</div></div>
+        <div class="row"><div class="label">Số tiền:</div><div class="value" style="font-weight: bold; font-size: 16px;">${Number(trans.amount).toLocaleString()} VNĐ</div></div>
+        <div class="row"><div class="label">Bằng chữ:</div><div class="value">...</div></div>
+        <div class="row"><div class="label">Kèm theo:</div><div class="value">... chứng từ gốc</div></div>
+
+        <div class="footer">
+            <div style="width: 25%"><b>Giám đốc</b><br/>(Ký, họ tên)</div>
+            <div style="width: 25%"><b>Kế toán trưởng</b><br/>(Ký, họ tên)</div>
+            <div style="width: 25%"><b>Người lập phiếu</b><br/>(Ký, họ tên)</div>
+            <div style="width: 25%"><b>${isReceipt ? 'Người nộp tiền' : 'Người nhận tiền'}</b><br/>(Ký, họ tên)</div>
         </div>
       </body>
     </html>

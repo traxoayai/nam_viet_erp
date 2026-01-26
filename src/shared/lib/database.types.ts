@@ -3449,7 +3449,7 @@ export type Database = {
       }
       bulk_upsert_customers_b2b: {
         Args: { p_customers_array: Json[] }
-        Returns: undefined
+        Returns: Json
       }
       bulk_upsert_customers_b2c: {
         Args: { p_customers_array: Json[] }

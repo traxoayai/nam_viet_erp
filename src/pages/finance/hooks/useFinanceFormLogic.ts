@@ -331,18 +331,10 @@ export const useFinanceFormLogic = (
 
       // [NEW] Ưu tiên lấy partner_id/type từ form values (Do logic tìm kiếm mới)
       if (values.partner_type && values.partner_id) {
+          // [FIX] Giữ nguyên partner_type chuẩn (customer_b2b hoặc customer)
+          // Để Trigger SQL phân biệt được đâu là B2B, đâu là B2C
           payload.p_partner_type = values.partner_type;
           payload.p_partner_id = values.partner_id;
-          
-          // Nếu là Customer B2B -> set partner_type = customer_b2b (Nếu DB hỗ trợ enum này, nếu không thì cứ để 'other' hoặc handle sau)
-          // Lưu ý: Nếu DB enum p_partner_type chỉ có 'supplier' | 'customer' | 'employee' | 'other'
-          // Thì 'customer_b2b' nên map về 'customer'
-          if (values.partner_type === 'customer_b2b') {
-             payload.p_partner_type = 'customer'; 
-             // Tuy nhiên, ID của B2B và B2C có thể trùng nhau? 
-             // Cần đảm bảo logic lưu trữ. Nếu DB transaction chỉ lưu partner_id và partner_type enum cố định.
-             // Tạm thời map về 'customer'. Nhưng cần lưu ý tên partner đã được set ở trên.
-          }
       }
 
       const success = await createTransaction(payload);

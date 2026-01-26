@@ -164,5 +164,18 @@ export const salesService = {
     });
     if (error) throw error;
     return true;
+  },
+
+  // 10. [NEW] Đánh dấu đơn hàng là Chuyển khoản (Cho flow B2B List)
+  async markOrderAsBankTransfer(orderId: string | number) {
+      const { error } = await supabase.from('orders')
+        .update({ 
+            payment_method: 'bank_transfer', 
+            updated_at: new Date().toISOString() 
+        })
+        .eq('id', orderId);
+      
+      if (error) throw error;
+      return true;
   }
 };

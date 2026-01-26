@@ -31,6 +31,7 @@ import { generateInvoiceExcel } from "@/shared/utils/invoiceExcelGenerator";
 import { salesService } from "@/features/sales/api/salesService";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { VatActionButton } from '@/features/pos/components/VatActionButton';
+import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
 
 const { Text } = Typography;
 
@@ -47,10 +48,14 @@ const B2BOrderListPage = () => {
   // State Chọn Hàng Loạt
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  // State Xác nhận Thu tiền (B2B Payment)
+  // State Xác nhận Thu tiền (B2B Payment Bulk) - Cũ
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [fundAccounts, setFundAccounts] = useState<any[]>([]); 
   const [selectedFundId, setSelectedFundId] = useState<number | null>(null);
+
+  // [NEW] State cho Thanh toán Đơn lẻ (Use Finance Modal)
+  const [financeModalOpen, setFinanceModalOpen] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
 
   // State Users (Sales Staff)
   const [creators, setCreators] = useState<any[]>([]);
@@ -135,6 +140,49 @@ const B2BOrderListPage = () => {
       }
   };
 
+  // [NEW] Handler: Khi bấm nút $
+  const handlePaymentClick = (order: any) => {
+      Modal.confirm({
+          title: `Xác nhận thanh toán đơn ${order.code}`,
+          content: 'Khách hàng thanh toán qua hình thức nào?',
+          okText: 'Tiền mặt',
+          cancelText: 'Chuyển khoản',
+          closable: true,
+          maskClosable: true,
+          onOk: () => {
+              // Mở form thu tiền mặt
+              setSelectedOrderForPayment(order);
+              setFinanceModalOpen(true);
+          },
+          // Custom footer để handle nút Cancel là Chuyển khoản
+          footer: (_, { }) => (
+            <div style={{textAlign: 'right', marginTop: 10}}>
+                <Button onClick={() => Modal.destroyAll()} style={{ marginRight: 8 }}>Hủy</Button>
+                <Button onClick={async () => {
+                     Modal.destroyAll();
+                     await handleMarkAsTransfer(order);
+                }} style={{ marginRight: 8 }}>Chuyển khoản</Button>
+                <Button type="primary" onClick={() => {
+                     Modal.destroyAll();
+                     setSelectedOrderForPayment(order);
+                     setFinanceModalOpen(true);
+                }}>Tiền mặt</Button>
+            </div>
+          )
+      });
+  };
+
+  // [NEW] Logic đánh dấu Chuyển khoản
+  const handleMarkAsTransfer = async (order: any) => {
+      try {
+          await salesService.markOrderAsBankTransfer(order.id);
+          message.success("Đã chuyển sang hình thức CK. Vui lòng sang trang Đối soát để kiểm tra.");
+          refresh(); // Reload bảng
+      } catch (e: any) {
+          message.error("Lỗi: " + e.message);
+      }
+  };
+
   // --- 4. CẤU HÌNH CỘT (COLUMNS DEFINITION) ---
   const columns = useMemo(() => [
     // 2. Ngày giờ tạo đơn
@@ -147,7 +195,7 @@ const B2BOrderListPage = () => {
     {
         title: "Hành động",
         key: "action",
-        width: 80,
+        width: 100,
         align: "center" as const,
         render: (_: any, record: any) => (
             <Space>
@@ -159,6 +207,20 @@ const B2BOrderListPage = () => {
                         printOrder(record);
                     }}
                 />
+                
+                {/* [NEW] Nút Thanh Toán (Chỉ hiện khi chưa trả hết) */}
+                {record.payment_status !== 'paid' && record.status !== 'CANCELLED' && (
+                    <Button 
+                        type="text" 
+                        title="Thanh toán (Tiền mặt / CK)"
+                        style={{ color: '#52c41a' }}
+                        icon={<DollarCircleOutlined />} 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handlePaymentClick(record);
+                        }} 
+                    />
+                )}
             </Space>
         )
     },
@@ -428,6 +490,28 @@ const B2BOrderListPage = () => {
             </div>
           </div>
       </Modal>
+
+      {/* [NEW] FINANCE MODAL INTEGRATION */}
+      <FinanceFormModal 
+         open={financeModalOpen}
+         onCancel={() => setFinanceModalOpen(false)}
+         initialFlow="in" // Phiếu Thu
+         onSuccess={() => {
+             setFinanceModalOpen(false);
+             refresh();
+             message.success("Đã lập phiếu thu thành công!");
+         }}
+         initialValues={selectedOrderForPayment ? {
+             business_type: 'trade',
+             partner_type: selectedOrderForPayment.customer_id ? 'customer_b2b' : 'customer',
+             partner_id: selectedOrderForPayment.customer_id, // Auto-select customer
+             partner_name: selectedOrderForPayment.customer_name, // Fallback name
+             amount: Math.max(0, selectedOrderForPayment.final_amount - (selectedOrderForPayment.paid_amount || 0)), // Số tiền còn thiếu
+             ref_type: 'order',
+             ref_id: selectedOrderForPayment.code, // Link mã đơn
+             description: `Thu tiền đơn hàng ${selectedOrderForPayment.code}`
+         } : undefined}
+      />
 
     </div>
   );

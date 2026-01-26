@@ -5,76 +5,68 @@ import { supabase } from "@/shared/lib/supabaseClient";
 
 export const useOrderPrint = () => {
   const printOrder = async (order: any) => {
-    const hide = message.loading("Đang tính toán công nợ & tạo bản in...", 0);
+    const hide = message.loading("Đang xử lý dữ liệu in...", 0);
     try {
-        console.log("🖨️ PRINT DEBUG - Input Order:", order);
-
-        // 1. Dò tìm Customer ID chuẩn xác
-        // Trong List Page có thể nó nằm ở order.customer_id, hoặc order.customer.id
+        // 1. Lấy thông tin Nợ hiện tại từ Server
+        let serverTotalDebt = 0;
         const customerId = order.customer_id || order.customer?.id || order.partner_id;
-
-        let oldDebt = 0;
-        let totalDebtFromServer = 0;
-
+        
         if (customerId) {
-            // Gọi RPC lấy công nợ thực tế (Real-time)
-            const { data, error } = await supabase.rpc('get_customer_debt_info', { 
-                p_customer_id: Number(customerId) 
-            });
-
-            if (!error && data && data.length > 0) {
-                 totalDebtFromServer = Number(data[0].current_debt) || 0;
-                 console.log("💰 Debt from Server:", totalDebtFromServer);
+            const { data } = await supabase.rpc('get_customer_debt_info', { p_customer_id: Number(customerId) });
+            if (data && data.length > 0) {
+                 serverTotalDebt = Number(data[0].current_debt) || 0;
             }
         }
 
-        // 2. Logic tính "Nợ cũ" (Số nợ TRƯỚC KHI cộng đơn này vào)
-        // Nếu đơn hàng CHƯA thanh toán (unpaid/debt) -> Nó đã nằm trong totalDebtFromServer.
-        // -> Nợ cũ = Tổng nợ server - Giá trị đơn này.
-        // Nếu đơn hàng ĐÃ thanh toán (paid) -> Nó không nằm trong nợ.
-        // -> Nợ cũ = Tổng nợ server.
+        // 2. Logic Hiển thị Nợ (QUAN TRỌNG)
+        // - Nếu đơn hàng MỚI TẠO (Chưa chốt nợ): Nợ hiển thị = Nợ Server (Nợ cũ). Tổng = Nợ cũ + Đơn mới.
+        // - Nếu đơn hàng LỊCH SỬ (Đã chốt nợ/Đã giao): Nợ Server đã bao gồm đơn này. 
+        //   -> Ta hiển thị Nợ Server là "Tổng dư nợ hiện tại". 
+        //   -> Dòng "Nợ cũ" sẽ được tính lùi: ServerDebt - Đơn này (nếu chưa trả).
         
-        const currentOrderUnpaidAmount = (order.payment_status === 'paid') 
-            ? 0 
-            : (Number(order.final_amount) - Number(order.paid_amount || 0));
+        const isDebtRecorded = ['CONFIRMED', 'SHIPPING', 'DELIVERED', 'COMPLETED'].includes(order.status);
+        const thisOrderUnpaid = (order.payment_status === 'paid') ? 0 : (Number(order.final_amount) - Number(order.paid_amount || 0));
+        
+        let oldDebtDisplay = 0;
+        let totalPayableDisplay = 0;
 
-        oldDebt = totalDebtFromServer - currentOrderUnpaidAmount;
+        if (isDebtRecorded) {
+            // Đơn đã tính nợ -> Tính ngược để ra nợ cũ
+            oldDebtDisplay = serverTotalDebt - thisOrderUnpaid;
+            totalPayableDisplay = serverTotalDebt; 
+        } else {
+            // Đơn mới (Draft/Quote) -> Nợ server là nợ cũ
+            oldDebtDisplay = serverTotalDebt;
+            totalPayableDisplay = serverTotalDebt + thisOrderUnpaid;
+        }
 
-        // Failsafe: Không để nợ cũ bị âm (trừ trường hợp trả thừa thật)
-        // Nhưng thường hiển thị in ấn ta chỉ quan tâm số dương để đòi tiền.
-        // if (oldDebt < 0) oldDebt = 0; 
-
-        console.log("🧮 Calc: TotalServer", totalDebtFromServer, "- CurrentUnpaid", currentOrderUnpaidAmount, "= OldDebt", oldDebt);
-
-        // 3. Chuẩn bị dữ liệu in
+        // 3. Map Data (Thêm Lô/Date)
         const printData = {
             ...order,
-            // Fallback tên sản phẩm
             items: (order.items || order.order_items || []).map((i: any) => ({
                 ...i,
                 product_name: i.product_name || i.product?.name || i.name || 'Sản phẩm',
                 uom: i.uom || i.unit || 'ĐVT',
                 quantity: i.quantity || 0,
                 unit_price: Number(i.unit_price || i.price || 0),
-                // Tính lại thành tiền cho chắc chắn
-                total_line: (Number(i.quantity || 0) * Number(i.unit_price || i.price || 0)) - Number(i.discount || 0)
+                total_line: i.total_line || ((i.quantity || 0) * (i.unit_price || 0)),
+                // [NEW] Map Lô/Hạn dùng
+                batch_no: i.batch_no || i.lot_number || '',
+                expiry_date: i.expiry_date || ''
             })),
-            // Quan trọng: Truyền số liệu đã tính vào template
-            old_debt: oldDebt,
-            final_amount: Number(order.final_amount || 0)
+            old_debt: oldDebtDisplay,
+            total_payable_display: totalPayableDisplay // Truyền biến riêng để template dùng
         };
 
-        // 4. Gọi hàm tạo HTML & In
         const html = generateB2BOrderHTML(printData);
         printHTML(html);
 
     } catch (e: any) {
-        console.error("Print Error:", e);
-        message.error("Lỗi in đơn: " + e.message);
+        console.error(e);
+        message.error("Lỗi in: " + e.message);
     } finally {
         hide();
     }
   };
-
   return { printOrder };
 };
