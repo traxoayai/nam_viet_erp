@@ -50,6 +50,9 @@ export const PERMISSIONS = {
       EDIT: 'crm.b2b.edit', 
       DELETE: 'crm.b2b.delete' 
     },
+  },
+  FINANCE: {
+    VIEW_BALANCE: 'finance.view_balance',
   }
 };
 

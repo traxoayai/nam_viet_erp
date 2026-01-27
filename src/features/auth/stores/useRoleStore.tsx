@@ -41,8 +41,8 @@ const buildPermissionTree = (permissions: Permission[]): PermissionNode[] => {
   const moduleMap: { [key: string]: Permission[] } = {};
   
   permissions.forEach((p) => {
-    // Chuẩn hóa module key (fallback 'other')
-    const modKey = p.module || 'other';
+    // Chuẩn hóa module key (fallback 'other') + [FIX] Lowercase để tránh trùng lặp
+    const modKey = (p.module || 'other').toLowerCase();
     if (!moduleMap[modKey]) moduleMap[modKey] = [];
     moduleMap[modKey].push(p);
   });

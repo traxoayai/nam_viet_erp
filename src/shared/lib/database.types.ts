@@ -4367,6 +4367,32 @@ export type Database = {
           transaction_date: string
         }[]
       }
+      get_transactions: {
+        Args: {
+          p_creator_id?: string
+          p_date_from: string
+          p_date_to: string
+          p_flow: string
+          p_page: number
+          p_page_size: number
+          p_search: string
+          p_status: string
+        }
+        Returns: {
+          amount: number
+          business_type: string
+          code: string
+          creator_name: string
+          description: string
+          flow: string
+          full_count: number
+          id: number
+          metadata: Json
+          partner_name: string
+          status: string
+          transaction_date: string
+        }[]
+      }
       get_user_pending_revenue: { Args: { p_user_id: string }; Returns: number }
       get_users_with_roles: {
         Args: never

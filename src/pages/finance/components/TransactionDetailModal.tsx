@@ -176,19 +176,30 @@ export const TransactionDetailModal: React.FC<Props> = ({
   };
 
   // [NEW] Logic tái tạo QR Code
-  // Kiểm tra xem record này có lưu thông tin ngân hàng đích không
-  const bankInfo = data.target_bank_info;
+  // [NEW] Logic tái tạo QR Code
+  // [FIX] Logic lấy thông tin ngân hàng chuẩn xác từ Metadata của Core
+  // Core trả về: account_number, account_name
+  // Frontend cần: acc, holder
+  const rawData = (data as any).metadata || data.target_bank_info || {};
+  
+  const bankInfo = {
+      bin: rawData.bin,
+      // Map các trường có thể xảy ra để tránh lỗi
+      acc: rawData.acc || rawData.account_number || rawData.accountNum, 
+      holder: rawData.holder || rawData.account_name || rawData.accountName
+  };
+
   let qrUrl = null;
 
-  if (bankInfo?.bin && bankInfo?.acc && data.flow === "out") {
+  // Kiểm tra đủ thông tin mới tạo QR
+  if (bankInfo.bin && bankInfo.acc && data.flow === "out") {
     const { bin, acc, holder } = bankInfo;
-    // Encode nội dung để tránh lỗi URL
-    const addInfo = encodeURIComponent(
-      data.description || `Thanh toan phieu ${data.code}`
-    );
+    
+    // Encode nội dung
+    const addInfo = encodeURIComponent(data.description || `Thanh toan ${data.code}`);
     const accountName = encodeURIComponent(holder || "");
 
-    // Tạo link VietQR (Template compact)
+    // Tạo link VietQR
     qrUrl = `https://img.vietqr.io/image/${bin}-${acc}-compact.png?amount=${data.amount}&addInfo=${addInfo}&accountName=${accountName}`;
   }
 

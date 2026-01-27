@@ -6007,6 +6007,57 @@ CREATE OR REPLACE FUNCTION "public"."get_transaction_history"("p_flow" "public".
 ALTER FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_transactions"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_flow" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("id" bigint, "code" "text", "flow" "text", "amount" numeric, "status" "text", "partner_name" "text", "transaction_date" timestamp with time zone, "description" "text", "business_type" "text", "creator_name" "text", "full_count" bigint, "metadata" "jsonb")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        t.id,
+        t.code,
+        t.flow::TEXT,
+        t.amount,
+        t.status::TEXT,
+        
+        -- Cột partner_name (đã fix ở V31.6)
+        COALESCE(t.partner_name_cache, 'Khách lẻ') as partner_name,
+        
+        t.transaction_date,
+        t.description,
+        t.business_type::TEXT,
+        
+        -- Cột creator_name (đã fix ở V31.7)
+        COALESCE(u.full_name, u.email, 'N/A') as creator_name,
+        
+        COUNT(*) OVER() as full_count,
+        
+        -- [CORE FIX]: Lấy target_bank_info và gán vào metadata
+        -- Đây là thông tin chứa: Ngân hàng, STK, Chủ TK -> Để tạo QR
+        COALESCE(t.target_bank_info, '{}'::jsonb) AS metadata
+        
+    FROM public.finance_transactions t
+    LEFT JOIN public.users u ON t.created_by = u.id 
+    WHERE 
+        (
+            p_search IS NULL 
+            OR t.code ILIKE '%' || p_search || '%' 
+            OR t.partner_name_cache ILIKE '%' || p_search || '%'
+        )
+        AND (p_flow IS NULL OR t.flow::TEXT = p_flow)
+        AND (p_status IS NULL OR t.status::TEXT = p_status)
+        AND (p_date_from IS NULL OR t.transaction_date >= p_date_from)
+        AND (p_date_to IS NULL OR t.transaction_date <= p_date_to)
+        AND (p_creator_id IS NULL OR t.created_by = p_creator_id) 
+    ORDER BY t.transaction_date DESC
+    LIMIT p_page_size OFFSET (p_page - 1) * p_page_size;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_transactions"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_flow" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_user_pending_revenue"("p_user_id" "uuid") RETURNS numeric
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -14970,6 +15021,12 @@ GRANT ALL ON FUNCTION "public"."get_suppliers_list"("search_query" "text", "stat
 GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_transactions"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_flow" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_transactions"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_flow" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_transactions"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_flow" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid") TO "service_role";
 
 
 

@@ -14,6 +14,7 @@ export const useFinanceTransactionLogic = () => {
     fetchTransactions,
     fetchFunds,
     setFilters,
+    filters, // [NEW]
     setPage,
   } = useFinanceStore();
 
@@ -45,6 +46,7 @@ export const useFinanceTransactionLogic = () => {
     page,
     pageSize,
     setFilters,
+    filters, // [NEW]
     setPage,
     fetchTransactions,
     isModalOpen,

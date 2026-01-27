@@ -30,5 +30,27 @@ export const financeService = {
     });
     if (error) throw error;
     return data || 0;
+  },
+
+  // [NEW] Lấy danh sách giao dịch (cho FinanceTransactionPage)
+  getTransactions: async (params: any) => {
+    const { data, error } = await supabase.rpc("get_transactions", {
+        p_page: params.page,
+        p_page_size: params.pageSize,
+        p_search: params.search || null,
+        p_flow: params.flow || null,
+        p_status: params.status || null,
+        p_date_from: params.date_from || null,
+        p_date_to: params.date_to || null,
+        
+        // [NEW] Mapping đúng tham số Core yêu cầu
+        p_creator_id: params.creatorId || null 
+    });
+
+    if (error) throw error;
+    
+    // Core trả về mảng, phần tử đầu tiên chứa full_count
+    const totalCount = data && data.length > 0 ? data[0].full_count : 0;
+    return { data: data || [], totalCount };
   }
 };

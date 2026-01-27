@@ -11,6 +11,8 @@ import {
 } from "@/features/finance/types/finance";
 import { FundAccountRecord } from "@/features/finance/types/fundAccount";
 
+import { financeService } from "@/features/finance/api/financeService"; // [NEW]
+
 interface FinanceState {
   transactions: TransactionRecord[];
   funds: FundAccountRecord[];
@@ -50,21 +52,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ loading: true });
     const { filters, page, pageSize } = get();
     try {
-      const { data, error } = await supabase.rpc("get_transaction_history", {
-        p_flow: filters.flow || null,
-        p_fund_id: filters.fund_id || null,
-        p_date_from: filters.date_from || null,
-        p_date_to: filters.date_to || null,
-        p_search: filters.search || null,
-        p_status: filters.status || null,
-        p_limit: pageSize,
-        p_offset: (page - 1) * pageSize,
+      const { data, totalCount } = await financeService.getTransactions({
+        page,
+        pageSize,
+        ...filters
       });
 
-      if (error) throw error;
-
-      const total = data && data.length > 0 ? data[0].total_count : 0;
-      set({ transactions: data || [], totalCount: total, loading: false });
+      set({ transactions: data || [], totalCount: totalCount, loading: false });
     } catch (err: any) {
       console.error("Lỗi tải lịch sử:", err);
       set({ loading: false });

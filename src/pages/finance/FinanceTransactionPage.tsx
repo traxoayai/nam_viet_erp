@@ -41,9 +41,12 @@ import { useFinanceTransactionLogic } from "./hooks/useFinanceTransactionLogic";
 
 import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
+import { useUserStore } from "@/features/auth/stores/useUserStore"; // [NEW]
 import { TransactionRecord } from "@/features/finance/types/finance";
 import { generatePaymentVoucherHTML } from "@/shared/utils/printTemplates"; // [NEW]
-import { printHTML } from "@/shared/utils/printUtils"; // [NEW]
+import { printHTML } from "@/shared/utils/printUtils"; // [RESTORED]
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -57,6 +60,12 @@ const FinanceTransactionPage = () => {
     useFinanceStore();
   const { message } = App.useApp();
   const [viewRecord, setViewRecord] = useState<TransactionRecord | null>(null);
+  const { users, fetchUsers } = useUserStore(); // [NEW]
+
+  // [NEW] Load users for filter
+  useState(() => {
+     fetchUsers();
+  });
 
   // [NEW] Lấy danh sách quyền của user hiện tại
   const { permissions } = useAuthStore();
@@ -87,6 +96,16 @@ const FinanceTransactionPage = () => {
       dataIndex: "code",
       width: 160,
       render: (code: string) => <Tag color="blue">{code}</Tag>,
+    },
+    {
+      title: "Người tạo",
+      dataIndex: "creator_name", // [FIX] Map field creator_name
+      width: 240,
+      render: (name: string) => (
+          <Tag color="cyan" style={{ margin: 0 }}>
+              {name || "N/A"}
+          </Tag>
+      ),
     },
     {
       title: "Ngày tạo", // Đổi tên cho rõ nghĩa
@@ -293,14 +312,28 @@ const FinanceTransactionPage = () => {
         <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={8}>
             <Card bordered={false}>
-              <Statistic
-                title="Tổng Quỹ Thực Tế (Tất cả các quỹ)"
-                value={logic.totalBalance}
-                precision={0}
-                valueStyle={{ color: "#1890ff" }}
-                prefix={<WalletOutlined />}
-                suffix="đ"
-              />
+              <Access 
+                permission={PERMISSIONS.FINANCE.VIEW_BALANCE} 
+                hide={true} // [FIX] Bắt buộc ẩn và hiện fallback
+                fallback={
+                    // Hiển thị khi không có quyền
+                    <Statistic 
+                        title="Tổng Quỹ Thực Tế (Tất cả các quỹ)" 
+                        value="***" 
+                        valueStyle={{ color: "#1890ff", filter: "blur(4px)" }} 
+                        prefix={<WalletOutlined />} 
+                    />
+                }
+              >
+                  <Statistic
+                    title="Tổng Quỹ Thực Tế (Tất cả các quỹ)"
+                    value={logic.totalBalance}
+                    precision={0}
+                    valueStyle={{ color: "#1890ff" }}
+                    prefix={<WalletOutlined />}
+                    suffix="đ"
+                  />
+              </Access>
             </Card>
           </Col>
         </Row>
@@ -318,8 +351,8 @@ const FinanceTransactionPage = () => {
             <Space wrap style={{ flex: 1 }}>
               {/* --- SỬA LỖI 5: Mở rộng ô tìm kiếm --- */}
               <Input.Search
-                placeholder="Tìm mã, tên, nội dung..."
-                style={{ width: 300 }} // Tăng width
+                placeholder="Tìm mã phiếu, Tên người tạo, Nội dung phiếu ..."
+                style={{ width: 400 }} // Tăng width
                 allowClear
                 onSearch={(val) => logic.setFilters({ search: val })}
                 enterButton
@@ -334,6 +367,23 @@ const FinanceTransactionPage = () => {
                 <Select.Option value="confirmed">Đã duyệt</Select.Option>
                 <Select.Option value="completed">Đã hoàn tất</Select.Option>
                 <Select.Option value="cancelled">Đã hủy</Select.Option>
+              </Select>
+              <Select
+                placeholder="Người tạo"
+                allowClear
+                style={{ width: 180 }}
+                showSearch
+                optionFilterProp="children"
+                onChange={(val) => logic.setFilters({ creatorId: val })} 
+              >
+                {users
+                    // [FIX] Chỉ hiện nhân viên Active và Đang làm việc (Bỏ qua 'test', 'resigned')
+                    .filter(u => u.status === 'active' && u.work_state === 'working')
+                    .map(u => (
+                        <Select.Option key={u.key} value={u.key}>
+                            {u.full_name || u.name || u.email} {/* [FIX] Dùng full_name ưu tiên */}
+                        </Select.Option>
+                ))}
               </Select>
               <RangePicker
                 style={{ width: 240 }}

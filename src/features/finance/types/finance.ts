@@ -62,6 +62,7 @@ export interface TransactionRecord {
   cash_tally?: Record<string, number>; // Key: mệnh giá, Value: số lượng
   total_count?: number; // For pagination
   target_bank_info?: { bin: string; acc: string; holder: string }; // [NEW]
+  metadata?: Record<string, any>; // [NEW] Metadata JSONB
 }
 
 // 6. [RESTORED] Params tạo giao dịch (RPC create_finance_transaction)
@@ -94,4 +95,5 @@ export interface TransactionFilter {
   date_to?: string;
   search?: string;
   status?: string;
+  creatorId?: string | null; // [NEW] Phase 2.1
 }
