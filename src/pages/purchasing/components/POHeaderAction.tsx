@@ -86,7 +86,7 @@ const POHeaderAction: React.FC<Props> = ({
                     icon={<SendOutlined />}
                     onClick={onSubmit}
                     loading={loading}
-                    disabled={!isEditMode}
+                    //disabled={!isEditMode}
                   >
                     Đặt Hàng
                   </Button>

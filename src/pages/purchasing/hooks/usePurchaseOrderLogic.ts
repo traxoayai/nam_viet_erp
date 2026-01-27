@@ -313,6 +313,7 @@ export const usePurchaseOrderLogic = () => {
             : 1,
         uom: item.uom,
         unit_price: item.unit_price || 0,
+        is_bonus: (item as any).is_bonus || false, // [NEW] Support bonus items
       }));
 
       const payloadData = {
@@ -342,10 +343,17 @@ export const usePurchaseOrderLogic = () => {
         // Reload lại để cập nhật state mới nhất nếu cần
         loadOrderDetail(Number(id));
       } else {
-        const newId = await purchaseOrderService.createDraftPO(
-          payloadData,
-          payloadItems
-        );
+        const result = await purchaseOrderService.createPO({
+            ...payloadData,
+            expected_date: payloadData.expected_delivery_date, // [FIX] Map correctly
+            supplier_id: values.supplier_id, // Ensure strict type matching
+            items: payloadItems,
+            status: 'DRAFT'
+        });
+        
+        // Result is { id, code, ... }
+        const newId = result.id;
+        
         message.success("Tạo đơn nháp thành công");
         navigate(`/purchase-orders/${newId}`);
       }
