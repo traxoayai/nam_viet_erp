@@ -15,6 +15,7 @@ export interface TransferMaster {
     source_warehouse_name?: string;
     dest_warehouse_name?: string;
     creator_name?: string;
+    receiver_name?: string; // [NEW]
 }
 
 export interface TransferItem {
@@ -48,4 +49,27 @@ export interface TransferBatchItem {
 
 export interface TransferDetail extends TransferMaster {
     items: TransferItem[];
+}
+
+export interface TransferCartItem {
+    key: string; // Unique ID cho UI
+    product_id: number;
+    sku: string;
+    product_name: string;
+    image_url: string; // [NEW] Hiển thị Avatar
+    
+    // Tồn kho & Gợi ý (Read-only)
+    current_stock: number; // Tồn thực tế (Base Unit)
+    shelf_location: string;
+    lot_hint: string;      // Gợi ý lô (FEFO)
+    expiry_hint: string;   // HSD lô gợi ý
+    
+    // Đơn vị & Số lượng (Editable)
+    unit: string;          // Đơn vị chuyển (Wholesale)
+    conversion_factor: number;
+    quantity: number;      // SL nhập vào (theo Unit)
+    
+    // Tính toán
+    base_quantity: number; // = quantity * conversion_factor
+    error?: string;        // Lỗi validate (nếu có)
 }

@@ -5,6 +5,7 @@ import { PlusOutlined, ThunderboltOutlined, SearchOutlined, EyeOutlined } from '
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useTransferStore } from '@/features/inventory/stores/useTransferStore';
+import { useUserStore } from '@/features/auth/stores/useUserStore'; // [NEW]
 import { AutoReplenishModal } from '@/features/inventory/components/transfer/AutoReplenishModal';
 // columns defined inline below 
 // Actually, strict requirements said "CREATE TransferListPage.tsx", I will put columns inside or separate if too large.
@@ -21,13 +22,31 @@ const TransferListPage: React.FC = () => {
     fetchList, 
     createAutoRequest 
   } = useTransferStore();
+  
+  // 1. User Store for Filters
+  const { users, fetchUsers } = useUserStore();
+
+  useEffect(() => {
+      fetchUsers();
+  }, []);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<{
+    page: number;
+    pageSize: number;
+    status: string;
+    search: string;
+    creatorId?: string;
+    receiverId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }>({
     page: 1,
     pageSize: 10,
     status: '',
-    search: ''
+    search: '',
+    creatorId: undefined,
+    receiverId: undefined
   });
 
   useEffect(() => {
@@ -70,6 +89,23 @@ const TransferListPage: React.FC = () => {
       title: 'Kho nhập',
       dataIndex: 'dest_warehouse_name',
       key: 'dest',
+    },
+    // [NEW] Cột Người tạo
+    {
+        title: 'Người tạo',
+        dataIndex: 'creator_name',
+        width: 150,
+        render: (name: string) => name ? <Tag color="blue">{name}</Tag> : <span style={{color: '#999'}}>---</span>
+    },
+    // [NEW] Cột Người nhận
+    {
+        title: 'Người nhận',
+        dataIndex: 'receiver_name',
+        width: 150,
+        render: (name: string) => (
+            // Nếu chưa có người nhận (---) thì hiện text thường, có thì hiện Tag tím
+            name && name !== '---' ? <Tag color="purple">{name}</Tag> : <span style={{color: '#999'}}>---</span>
+        )
     },
     {
       title: 'Trạng thái',
@@ -114,24 +150,31 @@ const TransferListPage: React.FC = () => {
              >
                 Tạo bù kho tự động (Min/Max)
              </Button>
-            <Button type="default" icon={<PlusOutlined />} disabled>
-              Tạo thủ công (Coming Soon)
-            </Button>
+              <Button 
+                type="default" 
+                icon={<PlusOutlined />} 
+                onClick={() => navigate('/inventory/transfer/new')}
+              >
+                Tạo thủ công
+              </Button>
           </Space>
         }
       >
-        {/* FILTERS */}
-        <Space style={{ marginBottom: 16 }}>
+        {/* FILTERS V2 */}
+        <Space style={{ marginBottom: 16 }} wrap>
+          {/* 1. Ô Tìm kiếm đa năng */}
           <Input 
-            placeholder="Tìm mã phiếu..." 
+            placeholder="Tìm mã phiếu, tên SP, người tạo/nhận..." 
             prefix={<SearchOutlined />} 
             onChange={(e) => setFilters({...filters, search: e.target.value})}
-            style={{ width: 500 }}
+            style={{ width: 400 }} 
           />
+          
+          {/* 2. Trạng thái */}
           <Select 
             placeholder="Trạng thái"
             allowClear
-            style={{ width: 150 }}
+            style={{ width: 140 }}
             options={[
                 { value: 'pending', label: 'Chờ duyệt' },
                 { value: 'approved', label: 'Đã duyệt' },
@@ -140,7 +183,45 @@ const TransferListPage: React.FC = () => {
             ]}
             onChange={(val) => setFilters({...filters, status: val})}
           />
-          <RangePicker placeholder={['Từ ngày', 'Đến ngày']} />
+
+          {/* 3. Lọc Người tạo */}
+            <Select 
+                placeholder="Người tạo"
+                allowClear
+                style={{ width: 160 }}
+                onChange={(val) => setFilters({...filters, creatorId: val})}
+                showSearch
+                optionFilterProp="children"
+            >
+                {users.filter(u => u.status === 'active').map(u => (
+                    <Select.Option key={u.key} value={u.key}>{u.full_name || u.email}</Select.Option>
+                ))}
+            </Select>
+
+            {/* 4. Lọc Người nhận */}
+            <Select 
+                placeholder="Người nhận"
+                allowClear
+                style={{ width: 160 }}
+                onChange={(val) => setFilters({...filters, receiverId: val})}
+                showSearch
+                optionFilterProp="children"
+            >
+                {users.filter(u => u.status === 'active').map(u => (
+                    <Select.Option key={u.key} value={u.key}>{u.full_name || u.email}</Select.Option>
+                ))}
+            </Select>
+          
+          <RangePicker 
+            placeholder={['Từ ngày', 'Đến ngày']} 
+            onChange={(_, dateStrings) => { // dateStrings is [string, string]
+                setFilters({
+                    ...filters, 
+                    dateFrom: dateStrings[0],
+                    dateTo: dateStrings[1]
+                });
+            }}
+          />
         </Space>
 
         <Table

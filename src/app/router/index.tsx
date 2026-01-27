@@ -52,6 +52,7 @@ import MainLayout from "@/shared/ui/layouts/MainLayout";
 import OnboardingLayout from "@/shared/ui/layouts/OnboardingLayout";
 import TransferListPage from "@/pages/inventory/transfer/TransferListPage";
 import TransferDetailPage from "@/pages/inventory/transfer/TransferDetailPage";
+import TransferCreatePage from "@/pages/inventory/transfer/TransferCreatePage"; // [NEW]
 import CustomerSegmentsPage from "@/pages/crm/CustomerSegmentsPage";
 import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
 import PosPage from "@/pages/pos/PosPage";
@@ -206,6 +207,10 @@ const routes: RouteObject[] = [
           {
             path: "inventory/transfer",
             element: <TransferListPage />,
+          },
+          {
+            path: "inventory/transfer/new",
+            element: <TransferCreatePage />,
           },
           { path:"/inventory/transfers/:id",
             element: <TransferDetailPage />

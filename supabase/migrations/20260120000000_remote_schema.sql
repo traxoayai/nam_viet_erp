@@ -6019,31 +6019,26 @@ BEGIN
         t.flow::TEXT,
         t.amount,
         t.status::TEXT,
-        
-        -- Cột partner_name (đã fix ở V31.6)
         COALESCE(t.partner_name_cache, 'Khách lẻ') as partner_name,
-        
         t.transaction_date,
         t.description,
         t.business_type::TEXT,
-        
-        -- Cột creator_name (đã fix ở V31.7)
         COALESCE(u.full_name, u.email, 'N/A') as creator_name,
-        
         COUNT(*) OVER() as full_count,
-        
-        -- [CORE FIX]: Lấy target_bank_info và gán vào metadata
-        -- Đây là thông tin chứa: Ngân hàng, STK, Chủ TK -> Để tạo QR
         COALESCE(t.target_bank_info, '{}'::jsonb) AS metadata
-        
     FROM public.finance_transactions t
     LEFT JOIN public.users u ON t.created_by = u.id 
     WHERE 
+        -- [CORE UPGRADE]: Tìm kiếm đa năng 4 trường
         (
             p_search IS NULL 
-            OR t.code ILIKE '%' || p_search || '%' 
-            OR t.partner_name_cache ILIKE '%' || p_search || '%'
+            OR t.code ILIKE '%' || p_search || '%'                  -- 1. Tìm theo Mã
+            OR t.partner_name_cache ILIKE '%' || p_search || '%'    -- 2. Tìm theo Đối tác
+            OR t.description ILIKE '%' || p_search || '%'           -- 3. Tìm theo Nội dung (Mới)
+            OR u.full_name ILIKE '%' || p_search || '%'             -- 4. Tìm theo Người tạo (Mới)
+            OR u.email ILIKE '%' || p_search || '%'                 -- (Backup) Tìm theo Email người tạo
         )
+        
         AND (p_flow IS NULL OR t.flow::TEXT = p_flow)
         AND (p_status IS NULL OR t.status::TEXT = p_status)
         AND (p_date_from IS NULL OR t.transaction_date >= p_date_from)

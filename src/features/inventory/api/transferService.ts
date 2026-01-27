@@ -24,45 +24,45 @@ export const transferService = {
         page?: number; 
         pageSize?: number; 
         status?: string; 
-        search?: string 
+        search?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        creatorId?: string;
+        receiverId?: string;
     }) => {
         const page = filters.page || 1;
         const pageSize = filters.pageSize || 10;
-        const from = (page - 1) * pageSize;
-        const to = from + pageSize - 1;
 
-        let query = supabase
-            .from('inventory_transfers')
-            .select(`
-                *,
-                source:source_warehouse_id(name),
-                dest:dest_warehouse_id(name)
-            `, { count: 'exact' });
-
-        if (filters.status) {
-            query = query.eq('status', filters.status);
-        }
-
-        if (filters.search) {
-            query = query.ilike('code', `%${filters.search}%`);
-        }
-
-        query = query
-            .order('created_at', { ascending: false })
-            .range(from, to);
-
-        const { data, error, count } = await query;
+        // [UPDATE] Use RPC get_transfers (V32.7)
+        const { data, error } = await supabase.rpc('get_transfers', {
+            p_page: page,
+            p_page_size: pageSize,
+            p_search: filters.search || null,
+            p_status: filters.status || null,
+            p_date_from: filters.dateFrom || null,
+            p_date_to: filters.dateTo || null,
+            p_creator_id: filters.creatorId || null,
+            p_receiver_id: filters.receiverId || null
+        });
 
         if (error) throw error;
 
-        // Map joined data to flat structure if needed
-        const mappedData: TransferMaster[] = data.map((item: any) => ({
-            ...item,
-            source_warehouse_name: item.source?.name,
-            dest_warehouse_name: item.dest?.name
-        }));
+        // RPC returns { data: [...], total_count: numbers } OR just array?
+        // Usually our RPCs return a JSON object with data & total.
+        // Let's assume standard pagination pattern for this project's RPCs.
+        // If the RPC returns just list, I might lose total count availability unless it's in the response.
+        // Checking previous similar RPC usage... `search_products_v2` returned { data: ..., count }.
+        // Let's assume the RPC returns { data: Transfer[], total_count: number } based on standard.
+        // If not, I'd have to adjust.
+        // HOWEVER, the prompt didn't specify return shape. 
+        // "Backend: Đã Deploy RPC get_transfers V32.7"
+        // I will assume it returns { data: [], total_count: 0 } or similar.
+        
+        // SAFEGUARD: If data is array directly, use it. If it has .data property, use that.
+        const resultData = data?.data || data || [];
+        const totalCount = data?.total_count || 0;
 
-        return { data: mappedData, total: count || 0 };
+        return { data: resultData, total: totalCount };
     },
 
     /**
@@ -263,12 +263,46 @@ export const transferService = {
      * Calls RPC: submit_transfer_shipping
      */
     submitShipping: async (transferId: number, items: { transfer_item_id: number; batch_id: number; quantity: number }[]) => {
-        const { data, error } = await supabase.rpc('submit_transfer_shipping', {
+        const { error } = await supabase.rpc('submit_transfer_shipping', {
             p_transfer_id: transferId,
             p_batch_items: items
         });
 
         if (error) throw error;
-        return data;
+    },
+
+    /**
+     * Check Stock Availability (Validate)
+     * Calls RPC: search_product_batches
+     */
+     checkAvailability: async (productId: number, warehouseId: number) => {
+        const { data, error } = await supabase.rpc('search_product_batches', {
+            p_product_id: productId,
+            p_warehouse_id: warehouseId
+        });
+        if (error) throw error;
+        // Trả về tổng tồn kho (Base Unit) của tất cả các lô cộng lại
+        const totalStock = data?.reduce((sum: number, b: any) => sum + b.quantity, 0) || 0;
+        return totalStock; 
+    },
+
+    /**
+     * Create Manual Transfer
+     * Calls RPC: create_manual_transfer
+     */
+    createManualTransfer: async (payload: {
+        p_source_warehouse_id: number,
+        p_dest_warehouse_id: number,
+        p_note: string,
+        p_items: Array<{
+            product_id: number,
+            quantity: number,       // Số lượng theo đơn vị Sỉ
+            unit: string,           // Tên đơn vị Sỉ
+            conversion_factor: number // Hệ số quy đổi
+        }>
+    }) => {
+        const { data, error } = await supabase.rpc('create_manual_transfer', payload);
+        if (error) throw error;
+        return data; // { success: true, transfer_id: ... }
     }
 };

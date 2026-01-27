@@ -3,6 +3,8 @@ import { create } from 'zustand';
 import { transferService } from '../api/transferService';
 import { TransferMaster, TransferDetail } from '../types/transfer';
 import { message } from 'antd';
+import { supabase } from '@/shared/lib/supabaseClient';
+import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 
 interface TransferState {
   transfers: TransferMaster[];
@@ -10,7 +12,16 @@ interface TransferState {
   loading: boolean;
   totalCount: number;
 
-  fetchList: (params: { page?: number; pageSize?: number; status?: string; search?: string }) => Promise<void>;
+  fetchList: (params: { 
+      page?: number; 
+      pageSize?: number; 
+      status?: string; 
+      search?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      creatorId?: string;
+      receiverId?: string;
+  }) => Promise<void>;
   createAutoRequest: (warehouseId: number, note?: string) => Promise<boolean>;
   getDetail: (id: number) => Promise<void>;
   updateStatus: (id: number, status: string) => Promise<void>;
@@ -31,6 +42,10 @@ interface TransferState {
   updateDraftItem: (itemId: number, batchId: number, quantity: number) => void;
   submitTransferShipment: () => Promise<boolean>;
   resetDetail: () => void;
+  // [NEW] Manual Transfer Actions
+  checkStockAvailability: (productId: number, warehouseId: number) => Promise<number>;
+  createTransfer: (payload: any) => Promise<boolean>;
+  confirmTransferInbound: (overrideWarehouseId?: number) => Promise<boolean>;
 }
 
 export const useTransferStore = create<TransferState>((set, get) => ({
@@ -378,40 +393,125 @@ export const useTransferStore = create<TransferState>((set, get) => ({
   },
 
   submitTransferShipment: async () => {
-      const { currentTransfer, shippingDraft } = get();
-      if (!currentTransfer) return false;
+    const { currentTransfer } = get();
+    
+    // 1. Validate cơ bản
+    if (!currentTransfer) {
+        message.error("Không tìm thấy thông tin phiếu chuyển!");
+        return false;
+    }
 
-      set({ loading: true });
+    // Lưu ý: Không cần check shippingDraft nữa vì Backend sẽ tự động lấy hàng theo FEFO.
+
+    set({ loading: true });
+    try {
+        // [UPDATE V32.4] Gọi RPC Xuất kho tự động (Auto-FEFO)
+        // Backend sẽ tự động tìm lô hết hạn sớm nhất để trừ kho -> Chuyển trạng thái sang Shipping
+        const { error } = await supabase.rpc('confirm_transfer_outbound_fefo', {
+            p_transfer_id: currentTransfer.id
+        });
+
+        if (error) {
+            // Ném lỗi để catch bên dưới xử lý hiển thị
+            throw error;
+        }
+
+        // 2. Thông báo thành công
+        message.success('Xuất kho thành công! Hệ thống đã tự động chọn lô (FEFO).');
+        
+        // 3. Refresh lại dữ liệu để UI cập nhật trạng thái mới (Pending -> Shipping)
+        await get().initTransferOperation(currentTransfer.id);
+        
+        return true;
+
+    } catch (err: any) {
+        console.error("Submit Error:", err);
+        // Hiển thị lỗi chi tiết từ Backend (VD: Kho không đủ hàng...)
+        message.error(err.message || 'Lỗi xuất kho không xác định');
+        return false;
+    } finally {
+        set({ loading: false });
+    }
+},
+
+
+  resetDetail: () => set({ currentTransfer: null, shippingDraft: {}, isAllocationDone: false, scannedCode: '' }),
+
+  // [NEW] Manual Transfer Implementation
+  checkStockAvailability: async (productId, warehouseId) => {
       try {
-          // Transform draft to RPC format
-          const itemsPayload: { transfer_item_id: number; batch_id: number; quantity: number }[] = [];
-          
-          Object.entries(shippingDraft).forEach(([itemId, batches]) => {
-              batches.forEach(batch => {
-                  itemsPayload.push({
-                      transfer_item_id: Number(itemId),
-                      batch_id: batch.id,
-                      quantity: batch.quantity_picked // Assuming local batch object has this field
-                  });
-              });
-          });
-
-          if (itemsPayload.length === 0) {
-              message.warning('Chưa có sản phẩm nào được chọn để xuất kho');
-              return false;
-          }
-
-          await transferService.submitShipping(currentTransfer.id, itemsPayload);
-          message.success('Đã xuất kho thành công!');
-          return true;
-      } catch (error: any) {
-          console.error('Error submitting shipment:', error);
-          message.error(error.message || 'Lỗi xuất kho');
-          return false;
-      } finally {
+          const qty = await transferService.checkAvailability(productId, warehouseId);
+          return qty;
+      } catch (error) {
+          console.error("Error checking stock:", error);
+          return 0;
+          } finally {
           set({ loading: false });
       }
   },
 
-  resetDetail: () => set({ currentTransfer: null, shippingDraft: {}, isAllocationDone: false, scannedCode: '' }),
+  confirmTransferInbound: async (overrideWarehouseId?: number) => {
+    const { currentTransfer } = get();
+    
+    // 1. Determine Actor Warehouse
+    // If override provided (Admin case), use it.
+    // Else use current user's warehouse.
+    const authStore = useAuthStore.getState();
+    const userWarehouseId = authStore.profile?.warehouse_id || authStore.profile?.branch_id; 
+    
+    const targetWarehouseId = overrideWarehouseId || (userWarehouseId ? Number(userWarehouseId) : undefined);
+
+    // 2. Validate
+    if (!currentTransfer) return false;
+    
+    if (!targetWarehouseId) {
+        message.warning("Không thể xác định kho để nhập. Vui lòng kiểm tra quyền hạn.");
+        return false;
+    }
+
+    // Verify consistency: The target warehouse MUST be the dest warehouse of the transfer
+    if (targetWarehouseId !== currentTransfer.dest_warehouse_id) {
+         message.error(`Kho thực hiện (${targetWarehouseId}) không trùng khớp với Kho đích của phiếu (${currentTransfer.dest_warehouse_id}).`);
+         return false;
+    }
+
+    set({ loading: true });
+    try {
+        // 3. Gọi RPC V32.8
+        const { data, error } = await supabase.rpc('confirm_transfer_inbound', {
+            p_transfer_id: currentTransfer.id,
+            p_actor_warehouse_id: targetWarehouseId
+        });
+
+        if (error) throw error;
+
+        // 4. Thành công
+        message.success(`Nhập kho thành công! Đã cộng tồn kho cho ${data.items_processed || 0} lô hàng.`);
+        
+        // Refresh lại dữ liệu phiếu để thấy trạng thái 'completed'
+        await get().initTransferOperation(currentTransfer.id);
+        return true;
+
+    } catch (err: any) {
+        console.error("Inbound Error:", err);
+        message.error(err.message || 'Lỗi nhập kho từ hệ thống.');
+        return false;
+    } finally {
+        set({ loading: false });
+    }
+  },
+  createTransfer: async (payload) => {
+      set({ loading: true });
+      try {
+          await transferService.createManualTransfer(payload);
+          message.success("Tạo phiếu chuyển kho thành công!");
+          return true;
+      } catch (error: any) {
+          console.error("Error creating transfer:", error);
+          message.error(error.message || "Lỗi tạo phiếu chuyển");
+          return false;
+      } finally {
+          set({ loading: false });
+      }
+  }
 }));

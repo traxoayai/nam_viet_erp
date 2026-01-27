@@ -25,11 +25,14 @@ import {
   BarcodeOutlined,
   CheckCircleOutlined,
   DownloadOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  ExclamationCircleOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTransferStore } from '@/features/inventory/stores/useTransferStore';
 import { TransferItem } from '@/features/inventory/types/transfer';
+import { useAuthStore } from '@/features/auth/stores/useAuthStore'; // [NEW]
 
 import { printHTML } from '@/shared/utils/printUtils';
 import { generateTransferHTML } from '@/shared/templates/transferTemplate';
@@ -49,11 +52,13 @@ const TransferDetailPage: React.FC = () => {
     handleBarcodeScan,
     updateDraftItem,
     submitTransferShipment,
-    updateStatus,
     cancelRequest,
     deleteRequest,
-    removeTransferItem
+    removeTransferItem,
+    confirmTransferInbound // [NEW]
   } = useTransferStore();
+  
+  const { profile } = useAuthStore(); // [NEW] Get permissions
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -134,17 +139,63 @@ const TransferDetailPage: React.FC = () => {
       });
   };
 
+  // 1. Logic check hiển thị nút Nhập kho thông minh hơn
+  // 1. Logic check hiển thị nút Nhập kho (Mở rộng tối đa theo yêu cầu Sếp)
+  // Không check userWarehouseId nữa vì user có thể quản nhiều kho.
+  // Check permission nếu cần thiết (optional), nhưng tạm thời mở cho tất cả nếu status = shipping.
+  const canReceive = currentTransfer?.status === 'shipping';
+
+  // Debug Log (Để check trên console)
+  useEffect(() => {
+      if (currentTransfer?.status === 'shipping') {
+          console.log('--- DEBUG INBOUND VISIBILITY ---');
+          console.log('Status:', currentTransfer.status);
+          console.log('-> CAN RECEIVE:', canReceive);
+      }
+  }, [currentTransfer, canReceive]);
+
   const handleReceive = () => {
       if (!currentTransfer) return;
+      
+      // [UPDATE] Truyền Context: Hành động này diễn ra tại KHO ĐÍCH
+      // Bất kể user đang ở kho nào, khi bấm nút này tức là họ xác nhận nhập vào Kho Đích.
+      const actorWarehouseId = currentTransfer.dest_warehouse_id;
+
+      // Check self-receive (Warning if Creator == Receiver)
+      const isSelfReceive = profile?.id === currentTransfer.creator_id;
+
       Modal.confirm({
-          title: 'Xác nhận nhập kho',
-          content: 'Xác nhận kho đích đã nhận đủ hàng?',
-          okText: 'Xác nhận',
-          okButtonProps: { style: { backgroundColor: '#52c41a' } },
+          title: isSelfReceive 
+            ? <span style={{color: '#faad14'}}>⚠️ Cảnh báo: Trùng người thực hiện</span> 
+            : 'Xác nhận Nhập kho',
+          icon: isSelfReceive ? <ExclamationCircleOutlined /> : <QuestionCircleOutlined />,
+          content: (
+            <div>
+                {isSelfReceive && (
+                    <div style={{ 
+                        background: '#fffbe6', 
+                        border: '1px solid #ffe58f', 
+                        padding: '8px', 
+                        marginBottom: '12px',
+                        borderRadius: '4px' 
+                    }}>
+                        <b>Lưu ý:</b> Bạn là người tạo phiếu này. Hệ thống cho phép tự nhập kho, nhưng hành động này sẽ được ghi log lại.
+                    </div>
+                )}
+                <p>Bạn xác nhận đã nhận đủ hàng hóa thực tế?</p>
+                <p>Hệ thống sẽ <b>tự động cộng tồn kho</b> (theo các lô đã xuất) vào kho hiện tại của bạn.</p>
+            </div>
+          ),
+          okText: 'Xác nhận Nhập',
+          okButtonProps: { 
+             style: { 
+                 backgroundColor: isSelfReceive ? '#faad14' : '#52c41a', 
+                 borderColor: isSelfReceive ? '#faad14' : '#52c41a' 
+             } 
+          },
           onOk: async () => {
-              await updateStatus(currentTransfer.id, 'completed');
-              message.success('Đã nhập kho thành công');
-              navigate('/inventory/transfer');
+              // Pass the actor ID to store
+              await confirmTransferInbound(actorWarehouseId);
           }
       });
   };
@@ -282,7 +333,7 @@ const TransferDetailPage: React.FC = () => {
   }
 
   const isPending = currentTransfer.status === 'pending';
-  const isShipping = currentTransfer.status === 'shipping';
+  // const isShipping = currentTransfer.status === 'shipping'; // Unused now
 
   return (
     <div style={{ padding: 24, maxWidth: 1500, margin: '0 auto' }}>
@@ -320,8 +371,13 @@ const TransferDetailPage: React.FC = () => {
                     </Button>
                 </>
             )}
-            {isShipping && (
-                <Button type="primary" style={{ backgroundColor: '#52c41a' }} icon={<DownloadOutlined />} onClick={handleReceive}>
+            {canReceive && (
+                <Button 
+                    type="primary" 
+                    style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }} 
+                    icon={<DownloadOutlined />} 
+                    onClick={handleReceive}
+                >
                     Xác nhận Nhập kho
                 </Button>
             )}

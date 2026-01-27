@@ -11,6 +11,8 @@ export interface UserProfile {
   status: "pending_approval" | "active" | "inactive";
   profile_updated_at: string | null; // Cột kiểm soát Onboarding
   phone: string | null; // (Các trường HCNS đầy đủ sẽ được dùng ở trang Profile)
+  warehouse_id?: number | null; // [NEW] Kho làm việc
+  branch_id?: number | null; // [NEW] Chi nhánh
 }
 
 // 2. NÂNG CẤP "KHUÔN MẪU" BỘ NÃO

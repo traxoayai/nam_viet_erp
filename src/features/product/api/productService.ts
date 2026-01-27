@@ -519,4 +519,25 @@ export const getAllProductsLite = async (page: number = 1, pageSize: number = 20
     return { data: [], total: 0 };
   }
   return { data: data || [], total: count || 0 };
+  if (error) {
+        console.error("Lỗi getAllProductsLite:", error?.message);
+    return { data: [], total: 0 };
+  }
+  return { data: data || [], total: count || 0 };
+};
+
+// 14. HÀM TÌM KIẾM CHUYÊN BIỆT CHO CHUYỂN KHO (Có tồn kho & Đơn vị)
+export const searchProductsForTransfer = async (keyword: string, warehouseId: number) => {
+    // Gọi RPC V32.3 Final của Core
+    const { data, error } = await supabase.rpc('search_products_for_transfer', { 
+        p_warehouse_id: warehouseId, // BẮT BUỘC
+        p_keyword: keyword,
+        p_limit: 20
+    });
+    
+    if (error) {
+        console.error("RPC Error:", error);
+        return [];
+    }
+    return data || []; 
 };
