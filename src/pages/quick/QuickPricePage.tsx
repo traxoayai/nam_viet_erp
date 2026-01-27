@@ -26,6 +26,8 @@ interface ProductPriceRow {
     base_unit: string;
     wholesale_unit: string;
     wholesale_rate: number;
+    retail_rate: number; // [NEW]
+    retail_unit_name: string; // [NEW]
 
     actual_cost: number; // Giá vốn (Hiển thị theo đơn vị Buôn)
     
@@ -91,8 +93,9 @@ const QuickPricePage: React.FC = () => {
                                       || units.find((u: any) => !u.is_base && u.conversion_rate > 1)
                                       || units.find((u: any) => u.is_base);
 
-                const retailUnitObj = units.find((u: any) => u.is_base || u.unit_type === 'retail') || units[0];
+                const retailUnitObj = units.find((u: any) => u.unit_type === 'retail') || units.find((u: any) => u.is_base) || units[0];
                 const rate = wholesaleUnitObj?.conversion_rate || 1;
+                const retailRate = retailUnitObj?.conversion_rate || 1; // [NEW] Lấy hệ số lẻ
                 
                 // Hiển thị giá vốn theo đơn vị Buôn
                 const displayCost = (p.actual_cost || 0) * rate;
@@ -102,6 +105,8 @@ const QuickPricePage: React.FC = () => {
                     base_unit: retailUnitObj?.unit_name || '---',
                     wholesale_unit: wholesaleUnitObj?.unit_name || '---',
                     wholesale_rate: rate,
+                    retail_rate: retailRate, // [NEW]
+                    retail_unit_name: retailUnitObj?.unit_name || '---', // [NEW]
                     actual_cost: displayCost,
                     
                     // Map đúng cột Margin từ DB
@@ -135,10 +140,20 @@ const QuickPricePage: React.FC = () => {
         // Tính Giá Lẻ
         if (['actual_cost', 'retail_margin', 'retail_margin_type'].includes(changedField)) {
             let margin = newItem.retail_margin;
+            
+            // Nếu lãi % -> Tính % trên giá vốn BUÔN
             if (newItem.retail_margin_type === 'percent') {
                 margin = newItem.actual_cost * (newItem.retail_margin / 100);
             }
-            updates.retail_price = Math.ceil((newItem.actual_cost + margin) / newItem.wholesale_rate);
+            
+            // Giá bán Buôn (đã cộng lãi) = Cost + Margin
+            const pricePerWholesaleUnit = newItem.actual_cost + margin;
+            
+            // Giá bán cho 1 đơn vị Base = Giá Buôn / Hệ số Buôn
+            const pricePerBase = pricePerWholesaleUnit / newItem.wholesale_rate;
+            
+            // Giá bán cho 1 đơn vị Lẻ (Vỉ) = Giá Base * Hệ số Lẻ
+            updates.retail_price = Math.ceil(pricePerBase * (newItem.retail_rate || 1));
         }
 
         // Tính Giá Buôn
@@ -411,7 +426,7 @@ const QuickPricePage: React.FC = () => {
         )
       },
       {
-        title: `Giá Lẻ (${products[0]?.base_unit || 'ĐV Lẻ'})`,
+        title: `Giá Lẻ (${products[0]?.retail_unit_name || 'ĐV Lẻ'})`,
         key: 'retail_price',
         width: 150,
         render: (_: any, record: ProductPriceRow) => (
