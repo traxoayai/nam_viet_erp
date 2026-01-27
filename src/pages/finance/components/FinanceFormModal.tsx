@@ -537,13 +537,13 @@ export const FinanceFormModal: React.FC<Props> = ({
           <Col span={12}>
             <Form.Item
               name="fund_account_id"
-              label="Nguồn tiền"
+              label="Hình thức"
               rules={[{ required: true }]}
             >
-              <Select placeholder="Chọn quỹ..." loading={funds.length === 0}>
+              <Select placeholder="Chọn hình thức..." loading={funds.length === 0}>
                 {funds.map((f) => (
                   <Option key={f.id} value={f.id}>
-                    {f.name} (Dư: {Number(f.balance).toLocaleString()}đ)
+                    {f.name}
                   </Option>
                 ))}
               </Select>
