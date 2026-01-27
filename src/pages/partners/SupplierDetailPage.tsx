@@ -36,6 +36,9 @@ import { useBankStore } from "@/features/finance/stores/useBankStore";
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
 import { supplierService } from "@/features/purchasing/api/supplierService";  // [NEW]
 import { Statistic } from "antd"; // [NEW]
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -178,13 +181,15 @@ const SupplierDetailPage: React.FC = () => {
                 Về danh sách
               </Button>
               {isEditing && formDisabled ? (
-                <Button
-                  type="primary"
-                  icon={<EditOutlined />}
-                  onClick={() => setFormDisabled(false)}
-                >
-                  Chỉnh sửa
-                </Button>
+                <Access permission={PERMISSIONS.PARTNER.SUPPLIER.EDIT}>
+                    <Button
+                    type="primary"
+                    icon={<EditOutlined />}
+                    onClick={() => setFormDisabled(false)}
+                    >
+                    Chỉnh sửa
+                    </Button>
+                </Access>
               ) : null}
             </Space>
           </Col>
@@ -456,6 +461,7 @@ const SupplierDetailPage: React.FC = () => {
                     icon={<SaveOutlined />}
                     onClick={handleSave}
                     loading={loadingDetails}
+                    disabled={isEditing && formDisabled} // Allow save if editing enabled
                   >
                     Lưu thay đổi
                   </Button>
@@ -490,4 +496,10 @@ const SupplierDetailPage: React.FC = () => {
   );
 };
 
-export default SupplierDetailPage;
+const ProtectedSupplierDetailPage = () => (
+    <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
+        <SupplierDetailPage />
+    </PermissionGuard>
+);
+
+export default ProtectedSupplierDetailPage;

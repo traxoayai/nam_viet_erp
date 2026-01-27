@@ -436,59 +436,95 @@ DECLARE
     v_order RECORD;
     v_pay_amount NUMERIC;
     v_partner_id BIGINT;
+    v_ref_order_code TEXT; 
 BEGIN
-    -- Chỉ chạy khi Phiếu Thu (IN) của Khách hàng (B2B/B2C) được DUYỆT (Completed/Confirmed)
-    -- Và chỉ chạy khi status thay đổi sang completed/confirmed (tránh chạy lại khi update field khác)
+    -- Điều kiện chạy: Phiếu Thu (IN) + Trạng thái Completed/Confirmed
+    -- [CORE NOTE]: Bắt cả trường hợp Insert (Tạo mới đã hoàn tất ngay) hoặc Update (Duyệt sau)
     IF NEW.flow = 'in' 
        AND NEW.status IN ('completed', 'confirmed') 
-       AND (OLD.status IS NULL OR OLD.status NOT IN ('completed', 'confirmed'))
-       AND NEW.partner_type IN ('customer', 'customer_b2b') 
+       AND (TG_OP = 'INSERT' OR OLD.status NOT IN ('completed', 'confirmed')) 
     THEN
         v_remaining_amount := NEW.amount;
         
-        -- Safe cast ID
-        BEGIN
-            v_partner_id := NEW.partner_id::BIGINT;
-        EXCEPTION WHEN OTHERS THEN
-            RETURN NEW; -- Bỏ qua nếu ID không phải số
-        END;
-
-        -- Loop qua các đơn hàng chưa trả hết của khách này (Cũ nhất trước - FIFO)
-        FOR v_order IN 
-            SELECT id, final_amount, paid_amount 
-            FROM public.orders 
-            WHERE 
-                (
-                    (NEW.partner_type = 'customer' AND customer_b2c_id = v_partner_id) OR
-                    (NEW.partner_type = 'customer_b2b' AND customer_id = v_partner_id)
-                )
-                AND payment_status != 'paid'
-                AND status != 'CANCELLED'
-            ORDER BY created_at ASC
-        LOOP
-            -- Thoát nếu hết tiền phân bổ
-            IF v_remaining_amount <= 0 THEN EXIT; END IF;
-
-            -- Tính số tiền cần trả cho đơn này (Nợ còn lại của đơn)
-            -- Logic: Min(Tiền đang có, Tiền đơn đang thiếu)
-            v_pay_amount := LEAST(v_remaining_amount, v_order.final_amount - COALESCE(v_order.paid_amount, 0));
+        -- =================================================================
+        -- ƯU TIÊN 1: TRẢ CHO ĐÚNG ĐƠN HÀNG ĐƯỢC CHỈ ĐỊNH (Explicit Allocation)
+        -- =================================================================
+        -- Điều kiện: ref_type = 'order' và ref_id chứa Mã đơn hàng (VD: SO-12345)
+        IF NEW.ref_type = 'order' AND NEW.ref_id IS NOT NULL THEN
+            v_ref_order_code := NEW.ref_id;
             
-            IF v_pay_amount > 0 THEN
-                -- Update Đơn hàng
-                UPDATE public.orders 
-                SET 
-                    paid_amount = COALESCE(paid_amount, 0) + v_pay_amount,
-                    payment_status = CASE 
-                        WHEN (COALESCE(paid_amount, 0) + v_pay_amount) >= (final_amount - 100) THEN 'paid' -- Cho phép sai số nhỏ 100đ
-                        ELSE 'partial' 
-                    END,
-                    updated_at = NOW()
-                WHERE id = v_order.id;
+            -- Tìm đơn hàng khớp Mã (Code) và chưa thanh toán xong
+            FOR v_order IN 
+                SELECT id, final_amount, paid_amount 
+                FROM public.orders 
+                WHERE code = v_ref_order_code 
+                  AND payment_status != 'paid'
+                  AND status != 'CANCELLED'
+            LOOP
+                -- Tính số tiền trả cho đơn này
+                v_pay_amount := LEAST(v_remaining_amount, v_order.final_amount - COALESCE(v_order.paid_amount, 0));
+                
+                IF v_pay_amount > 0 THEN
+                    -- Update trạng thái đơn hàng
+                    UPDATE public.orders 
+                    SET paid_amount = COALESCE(paid_amount, 0) + v_pay_amount,
+                        payment_status = CASE 
+                            WHEN (COALESCE(paid_amount, 0) + v_pay_amount) >= (final_amount - 100) THEN 'paid' 
+                            ELSE 'partial' 
+                        END,
+                        updated_at = NOW()
+                    WHERE id = v_order.id;
+                    
+                    -- Trừ đi số tiền đã dùng
+                    v_remaining_amount := v_remaining_amount - v_pay_amount;
+                END IF;
+            END LOOP;
+        END IF;
 
-                -- Trừ dần số tiền còn lại của phiếu thu
-                v_remaining_amount := v_remaining_amount - v_pay_amount;
-            END IF;
-        END LOOP;
+        -- =================================================================
+        -- ƯU TIÊN 2: NẾU CÒN TIỀN DƯ, TRẢ CHO NỢ CŨ (FIFO Allocation)
+        -- =================================================================
+        -- Chỉ áp dụng nếu có định danh Khách hàng (partner_type/partner_id hợp lệ)
+        IF v_remaining_amount > 0 AND NEW.partner_type IN ('customer', 'customer_b2b') THEN
+            
+            BEGIN
+                v_partner_id := NEW.partner_id::BIGINT;
+            EXCEPTION WHEN OTHERS THEN
+                RETURN NEW; -- Bỏ qua nếu ID khách hàng không phải số hợp lệ
+            END;
+
+            FOR v_order IN 
+                SELECT id, final_amount, paid_amount 
+                FROM public.orders 
+                WHERE 
+                    (
+                        (NEW.partner_type = 'customer' AND customer_b2c_id = v_partner_id) OR
+                        (NEW.partner_type = 'customer_b2b' AND customer_id = v_partner_id)
+                    )
+                    AND payment_status != 'paid'
+                    AND status != 'CANCELLED'
+                    -- [CORE NOTE]: Tránh trả lại đơn vừa trả ở trên (nếu Priority 1 đã xử lý nhưng chưa hết tiền)
+                    AND (v_ref_order_code IS NULL OR code != v_ref_order_code)
+                ORDER BY created_at ASC -- Cũ nhất trước
+            LOOP
+                IF v_remaining_amount <= 0 THEN EXIT; END IF;
+                
+                v_pay_amount := LEAST(v_remaining_amount, v_order.final_amount - COALESCE(v_order.paid_amount, 0));
+                
+                IF v_pay_amount > 0 THEN
+                    UPDATE public.orders 
+                    SET paid_amount = COALESCE(paid_amount, 0) + v_pay_amount,
+                        payment_status = CASE 
+                            WHEN (COALESCE(paid_amount, 0) + v_pay_amount) >= (final_amount - 100) THEN 'paid' 
+                            ELSE 'partial' 
+                        END,
+                        updated_at = NOW()
+                    WHERE id = v_order.id;
+
+                    v_remaining_amount := v_remaining_amount - v_pay_amount;
+                END IF;
+            END LOOP;
+        END IF;
     END IF;
     RETURN NEW;
 END;
@@ -687,7 +723,7 @@ DECLARE
     item jsonb;
     v_product_id BIGINT;
     
-    -- Biến lưu giá trị CŨ trong DB
+    -- Biến lưu giá trị CŨ
     v_old_cost NUMERIC;
     v_old_retail_margin_val NUMERIC;
     v_old_retail_margin_type TEXT;
@@ -696,21 +732,16 @@ DECLARE
     v_wholesale_unit_name TEXT;
     v_retail_unit_name TEXT;
 
-    -- Biến lưu giá trị MỚI (Sau khi merge)
+    -- Biến lưu giá trị MỚI
     v_final_cost NUMERIC;
-    v_final_retail_price NUMERIC;
-    v_final_wholesale_price NUMERIC;
-    
-    -- Biến tạm để check input
     v_input_retail_price NUMERIC;
     v_input_wholesale_price NUMERIC;
-
 BEGIN
     FOR item IN SELECT * FROM jsonb_array_elements(p_data)
     LOOP
         v_product_id := (item->>'product_id')::BIGINT;
 
-        -- 1. Lấy dữ liệu CŨ từ Database (Snapshot hiện tại)
+        -- 1. Lấy dữ liệu CŨ từ Database
         SELECT 
             actual_cost, 
             retail_margin_value, retail_margin_type,
@@ -724,15 +755,10 @@ BEGIN
         FROM public.products 
         WHERE id = v_product_id;
 
-        -- 2. TÍNH TOÁN GIÁ TRỊ CUỐI CÙNG (Merge Input vs Old Data)
-        -- Logic: Nếu Input IS NOT NULL thì lấy Input, ngược lại lấy Old Data
-        
+        -- 2. TÍNH TOÁN (Merge Input)
         v_final_cost := COALESCE((item->>'actual_cost')::NUMERIC, v_old_cost, 0);
         
-        -- Các trường Margin
-        -- Lưu ý: Type cần COALESCE cẩn thận để tránh lỗi NULL
-        
-        -- 3. CẬP NHẬT BẢNG PRODUCTS (Chỉ update những gì thay đổi hoặc giữ nguyên cái cũ)
+        -- 3. CẬP NHẬT BẢNG PRODUCTS (Lưu Cost & Margin)
         UPDATE public.products 
         SET 
             actual_cost = v_final_cost,
@@ -746,44 +772,56 @@ BEGIN
             updated_at = NOW()
         WHERE id = v_product_id;
 
-        -- 4. ĐỒNG BỘ GIÁ VỐN CHO TẤT CẢ ĐƠN VỊ (Nếu giá vốn thay đổi)
-        -- Luôn chạy cái này để đảm bảo nhất quán
+        -- 4. ĐỒNG BỘ GIÁ VỐN CHO TẤT CẢ ĐƠN VỊ (product_units)
         UPDATE public.product_units
         SET price_cost = v_final_cost * conversion_rate,
             updated_at = NOW()
         WHERE product_id = v_product_id;
 
-        -- 5. XỬ LÝ GIÁ BÁN (Retail Price)
+        -- 5. XỬ LÝ GIÁ BÁN LẺ (Retail Price)
         v_input_retail_price := (item->>'retail_price')::NUMERIC;
         
-        -- Chỉ update giá bán lẻ nếu Frontend có gửi giá trị cụ thể
         IF v_input_retail_price IS NOT NULL THEN
+            -- Update đơn vị Lẻ chính
             UPDATE public.product_units
             SET price_sell = v_input_retail_price,
+                price = v_input_retail_price, -- [CORE FIX V23]: Đồng bộ cột Legacy
                 updated_at = NOW()
             WHERE product_id = v_product_id 
-              AND (unit_name = v_retail_unit_name OR is_base = true);
+              AND (
+                  unit_type = 'retail' 
+                  OR (unit_name = v_retail_unit_name AND v_retail_unit_name IS NOT NULL)
+                  OR is_base = true -- Fallback
+              );
               
-            -- [Smart Sync] Đồng bộ giá các đơn vị phụ theo giá lẻ mới
+            -- [Smart Sync] Đồng bộ các đơn vị phụ khác (trừ Buôn)
             UPDATE public.product_units
             SET price_sell = v_input_retail_price * conversion_rate,
+                price = v_input_retail_price * conversion_rate, -- [CORE FIX]
                 updated_at = NOW()
             WHERE product_id = v_product_id 
-              AND unit_name <> v_retail_unit_name 
-              AND unit_name <> v_wholesale_unit_name
+              AND unit_type <> 'wholesale'
+              AND (v_wholesale_unit_name IS NULL OR unit_name <> v_wholesale_unit_name)
               AND price_sell = 0; -- Chỉ auto-fill cái chưa có giá
         END IF;
 
-        -- 6. XỬ LÝ GIÁ BUÔN (Wholesale Price)
+        -- 6. XỬ LÝ GIÁ BÁN BUÔN (Wholesale Price) - [LOGIC SENKO + CORE FIX]
         v_input_wholesale_price := (item->>'wholesale_price')::NUMERIC;
 
-        -- Chỉ update giá buôn nếu Frontend có gửi giá trị cụ thể
         IF v_input_wholesale_price IS NOT NULL AND v_input_wholesale_price > 0 THEN
             UPDATE public.product_units
             SET price_sell = v_input_wholesale_price,
+                price = v_input_wholesale_price, -- [CORE FIX]: Đồng bộ cột Legacy
                 updated_at = NOW()
             WHERE product_id = v_product_id 
-              AND unit_name = v_wholesale_unit_name;
+              AND (
+                  -- Ưu tiên 1: Cờ chuẩn
+                  unit_type = 'wholesale' 
+                  -- Ưu tiên 2: Trùng tên với cấu hình sản phẩm
+                  OR (unit_name = v_wholesale_unit_name AND v_wholesale_unit_name IS NOT NULL) 
+                  -- Ưu tiên 3 (Logic Senko): Quy cách lớn nhất (Thùng/Hộp to nhất)
+                  OR (conversion_rate = (SELECT MAX(conversion_rate) FROM public.product_units WHERE product_id = v_product_id)) 
+              );
         END IF;
 
     END LOOP;
@@ -2575,207 +2613,6 @@ $$;
 ALTER FUNCTION "public"."create_customer_b2c"("p_customer_data" "jsonb", "p_guardians" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb") RETURNS bigint
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    AS $$
-DECLARE
-    v_po_id BIGINT;
-    v_item JSONB;
-    v_product_record RECORD;
-    v_conversion_factor INTEGER;
-    v_base_quantity INTEGER;
-    v_total_amount NUMERIC := 0;
-    v_items_per_carton_db INTEGER;
-    v_wholesale_unit_db TEXT;
-BEGIN
-    -- 1. Tạo Header PO (Trạng thái DRAFT)
-    INSERT INTO public.purchase_orders (
-        code,
-        supplier_id,
-        creator_id,
-        status,             -- Mới: DRAFT
-        delivery_status,    -- Mặc định: pending
-        payment_status,     -- Mặc định: unpaid
-        expected_delivery_date,
-        note,
-        total_amount,
-        final_amount
-    )
-    VALUES (
-        'PO-' || to_char(now(), 'YYMMDD') || '-' || floor(random() * 10000)::text,
-        p_supplier_id,
-        auth.uid(),
-        'DRAFT',
-        'pending',
-        'unpaid',
-        p_expected_date,
-        p_note,
-        0, -- Sẽ cập nhật sau
-        0
-    )
-    RETURNING id INTO v_po_id;
-
-    -- 2. Duyệt qua từng sản phẩm để xử lý logic quy đổi
-    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-    LOOP
-        -- a. Lấy thông tin quy cách từ bảng Products (Snapshot dữ liệu gốc)
-        SELECT 
-            items_per_carton, 
-            wholesale_unit, -- Đơn vị sỉ (Ví dụ: Thùng)
-            retail_unit     -- Đơn vị lẻ (Ví dụ: Hộp)
-        INTO v_product_record
-        FROM public.products
-        WHERE id = (v_item->>'product_id')::BIGINT;
-
-        -- b. Xác định Hệ số quy đổi (Conversion Factor)
-        -- Logic:
-        -- Nếu đơn vị đặt hàng khớp với Đơn vị sỉ (Thùng) -> Lấy items_per_carton
-        -- Các trường hợp còn lại (Lẻ, hoặc khác) -> Lấy 1
-        
-        v_items_per_carton_db := COALESCE(v_product_record.items_per_carton, 1);
-        v_wholesale_unit_db := v_product_record.wholesale_unit;
-
-        IF (v_item->>'uom_ordered') = v_wholesale_unit_db THEN
-            v_conversion_factor := v_items_per_carton_db;
-        ELSE
-            v_conversion_factor := 1;
-        END IF;
-
-        -- c. Tính Base Quantity (Số lượng cơ sở)
-        v_base_quantity := (v_item->>'quantity_ordered')::INTEGER * v_conversion_factor;
-
-        -- d. Insert vào dòng chi tiết
-        INSERT INTO public.purchase_order_items (
-            po_id,
-            product_id,
-            quantity_ordered,
-            uom_ordered,
-            unit, -- Giữ tương thích ngược với code cũ nếu cần
-            unit_price,
-            conversion_factor, -- Cột mới: Lưu cứng quy cách lúc mua
-            base_quantity      -- Cột mới: Số lượng thực nhập kho
-        )
-        VALUES (
-            v_po_id,
-            (v_item->>'product_id')::BIGINT,
-            (v_item->>'quantity_ordered')::INTEGER,
-            v_item->>'uom_ordered',
-            v_item->>'uom_ordered', -- Map tạm vào cột unit cũ
-            (v_item->>'unit_price')::NUMERIC,
-            v_conversion_factor,
-            v_base_quantity
-        );
-
-        -- e. Cộng dồn tổng tiền
-        v_total_amount := v_total_amount + ((v_item->>'quantity_ordered')::INTEGER * (v_item->>'unit_price')::NUMERIC);
-    END LOOP;
-
-    -- 3. Cập nhật lại tổng tiền cho Header
-    UPDATE public.purchase_orders
-    SET total_amount = v_total_amount, final_amount = v_total_amount
-    WHERE id = v_po_id;
-
-    RETURN v_po_id;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text" DEFAULT 'internal'::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_shipping_fee" numeric DEFAULT 0, "p_items" "jsonb" DEFAULT '[]'::"jsonb") RETURNS bigint
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    AS $$
-    DECLARE
-        v_po_id BIGINT;
-        v_item JSONB;
-        v_product_record RECORD;
-        v_conversion_factor INTEGER;
-        v_base_quantity INTEGER;
-        v_total_amount NUMERIC := 0;
-        v_items_per_carton_db INTEGER;
-        v_wholesale_unit_db TEXT;
-        v_qty_ordered INTEGER;
-        v_unit_price NUMERIC;
-        v_is_bonus BOOLEAN;
-    BEGIN
-        -- Insert Header
-        INSERT INTO public.purchase_orders (
-            code, supplier_id, creator_id, status, delivery_status, payment_status,
-            expected_delivery_date, note, total_amount, final_amount,
-            delivery_method, shipping_partner_id, shipping_fee
-        )
-        VALUES (
-            'PO-' || to_char(now(), 'YYMMDD') || '-' || floor(random() * 10000)::text,
-            p_supplier_id, auth.uid(), 'DRAFT', 'pending', 'unpaid',
-            p_expected_date, p_note, 0, 0,
-            p_delivery_method, p_shipping_partner_id, COALESCE(p_shipping_fee, 0)
-        )
-        RETURNING id INTO v_po_id;
-
-        -- Insert Items
-        FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-        LOOP
-            v_qty_ordered := COALESCE((v_item->>'quantity_ordered')::INTEGER, (v_item->>'quantity')::INTEGER, 1);
-            
-            -- [CORE UPDATE] Xử lý is_bonus
-            v_is_bonus := COALESCE((v_item->>'is_bonus')::BOOLEAN, false);
-            
-            -- Nếu là hàng tặng, ép giá về 0 (để an toàn dữ liệu)
-            IF v_is_bonus THEN
-                v_unit_price := 0;
-            ELSE
-                v_unit_price := (v_item->>'unit_price')::NUMERIC;
-            END IF;
-
-            -- Lấy quy cách
-            SELECT items_per_carton, wholesale_unit INTO v_product_record
-            FROM public.products WHERE id = (v_item->>'product_id')::BIGINT;
-
-            -- Tính quy đổi
-            v_items_per_carton_db := COALESCE(v_product_record.items_per_carton, 1);
-            v_wholesale_unit_db := v_product_record.wholesale_unit;
-
-            IF (COALESCE(v_item->>'uom_ordered', v_item->>'uom')) = v_wholesale_unit_db THEN
-                v_conversion_factor := v_items_per_carton_db;
-            ELSE
-                v_conversion_factor := 1;
-            END IF;
-
-            v_base_quantity := v_qty_ordered * v_conversion_factor;
-
-            INSERT INTO public.purchase_order_items (
-                po_id, product_id, quantity_ordered, uom_ordered, unit, unit_price, 
-                conversion_factor, base_quantity, is_bonus -- [NEW FIELD]
-            )
-            VALUES (
-                v_po_id,
-                (v_item->>'product_id')::BIGINT,
-                v_qty_ordered,
-                COALESCE(v_item->>'uom_ordered', v_item->>'uom'),
-                COALESCE(v_item->>'uom_ordered', v_item->>'uom'),
-                v_unit_price,
-                v_conversion_factor,
-                v_base_quantity,
-                v_is_bonus
-            );
-
-            v_total_amount := v_total_amount + (v_qty_ordered * v_unit_price);
-        END LOOP;
-
-        -- Update Header
-        UPDATE public.purchase_orders
-        SET total_amount = v_total_amount, final_amount = v_total_amount + COALESCE(p_shipping_fee, 0)
-        WHERE id = v_po_id;
-
-        RETURN v_po_id;
-    END;
-    $$;
-
-
-ALTER FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb" DEFAULT NULL::"jsonb", "p_category_id" bigint DEFAULT NULL::bigint, "p_description" "text" DEFAULT NULL::"text", "p_flow" "text" DEFAULT 'out'::"text", "p_fund_id" bigint DEFAULT NULL::bigint, "p_partner_id" "text" DEFAULT NULL::"text", "p_partner_name" "text" DEFAULT NULL::"text", "p_partner_type" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT 'pending'::"text", "p_transaction_date" timestamp with time zone DEFAULT "now"(), "p_code" "text" DEFAULT NULL::"text", "p_ref_type" "text" DEFAULT NULL::"text", "p_ref_id" "text" DEFAULT NULL::"text", "p_evidence_url" "text" DEFAULT NULL::"text", "p_ref_advance_id" bigint DEFAULT NULL::bigint, "p_created_by" "uuid" DEFAULT NULL::"uuid", "p_target_bank_info" "jsonb" DEFAULT NULL::"jsonb") RETURNS bigint
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -3238,64 +3075,89 @@ $$;
 ALTER FUNCTION "public"."create_product"("p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb", "p_description" "text", "p_registration_number" "text", "p_packing_spec" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."create_purchase_order"("p_data" "jsonb", "p_items" "jsonb") RETURNS bigint
+CREATE OR REPLACE FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text" DEFAULT 'DRAFT'::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 DECLARE
-    v_new_id BIGINT;
-    v_code TEXT;
+    v_po_id BIGINT;
+    v_po_code TEXT;
     v_item JSONB;
     v_total_amount NUMERIC := 0;
-    v_final_amount NUMERIC := 0;
+    
+    -- Biến xử lý item
+    v_qty_ordered INT;
+    v_unit_price NUMERIC;
+    v_is_bonus BOOLEAN;
+    v_product_record RECORD;
+    v_conversion_factor INT;
+    v_base_qty INT;
 BEGIN
-    -- Tạo mã PO tự động nếu không truyền (PO-YYMMDD-XXXX)
-    v_code := COALESCE(p_data->>'code', 'PO-' || to_char(now(), 'YYMMDD') || '-' || floor(random() * 10000)::text);
-
-    -- Tính tổng tiền
-    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-    LOOP
-        v_total_amount := v_total_amount + ((v_item->>'quantity_ordered')::INTEGER * (v_item->>'unit_price')::NUMERIC);
-    END LOOP;
-
-    v_final_amount := v_total_amount - COALESCE((p_data->>'discount_amount')::NUMERIC, 0);
-    IF v_final_amount < 0 THEN v_final_amount := 0; END IF;
+    -- Sinh mã phiếu
+    v_po_code := 'PO-' || to_char(NOW(), 'YYMM') || '-' || upper(substring(md5(random()::text) from 1 for 4));
 
     -- Insert Header
     INSERT INTO public.purchase_orders (
-        code, supplier_id, expected_delivery_date, 
-        total_amount, discount_amount, final_amount, note,
-        delivery_status, payment_status
+        code, supplier_id, expected_delivery_date, note, delivery_method, 
+        shipping_partner_id, shipping_fee, status, 
+        delivery_status, payment_status, creator_id, created_at, updated_at
     ) VALUES (
-        v_code,
-        (p_data->>'supplier_id')::BIGINT,
-        (p_data->>'expected_delivery_date')::TIMESTAMPTZ,
-        v_total_amount,
-        COALESCE((p_data->>'discount_amount')::NUMERIC, 0),
-        v_final_amount,
-        p_data->>'note',
-        'pending', 'unpaid'
-    ) RETURNING id INTO v_new_id;
+        v_po_code, p_supplier_id, p_expected_date, p_note, p_delivery_method, 
+        p_shipping_partner_id, COALESCE(p_shipping_fee, 0), p_status, 
+        'pending', 'unpaid', auth.uid(), NOW(), NOW()
+    ) RETURNING id INTO v_po_id;
 
     -- Insert Items
-    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-    LOOP
-        INSERT INTO public.purchase_order_items (
-            po_id, product_id, quantity_ordered, unit_price, unit
-        ) VALUES (
-            v_new_id,
-            (v_item->>'product_id')::BIGINT,
-            (v_item->>'quantity_ordered')::INTEGER,
-            (v_item->>'unit_price')::NUMERIC,
-            v_item->>'unit'
-        );
-    END LOOP;
+    IF p_items IS NOT NULL THEN
+        FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+        LOOP
+            v_qty_ordered := COALESCE((v_item->>'quantity')::INT, (v_item->>'quantity_ordered')::INT, 0);
+            v_is_bonus := COALESCE((v_item->>'is_bonus')::BOOLEAN, false);
+            
+            IF v_is_bonus THEN
+                v_unit_price := 0;
+            ELSE
+                v_unit_price := COALESCE((v_item->>'unit_price')::NUMERIC, 0);
+            END IF;
 
-    RETURN v_new_id;
+            IF v_qty_ordered > 0 THEN
+                -- Lấy quy đổi
+                SELECT items_per_carton, wholesale_unit INTO v_product_record
+                FROM public.products WHERE id = (v_item->>'product_id')::BIGINT;
+
+                IF (v_item->>'unit') = v_product_record.wholesale_unit THEN
+                    v_conversion_factor := COALESCE(v_product_record.items_per_carton, 1);
+                ELSE
+                    v_conversion_factor := 1;
+                END IF;
+                v_base_qty := v_qty_ordered * v_conversion_factor;
+
+                -- Insert Item (Đầy đủ cột mới)
+                INSERT INTO public.purchase_order_items (
+                    po_id, product_id, quantity_ordered, uom_ordered, unit, 
+                    unit_price, is_bonus, conversion_factor, base_quantity
+                ) VALUES (
+                    v_po_id, (v_item->>'product_id')::BIGINT, v_qty_ordered, 
+                    (v_item->>'unit')::TEXT, (v_item->>'unit')::TEXT, 
+                    v_unit_price, v_is_bonus, v_conversion_factor, v_base_qty
+                );
+                
+                v_total_amount := v_total_amount + (v_qty_ordered * v_unit_price);
+            END IF;
+        END LOOP;
+    END IF;
+
+    -- Update Total
+    UPDATE public.purchase_orders 
+    SET total_amount = v_total_amount,
+        final_amount = v_total_amount + COALESCE(p_shipping_fee, 0)
+    WHERE id = v_po_id;
+
+    RETURN jsonb_build_object('id', v_po_id, 'code', v_po_code, 'message', 'Tạo đơn thành công');
 END;
 $$;
 
 
-ALTER FUNCTION "public"."create_purchase_order"("p_data" "jsonb", "p_items" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric DEFAULT 0, "p_shipping_fee" numeric DEFAULT 0, "p_status" "public"."order_status" DEFAULT 'DRAFT'::"public"."order_status", "p_delivery_method" "text" DEFAULT 'internal'::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_warehouse_id" bigint DEFAULT NULL::bigint) RETURNS "uuid"
@@ -14661,18 +14523,6 @@ GRANT ALL ON FUNCTION "public"."create_customer_b2c"("p_customer_data" "jsonb", 
 
 
 
-GRANT ALL ON FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_draft_po"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb") TO "service_role";
-
-
-
 GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") TO "service_role";
@@ -14721,9 +14571,9 @@ GRANT ALL ON FUNCTION "public"."create_product"("p_name" "text", "p_sku" "text",
 
 
 
-GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_data" "jsonb", "p_items" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_data" "jsonb", "p_items" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_data" "jsonb", "p_items" "jsonb") TO "service_role";
+GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text") TO "service_role";
 
 
 

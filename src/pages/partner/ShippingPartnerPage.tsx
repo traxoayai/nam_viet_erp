@@ -43,6 +43,9 @@ import React, { useState, useEffect, useCallback } from "react";
 import { v4 as uuidv4 } from "uuid";
 
 import type { TableProps } from "antd";
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 // IMPORT "BỘ NÃO" VÀ "KHUÔN MẪU"
 import { useDebounce } from "@/shared/hooks/useDebounce";
@@ -306,33 +309,39 @@ const ShippingPartnerPage: React.FC = () => {
       fixed: "right",
       render: (_: any, record: ShippingPartnerListRecord) => (
         <Space size="small">
-          <Tooltip title="Sửa">
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => showModal(record)}
-            />
-          </Tooltip>
+          <Access permission={PERMISSIONS.PARTNER.SHIPPING.EDIT}>
+              <Tooltip title="Sửa">
+                <Button
+                  type="text"
+                  icon={<EditOutlined />}
+                  onClick={() => showModal(record)}
+                />
+              </Tooltip>
+          </Access>
           {record.status === "active" ? (
-            <Tooltip title="Ngừng Hợp tác">
-              <Popconfirm
-                title={`Ngừng hợp tác với "${record.name}"?`}
-                onConfirm={() => handleDelete(record)}
-                okText="Đồng ý"
-                cancelText="Hủy"
-              >
-                <Button type="text" danger icon={<DeleteOutlined />} />
-              </Popconfirm>
-            </Tooltip>
+             <Access permission={PERMISSIONS.PARTNER.SHIPPING.DELETE}>
+                <Tooltip title="Ngừng Hợp tác">
+                <Popconfirm
+                    title={`Ngừng hợp tác với "${record.name}"?`}
+                    onConfirm={() => handleDelete(record)}
+                    okText="Đồng ý"
+                    cancelText="Hủy"
+                >
+                    <Button type="text" danger icon={<DeleteOutlined />} />
+                </Popconfirm>
+                </Tooltip>
+            </Access>
           ) : (
-            <Tooltip title="Hợp tác trở lại">
-              <Button
-                type="text"
-                style={{ color: "green" }}
-                icon={<SafetyOutlined />}
-                onClick={() => handleReactivate(record)}
-              />
-            </Tooltip>
+            <Access permission={PERMISSIONS.PARTNER.SHIPPING.EDIT}>
+                <Tooltip title="Hợp tác trở lại">
+                <Button
+                    type="text"
+                    style={{ color: "green" }}
+                    icon={<SafetyOutlined />}
+                    onClick={() => handleReactivate(record)}
+                />
+                </Tooltip>
+            </Access>
           )}
         </Space>
       ),
@@ -368,13 +377,15 @@ const ShippingPartnerPage: React.FC = () => {
                   </Text>
                 </Col>
                 <Col>
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => showModal()}
-                  >
-                    Thêm Đối tác
-                  </Button>
+                  <Access permission={PERMISSIONS.PARTNER.SHIPPING.CREATE}>
+                      <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => showModal()}
+                      >
+                        Thêm Đối tác
+                      </Button>
+                  </Access>
                 </Col>
               </Row>
               {/* Phần 2: Bộ lọc */}
@@ -603,4 +614,12 @@ const ShippingPartnerPage: React.FC = () => {
   );
 };
 
-export default ShippingPartnerPage;
+
+
+const ProtectedShippingPartnerPage = () => (
+    <PermissionGuard permission={PERMISSIONS.PARTNER.SHIPPING.VIEW}>
+        <ShippingPartnerPage />
+    </PermissionGuard>
+);
+
+export default ProtectedShippingPartnerPage;

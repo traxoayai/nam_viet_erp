@@ -3,6 +3,7 @@ import { Navigate, type RouteObject, Outlet } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
 import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 import LoginPage from "@/pages/auth/LoginPage";
 import PendingApprovalPage from "@/pages/auth/PendingApprovalPage";
@@ -249,35 +250,67 @@ const routes: RouteObject[] = [
           // 7. Thao tác Nhanh
           {
             path: "quick/product-location",
-            element: <QuickLocationUpdate />,
+            element: (
+              <PermissionGuard permission={PERMISSIONS.QUICK.LOCATION_UPDATE}>
+                <QuickLocationUpdate />
+              </PermissionGuard>
+            ),
           },
           {
             path: "quick/unit-setup", // [NEW]
-            element: <QuickUnitPage />,
+            element: (
+              <PermissionGuard permission={PERMISSIONS.QUICK.UNIT_SETUP}>
+                <QuickUnitPage />
+              </PermissionGuard>
+            ),
           },
           {
             path: "quick/min-max", // [NEW]
-            element: <QuickMinMaxPage />,
+            element: (
+              <PermissionGuard permission={PERMISSIONS.QUICK.MIN_MAX}>
+                <QuickMinMaxPage />
+              </PermissionGuard>
+            ),
           },
           {
             path: "quick/price-edit",
-            element: <QuickPricePage />,
+            element: (
+              <PermissionGuard permission={PERMISSIONS.QUICK.PRICE_UPDATE}>
+                <QuickPricePage />
+              </PermissionGuard>
+            ),
           },
           {
             path: "quick/barcode-edit",
-            element: <QuickBarcodePage />,
+            element: (
+              <PermissionGuard permission={PERMISSIONS.QUICK.BARCODE}>
+                <QuickBarcodePage />
+              </PermissionGuard>
+            ),
           },
           {
             path: "quick/promo-code",
-            element: <PagePlaceholder title="Tạo nhanh Mã Giảm Giá" />,
+            element: (
+                <PermissionGuard permission={PERMISSIONS.QUICK.VOUCHER}>
+                    <PagePlaceholder title="Tạo nhanh Mã Giảm Giá" />
+                </PermissionGuard>
+            )
           },
           {
             path: "quick/prescription-template",
-            element: <PrescriptionTemplatePage />,
+            element: (
+                <PermissionGuard permission={PERMISSIONS.QUICK.PRESCRIPTION}>
+                    <PrescriptionTemplatePage />
+                </PermissionGuard>
+            )
           },
           {
             path: "quick/vaccination-template",
-            element: <VaccinationTemplatePage />,
+            element: (
+                <PermissionGuard permission={PERMISSIONS.QUICK.VACCINATION}>
+                   <VaccinationTemplatePage />
+                </PermissionGuard>
+            )
           },
 
           // 8. Đối tác
@@ -285,30 +318,81 @@ const routes: RouteObject[] = [
             path: "partners",
             element: <Navigate to="/partners/suppliers" replace />,
           },
-          { path: "partners/suppliers", element: <SupplierListPage /> },
-          { path: "partners/new", element: <SupplierDetailPage /> },
-          { path: "partners/edit/:id", element: <SupplierDetailPage /> },
-          { path: "partners/detail/:id", element: <SupplierDetailPage /> },
+          { 
+              path: "partners/suppliers", 
+              element: (
+                  <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
+                      <SupplierListPage /> 
+                  </PermissionGuard>
+              )
+          },
+          { 
+              path: "partners/new", 
+              element: (
+                  <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.CREATE}>
+                      <SupplierDetailPage />
+                  </PermissionGuard>
+              ) 
+          },
+          { 
+              path: "partners/edit/:id", 
+              element: (
+                  <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.EDIT}>
+                      <SupplierDetailPage /> 
+                  </PermissionGuard>
+              )
+          },
+          { 
+              path: "partners/detail/:id", 
+              element: (
+                  <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
+                      <SupplierDetailPage /> 
+                  </PermissionGuard>
+              )
+          },
           {
             path: "partners/shipping",
-            element: <ShippingPartnerPage />,
+            element: (
+                  <PermissionGuard permission={PERMISSIONS.PARTNER.SHIPPING.VIEW}>
+                      <ShippingPartnerPage />
+                  </PermissionGuard>
+              ),
           },
 
           // 9. Quản lý Khách hàng
           { path: "crm", element: <Navigate to="/crm/retail" replace /> },
           {
             path: "crm/retail",
-            element: <CustomerB2CPage />,
+            element: (
+                <PermissionGuard permission={PERMISSIONS.CRM.B2C.VIEW}>
+                    <CustomerB2CPage />
+                </PermissionGuard>
+            ),
           },
           {
             path: "crm/organization/new",
-            element: <CustomerB2COrgForm />,
+            element: (
+                <PermissionGuard permission={PERMISSIONS.CRM.B2C.CREATE}>
+                    <CustomerB2COrgForm />
+                </PermissionGuard>
+            ),
           },
           {
             path: "crm/organization/edit/:id",
-            element: <CustomerB2COrgForm />,
+            element: (
+                <PermissionGuard permission={PERMISSIONS.CRM.B2C.EDIT}>
+                    <CustomerB2COrgForm />
+                </PermissionGuard>
+            ),
           },
-          { path: "crm/b2b", element: <CustomerB2BPage /> },
+          { 
+              path: "crm/b2b", 
+              element: (
+                  <PermissionGuard permission={PERMISSIONS.CRM.B2B.VIEW}>
+                      <CustomerB2BPage />
+                  </PermissionGuard>
+              ) 
+          },
 
           // 10. Quản lý Marketing
           {

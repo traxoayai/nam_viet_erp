@@ -47,6 +47,8 @@ import { aiService } from "@/features/product/api/aiService"; // [NEW]
 
 import SupplierSelectModal from "@/shared/ui/common/SupplierSelectModal";
 import { useProductFormLogic } from "./hooks/useProductFormLogic";
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 const { Content } = Layout;
 const { Title } = Typography;
@@ -138,7 +140,8 @@ const ProductFormPage: React.FC = () => {
                           bordered={false}
                           style={{ marginBottom: 24 }}
                         >
-                          <Row gutter={24}>
+                          <Access permission={PERMISSIONS.INVENTORY.EDIT_INFO}>
+                            <Row gutter={24}>
                             <Col xs={24} md={6}>
                               <Form.Item label="Ảnh sản phẩm">
                                 <Upload
@@ -218,14 +221,16 @@ const ProductFormPage: React.FC = () => {
                                 </Col>
                                 <Col xs={24} sm={12} lg={8}>
                                   <Form.Item label="Công ty Phân phối (NCC)">
-                                    <Input
-                                      placeholder="Chọn nhà cung cấp..."
-                                      value={selectedSupplierName}
-                                      onClick={() => setIsSupplierModalOpen(true)}
-                                      readOnly
-                                      addonAfter={<SearchOutlined />}
-                                      style={{ cursor: "pointer" }}
-                                    />
+                                    <Access permission={PERMISSIONS.INVENTORY.MANAGE_SUPPLIER}>
+                                        <Input
+                                        placeholder="Chọn nhà cung cấp..."
+                                        value={selectedSupplierName}
+                                        onClick={() => setIsSupplierModalOpen(true)}
+                                        readOnly
+                                        addonAfter={<SearchOutlined />}
+                                        style={{ cursor: "pointer" }}
+                                        />
+                                    </Access>
                                   </Form.Item>
                                   <Form.Item name="distributor" hidden>
                                     <Input />
@@ -249,6 +254,17 @@ const ProductFormPage: React.FC = () => {
                               </Row>
                             </Col>
                           </Row>
+                          </Access>
+                          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: -1 }}>
+                             {/* Hacky way? Better to wrap Inputs. Let's wrap the Col content or FieldSet */}
+                          </div>
+                          {/* [NEW] Protect Edit Info */}
+                          <div style={{ display: 'none' }}></div> 
+                          {/* Access wrapper for inputs is hard with Form.Item structure requiring direct child. 
+                              I will wrap the card content logically or use a FieldSet if possible. 
+                              For now, I will wrap the individual inputs where critical.
+                              User said "Bọc nhóm input". I will wrap the Row content inside Access disabled.
+                          */}
                         </Card>
 
                         <Card
@@ -283,19 +299,30 @@ const ProductFormPage: React.FC = () => {
                                 initialValue={0}
                                 tooltip="Nhập giá vốn của đơn vị Bán buôn (ví dụ: Hộp/Thùng). Hệ thống sẽ tự quy đổi ra giá cơ sở."
                               >
-                                <InputNumber
-                                  style={{ width: "100%" }}
-                                  formatter={(v) =>
-                                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                                  }
-                                  parser={(v) => v!.replace(/đ\s?|(,*)/g, "")}
-                                  addonAfter="đ"
-                                  onChange={handleModifyCostOrMargin}
-                                />
+                                <Access permission={PERMISSIONS.INVENTORY.VIEW_COST} hide fallback={<Input disabled value="******" />}>
+                                    <InputNumber
+                                    style={{ width: "100%" }}
+                                    formatter={(v) =>
+                                        `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                                    }
+                                    parser={(v) => v!.replace(/đ\s?|(,*)/g, "")}
+                                    addonAfter="đ"
+                                    onChange={handleModifyCostOrMargin}
+                                    />
+                                </Access>
                               </Form.Item>
                             </Col>
 
                             <Col xs={24} sm={12} md={8} lg={6}>
+                               <Access 
+                                  permission={PERMISSIONS.INVENTORY.VIEW_MARGIN_WHOLESALE}
+                                  fallback={
+                                    <Input.Group compact style={{display: 'none'}}>
+                                      <Form.Item name="wholesaleMarginValue" noStyle><InputNumber /></Form.Item>
+                                      <Form.Item name="wholesaleMarginType" noStyle><Select /></Form.Item>
+                                    </Input.Group>  
+                                  }
+                               >
                               <Form.Item label="Lãi Bán Buôn">
                                 <Input.Group compact>
                                   <Form.Item
@@ -324,9 +351,19 @@ const ProductFormPage: React.FC = () => {
                                   </Form.Item>
                                 </Input.Group>
                               </Form.Item>
+                              </Access>
                             </Col>
 
                             <Col xs={24} sm={12} md={8} lg={6}>
+                               <Access 
+                                  permission={PERMISSIONS.INVENTORY.VIEW_MARGIN_RETAIL}
+                                  fallback={
+                                    <Input.Group compact style={{display: 'none'}}>
+                                      <Form.Item name="retailMarginValue" noStyle><InputNumber /></Form.Item>
+                                      <Form.Item name="retailMarginType" noStyle><Select /></Form.Item>
+                                    </Input.Group>
+                                  }
+                               >
                                <Form.Item label="Lãi Bán Lẻ">
                                 <Input.Group compact>
                                   <Form.Item
@@ -355,6 +392,7 @@ const ProductFormPage: React.FC = () => {
                                   </Form.Item>
                                 </Input.Group>
                               </Form.Item>
+                              </Access>
                             </Col>
 
                             {/* ROW 2: LOGISTICS */}
@@ -624,7 +662,8 @@ const ProductFormPage: React.FC = () => {
                     key: "3",
                     label: <span><GlobalOutlined /> Marketing & SEO</span>,
                     children: (
-                       <Card title="Nội dung & SEO Website" bordered={false} style={{minHeight: 500}}>
+                       <Access permission={PERMISSIONS.MARKETING.EDIT_CONTENT}>
+                        <Card title="Nội dung & SEO Website" bordered={false} style={{minHeight: 500}}>
                           <Row gutter={24}>
                              <Col span={24}>
                                <Form.Item label="SEO Title (Tiêu đề hiển thị Google)" name={['content', 'seo_title']}>
@@ -656,6 +695,7 @@ const ProductFormPage: React.FC = () => {
                              </Col>
                           </Row>
                        </Card>
+                       </Access>
                     )
                   }
                 ]}

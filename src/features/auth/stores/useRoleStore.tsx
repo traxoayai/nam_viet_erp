@@ -6,6 +6,7 @@ import {
   ApartmentOutlined,
   AccountBookOutlined,
   SettingOutlined,
+  ThunderboltOutlined, // [NEW]
 } from "@ant-design/icons";
 import { create } from "zustand";
 
@@ -24,6 +25,9 @@ const MODULE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = 
   'medical': { label: 'Y Tế & Phòng Khám', icon: <MedicineBoxOutlined /> },
   'inventory': { label: 'Kho & Sản Phẩm', icon: <ApartmentOutlined /> },
   'settings': { label: 'Cấu hình Hệ thống', icon: <SettingOutlined /> },
+  'marketing': { label: 'Marketing & Nội dung', icon: <ShopOutlined /> }, // [NEW]
+  'order': { label: 'Đơn Hàng', icon: <AccountBookOutlined /> }, // [NEW]
+  'quick': { label: 'Thao Tác Nhanh', icon: <ThunderboltOutlined /> }, // [NEW]
 };
 
 // 2. Cấu hình Highlight (QUAN TRỌNG)

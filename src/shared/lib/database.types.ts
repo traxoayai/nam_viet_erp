@@ -3568,28 +3568,6 @@ export type Database = {
         Args: { p_customer_data: Json; p_guardians: Json }
         Returns: number
       }
-      create_draft_po:
-        | {
-            Args: {
-              p_delivery_method?: string
-              p_expected_date: string
-              p_items?: Json
-              p_note: string
-              p_shipping_fee?: number
-              p_shipping_partner_id?: number
-              p_supplier_id: number
-            }
-            Returns: number
-          }
-        | {
-            Args: {
-              p_expected_date: string
-              p_items: Json
-              p_note: string
-              p_supplier_id: number
-            }
-            Returns: number
-          }
       create_finance_transaction: {
         Args: {
           p_amount: number
@@ -3728,8 +3706,17 @@ export type Database = {
             Returns: number
           }
       create_purchase_order: {
-        Args: { p_data: Json; p_items: Json }
-        Returns: number
+        Args: {
+          p_delivery_method: string
+          p_expected_date: string
+          p_items: Json
+          p_note: string
+          p_shipping_fee: number
+          p_shipping_partner_id: number
+          p_status?: string
+          p_supplier_id: number
+        }
+        Returns: Json
       }
       create_sales_order:
         | {

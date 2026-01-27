@@ -28,6 +28,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom"; // Import useNavigate
 
 import type { TableProps } from "antd";
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
@@ -140,24 +143,30 @@ const SupplierListPage: React.FC = () => {
               onClick={() => navigate(`/partners/detail/${record.id}`)}
             />
           </Tooltip>
-          <Tooltip title="Sửa thông tin">
-            {/* SỬA: Chuyển hướng đến trang Chi tiết (chế độ sửa) */}
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => navigate(`/partners/edit/${record.id}`)}
-            />
-          </Tooltip>
-          <Tooltip title="Xóa">
-            <Popconfirm
-              title={`Bạn có chắc chắn muốn xóa NCC "${record.name}"?`}
-              onConfirm={() => handleDelete(record)}
-              okText="Đồng ý"
-              cancelText="Hủy"
-            >
-              <Button type="text" danger icon={<DeleteOutlined />} />
-            </Popconfirm>
-          </Tooltip>
+          
+          <Access permission={PERMISSIONS.PARTNER.SUPPLIER.EDIT}>
+              <Tooltip title="Sửa thông tin">
+                {/* SỬA: Chuyển hướng đến trang Chi tiết (chế độ sửa) */}
+                <Button
+                  type="text"
+                  icon={<EditOutlined />}
+                  onClick={() => navigate(`/partners/edit/${record.id}`)}
+                />
+              </Tooltip>
+          </Access>
+
+          <Access permission={PERMISSIONS.PARTNER.SUPPLIER.DELETE}>
+              <Tooltip title="Xóa">
+                <Popconfirm
+                  title={`Bạn có chắc chắn muốn xóa NCC "${record.name}"?`}
+                  onConfirm={() => handleDelete(record)}
+                  okText="Đồng ý"
+                  cancelText="Hủy"
+                >
+                  <Button type="text" danger icon={<DeleteOutlined />} />
+                </Popconfirm>
+              </Tooltip>
+          </Access>
         </Space>
       ),
     },
@@ -191,13 +200,16 @@ const SupplierListPage: React.FC = () => {
                 Xuất Excel
               </Button>
               {/* SỬA: Chuyển hướng đến trang Thêm mới */}
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => navigate("/partners/new")}
-              >
-                Thêm Nhà Cung Cấp
-              </Button>
+              {/* SỬA: Chuyển hướng đến trang Thêm mới */}
+              <Access permission={PERMISSIONS.PARTNER.SUPPLIER.CREATE}>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => navigate("/partners/new")}
+                  >
+                    Thêm Nhà Cung Cấp
+                  </Button>
+              </Access>
             </Space>
           </Col>
         </Row>
@@ -250,4 +262,10 @@ const SupplierListPage: React.FC = () => {
   );
 };
 
-export default SupplierListPage;
+const ProtectedSupplierListPage = () => (
+    <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
+        <SupplierListPage />
+    </PermissionGuard>
+);
+
+export default ProtectedSupplierListPage;

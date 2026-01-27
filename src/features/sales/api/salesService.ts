@@ -177,5 +177,12 @@ export const salesService = {
       
       if (error) throw error;
       return true;
+  },
+
+  // 11. [NEW] Xóa đơn hàng (Admin Only)
+  async deleteOrder(orderId: string | number) {
+      const { error } = await supabase.from('orders').delete().eq('id', orderId);
+      if (error) throw error;
+      return true;
   }
 };

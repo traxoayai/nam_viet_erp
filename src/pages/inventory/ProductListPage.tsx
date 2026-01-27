@@ -47,6 +47,8 @@ import { Product } from "@/features/product/types/product.types";
 import { ProductAiScannerModal } from "@/features/product/components/ProductAiScannerModal"; // [NEW]
 import { aiService } from "@/features/product/api/aiService"; // [NEW]
 import { updateProduct } from "@/features/product/api/productService"; // [NEW] Hàm update cũ
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
 
 const { Title, Text } = Typography;
 
@@ -326,6 +328,18 @@ const ProductListPage = () => {
       align: "center",
       // Nếu RPC trả 'base_unit' thì dùng, nếu ko map từ legacy data
       render: (text: string, record: any) => record.retail_unit || text || "-",
+    },
+    {
+      title: "Giá Vốn",
+      dataIndex: "actual_cost",
+      key: "actual_cost",
+      width: 120,
+      align: "right",
+      render: (val: number) => (
+        <Access permission={PERMISSIONS.INVENTORY.VIEW_COST} fallback="***">
+             {val ? new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val) : "-"}
+        </Access>
+      ),
     },
     {
       title: "Giá Bán Lẻ",

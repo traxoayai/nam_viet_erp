@@ -76,6 +76,10 @@ const { Option } = Select;
 const { TextArea } = Input;
 const { TabPane } = Tabs;
 
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
+
 // --- CSS INLINE (Style từ Canvas) ---
 // SỬA LỖI B & G: Bỏ style 'layout' và 'cardBody'
 const styles = {
@@ -537,25 +541,29 @@ const CustomerB2CPage: React.FC = () => {
             </Tooltip>
             {/* SỬA LỖI: LOGIC 2 CHIỀU */}
             {record.status === "active" ? (
-              <Tooltip title="Ngừng Giao dịch">
-                <Popconfirm
-                  title={`Ngừng GD khách "${record.name}"?`}
-                  onConfirm={() => handleDelete(record)}
-                  okText="Đồng ý"
-                  cancelText="Hủy"
-                >
-                  <Button type="text" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
-              </Tooltip>
+               <Access permission={PERMISSIONS.CRM.B2C.DELETE}>
+                  <Tooltip title="Ngừng Giao dịch">
+                    <Popconfirm
+                      title={`Ngừng GD khách "${record.name}"?`}
+                      onConfirm={() => handleDelete(record)}
+                      okText="Đồng ý"
+                      cancelText="Hủy"
+                    >
+                      <Button type="text" danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  </Tooltip>
+              </Access>
             ) : (
-              <Tooltip title="Cho phép Giao dịch trở lại">
-                <Button
-                  type="text"
-                  style={{ color: "green" }}
-                  icon={<SafetyOutlined />}
-                  onClick={() => handleReactivate(record)}
-                />
-              </Tooltip>
+              <Access permission={PERMISSIONS.CRM.B2C.EDIT}>
+                  <Tooltip title="Cho phép Giao dịch trở lại">
+                    <Button
+                      type="text"
+                      style={{ color: "green" }}
+                      icon={<SafetyOutlined />}
+                      onClick={() => handleReactivate(record)}
+                    />
+                  </Tooltip>
+              </Access>
             )}
           </Space>
         ),
@@ -718,14 +726,19 @@ const CustomerB2CPage: React.FC = () => {
               </Col>
 
               <Col>
-                <Button
-                  type="primary"
-                  icon={<SaveOutlined />}
-                  htmlType="submit"
-                  loading={loading}
+                <Access 
+                    permission={isNew ? PERMISSIONS.CRM.B2C.CREATE : PERMISSIONS.CRM.B2C.EDIT}
+                    fallback={null} // Hide save button if no permission
                 >
-                  Lưu Hồ sơ
-                </Button>
+                    <Button
+                      type="primary"
+                      icon={<SaveOutlined />}
+                      htmlType="submit"
+                      loading={loading}
+                    >
+                      Lưu Hồ sơ
+                    </Button>
+                </Access>
               </Col>
             </Row>
           </Card>
@@ -1106,17 +1119,19 @@ height: 100px !important;
   padding: 0 !important;
   margin: 0 !important;
   }
-   `}</style>
-      {/* SỬA LỖI G: Sửa style và logic view */}  
-      <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
-        {isFormView ? renderFormView() : renderListView()}  
-      </Layout>
-      {/* NÂNG CẤP: Modal Tìm kiếm Giám hộ */}  
-      <GuardianSelectModal
-        open={isGuardianModalOpen}
-        onClose={() => setIsGuardianModalOpen(false)}
-        onSelect={handleSelectGuardian}
-      />
+   `}</style>
+      <PermissionGuard permission={PERMISSIONS.CRM.B2C.VIEW}>
+        {/* SỬA LỖI G: Sửa style và logic view */}  
+        <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
+            {isFormView ? renderFormView() : renderListView()}  
+        </Layout>
+        {/* NÂNG CẤP: Modal Tìm kiếm Giám hộ */}  
+        <GuardianSelectModal
+            open={isGuardianModalOpen}
+            onClose={() => setIsGuardianModalOpen(false)}
+            onSelect={handleSelectGuardian}
+        />
+      </PermissionGuard>
     </ConfigProvider>
   );
 };

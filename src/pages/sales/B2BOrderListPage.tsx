@@ -12,6 +12,7 @@ import {
   ShopOutlined,
   UserOutlined,
   PrinterOutlined,
+  DeleteOutlined, // [NEW]
 } from "@ant-design/icons";
 import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders";
 import { Button, message, Modal, Select, Upload, Tag, Typography, Avatar, Space } from "antd";
@@ -32,6 +33,8 @@ import { salesService } from "@/features/sales/api/salesService";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { VatActionButton } from '@/features/pos/components/VatActionButton';
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 const { Text } = Typography;
 
@@ -183,6 +186,24 @@ const B2BOrderListPage = () => {
       }
   };
 
+  // [NEW] Xóa đơn
+  const handleDelete = (order: any) => {
+      Modal.confirm({
+          title: "Xác nhận xóa đơn hàng",
+          content: `Bạn có chắc muốn xóa đơn ${order.code}? Hành động này không thể hoàn tác.`,
+          okType: 'danger',
+          onOk: async () => {
+              try {
+                  await salesService.deleteOrder(order.id);
+                  message.success("Đã xóa đơn hàng");
+                  refresh();
+              } catch (e: any) {
+                  message.error("Lỗi xóa: " + e.message);
+              }
+          }
+      });
+  };
+
   // --- 4. CẤU HÌNH CỘT (COLUMNS DEFINITION) ---
   const columns = useMemo(() => [
     // 2. Ngày giờ tạo đơn
@@ -221,6 +242,30 @@ const B2BOrderListPage = () => {
                         }} 
                     />
                 )}
+                
+                {/* [NEW] Nút Xóa (Phân quyền) */}
+                <Access 
+                    permission={PERMISSIONS.ORDER.DELETE_COMPLETED}
+                    fallback={
+                        // Nếu không có quyền xóa đơn đã chốt -> Chỉ hiện nút xóa cho đơn Nháp/Quote/Cancel
+                        !['COMPLETED', 'CONFIRMED', 'SHIPPING'].includes(record.status) ? (
+                            <Button 
+                                type="text" 
+                                danger
+                                icon={<DeleteOutlined />} 
+                                onClick={(e) => { e.stopPropagation(); handleDelete(record); }}
+                            />
+                        ) : null
+                    }
+                >
+                    {/* Nếu có quyền -> Hiện nút xóa cho mọi trạng thái */}
+                     <Button 
+                        type="text" 
+                        danger
+                        icon={<DeleteOutlined />} 
+                        onClick={(e) => { e.stopPropagation(); handleDelete(record); }}
+                    />
+                </Access>
             </Space>
         )
     },

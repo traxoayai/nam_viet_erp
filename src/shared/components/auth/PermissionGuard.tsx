@@ -1,33 +1,28 @@
 import React from 'react';
-import { Button, Result } from 'antd';
-import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/stores/useAuthStore';
+import { Result, Button } from 'antd';
 
-interface Props {
-  permission: string; // Key quyền (VD: 'pos-view')
+interface PermissionGuardProps {
+  permission: string;
   children: React.ReactNode;
 }
 
-export const PermissionGuard: React.FC<Props> = ({ permission, children }) => {
-  const { permissions } = useAuthStore();
-  const navigate = useNavigate();
+export const PermissionGuard: React.FC<PermissionGuardProps> = ({ permission, children }) => {
+  const { permissions, loading } = useAuthStore();
+  
+  // Wait for permissions to load
+  if (loading) return null; // Or a spinner
 
-  // Bypass cho Super Admin (Nếu role là Admin hoặc có quyền đặc biệt)
-  if (permissions.includes('admin-all')) return <>{children}</>;
+  const hasPermission = permissions.includes('admin-all') || permissions.includes(permission);
 
-  // Kiểm tra quyền
-  if (!permissions.includes(permission)) {
+  if (!hasPermission) {
     return (
-      <div style={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <Result
-          status="403"
-          title="403"
-          subTitle="Xin lỗi, bạn chưa được cấp quyền truy cập tính năng này."
-          extra={
-            <Button type="primary" onClick={() => navigate('/')}>
-              Về Trang chủ
-            </Button>
-          }
+            status="403"
+            title="403"
+            subTitle="Xin lỗi, bạn không có quyền truy cập trang này."
+            extra={<Button type="primary" href="/">Về trang chủ</Button>}
         />
       </div>
     );
