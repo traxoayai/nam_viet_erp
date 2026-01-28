@@ -2155,6 +2155,242 @@ $$;
 ALTER FUNCTION "public"."confirm_transaction"("p_id" bigint) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."confirm_transfer_inbound"("p_transfer_id" bigint, "p_actor_warehouse_id" bigint) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_transfer_record RECORD;
+    v_batch_track RECORD;
+    v_received_count INT := 0;
+    v_source_wh_name TEXT; -- [FIX] Biến lưu tên kho nguồn
+BEGIN
+    -- 1. Validate & Lock phiếu
+    SELECT * INTO v_transfer_record 
+    FROM public.inventory_transfers 
+    WHERE id = p_transfer_id 
+    FOR UPDATE;
+
+    IF v_transfer_record IS NULL THEN
+        RAISE EXCEPTION 'Không tìm thấy phiếu chuyển kho ID %', p_transfer_id;
+    END IF;
+
+    IF v_transfer_record.status != 'shipping' THEN
+        RAISE EXCEPTION 'Phiếu không ở trạng thái chờ nhập kho (Status: %).', v_transfer_record.status;
+    END IF;
+
+    -- Validate đúng kho đích mới được nhập
+    IF v_transfer_record.dest_warehouse_id != p_actor_warehouse_id THEN
+        RAISE EXCEPTION 'Mã kho thực hiện (%) không trùng khớp với kho đích (%).', p_actor_warehouse_id, v_transfer_record.dest_warehouse_id;
+    END IF;
+
+    -- [FIX LOGIC]: Lấy tên kho nguồn từ bảng warehouses để ghi log cho đẹp
+    SELECT name INTO v_source_wh_name FROM public.warehouses WHERE id = v_transfer_record.source_warehouse_id;
+
+    -- 2. DUYỆT CÁC LÔ ĐÃ XUẤT (Tracking Logs) ĐỂ CỘNG VÀO KHO ĐÍCH
+    FOR v_batch_track IN 
+        SELECT 
+            itbi.batch_id,
+            itbi.quantity, 
+            iti.product_id
+        FROM public.inventory_transfer_batch_items itbi
+        JOIN public.inventory_transfer_items iti ON itbi.transfer_item_id = iti.id
+        WHERE iti.transfer_id = p_transfer_id
+    LOOP
+        -- A. Upsert vào Inventory Batches tại Kho Đích
+        INSERT INTO public.inventory_batches (
+            warehouse_id, 
+            product_id, 
+            batch_id, 
+            quantity, 
+            updated_at
+        ) VALUES (
+            v_transfer_record.dest_warehouse_id,
+            v_batch_track.product_id, 
+            v_batch_track.batch_id, 
+            v_batch_track.quantity, 
+            NOW()
+        )
+        ON CONFLICT (warehouse_id, product_id, batch_id) 
+        DO UPDATE SET 
+            quantity = public.inventory_batches.quantity + EXCLUDED.quantity,
+            updated_at = NOW();
+
+        -- B. Upsert vào Product Inventory (Tổng tồn kho)
+        INSERT INTO public.product_inventory (
+            warehouse_id, 
+            product_id, 
+            stock_quantity,
+            updated_at
+        ) VALUES (
+            v_transfer_record.dest_warehouse_id,
+            v_batch_track.product_id, 
+            v_batch_track.quantity,
+            NOW()
+        )
+        ON CONFLICT (warehouse_id, product_id)
+        DO UPDATE SET 
+            stock_quantity = public.product_inventory.stock_quantity + EXCLUDED.stock_quantity,
+            updated_at = NOW();
+
+        -- C. Ghi Log Giao dịch (Transaction)
+        INSERT INTO public.inventory_transactions (
+            warehouse_id, product_id, batch_id, 
+            type, action_group, quantity, unit_price, 
+            ref_id, description, created_by, created_at
+        ) VALUES (
+            v_transfer_record.dest_warehouse_id,
+            v_batch_track.product_id,
+            v_batch_track.batch_id,
+            'transfer_in', 
+            'TRANSFER',
+            v_batch_track.quantity, 
+            0,
+            v_transfer_record.code,
+            -- [FIX]: Dùng biến tên kho đã query, fallback về ID nếu null
+            'Nhập kho chuyển từ ' || COALESCE(v_source_wh_name, 'Kho #' || v_transfer_record.source_warehouse_id),
+            auth.uid(),
+            NOW()
+        );
+
+        v_received_count := v_received_count + 1;
+    END LOOP;
+
+    -- 3. Cập nhật trạng thái phiếu -> COMPLETED
+    UPDATE public.inventory_transfers
+    SET status = 'completed',
+        received_by = auth.uid(),
+        received_at = NOW(),
+        updated_at = NOW()
+    WHERE id = p_transfer_id;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'message', 'Đã nhập kho thành công.',
+        'items_processed', v_received_count
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."confirm_transfer_inbound"("p_transfer_id" bigint, "p_actor_warehouse_id" bigint) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."confirm_transfer_outbound_fefo"("p_transfer_id" bigint) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_transfer_record RECORD;
+    v_item RECORD;
+    v_batch_record RECORD;
+    v_qty_needed_base INTEGER; -- Số lượng cần xuất (Base Unit)
+    v_qty_take INTEGER;        -- Số lượng lấy từ 1 lô
+BEGIN
+    -- 1. Lấy thông tin phiếu & Lock dòng để tránh tranh chấp
+    SELECT * INTO v_transfer_record 
+    FROM public.inventory_transfers 
+    WHERE id = p_transfer_id 
+    FOR UPDATE;
+
+    IF v_transfer_record IS NULL THEN
+        RAISE EXCEPTION 'Không tìm thấy phiếu chuyển kho ID %', p_transfer_id;
+    END IF;
+
+    IF v_transfer_record.status NOT IN ('pending', 'approved') THEN
+        RAISE EXCEPTION 'Phiếu không ở trạng thái có thể xuất kho (Status: %)', v_transfer_record.status;
+    END IF;
+
+    -- 2. Duyệt qua từng sản phẩm trong phiếu
+    FOR v_item IN 
+        SELECT * FROM public.inventory_transfer_items 
+        WHERE transfer_id = p_transfer_id
+    LOOP
+        -- Tính tổng số lượng Base Unit cần xuất
+        -- Công thức: (Qty Requested * Conversion Factor) - (Đã xuất nếu có)
+        v_qty_needed_base := (v_item.qty_requested * COALESCE(v_item.conversion_factor, 1))::INTEGER - COALESCE(v_item.qty_shipped, 0)::INTEGER;
+
+        -- Nếu dòng này đã xuất đủ hoặc không cần xuất -> Bỏ qua
+        IF v_qty_needed_base <= 0 THEN CONTINUE; END IF;
+
+        -- 3. [CORE FIX]: Tìm các lô trong Kho Nguồn theo FEFO (Phải JOIN bảng batches)
+        FOR v_batch_record IN 
+            SELECT ib.id, ib.batch_id, ib.quantity 
+            FROM public.inventory_batches ib
+            JOIN public.batches b ON ib.batch_id = b.id -- Join để lấy expiry_date
+            WHERE ib.warehouse_id = v_transfer_record.source_warehouse_id
+              AND ib.product_id = v_item.product_id
+              AND ib.quantity > 0
+            ORDER BY b.expiry_date ASC, b.created_at ASC -- Ưu tiên hết hạn trước, nhập trước
+        LOOP
+            -- Tính số lượng lấy từ lô này
+            IF v_batch_record.quantity >= v_qty_needed_base THEN
+                v_qty_take := v_qty_needed_base;
+            ELSE
+                v_qty_take := v_batch_record.quantity;
+            END IF;
+
+            -- A. Trừ kho lô này (Inventory Batches)
+            UPDATE public.inventory_batches
+            SET quantity = quantity - v_qty_take,
+                updated_at = NOW()
+            WHERE id = v_batch_record.id;
+
+            -- B. Ghi log tracking (Để biết phiếu này đã lấy hàng từ lô nào)
+            INSERT INTO public.inventory_transfer_batch_items (
+                transfer_item_id, batch_id, quantity
+            ) VALUES (
+                v_item.id, v_batch_record.batch_id, v_qty_take
+            );
+            
+            -- C. [QUAN TRỌNG] Ghi Inventory Transactions (Sổ cái kho)
+            INSERT INTO public.inventory_transactions (
+                warehouse_id, product_id, batch_id, type, action_group, 
+                quantity, unit_price, ref_id, description, created_by
+            ) VALUES (
+                v_transfer_record.source_warehouse_id,
+                v_item.product_id,
+                v_batch_record.batch_id,
+                'transfer_out', -- Loại giao dịch
+                'TRANSFER',
+                -v_qty_take,    -- Số lượng âm (xuất)
+                0,              -- Giá vốn (Có thể update sau hoặc lấy từ product)
+                v_transfer_record.code,
+                'Xuất chuyển kho tới ' || v_transfer_record.dest_warehouse_id,
+                auth.uid()
+            );
+
+            -- D. Giảm số lượng cần tìm
+            v_qty_needed_base := v_qty_needed_base - v_qty_take;
+
+            -- Nếu đã đủ hàng -> Dừng tìm lô tiếp
+            IF v_qty_needed_base = 0 THEN EXIT; END IF;
+        END LOOP;
+
+        -- 4. Nếu sau khi quét hết kho mà vẫn thiếu hàng -> Báo lỗi chặn lại
+        IF v_qty_needed_base > 0 THEN
+            RAISE EXCEPTION 'Kho nguồn không đủ hàng cho sản phẩm ID %. Thiếu % (Base Unit). Vui lòng kiểm tra tồn kho.', v_item.product_id, v_qty_needed_base;
+        END IF;
+
+        -- 5. Cập nhật số lượng đã xuất vào Item
+        UPDATE public.inventory_transfer_items
+        SET qty_shipped = (v_item.qty_requested * COALESCE(v_item.conversion_factor, 1)) -- Lưu theo Base
+        WHERE id = v_item.id;
+
+    END LOOP;
+
+    -- 6. Cập nhật trạng thái phiếu -> SHIPPING
+    UPDATE public.inventory_transfers
+    SET status = 'shipping',
+        updated_at = NOW()
+    WHERE id = p_transfer_id;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Đã xuất kho thành công (Auto-FEFO).');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."confirm_transfer_outbound_fefo"("p_transfer_id" bigint) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid" DEFAULT NULL::"uuid", "p_time" timestamp with time zone DEFAULT "now"(), "p_symptoms" "jsonb" DEFAULT '[]'::"jsonb", "p_note" "text" DEFAULT NULL::"text", "p_type" "text" DEFAULT 'examination'::"text", "p_status" "text" DEFAULT 'confirmed'::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -2828,6 +3064,81 @@ CREATE OR REPLACE FUNCTION "public"."create_inventory_receipt"("p_po_id" bigint,
 ALTER FUNCTION "public"."create_inventory_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_note" "text", "p_items" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."create_manual_transfer"("p_source_warehouse_id" bigint, "p_dest_warehouse_id" bigint, "p_note" "text", "p_items" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_transfer_id BIGINT;
+    v_code TEXT;
+    v_item JSONB;
+BEGIN
+    -- 1. Validate
+    IF p_source_warehouse_id = p_dest_warehouse_id THEN
+        RAISE EXCEPTION 'Kho nguồn và đích không được trùng nhau';
+    END IF;
+
+    -- 2. Sinh mã phiếu (TRF-YYMMDD-XXXX)
+    v_code := 'TRF-' || to_char(now(), 'YYMMDD') || '-' || floor(random() * 10000)::text;
+
+    -- 3. Tạo Header
+    -- [CORE CONFIRM]: Dựa trên Schema, bảng inventory_transfers dùng 'created_by' (uuid)
+    INSERT INTO public.inventory_transfers (
+        code, 
+        source_warehouse_id, 
+        dest_warehouse_id, 
+        status, 
+        created_by,   -- [CORRECTED]: Tuân thủ schema
+        note, 
+        is_urgent,
+        created_at,
+        updated_at
+    ) VALUES (
+        v_code, 
+        p_source_warehouse_id, 
+        p_dest_warehouse_id, 
+        'pending', 
+        auth.uid(), 
+        p_note, 
+        false,
+        NOW(),
+        NOW()
+    ) RETURNING id INTO v_transfer_id;
+
+    -- 4. Tạo Items
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+        INSERT INTO public.inventory_transfer_items (
+            transfer_id, 
+            product_id, 
+            unit, 
+            conversion_factor, 
+            qty_requested, 
+            qty_approved, -- Mặc định bằng Requested
+            qty_shipped,  -- Mặc định 0
+            qty_received, -- Mặc định 0
+            created_at
+        ) VALUES (
+            v_transfer_id,
+            (v_item->>'product_id')::BIGINT,
+            v_item->>'unit',
+            COALESCE((v_item->>'conversion_factor')::INTEGER, 1),
+            (v_item->>'quantity')::NUMERIC,
+            (v_item->>'quantity')::NUMERIC, -- Auto approve
+            0,
+            0,
+            NOW()
+        );
+    END LOOP;
+
+    RETURN jsonb_build_object('success', true, 'transfer_id', v_transfer_id, 'code', v_code);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."create_manual_transfer"("p_source_warehouse_id" bigint, "p_dest_warehouse_id" bigint, "p_note" "text", "p_items" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."create_new_auth_user"("p_email" "text", "p_password" "text", "p_full_name" "text") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -3160,130 +3471,7 @@ $$;
 ALTER FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric DEFAULT 0, "p_shipping_fee" numeric DEFAULT 0, "p_status" "public"."order_status" DEFAULT 'DRAFT'::"public"."order_status", "p_delivery_method" "text" DEFAULT 'internal'::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_warehouse_id" bigint DEFAULT NULL::bigint) RETURNS "uuid"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    AS $$
-    DECLARE
-        v_order_id UUID;
-        v_code TEXT;
-        v_item JSONB;
-        v_total_amount NUMERIC := 0;
-        v_final_amount NUMERIC := 0;
-        v_conversion_factor INTEGER;
-        v_unit_price NUMERIC;
-        v_quantity NUMERIC;
-        v_discount NUMERIC;
-    BEGIN
-        -- A. VALIDATION (Kiểm tra đầu vào)
-        IF p_warehouse_id IS NULL THEN
-            RAISE EXCEPTION 'Bắt buộc phải chọn Kho xuất hàng (warehouse_id)';
-        END IF;
-
-        -- B. SINH MÃ ĐƠN HÀNG (SO-YYMMDD-XXXX)
-        v_code := 'SO-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 10000)::TEXT, 4, '0');
-
-        -- C. TẠO HEADER ĐƠN HÀNG
-        INSERT INTO public.orders (
-            code, 
-            customer_id, 
-            creator_id, 
-            status, 
-            delivery_address, 
-            delivery_time, 
-            note,
-            discount_amount, 
-            shipping_fee,
-            delivery_method, 
-            shipping_partner_id,
-            warehouse_id,   -- Lưu kho xuất để Trigger biết đường trừ
-            total_amount,   
-            final_amount,   
-            created_at,
-            updated_at
-        ) VALUES (
-            v_code, 
-            p_customer_id, 
-            auth.uid(), 
-            p_status,
-            p_delivery_address, 
-            p_delivery_time, 
-            p_note,
-            p_discount_amount, 
-            p_shipping_fee,
-            p_delivery_method, 
-            p_shipping_partner_id,
-            p_warehouse_id,
-            0, 0, -- Tạm thời 0, tính lại ở dưới
-            NOW(), NOW()
-        ) RETURNING id INTO v_order_id;
-
-        -- D. XỬ LÝ CHI TIẾT (ITEMS)
-        FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-        LOOP
-            v_quantity := (v_item->>'quantity')::NUMERIC;
-            v_unit_price := (v_item->>'unit_price')::NUMERIC;
-            v_discount := COALESCE((v_item->>'discount')::NUMERIC, 0);
-
-            -- 1. Tìm tỷ lệ quy đổi từ bảng product_units (Logic V4)
-            -- (Ví dụ: Đơn vị 'Thùng' -> Rate 24)
-            SELECT conversion_rate INTO v_conversion_factor
-            FROM public.product_units 
-            WHERE product_id = (v_item->>'product_id')::BIGINT 
-              AND unit_name = (v_item->>'uom')
-            LIMIT 1;
-
-            -- Fallback: Nếu không tìm thấy đơn vị (hoặc là Base unit), mặc định là 1
-            IF v_conversion_factor IS NULL THEN v_conversion_factor := 1; END IF;
-
-            -- 2. Insert Item
-            INSERT INTO public.order_items (
-                order_id, 
-                product_id, 
-                quantity, 
-                uom, 
-                conversion_factor,
-                unit_price, 
-                discount, 
-                is_gift, 
-                note
-            ) VALUES (
-                v_order_id,
-                (v_item->>'product_id')::BIGINT,
-                v_quantity,
-                v_item->>'uom',
-                v_conversion_factor,
-                v_unit_price,
-                v_discount,
-                COALESCE((v_item->>'is_gift')::BOOLEAN, false),
-                v_item->>'note'
-            );
-
-            -- 3. Cộng dồn tiền
-            v_total_amount := v_total_amount + ((v_quantity * v_unit_price) - v_discount);
-        END LOOP;
-
-        -- E. CẬP NHẬT TỔNG TIỀN CUỐI CÙNG
-        v_final_amount := v_total_amount - p_discount_amount + p_shipping_fee;
-        IF v_final_amount < 0 THEN v_final_amount := 0; END IF;
-
-        UPDATE public.orders 
-        SET total_amount = v_total_amount,
-            final_amount = v_final_amount
-        WHERE id = v_order_id;
-
-        RETURN v_order_id;
-    END;
-    $$;
-
-
-ALTER FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_warehouse_id" bigint) OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_warehouse_id" bigint) IS 'V3 Final: Auto Clean & Rebuild - Hỗ trợ Warehouse ID và Quy đổi đơn vị';
-
-
-
-CREATE OR REPLACE FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint DEFAULT NULL::bigint, "p_customer_b2c_id" bigint DEFAULT NULL::bigint, "p_discount_amount" numeric DEFAULT 0, "p_items" "jsonb" DEFAULT '[]'::"jsonb", "p_order_type" "text" DEFAULT 'POS'::"text", "p_payment_method" "text" DEFAULT 'cash'::"text", "p_shipping_fee" numeric DEFAULT 0, "p_status" "text" DEFAULT 'COMPLETED'::"text", "p_warehouse_id" bigint DEFAULT 1, "p_note" "text" DEFAULT NULL::"text", "p_delivery_address" "text" DEFAULT NULL::"text", "p_delivery_time" "text" DEFAULT NULL::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_delivery_method" "text" DEFAULT 'internal'::"text") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint DEFAULT NULL::bigint, "p_customer_b2c_id" bigint DEFAULT NULL::bigint, "p_discount_amount" numeric DEFAULT 0, "p_items" "jsonb" DEFAULT '[]'::"jsonb", "p_order_type" "text" DEFAULT 'POS'::"text", "p_payment_method" "text" DEFAULT 'cash'::"text", "p_shipping_fee" numeric DEFAULT 0, "p_status" "text" DEFAULT 'COMPLETED'::"text", "p_warehouse_id" bigint DEFAULT 1, "p_note" "text" DEFAULT NULL::"text", "p_delivery_address" "text" DEFAULT NULL::"text", "p_delivery_time" "text" DEFAULT NULL::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_delivery_method" "text" DEFAULT 'internal'::"text", "p_customer_id" bigint DEFAULT NULL::bigint) RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 DECLARE
@@ -3297,79 +3485,61 @@ DECLARE
     v_discount NUMERIC;
     v_conversion_factor INTEGER;
     v_prefix TEXT;
-BEGIN
-    -- A. VALIDATION
-    IF p_warehouse_id IS NULL THEN
-        RAISE EXCEPTION 'Bắt buộc phải chọn Kho xuất hàng.';
-    END IF;
-
-    -- B. SINH MÃ ĐƠN HÀNG
-    IF p_order_type = 'POS' THEN
-        v_prefix := 'POS-';
-    ELSE
-        v_prefix := 'SO-';
-    END IF;
     
+    -- Biến xử lý ID khách hàng cuối cùng
+    v_final_b2b_id BIGINT;
+    
+    -- Biến tích điểm
+    v_loyalty_points_earned INT := 0;
+BEGIN
+    -- 1. Validation & Setup
+    IF p_warehouse_id IS NULL THEN RAISE EXCEPTION 'Bắt buộc phải chọn Kho xuất hàng.'; END IF;
+
+    -- Map ID cũ sang mới (Ưu tiên tham số mới, fallback về tham số cũ)
+    v_final_b2b_id := COALESCE(p_customer_b2b_id, p_customer_id);
+
+    -- Sinh mã đơn
+    IF p_order_type = 'POS' THEN v_prefix := 'POS-'; ELSE v_prefix := 'SO-'; END IF;
     v_code := v_prefix || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 10000)::TEXT, 4, '0');
 
-    -- C. TẠO HEADER ĐƠN HÀNG
+    -- 2. Insert Header
     INSERT INTO public.orders (
         code, 
-        customer_id,      -- B2B
-        customer_b2c_id,  -- B2C
+        customer_id,        -- Cột B2B trong DB
+        customer_b2c_id,    -- Cột B2C trong DB
         creator_id, 
         status, 
-        order_type,       
-        payment_method,   
-        remittance_status,
-        
-        delivery_address, 
-        delivery_time, 
-        note,
-        discount_amount, 
-        shipping_fee,
-        shipping_partner_id,
-        delivery_method,  -- [SENKO ADDED] Lưu phương thức giao hàng
-        warehouse_id,
-        
-        total_amount, 
-        final_amount, 
-        created_at,
-        updated_at
+        order_type, 
+        payment_method, 
+        remittance_status, 
+        delivery_address, delivery_time, note,
+        discount_amount, shipping_fee, shipping_partner_id, delivery_method, warehouse_id,
+        total_amount, final_amount, paid_amount, payment_status, created_at, updated_at
     ) VALUES (
         v_code, 
-        p_customer_b2b_id, 
+        v_final_b2b_id, 
         p_customer_b2c_id, 
         auth.uid(), 
-        p_status,
+        p_status, 
         p_order_type,
-        p_payment_method,
-        -- Logic nộp tiền: Nếu thu tiền mặt tại quầy -> pending (chờ nộp). Nếu nợ/ck -> skipped
-        CASE WHEN p_payment_method = 'cash' THEN 'pending' ELSE 'skipped' END, 
-        
-        COALESCE(p_delivery_address, ''), 
-        p_delivery_time, 
-        p_note,
-        p_discount_amount, 
-        p_shipping_fee,
-        p_shipping_partner_id,
-        p_delivery_method, -- [SENKO ADDED]
-        p_warehouse_id,
-        
-        0, 0, -- Tính sau
-        NOW(), NOW()
+        p_payment_method, 
+        -- Logic nộp tiền: Tiền mặt -> Pending (Chờ nộp), Khác -> Skipped
+        CASE WHEN p_payment_method = 'cash' THEN 'pending' ELSE 'skipped' END,
+        COALESCE(p_delivery_address, ''), p_delivery_time, p_note,
+        p_discount_amount, p_shipping_fee, p_shipping_partner_id, p_delivery_method, p_warehouse_id,
+        0, 0, -- Tạm tính 0
+        0, 'unpaid', NOW(), NOW()
     ) RETURNING id INTO v_order_id;
 
-    -- D. XỬ LÝ CHI TIẾT (ITEMS)
+    -- 3. Insert Items & Tính tiền
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
     LOOP
         v_quantity := (v_item->>'quantity')::NUMERIC;
         v_unit_price := (v_item->>'unit_price')::NUMERIC;
         v_discount := COALESCE((v_item->>'discount')::NUMERIC, 0);
-
-        -- Lấy tỷ lệ quy đổi (Fallback DB nếu cần)
-        v_conversion_factor := COALESCE((v_item->>'conversion_factor')::INTEGER, 0);
         
+        -- Logic tìm tỷ lệ quy đổi (Ưu tiên JSON -> DB)
+        v_conversion_factor := COALESCE((v_item->>'conversion_factor')::INTEGER, 0);
         IF v_conversion_factor = 0 THEN
              SELECT conversion_rate INTO v_conversion_factor
              FROM public.product_units 
@@ -3379,55 +3549,56 @@ BEGIN
         END IF;
 
         INSERT INTO public.order_items (
-            order_id, 
-            product_id, 
-            quantity, 
-            uom, 
-            conversion_factor,
-            unit_price, 
-            discount, 
-            is_gift, 
-            note
+            order_id, product_id, quantity, uom, conversion_factor, 
+            unit_price, discount, is_gift, note
         ) VALUES (
-            v_order_id,
-            (v_item->>'product_id')::BIGINT,
-            v_quantity,
-            v_item->>'uom',
-            v_conversion_factor,
-            v_unit_price,
-            v_discount,
-            COALESCE((v_item->>'is_gift')::BOOLEAN, false),
+            v_order_id, 
+            (v_item->>'product_id')::BIGINT, 
+            v_quantity, 
+            v_item->>'uom', 
+            v_conversion_factor, 
+            v_unit_price, 
+            v_discount, 
+            COALESCE((v_item->>'is_gift')::BOOLEAN, false), 
             v_item->>'note'
         );
 
         v_total_amount := v_total_amount + ((v_quantity * v_unit_price) - v_discount);
     END LOOP;
 
-    -- E. UPDATE TỔNG TIỀN & TRẠNG THÁI THANH TOÁN [QUAN TRỌNG]
+    -- 4. Update Tổng tiền
     v_final_amount := v_total_amount - p_discount_amount + p_shipping_fee;
     IF v_final_amount < 0 THEN v_final_amount := 0; END IF;
 
     UPDATE public.orders 
     SET total_amount = v_total_amount,
         final_amount = v_final_amount,
-        -- [SENKO ADDED]: Logic tự động thanh toán cho POS
-        paid_amount = CASE 
-            -- Nếu là đơn hoàn thành và không phải nợ -> Coi như đã trả đủ
-            WHEN p_status = 'COMPLETED' AND p_payment_method != 'debt' THEN v_final_amount 
-            ELSE 0 
-        END,
-        payment_status = CASE 
-             WHEN p_status = 'COMPLETED' AND p_payment_method != 'debt' THEN 'paid' 
-             ELSE 'unpaid' 
-        END
+        -- Nếu POS Hoàn tất & Không nợ -> Đánh dấu đã trả đủ
+        paid_amount = CASE WHEN p_status = 'COMPLETED' AND p_payment_method != 'debt' THEN v_final_amount ELSE 0 END,
+        payment_status = CASE WHEN p_status = 'COMPLETED' AND p_payment_method != 'debt' THEN 'paid' ELSE 'unpaid' END
     WHERE id = v_order_id;
+
+    -- 5. [CORE NEW]: Tính điểm thưởng (100k = 1 điểm)
+    v_loyalty_points_earned := FLOOR(v_final_amount / 100000); 
+
+    IF p_status = 'COMPLETED' AND v_loyalty_points_earned > 0 THEN
+        IF p_customer_b2c_id IS NOT NULL THEN
+            UPDATE public.customers 
+            SET loyalty_points = COALESCE(loyalty_points, 0) + v_loyalty_points_earned, updated_at = NOW()
+            WHERE id = p_customer_b2c_id;
+        ELSIF v_final_b2b_id IS NOT NULL THEN
+            UPDATE public.customers_b2b 
+            SET loyalty_points = COALESCE(loyalty_points, 0) + v_loyalty_points_earned, updated_at = NOW()
+            WHERE id = v_final_b2b_id;
+        END IF;
+    END IF;
 
     RETURN v_order_id;
 END;
 $$;
 
 
-ALTER FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_discount_amount" numeric, "p_items" "jsonb", "p_order_type" "text", "p_payment_method" "text", "p_shipping_fee" numeric, "p_status" "text", "p_warehouse_id" bigint, "p_note" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_shipping_partner_id" bigint, "p_delivery_method" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_discount_amount" numeric, "p_items" "jsonb", "p_order_type" "text", "p_payment_method" "text", "p_shipping_fee" numeric, "p_status" "text", "p_warehouse_id" bigint, "p_note" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_shipping_partner_id" bigint, "p_delivery_method" "text", "p_customer_id" bigint) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_service_package"("p_data" "jsonb", "p_items" "jsonb") RETURNS bigint
@@ -6053,6 +6224,77 @@ $$;
 ALTER FUNCTION "public"."get_transactions"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_flow" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_transfers"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid" DEFAULT NULL::"uuid", "p_receiver_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("id" bigint, "code" "text", "source_warehouse_name" "text", "dest_warehouse_name" "text", "status" "text", "created_at" timestamp with time zone, "creator_name" "text", "receiver_name" "text", "note" "text", "full_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        t.id,
+        t.code,
+        w1.name as source_warehouse_name,
+        w2.name as dest_warehouse_name,
+        t.status,
+        t.created_at,
+        
+        -- Lấy tên người tạo
+        COALESCE(u1.full_name, u1.email, 'System') as creator_name,
+        
+        -- [NEW] Lấy tên người nhận (Nếu chưa có thì hiện ---)
+        COALESCE(u2.full_name, u2.email, '---') as receiver_name,
+        
+        t.note,
+        COUNT(*) OVER() as full_count
+    FROM public.inventory_transfers t
+    JOIN public.warehouses w1 ON t.source_warehouse_id = w1.id
+    JOIN public.warehouses w2 ON t.dest_warehouse_id = w2.id
+    LEFT JOIN public.users u1 ON t.created_by = u1.id
+    LEFT JOIN public.users u2 ON t.received_by = u2.id -- [NEW] Join người nhận
+    WHERE 
+        -- 1. TÌM KIẾM ĐA NĂNG (Deep Search)
+        (p_search IS NULL OR p_search = '' OR 
+            -- A. Tìm theo Mã phiếu
+            t.code ILIKE '%' || p_search || '%' OR
+            
+            -- B. Tìm theo Tên người tạo
+            COALESCE(u1.full_name, '') ILIKE '%' || p_search || '%' OR
+            
+            -- C. [NEW] Tìm theo Tên người nhận
+            COALESCE(u2.full_name, '') ILIKE '%' || p_search || '%' OR
+            
+            -- D. Tìm theo Ghi chú
+            COALESCE(t.note, '') ILIKE '%' || p_search || '%' OR
+
+            -- E. Tìm theo Sản phẩm bên trong phiếu
+            EXISTS (
+                SELECT 1 
+                FROM public.inventory_transfer_items iti
+                JOIN public.products p ON iti.product_id = p.id
+                WHERE iti.transfer_id = t.id 
+                AND (
+                    p.name ILIKE '%' || p_search || '%' 
+                    OR p.sku ILIKE '%' || p_search || '%'
+                )
+            )
+        )
+        
+        -- 2. Các bộ lọc khác
+        AND (p_status IS NULL OR t.status = p_status)
+        AND (p_date_from IS NULL OR t.created_at >= p_date_from)
+        AND (p_date_to IS NULL OR t.created_at <= p_date_to)
+        AND (p_creator_id IS NULL OR t.created_by = p_creator_id)
+        AND (p_receiver_id IS NULL OR t.received_by = p_receiver_id) -- [NEW] Filter
+        
+    ORDER BY t.created_at DESC
+    LIMIT p_page_size OFFSET (p_page - 1) * p_page_size;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_transfers"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid", "p_receiver_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_user_pending_revenue"("p_user_id" "uuid") RETURNS numeric
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -7094,6 +7336,111 @@ ALTER FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") OWNER TO "pos
 
 COMMENT ON FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") IS 'Import AI Senko Version: Packing Spec + Items Per Carton + Safe Content Check';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."import_suppliers_bulk"("p_suppliers" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_item JSONB;
+    v_supplier_id BIGINT;
+    v_count INT := 0;
+    v_debt NUMERIC;
+    v_trans_code TEXT;
+BEGIN
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_suppliers)
+    LOOP
+        -- 1. Insert Supplier (Bỏ cột 'code')
+        INSERT INTO public.suppliers (
+            name, 
+            tax_code, 
+            address,
+            contact_person, 
+            phone, 
+            email, 
+            
+            -- Thông tin Ngân hàng
+            bank_name,
+            bank_account,
+            bank_holder,
+            
+            -- Thông tin Vận hành
+            payment_term,
+            delivery_method,
+            
+            status, 
+            notes, 
+            created_at
+        ) VALUES (
+            v_item->>'name',
+            v_item->>'tax_code',
+            v_item->>'address',
+            v_item->>'contact_person',
+            v_item->>'phone',
+            v_item->>'email',
+            
+            v_item->>'bank_name',
+            v_item->>'bank_account',
+            v_item->>'bank_holder',
+            
+            v_item->>'payment_term', -- Lưu chuỗi text (VD: "30 ngày", "Gối đầu")
+            v_item->>'delivery_method',
+            
+            'active', 
+            v_item->>'notes',
+            NOW()
+        )
+        RETURNING id INTO v_supplier_id;
+
+        -- 2. Xử lý Công nợ đầu kỳ (Nếu có)
+        BEGIN
+            v_debt := COALESCE((v_item->>'current_debt')::NUMERIC, 0);
+        EXCEPTION WHEN OTHERS THEN
+            v_debt := 0; -- Nếu parse lỗi thì coi như 0
+        END;
+
+        IF v_debt > 0 THEN
+            -- Sinh mã giao dịch tự động
+            v_trans_code := 'CN-NCC-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || floor(random() * 1000)::text;
+
+            INSERT INTO public.finance_transactions (
+                code,
+                partner_type, 
+                partner_id, 
+                partner_name_cache, -- Cache tên để hiển thị nhanh
+                amount, 
+                flow, 
+                business_type, 
+                status, 
+                description, 
+                created_by,
+                created_at,
+                fund_account_id -- Bắt buộc (Lấy quỹ mặc định ID=1 hoặc NULL tùy logic)
+            ) VALUES (
+                v_trans_code,
+                'supplier', 
+                v_supplier_id::TEXT, 
+                v_item->>'name', -- Cache tên NCC
+                v_debt, 
+                'out', -- Flow OUT (Nợ phải trả)
+                'opening_balance', -- Loại: Dư nợ đầu kỳ
+                'completed', -- Đã ghi nhận
+                'Dư nợ đầu kỳ (Import Excel)',
+                auth.uid(),
+                NOW(),
+                1 -- [HARDCODE TEMPORARY]: Gán tạm vào Quỹ Tiền Mặt (hoặc Sếp cần tạo 1 Quỹ ảo "Công nợ"?) -> Tạm để 1 để ko lỗi constraint
+            );
+        END IF;
+
+        v_count := v_count + 1;
+    END LOOP;
+
+    RETURN jsonb_build_object('success', true, 'count', v_count);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."import_suppliers_bulk"("p_suppliers" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") RETURNS "uuid"
@@ -8220,25 +8567,26 @@ $$;
 ALTER FUNCTION "public"."search_items_for_sales"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."search_product_batches"("p_product_id" bigint, "p_warehouse_id" bigint DEFAULT 1) RETURNS TABLE("lot_number" "text", "expiry_date" "date", "days_remaining" integer)
+CREATE OR REPLACE FUNCTION "public"."search_product_batches"("p_product_id" bigint, "p_warehouse_id" bigint) RETURNS TABLE("id" bigint, "lot_number" "text", "expiry_date" "date", "quantity" integer, "days_remaining" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 BEGIN
-    -- Lưu ý: Đây là gợi ý lô dựa trên lịch sử nhập.
-    -- Hệ thống hiện tại (V1) quản lý tồn kho tổng (product_inventory).
-    -- Việc tracking số lượng chi tiết từng lô (Batch Inventory) sẽ được nâng cấp ở V2.
     RETURN QUERY
-    SELECT DISTINCT 
-        iri.lot_number,
-        iri.expiry_date,
-        (iri.expiry_date - CURRENT_DATE)::int as days_remaining
-    FROM public.inventory_receipt_items iri
-    JOIN public.inventory_receipts ir ON iri.receipt_id = ir.id
+    SELECT 
+        ib.id, 
+        b.batch_code as lot_number, 
+        b.expiry_date,
+        ib.quantity,
+        (b.expiry_date - CURRENT_DATE)::int as days_remaining
+    FROM public.inventory_batches ib
+    JOIN public.batches b ON ib.batch_id = b.id
     WHERE 
-        iri.product_id = p_product_id
-        AND ir.warehouse_id = p_warehouse_id
-        AND iri.expiry_date > CURRENT_DATE -- Chỉ lấy lô còn hạn
-    ORDER BY iri.expiry_date ASC; -- FIFO: Hết hạn trước xuất trước
+        ib.product_id = p_product_id
+        AND ib.warehouse_id = p_warehouse_id
+        AND ib.quantity > 0          
+        AND b.expiry_date >= CURRENT_DATE 
+    ORDER BY b.expiry_date ASC;     
 END;
 $$;
 
@@ -8398,6 +8746,101 @@ $$;
 ALTER FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."search_products_for_transfer"("p_warehouse_id" bigint, "p_keyword" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 20) RETURNS TABLE("id" bigint, "sku" "text", "name" "text", "image_url" "text", "current_stock" integer, "shelf_location" "text", "lot_number" "text", "expiry_date" "date", "unit" "text", "conversion_factor" integer, "items_per_carton" integer)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_clean_keyword text;
+    v_search_query tsquery;
+BEGIN
+    -- 1. Chuẩn hóa từ khóa
+    v_clean_keyword := trim(regexp_replace(p_keyword, '\s+', ' ', 'g'));
+    
+    IF v_clean_keyword IS NOT NULL AND v_clean_keyword <> '' THEN
+        BEGIN
+            v_search_query := to_tsquery('simple', replace(v_clean_keyword, ' ', ':* & ') || ':*');
+        EXCEPTION WHEN OTHERS THEN
+            v_search_query := plainto_tsquery('simple', v_clean_keyword);
+        END;
+    END IF;
+
+    RETURN QUERY
+    SELECT 
+        p.id,
+        p.sku,
+        p.name,
+        p.image_url,
+        
+        -- Lấy tồn kho chính xác tại kho nguồn
+        COALESCE(inv.stock_quantity, 0)::INTEGER as current_stock,
+        COALESCE(inv.shelf_location, '') as shelf_location,
+        
+        -- [CORE FIX]: Join đúng bảng batches để lấy batch_code và expiry_date
+        (
+            SELECT b.batch_code 
+            FROM public.inventory_batches ib
+            JOIN public.batches b ON ib.batch_id = b.id -- FIX QUAN TRỌNG
+            WHERE ib.product_id = p.id 
+              AND ib.warehouse_id = p_warehouse_id 
+              AND ib.quantity > 0 
+              AND b.expiry_date >= CURRENT_DATE
+            ORDER BY b.expiry_date ASC 
+            LIMIT 1
+        ) as lot_number,
+        
+        (
+            SELECT b.expiry_date 
+            FROM public.inventory_batches ib
+            JOIN public.batches b ON ib.batch_id = b.id -- FIX QUAN TRỌNG
+            WHERE ib.product_id = p.id 
+              AND ib.warehouse_id = p_warehouse_id 
+              AND ib.quantity > 0 
+              AND b.expiry_date >= CURRENT_DATE
+            ORDER BY b.expiry_date ASC 
+            LIMIT 1
+        ) as expiry_date,
+        
+        -- [LOGIC SENKO]: Tìm đơn vị Wholesale tốt nhất
+        COALESCE(u_b2b.unit_name, p.wholesale_unit, p.retail_unit, 'Hộp') as unit,
+        COALESCE(u_b2b.conversion_rate, p.items_per_carton, 1) as conversion_factor,
+        COALESCE(p.items_per_carton, 1) as items_per_carton
+
+    FROM public.products p
+    LEFT JOIN public.product_inventory inv 
+        ON p.id = inv.product_id AND inv.warehouse_id = p_warehouse_id
+    
+    -- Lateral Join để tìm unit "ngon" nhất (Logic của Senko)
+    LEFT JOIN LATERAL (
+        SELECT unit_name, conversion_rate
+        FROM public.product_units pu
+        WHERE pu.product_id = p.id
+        ORDER BY (pu.unit_type = 'wholesale') DESC, pu.conversion_rate DESC
+        LIMIT 1
+    ) u_b2b ON TRUE
+    
+    WHERE 
+        p.status = 'active'
+        AND (
+            v_clean_keyword IS NULL 
+            OR v_clean_keyword = ''
+            OR p.sku ILIKE v_clean_keyword || '%'
+            OR p.barcode = v_clean_keyword
+            OR p.fts @@ v_search_query
+            OR p.name ILIKE '%' || v_clean_keyword || '%'
+        )
+    ORDER BY 
+        -- Ưu tiên tìm thấy trong kho có hàng trước
+        (COALESCE(inv.stock_quantity, 0) > 0) DESC,
+        p.created_at DESC
+    LIMIT p_limit;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_for_transfer"("p_warehouse_id" bigint, "p_keyword" "text", "p_limit" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_id" bigint, "p_limit" integer DEFAULT 20) RETURNS TABLE("id" bigint, "name" "text", "sku" "text", "barcode" "text", "retail_price" numeric, "image_url" "text", "unit" "text", "stock_quantity" integer, "location_cabinet" "text", "location_row" "text", "location_slot" "text", "usage_instructions" "jsonb", "status" "text", "similarity_score" real)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -8407,88 +8850,35 @@ DECLARE
     v_search_pattern text;
     v_warehouse_type text;
 BEGIN
-    -- 1. [SECURITY CHECK - FIXED]
-    -- Sử dụng Alias 'w' để chỉ định rõ w.id, tránh xung đột với biến output 'id'
-    SELECT w.type INTO v_warehouse_type 
-    FROM public.warehouses w
-    WHERE w.id = p_warehouse_id;
+    SELECT w.type INTO v_warehouse_type FROM public.warehouses w WHERE w.id = p_warehouse_id;
+    IF v_warehouse_type = 'wholesale' THEN RETURN; END IF;
 
-    -- Nếu là kho 'wholesale' (Bán buôn) -> Chặn luôn
-    IF v_warehouse_type = 'wholesale' THEN
-        RETURN; 
-    END IF;
-
-    -- 2. Chuẩn hóa từ khóa
     v_clean_keyword := TRIM(p_keyword);
-    
-    IF v_clean_keyword IS NULL OR v_clean_keyword = '' THEN
-        RETURN;
-    END IF;
-
-    -- 3. Tạo mẫu tìm kiếm
+    IF v_clean_keyword IS NULL OR v_clean_keyword = '' THEN RETURN; END IF;
     v_search_pattern := '%' || REPLACE(v_clean_keyword, ' ', '%') || '%';
 
-    -- 4. TRUY VẤN CHÍNH (Đã an toàn vì dùng alias 'p')
     RETURN QUERY
     SELECT 
-        p.id,
-        p.name,
-        p.sku,
-        p.barcode,
-        
-        COALESCE(u_retail.price_sell, 0) AS retail_price, 
+        p.id, p.name, p.sku, p.barcode,
+        COALESCE(u_retail.price_sell, 0), 
         p.image_url,
-        COALESCE(u_retail.unit_name, u_base.unit_name, 'N/A') AS unit,
-        COALESCE(inv.stock_quantity, 0)::INTEGER AS stock_quantity,
+        COALESCE(u_retail.unit_name, u_base.unit_name, 'N/A'),
         
-        inv.location_cabinet,
-        inv.location_row,
-        inv.location_slot,
-        p.usage_instructions,
-        p.status,
+        -- [CORE FIX]: Chia tồn kho Base cho tỷ lệ quy đổi để ra số lượng hiển thị (VD: 180 viên / 12 = 15 vỉ)
+        FLOOR(COALESCE(inv.stock_quantity, 0)::NUMERIC / GREATEST(COALESCE(u_retail.conversion_rate, 1), 1))::INTEGER,
         
-        -- TÍNH ĐIỂM THÔNG MINH
+        inv.location_cabinet, inv.location_row, inv.location_slot, p.usage_instructions, p.status,
         CASE 
-            -- Barcode (Tuyệt đối)
             WHEN p.barcode = v_clean_keyword THEN 1.0::REAL
-            WHEN u_retail.barcode = v_clean_keyword THEN 1.0::REAL
-            WHEN u_base.barcode = v_clean_keyword THEN 1.0::REAL
-            
-            -- SKU
-            WHEN p.sku ILIKE v_clean_keyword || '%' THEN 0.9::REAL
-            
-            -- Tên & Hoạt chất
-            ELSE GREATEST(
-                similarity(p.name, v_clean_keyword), 
-                similarity(COALESCE(p.active_ingredient, ''), v_clean_keyword)
-            )::REAL
-        END AS similarity_score
-
+            ELSE GREATEST(similarity(p.name, v_clean_keyword), 0.5)::REAL
+        END AS score
     FROM public.products p
-    
     LEFT JOIN public.product_units u_retail ON p.id = u_retail.product_id AND u_retail.unit_type = 'retail'
     LEFT JOIN public.product_units u_base ON p.id = u_base.product_id AND u_base.is_base = true
     LEFT JOIN public.product_inventory inv ON p.id = inv.product_id AND inv.warehouse_id = p_warehouse_id
-
-    WHERE 
-        p.status = 'active' 
-        AND (
-            p.barcode = v_clean_keyword
-            OR u_retail.barcode = v_clean_keyword
-            OR u_base.barcode = v_clean_keyword
-            OR p.sku ILIKE v_clean_keyword || '%'
-            OR p.name ILIKE v_search_pattern           
-            OR p.name % v_clean_keyword                
-            OR COALESCE(p.active_ingredient, '') ILIKE v_search_pattern
-            OR COALESCE(p.active_ingredient, '') % v_clean_keyword
-        )
-        
-    ORDER BY 
-        (CASE WHEN p.barcode = v_clean_keyword OR u_retail.barcode = v_clean_keyword OR u_base.barcode = v_clean_keyword THEN 1 ELSE 0 END) DESC,
-        similarity_score DESC,
-        inv.stock_quantity DESC NULLS LAST,
-        LENGTH(p.name) ASC
-        
+    WHERE p.status = 'active' 
+      AND (p.barcode = v_clean_keyword OR p.sku ILIKE v_clean_keyword || '%' OR p.name ILIKE v_search_pattern)
+    ORDER BY score DESC, inv.stock_quantity DESC NULLS LAST
     LIMIT p_limit;
 END;
 $$;
@@ -11139,6 +11529,8 @@ CREATE TABLE IF NOT EXISTS "public"."inventory_transfers" (
     "packages_received" integer DEFAULT 0,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
+    "received_by" "uuid",
+    "received_at" timestamp with time zone,
     CONSTRAINT "inventory_transfers_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'approved'::"text", 'shipping'::"text", 'completed'::"text", 'cancelled'::"text"])))
 );
 
@@ -13460,6 +13852,11 @@ ALTER TABLE ONLY "public"."inventory_transfers"
 
 
 ALTER TABLE ONLY "public"."inventory_transfers"
+    ADD CONSTRAINT "inventory_transfers_received_by_fkey" FOREIGN KEY ("received_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."inventory_transfers"
     ADD CONSTRAINT "inventory_transfers_source_warehouse_id_fkey" FOREIGN KEY ("source_warehouse_id") REFERENCES "public"."warehouses"("id");
 
 
@@ -14533,6 +14930,18 @@ GRANT ALL ON FUNCTION "public"."confirm_transaction"("p_id" bigint) TO "service_
 
 
 
+GRANT ALL ON FUNCTION "public"."confirm_transfer_inbound"("p_transfer_id" bigint, "p_actor_warehouse_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."confirm_transfer_inbound"("p_transfer_id" bigint, "p_actor_warehouse_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."confirm_transfer_inbound"("p_transfer_id" bigint, "p_actor_warehouse_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."confirm_transfer_outbound_fefo"("p_transfer_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."confirm_transfer_outbound_fefo"("p_transfer_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."confirm_transfer_outbound_fefo"("p_transfer_id" bigint) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_note" "text", "p_type" "text", "p_status" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_note" "text", "p_type" "text", "p_status" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_appointment_booking"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_time" timestamp with time zone, "p_symptoms" "jsonb", "p_note" "text", "p_type" "text", "p_status" "text") TO "service_role";
@@ -14587,6 +14996,12 @@ GRANT ALL ON FUNCTION "public"."create_inventory_receipt"("p_po_id" bigint, "p_w
 
 
 
+GRANT ALL ON FUNCTION "public"."create_manual_transfer"("p_source_warehouse_id" bigint, "p_dest_warehouse_id" bigint, "p_note" "text", "p_items" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_manual_transfer"("p_source_warehouse_id" bigint, "p_dest_warehouse_id" bigint, "p_note" "text", "p_items" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_manual_transfer"("p_source_warehouse_id" bigint, "p_dest_warehouse_id" bigint, "p_note" "text", "p_items" "jsonb") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."create_new_auth_user"("p_email" "text", "p_password" "text", "p_full_name" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_new_auth_user"("p_email" "text", "p_password" "text", "p_full_name" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_new_auth_user"("p_email" "text", "p_password" "text", "p_full_name" "text") TO "service_role";
@@ -14623,15 +15038,9 @@ GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "
 
 
 
-GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_warehouse_id" bigint) TO "anon";
-GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_warehouse_id" bigint) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_id" bigint, "p_delivery_address" "text", "p_delivery_time" "text", "p_note" "text", "p_items" "jsonb", "p_discount_amount" numeric, "p_shipping_fee" numeric, "p_status" "public"."order_status", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_warehouse_id" bigint) TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_discount_amount" numeric, "p_items" "jsonb", "p_order_type" "text", "p_payment_method" "text", "p_shipping_fee" numeric, "p_status" "text", "p_warehouse_id" bigint, "p_note" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_shipping_partner_id" bigint, "p_delivery_method" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_discount_amount" numeric, "p_items" "jsonb", "p_order_type" "text", "p_payment_method" "text", "p_shipping_fee" numeric, "p_status" "text", "p_warehouse_id" bigint, "p_note" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_shipping_partner_id" bigint, "p_delivery_method" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_discount_amount" numeric, "p_items" "jsonb", "p_order_type" "text", "p_payment_method" "text", "p_shipping_fee" numeric, "p_status" "text", "p_warehouse_id" bigint, "p_note" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_shipping_partner_id" bigint, "p_delivery_method" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_discount_amount" numeric, "p_items" "jsonb", "p_order_type" "text", "p_payment_method" "text", "p_shipping_fee" numeric, "p_status" "text", "p_warehouse_id" bigint, "p_note" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_shipping_partner_id" bigint, "p_delivery_method" "text", "p_customer_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_discount_amount" numeric, "p_items" "jsonb", "p_order_type" "text", "p_payment_method" "text", "p_shipping_fee" numeric, "p_status" "text", "p_warehouse_id" bigint, "p_note" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_shipping_partner_id" bigint, "p_delivery_method" "text", "p_customer_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint, "p_customer_b2c_id" bigint, "p_discount_amount" numeric, "p_items" "jsonb", "p_order_type" "text", "p_payment_method" "text", "p_shipping_fee" numeric, "p_status" "text", "p_warehouse_id" bigint, "p_note" "text", "p_delivery_address" "text", "p_delivery_time" "text", "p_shipping_partner_id" bigint, "p_delivery_method" "text", "p_customer_id" bigint) TO "service_role";
 
 
 
@@ -15025,6 +15434,12 @@ GRANT ALL ON FUNCTION "public"."get_transactions"("p_page" integer, "p_page_size
 
 
 
+GRANT ALL ON FUNCTION "public"."get_transfers"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid", "p_receiver_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_transfers"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid", "p_receiver_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_transfers"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_creator_id" "uuid", "p_receiver_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_user_pending_revenue"("p_user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_user_pending_revenue"("p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_user_pending_revenue"("p_user_id" "uuid") TO "service_role";
@@ -15224,6 +15639,12 @@ GRANT ALL ON FUNCTION "public"."import_product_from_ai"("p_data" "jsonb") TO "se
 
 
 
+GRANT ALL ON FUNCTION "public"."import_suppliers_bulk"("p_suppliers" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."import_suppliers_bulk"("p_suppliers" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."import_suppliers_bulk"("p_suppliers" "jsonb") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") TO "service_role";
@@ -15365,6 +15786,12 @@ GRANT ALL ON FUNCTION "public"."search_products_for_b2b_order"("p_keyword" "text
 GRANT ALL ON FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."search_products_for_transfer"("p_warehouse_id" bigint, "p_keyword" "text", "p_limit" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_for_transfer"("p_warehouse_id" bigint, "p_keyword" "text", "p_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_for_transfer"("p_warehouse_id" bigint, "p_keyword" "text", "p_limit" integer) TO "service_role";
 
 
 

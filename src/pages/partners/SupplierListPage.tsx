@@ -8,6 +8,8 @@ import {
   DeleteOutlined,
   EyeOutlined,
 } from "@ant-design/icons";
+import * as XLSX from 'xlsx'; // Import XLSX
+import { ExcelImportModal } from './components/ExcelImportModal'; // Import Modal
 import {
   Input,
   Table,
@@ -35,6 +37,7 @@ import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
 import { Supplier } from "@/features/purchasing/types/supplier";
+import { supplierService } from "@/features/purchasing/api/supplierService"; // [NEW] Import Service
 
 const { Title, Text } = Typography;
 
@@ -61,6 +64,10 @@ const SupplierListPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 500);
 
+  const [importModalOpen, setImportModalOpen] = useState(false);
+
+
+
   useEffect(() => {
     fetchSuppliers();
   }, [page, pageSize]);
@@ -76,6 +83,43 @@ const SupplierListPage: React.FC = () => {
     } else {
       antMessage.error("Xóa thất bại. Vui lòng thử lại.");
     }
+  };
+
+  // 1. Hàm nhận dữ liệu từ Modal -> Gọi API
+  const handleImportSubmit = async (data: any[]) => {
+      try {
+          // Gọi Service
+          await supplierService.importSuppliersBulk(data); 
+          antMessage.success(`Đã nhập thành công ${data.length} nhà cung cấp!`);
+          setImportModalOpen(false);
+          fetchSuppliers(); // Refresh lại danh sách
+      } catch (error: any) {
+          antMessage.error("Lỗi nhập dữ liệu: " + error.message);
+          throw error; // Throw to let Modal know it failed
+      }
+  };
+
+  // 2. Hàm Xuất Excel (Client-side cho nhanh)
+  const handleExport = () => {
+      if (suppliers.length === 0) return antMessage.warning("Không có dữ liệu để xuất");
+      
+      // Format dữ liệu cho đẹp
+      const exportData = suppliers.map(s => ({
+          "Mã NCC": s.code || `SUP-${s.id}`,
+          "Tên NCC": s.name,
+          "Người liên hệ": s.contact_person,
+          "SĐT": s.phone,
+          "Công nợ": s.debt,
+          "Trạng thái": s.status === 'active' ? 'Đang hợp tác' : 'Ngừng hợp tác'
+      }));
+
+      // Tạo file
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "NhaCungCap");
+      
+      // Tải xuống
+      XLSX.writeFile(wb, `DanhSachNCC_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const columns: TableProps<Supplier>["columns"] = [
@@ -189,13 +233,13 @@ const SupplierListPage: React.FC = () => {
             <Space>
               <Button
                 icon={<UploadOutlined />}
-                onClick={() => antMessage.info("Chức năng đang phát triển")}
+                onClick={() => setImportModalOpen(true)}
               >
                 Nhập Excel
               </Button>
               <Button
                 icon={<DownloadOutlined />}
-                onClick={() => antMessage.info("Chức năng đang phát triển")}
+                onClick={handleExport}
               >
                 Xuất Excel
               </Button>
@@ -256,7 +300,13 @@ const SupplierListPage: React.FC = () => {
               `${range[0]}-${range[1]} của ${total} NCC`,
           }}
         />
-        {/* XÓA: Toàn bộ <Modal> đã bị xóa bỏ */}
+        {/* Modal Import */}
+        <ExcelImportModal
+            open={importModalOpen}
+            onCancel={() => setImportModalOpen(false)}
+            onImport={handleImportSubmit}
+            templateType="supplier"
+        />
       </Card>
     </Spin>
   );
