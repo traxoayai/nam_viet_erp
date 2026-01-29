@@ -31,6 +31,8 @@ import LoyaltyPolicyPage from "@/pages/marketing/LoyaltyPolicyPage";
 import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
+import SupplierPolicyListPage from "@/pages/partners/policies/SupplierPolicyListPage"; // [NEW]
+import SupplierPolicyFormPage from "@/pages/partners/policies/SupplierPolicyFormPage"; // [NEW]
 import PurchaseOrderDetail from "@/pages/purchasing/PurchaseOrderDetail";
 import PurchaseOrderMasterPage from "@/pages/purchasing/PurchaseOrderMasterPage";
 import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
@@ -362,6 +364,18 @@ const routes: RouteObject[] = [
                       <ShippingPartnerPage />
                   </PermissionGuard>
               ),
+          },
+          {
+            path: "partners/policies",
+            element: <SupplierPolicyListPage />,
+          },
+          {
+            path: "partners/policies/new",
+            element: <SupplierPolicyFormPage />,
+          },
+          {
+            path: "partners/policies/:id",
+            element: <SupplierPolicyFormPage />,
           },
 
           // 9. Quản lý Khách hàng

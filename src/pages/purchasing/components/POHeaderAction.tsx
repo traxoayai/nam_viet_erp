@@ -19,6 +19,7 @@ interface Props {
   onSave: () => void;
   onSubmit: () => void;
   onRequestPayment: () => void; // Hàm mới
+  onCalculateInbound: () => void; // [NEW] V34
 }
 
 const POHeaderAction: React.FC<Props> = ({
@@ -29,6 +30,7 @@ const POHeaderAction: React.FC<Props> = ({
   onSave,
   onSubmit,
   onRequestPayment,
+  onCalculateInbound,
 }) => {
   const navigate = useNavigate();
 
@@ -103,6 +105,18 @@ const POHeaderAction: React.FC<Props> = ({
                 >
                   Yêu cầu Thanh toán
                 </Button>
+              )}
+              
+              {/* [NEW] Nút Tính toán & Nhập kho (V34) - Hiện khi Pending hoặc Shipping - DISABLED TEMP for CostingPage */}
+              {false && (poStatus === "PENDING" || poStatus === "SHIPPING") && (
+                 <Button
+                    type="primary"
+                    style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
+                    icon={<DollarCircleOutlined />}
+                    onClick={onCalculateInbound}
+                 >
+                    Tính toán & Nhập kho
+                 </Button>
               )}
             </Space>
           </Col>

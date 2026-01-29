@@ -12,6 +12,7 @@ import POProductTable from "./components/POProductTable";
 import { usePurchaseOrderLogic } from "./hooks/usePurchaseOrderLogic";
 
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
+import { CostAllocationModal } from "./components/CostAllocationModal"; // [NEW] V34
 
 import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect";
 import { searchProductsForPurchase } from "@/features/product/api/productService";
@@ -32,7 +33,8 @@ const PurchaseOrderDetailContent = () => {
           loading={logic.loading}
           onSave={() => logic.form.submit()}
           onSubmit={logic.confirmOrder}
-          onRequestPayment={logic.requestPayment} // Truyền hàm mới
+          onRequestPayment={logic.requestPayment}
+          onCalculateInbound={logic.handleCalculateInbound} // [NEW]
         />
 
         <Content
@@ -105,6 +107,15 @@ const PurchaseOrderDetailContent = () => {
             onCancel={() => logic.setPaymentModalOpen(false)}
             initialFlow="out"
             initialValues={logic.paymentInitialValues}
+        />
+
+        {/* [NEW] Cost Allocation Modal */}
+        <CostAllocationModal
+            open={logic.costModalOpen}
+            onCancel={() => logic.setCostModalOpen(false)}
+            items={logic.itemsList}
+            onConfirm={logic.handleConfirmFinancials}
+            loading={logic.loading}
         />
       </Form>
     </Layout>

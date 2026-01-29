@@ -60,6 +60,12 @@ export const FinanceFormModal: React.FC<Props> = ({
   const [checkingPending, setCheckingPending] = useState(false);
   const [pendingTrans, setPendingTrans] = useState<any[]>([]);
 
+  // [NEW] Wallet State
+  // const [useWallet, setUseWallet] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletAmount, setWalletAmount] = useState(0);
+
+
   const {
     form,
     loading,
@@ -115,8 +121,25 @@ export const FinanceFormModal: React.FC<Props> = ({
     };
 
     checkPendingTransactions();
-    checkPendingTransactions();
   }, [initialValues, open]);
+
+  // [NEW] Check Wallet Balance if Supplier
+  useEffect(() => {
+     const checkWallet = async () => {
+         if (open && initialValues?.partner_type === 'supplier' && initialValues?.partner_id) {
+             const { data } = await supabase
+                .from('supplier_wallets')
+                .select('balance')
+                .eq('supplier_id', initialValues.partner_id)
+                .single();
+             if (data) {
+                 setWalletBalance(data.balance || 0);
+             }
+         }
+     };
+     checkWallet();
+  }, [open, initialValues]);
+
 
   // [NEW] Auto-fill Partner Details when Opened with Initial Values
   useEffect(() => {
@@ -151,6 +174,10 @@ export const FinanceFormModal: React.FC<Props> = ({
       centered
     >
       <Form form={form} layout="vertical" onFinish={async (values) => {
+         // [NEW] Inject Wallet Amount
+         if (walletAmount > 0) {
+             values.wallet_usage = walletAmount; 
+         }
          const success = await handleFinish(values);
          if (success && onSuccess) onSuccess();
       }} initialValues={initialValues}>
@@ -512,7 +539,58 @@ export const FinanceFormModal: React.FC<Props> = ({
           </Row>
         )}
 
+
         <Divider />
+
+        {/* [NEW] Wallet Payment Section (Payment V2) */}
+        {flow === 'out' && initialValues?.partner_type === 'supplier' && (
+            <Card size="small" style={{ marginBottom: 16, borderColor: '#b37feb', background: '#f9f0ff' }}>
+                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                     <Text strong style={{ color: '#722ed1' }}>
+                         <BankOutlined /> Thanh toán từ Ví NCC
+                     </Text>
+                     <Text>Số dư khả dụng: <b style={{ color: '#52c41a' }}>{walletBalance.toLocaleString()}đ</b></Text>
+                 </div>
+                 
+                 <Row gutter={16} align="middle">
+                     <Col span={12}>
+                        <Form.Item label="Sử dụng từ Ví" style={{ marginBottom: 0 }}>
+                            <InputNumber 
+                                style={{ width: '100%' }}
+                                min={0}
+                                max={walletBalance}
+                                value={walletAmount}
+                                onChange={(val) => {
+                                    const v = val || 0;
+                                    setWalletAmount(v);
+                                    // Auto adjust Cash/Bank amount
+                                    // const total = initialValues?.amount || 0; // Use initial total if available
+                                    // const remain = total - v;
+                                    // We can't easily set 'amount' form field if it's controlled by user? 
+                                    // Better to let user input both OR link them.
+                                    // User Request: "Input: 'Sử dụng từ Ví', Input: 'Chi từ Quỹ'". 
+                                    // Let's assume user manually inputs, but we show Remaining helper.
+                                }}
+                                formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                addonAfter="đ"
+                            />
+                        </Form.Item>
+                     </Col>
+                     <Col span={12}>
+                         <Alert 
+                            message="Số tiền còn lại cần chi từ Quỹ:" 
+                            description={<b style={{ fontSize: 16 }}>{((form.getFieldValue('amount') || 0)).toLocaleString()} đ</b>} // This is the 'Chi tu Quy' field
+                            type="info" 
+                            style={{ padding: '4px 12px' }}
+                         />
+                     </Col>
+                 </Row>
+                 {walletAmount > 0 && <Form.Item name="wallet_offset" hidden initialValue={0}>
+                      {/* Hidden field to pass to submit handler */}
+                      <InputNumber value={walletAmount} />
+                 </Form.Item>}
+            </Card>
+        )}
 
         {/* Amount & Fund */}
         <Row gutter={16}>

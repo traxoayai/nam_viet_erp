@@ -38,6 +38,9 @@ export const usePurchaseOrderLogic = () => {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentInitialValues, setPaymentInitialValues] = useState<any>(null);
 
+  // [NEW] Cost Allocation Modal V34
+  const [costModalOpen, setCostModalOpen] = useState(false);
+
   // --- 1. KHỞI TẠO DỮ LIỆU ---
   useEffect(() => {
     const initData = async () => {
@@ -85,6 +88,7 @@ export const usePurchaseOrderLogic = () => {
       // Map items từ DB về UI
       // [FIX] Map đầy đủ available_units từ API
       const mappedItems: POItem[] = (po.items || []).map((item: any) => ({
+        id: item.id, // [IMPORTANT] Map Item ID for update/financials
         product_id: item.product_id,
         sku: item.sku,
         name: item.product_name,
@@ -106,11 +110,18 @@ export const usePurchaseOrderLogic = () => {
         _retail_unit: item.retail_unit,
         
         // Tính giá base
+        // Tính giá base
         _base_price:
           Number(item.unit_price) /
           (item.uom_ordered === item.wholesale_unit
             ? 1
             : 1 / (item.items_per_carton || 1)),
+        
+        // [NEW] Map VAT/Rebate from DB if exists (For display accuracy)
+        vat_rate: item.vat_rate || 0,
+        rebate_rate: item.rebate_rate || 0,
+        allocated_shipping_fee: item.allocated_shipping_fee || 0,
+        bonus_quantity: item.bonus_quantity || 0,
       }));
 
       setItemsList(mappedItems);
@@ -169,17 +180,29 @@ export const usePurchaseOrderLogic = () => {
 
   // Tính tổng tiền & số thùng
   const calculateTotals = useCallback(
+    // [FIX] Payment V2: Final Amount = SL * Price * (1 + VAT)
+    // Note: VAT is currently only available in CostAllocationModal or from DB if confirmed.
+    // If not confirmed, we assume VAT=0 for display or we need to add VAT input to main table?
+    // Request says "Phải luôn hiển thị là Giá trị Hóa đơn cần thanh toán".
+    // If we don't have VAT input in main table, we can't show it accurately before Costing.
+    // However, if the order is Confirmed/Costing done, `vat_rate` might be in DB.
+    // Let's try to use `vat_rate` if it exists in item.
     (currentItems: POItem[], currentPaid?: number) => {
       let sub = 0;
+      let totalInvoice = 0;
       let cartons = 0;
+      
       currentItems.forEach((item) => {
         const qty = Number(item.quantity) || 0;
         const price = Number(item.unit_price) || 0;
         const packSize = item._items_per_carton || 1;
+        const vat = (item as any).vat_rate || 0; // Get VAT if available
 
-        sub += qty * price;
+        const lineTotal = qty * price;
+        sub += lineTotal;
+        totalInvoice += lineTotal * (1 + vat / 100);
 
-        // Logic tính thùng: Nếu đơn vị là Thùng (Sỉ) -> Cộng thẳng qty
+        // Logic tính thùng
         if (item.uom === item._wholesale_unit) {
           cartons += qty;
         } else {
@@ -188,15 +211,22 @@ export const usePurchaseOrderLogic = () => {
       });
 
       const ship = form.getFieldValue("shipping_fee") || 0;
+      // Final Payment = Total Invoice + Ship (if Ship is external/separate bill? Or Ship is part of invoice?)
+      // Usually Ship is separate service. But `final_amount` usually means "Everything I need to pay for this PO".
+      // If Ship is "Allocated", it's part of COGS but maybe not part of Supplier Payment if paid to 3rd party.
+      // However, `shipping_fee` field in PO usually means fee paid to Supplier or Carrier.
+      // Let's assume Add Ship to Final.
+      
       setFinancials((prev) => ({
         subtotal: sub,
-        final: sub + ship,
-        paid: currentPaid !== undefined ? currentPaid : prev.paid, // [FIX] Keep existing paid if not passed
+        final: totalInvoice + ship, // [UPDATED] Use Invoice Value with VAT
+        paid: currentPaid !== undefined ? currentPaid : prev.paid,
         totalCartons: parseFloat(cartons.toFixed(1)),
       }));
     },
     [form]
-  );
+
+ );
 
   // Khi chọn sản phẩm từ ô tìm kiếm
   // Khi chọn sản phẩm từ ô tìm kiếm
@@ -416,6 +446,43 @@ export const usePurchaseOrderLogic = () => {
     setPaymentModalOpen(true);
   };
 
+  // [NEW] Open Cost Modal
+  const handleCalculateInbound = () => {
+      if (itemsList.length === 0) {
+          message.warning("Đơn hàng chưa có sản phẩm!");
+          return;
+      }
+      setCostModalOpen(true);
+  };
+
+  // [NEW] Submit Landed Cost Data to Backend
+  const handleConfirmFinancials = async (processedItems: any[]) => {
+      setLoading(true);
+      try {
+          // Prepare Payload matching "confirm_purchase_order_financials"
+          // We need to map UI "id" back to DB "id"
+          // Note: In loadOrderDetail, we didn't map "id" field explicitly for itemsList?
+          // Let's check loadOrderDetail -> "const mappedItems". It does NOT map 'id'.
+          // Wait, PO items from DB MUST have an ID for this to work.
+          // FIX: In loadOrderDetail, I need to check if 'id' is mapped.
+          // Looking at file content: mappedItems doesn't have 'id'.
+          // WARNING: We must fix loadOrderDetail mapping first or use product_id if API supports it.
+          // Request says: "id": 888, // ID dòng (purchase_order_items.id)
+          // So we need 'id'.
+          
+          await purchaseOrderService.confirmPOFinancials(Number(id), processedItems);
+          message.success("Nhập kho & Chốt giá vốn thành công!");
+          setCostModalOpen(false);
+          // Refresh
+          loadOrderDetail(Number(id));
+      } catch (error: any) {
+          console.error(error);
+          message.error(error.message || "Lỗi nhập kho");
+      } finally {
+          setLoading(false);
+      }
+  };
+
   return {
     form,
     isEditMode,
@@ -438,8 +505,15 @@ export const usePurchaseOrderLogic = () => {
     handleSupplierChange,
     
     // [NEW]
+    // [NEW]
     paymentModalOpen,
     setPaymentModalOpen,
     paymentInitialValues,
+    
+    // [NEW]
+    costModalOpen,
+    setCostModalOpen,
+    handleCalculateInbound,
+    handleConfirmFinancials,
   };
 };

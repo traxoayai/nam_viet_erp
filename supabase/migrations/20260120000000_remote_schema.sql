@@ -134,7 +134,8 @@ CREATE TYPE "public"."business_type" AS ENUM (
     'advance',
     'reimbursement',
     'internal',
-    'other'
+    'other',
+    'opening_balance'
 );
 
 
@@ -186,6 +187,18 @@ CREATE TYPE "public"."fund_account_type" AS ENUM (
 
 
 ALTER TYPE "public"."fund_account_type" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."gift_type" AS ENUM (
+    'artifact',
+    'scratch_card',
+    'gold',
+    'money',
+    'other'
+);
+
+
+ALTER TYPE "public"."gift_type" OWNER TO "postgres";
 
 
 CREATE TYPE "public"."invoice_request_status" AS ENUM (
@@ -271,6 +284,15 @@ CREATE TYPE "public"."stock_management_type" AS ENUM (
 
 
 ALTER TYPE "public"."stock_management_type" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."supplier_program_type" AS ENUM (
+    'contract',
+    'promotion'
+);
+
+
+ALTER TYPE "public"."supplier_program_type" OWNER TO "postgres";
 
 
 CREATE TYPE "public"."template_module" AS ENUM (
@@ -2025,6 +2047,78 @@ $$;
 ALTER FUNCTION "public"."confirm_purchase_order"("p_po_id" bigint, "p_status" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."confirm_purchase_order_financials"("p_po_id" bigint, "p_items_data" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_item JSONB;
+    v_po_record RECORD;
+    v_total_rebate NUMERIC := 0;
+    v_supplier_id BIGINT;
+BEGIN
+    SELECT * INTO v_po_record FROM public.purchase_orders WHERE id = p_po_id;
+    
+    IF v_po_record IS NULL THEN
+        RAISE EXCEPTION 'Không tìm thấy đơn mua hàng ID %', p_po_id;
+    END IF;
+
+    v_supplier_id := v_po_record.supplier_id;
+
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items_data)
+    LOOP
+        -- Update các cột tài chính mới
+        UPDATE public.purchase_order_items
+        SET 
+            vat_rate = COALESCE((v_item->>'vat_rate')::NUMERIC, 0),
+            rebate_rate = COALESCE((v_item->>'rebate_rate')::NUMERIC, 0),
+            bonus_quantity = COALESCE((v_item->>'bonus_quantity')::INTEGER, 0),
+            allocated_shipping_fee = COALESCE((v_item->>'allocated_shipping_fee')::NUMERIC, 0),
+            final_unit_cost = COALESCE((v_item->>'final_unit_cost')::NUMERIC, 0)
+        WHERE id = (v_item->>'id')::BIGINT;
+
+        -- Tính tổng Rebate
+        v_total_rebate := v_total_rebate + 
+            ( 
+                ((v_item->>'unit_price')::NUMERIC * (v_item->>'quantity_ordered')::NUMERIC) 
+                * ((v_item->>'rebate_rate')::NUMERIC / 100.0) 
+            );
+            
+        -- Cập nhật giá nhập gần nhất vào Products
+        UPDATE public.products
+        SET actual_cost = COALESCE((v_item->>'final_unit_cost')::NUMERIC, actual_cost),
+            updated_at = NOW()
+        WHERE id = (v_item->>'product_id')::BIGINT;
+    END LOOP;
+
+    -- Cộng tiền vào Ví
+    IF v_total_rebate > 0 THEN
+        INSERT INTO public.supplier_wallets (supplier_id, balance, total_earned, updated_at)
+        VALUES (v_supplier_id, v_total_rebate, v_total_rebate, NOW())
+        ON CONFLICT (supplier_id) 
+        DO UPDATE SET 
+            balance = public.supplier_wallets.balance + v_total_rebate,
+            total_earned = public.supplier_wallets.total_earned + v_total_rebate,
+            updated_at = NOW();
+    END IF;
+
+    -- Đổi trạng thái PO
+    UPDATE public.purchase_orders 
+    SET status = 'COMPLETED', 
+        updated_at = NOW() 
+    WHERE id = p_po_id;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'total_rebate_earned', v_total_rebate,
+        'message', 'Đã cập nhật giá vốn và tích lũy ví NCC thành công.'
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."confirm_purchase_order_financials"("p_po_id" bigint, "p_items_data" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."confirm_purchase_payment"("p_order_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_payment_method" "text" DEFAULT 'bank_transfer'::"text", "p_note" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -2918,6 +3012,61 @@ CREATE OR REPLACE FUNCTION "public"."create_finance_transaction"("p_amount" nume
 
 
 ALTER FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."create_full_supplier_program"("p_program_data" "jsonb", "p_groups_data" "jsonb") RETURNS bigint
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_program_id BIGINT;
+    v_group JSONB;
+    v_group_id BIGINT;
+    v_prod_id BIGINT;
+BEGIN
+    -- A. Insert Header
+    INSERT INTO public.supplier_programs (
+        supplier_id, code, name, type, 
+        valid_from, valid_to, status, 
+        document_code, attachment_url, description
+    ) VALUES (
+        (p_program_data->>'supplier_id')::BIGINT,
+        p_program_data->>'code',
+        p_program_data->>'name',
+        (p_program_data->>'type')::public.supplier_program_type,
+        (p_program_data->>'valid_from')::DATE,
+        (p_program_data->>'valid_to')::DATE,
+        'active',
+        p_program_data->>'document_code',
+        p_program_data->>'attachment_url',
+        p_program_data->>'description'
+    ) RETURNING id INTO v_program_id;
+
+    -- B. Loop Insert Groups
+    FOR v_group IN SELECT * FROM jsonb_array_elements(p_groups_data)
+    LOOP
+        INSERT INTO public.supplier_program_groups (
+            program_id, name, rule_type, rules, price_basis
+        ) VALUES (
+            v_program_id,
+            v_group->>'name',
+            v_group->>'rule_type',
+            v_group->'rules',
+            COALESCE(v_group->>'price_basis', 'pre_vat')
+        ) RETURNING id INTO v_group_id;
+
+        -- C. Loop Insert Products (Scope)
+        -- Sử dụng INSERT SELECT UNNEST để tối ưu hiệu năng thay vì loop từng dòng
+        INSERT INTO public.supplier_program_products (group_id, product_id)
+        SELECT v_group_id, (value::BIGINT)
+        FROM jsonb_array_elements_text(v_group->'product_ids');
+    END LOOP;
+
+    RETURN v_program_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."create_full_supplier_program"("p_program_data" "jsonb", "p_groups_data" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_inventory_check"("p_warehouse_id" bigint, "p_user_id" "uuid", "p_note" "text" DEFAULT NULL::"text", "p_scope" "text" DEFAULT 'ALL'::"text", "p_text_val" "text" DEFAULT NULL::"text", "p_int_val" bigint DEFAULT NULL::bigint) RETURNS bigint
@@ -6028,38 +6177,35 @@ CREATE OR REPLACE FUNCTION "public"."get_supplier_quick_info"("p_supplier_id" bi
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 DECLARE
-    v_supplier RECORD;
-    v_current_debt NUMERIC := 0;
+    v_total_purchase NUMERIC;
+    v_opening_debt NUMERIC;
+    v_total_paid NUMERIC;
+    v_total_purchase_month NUMERIC;
 BEGIN
-    -- 1. Lấy thông tin tĩnh từ bảng suppliers
-    SELECT id, name, contact_person, phone, address, lead_time
-    INTO v_supplier
-    FROM public.suppliers
-    WHERE id = p_supplier_id;
-
-    IF v_supplier IS NULL THEN
-        RETURN NULL;
-    END IF;
-
-    -- 2. Tính công nợ hiện tại (Real-time calculation)
-    -- Công thức: Tổng tiền các đơn hàng (Final Amount) - Tổng tiền đã thanh toán (Total Paid)
-    -- Chỉ tính các đơn có trạng thái thanh toán chưa hoàn tất (unpaid, partial) và không bị hủy
-    SELECT COALESCE(SUM(final_amount - total_paid), 0)
-    INTO v_current_debt
+    -- 1. Tổng giá trị mua hàng
+    SELECT COALESCE(SUM(final_amount), 0) INTO v_total_purchase
     FROM public.purchase_orders
-    WHERE supplier_id = p_supplier_id
-      AND status <> 'CANCELLED'
-      AND payment_status IN ('unpaid', 'partial');
+    WHERE supplier_id = p_supplier_id AND status <> 'CANCELLED';
 
-    -- 3. Trả về JSON đầy đủ
+    -- 2. Nợ đầu kỳ
+    SELECT COALESCE(SUM(amount), 0) INTO v_opening_debt
+    FROM public.finance_transactions
+    WHERE partner_type = 'supplier' AND partner_id = p_supplier_id::TEXT AND business_type = 'opening_balance';
+
+    -- 3. Tổng đã chi trả
+    SELECT COALESCE(SUM(amount), 0) INTO v_total_paid
+    FROM public.finance_transactions
+    WHERE partner_type = 'supplier' AND partner_id = p_supplier_id::TEXT AND flow = 'out' AND status = 'completed' AND business_type <> 'opening_balance';
+
+    -- 4. Tổng mua trong tháng (KPI)
+    SELECT COALESCE(SUM(final_amount), 0) INTO v_total_purchase_month
+    FROM public.purchase_orders
+    WHERE supplier_id = p_supplier_id AND created_at >= date_trunc('month', CURRENT_DATE);
+
     RETURN jsonb_build_object(
-        'id', v_supplier.id,
-        'name', v_supplier.name,
-        'contact_person', COALESCE(v_supplier.contact_person, 'Chưa cập nhật'),
-        'phone', COALESCE(v_supplier.phone, ''),
-        'address', v_supplier.address,
-        'lead_time', COALESCE(v_supplier.lead_time, 0), -- Số ngày giao hàng dự kiến
-        'current_debt', v_current_debt
+        'current_debt', (v_total_purchase + v_opening_debt) - v_total_paid, -- Công thức thông minh
+        'purchased_this_month', v_total_purchase_month,
+        'opening_debt', v_opening_debt
     );
 END;
 $$;
@@ -6070,33 +6216,60 @@ ALTER FUNCTION "public"."get_supplier_quick_info"("p_supplier_id" bigint) OWNER 
 
 CREATE OR REPLACE FUNCTION "public"."get_suppliers_list"("search_query" "text", "status_filter" "text", "page_num" integer, "page_size" integer) RETURNS TABLE("id" bigint, "key" "text", "code" "text", "name" "text", "contact_person" "text", "phone" "text", "status" "text", "debt" numeric, "bank_bin" "text", "bank_account" "text", "bank_name" "text", "bank_holder" "text", "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
 BEGIN
     RETURN QUERY
-    WITH debt_calc AS (
-        -- 1. Tính tổng nợ hiện tại cho từng NCC
-        -- Logic: Tổng (Final Amount - Total Paid) của các đơn chưa trả hết và chưa hủy
-        SELECT 
-            po.supplier_id, 
-            SUM(po.final_amount - COALESCE(po.total_paid, 0)) as current_debt
+    WITH 
+    -- A. Tổng giá trị nhập hàng (Purchase Orders)
+    po_total AS (
+        SELECT po.supplier_id, 
+               SUM(po.final_amount) as amount
         FROM public.purchase_orders po
         WHERE po.status <> 'CANCELLED' 
-          AND po.payment_status IN ('unpaid', 'partial') -- Chỉ tính đơn chưa thanh toán xong
         GROUP BY po.supplier_id
     ),
+    
+    -- B. Nợ đầu kỳ (Finance Transactions)
+    opening_debt AS (
+        SELECT ft.partner_id::BIGINT as supplier_id, 
+               SUM(ft.amount) as amount
+        FROM public.finance_transactions ft
+        WHERE ft.partner_type = 'supplier' 
+          AND ft.business_type = 'opening_balance'
+        GROUP BY ft.partner_id
+    ),
+    
+    -- C. Tổng tiền ĐÃ CHI TRẢ (Finance Transactions)
+    paid_total AS (
+        SELECT ft.partner_id::BIGINT as supplier_id,
+               SUM(ft.amount) as amount
+        FROM public.finance_transactions ft
+        WHERE ft.partner_type = 'supplier'
+          AND ft.flow = 'out'
+          AND ft.status = 'completed'
+          AND ft.business_type <> 'opening_balance'
+        GROUP BY ft.partner_id
+    ),
+
     filtered_suppliers AS (
         SELECT 
             s.id,
             s.id::TEXT AS key,
-            'NCC-' || s.id::TEXT AS code,
+            
+            -- [CORE FIX]: Tạo mã hiển thị từ ID, KHÔNG gọi s.code
+            ('NCC-' || s.id::TEXT) AS code,
+            
             s.name,
             s.contact_person,
             s.phone,
-            s.status,
+            s.status, 
             
-            -- [FIX] Map dữ liệu nợ từ bảng tính toán (Nếu không có đơn nợ thì là 0)
-            COALESCE(d.current_debt, 0) AS debt,
+            -- Công thức tính nợ thông minh
+            (
+                COALESCE(pt.amount, 0) +      -- Tổng giá trị đơn hàng
+                COALESCE(od.amount, 0) -      -- Cộng nợ đầu kỳ
+                COALESCE(pd.amount, 0)        -- Trừ tổng tiền đã trả
+            ) AS debt,
             
             s.bank_bin,
             s.bank_account,
@@ -6106,13 +6279,13 @@ BEGIN
             COUNT(*) OVER() as total_count
         FROM 
             public.suppliers s
-        -- Join với bảng tính nợ
-        LEFT JOIN debt_calc d ON s.id = d.supplier_id
+        LEFT JOIN po_total pt ON s.id = pt.supplier_id
+        LEFT JOIN opening_debt od ON s.id = od.supplier_id
+        LEFT JOIN paid_total pd ON s.id = pd.supplier_id
         WHERE 
             (search_query IS NULL OR search_query = '' OR (
                 s.name ILIKE ('%' || search_query || '%') OR
-                s.phone ILIKE ('%' || search_query || '%') OR 
-                s.id::TEXT ILIKE ('%' || search_query || '%')
+                s.phone ILIKE ('%' || search_query || '%')
             ))
         AND 
             (status_filter IS NULL OR s.status = status_filter)
@@ -7671,6 +7844,116 @@ CREATE OR REPLACE FUNCTION "public"."notify_users_by_permission"("p_permission_k
 
 
 ALTER FUNCTION "public"."notify_users_by_permission"("p_permission_key" "text", "p_title" "text", "p_message" "text", "p_type" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."pay_purchase_order_via_wallet"("p_po_id" bigint, "p_amount" numeric) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_po_record RECORD;
+    v_wallet_balance NUMERIC;
+    v_new_paid NUMERIC;
+    v_remaining_po_debt NUMERIC;
+    v_supplier_id BIGINT;
+    v_supplier_name TEXT;
+    v_clearing_fund_id BIGINT;
+    v_po_code TEXT;
+BEGIN
+    -- A. Lấy ID Quỹ Cấn Trừ
+    SELECT id INTO v_clearing_fund_id FROM public.fund_accounts WHERE name = 'Cấn trừ công nợ' LIMIT 1;
+    -- Fallback nếu không có (hiếm) thì lấy quỹ đầu tiên
+    IF v_clearing_fund_id IS NULL THEN SELECT id INTO v_clearing_fund_id FROM public.fund_accounts LIMIT 1; END IF;
+
+    -- B. Validate & Lock PO
+    SELECT po.*, s.name as supplier_name 
+    INTO v_po_record 
+    FROM public.purchase_orders po
+    JOIN public.suppliers s ON po.supplier_id = s.id
+    WHERE po.id = p_po_id 
+    FOR UPDATE;
+
+    IF v_po_record IS NULL THEN 
+        RAISE EXCEPTION 'Không tìm thấy đơn mua hàng ID %', p_po_id; 
+    END IF;
+
+    v_supplier_id := v_po_record.supplier_id;
+    v_supplier_name := v_po_record.supplier_name;
+    v_po_code := v_po_record.code;
+
+    -- C. Validate & Lock Wallet
+    SELECT balance INTO v_wallet_balance 
+    FROM public.supplier_wallets 
+    WHERE supplier_id = v_supplier_id 
+    FOR UPDATE;
+
+    IF v_wallet_balance IS NULL OR v_wallet_balance < p_amount THEN
+        RAISE EXCEPTION 'Số dư Ví NCC không đủ để cấn trừ (Hiện có: %, Cần chi: %)', 
+            TO_CHAR(COALESCE(v_wallet_balance, 0), 'FM999,999,999'), 
+            TO_CHAR(p_amount, 'FM999,999,999');
+    END IF;
+
+    -- D. Validate Amount
+    v_remaining_po_debt := v_po_record.final_amount - COALESCE(v_po_record.total_paid, 0);
+    
+    IF p_amount > (v_remaining_po_debt + 1000) THEN -- Cho phép sai số 1000đ
+        RAISE EXCEPTION 'Số tiền cấn trừ (%) lớn hơn số tiền còn nợ của đơn hàng (%)', 
+            TO_CHAR(p_amount, 'FM999,999,999'), 
+            TO_CHAR(v_remaining_po_debt, 'FM999,999,999');
+    END IF;
+
+    -- E. THỰC THI 1: Trừ tiền trong Ví NCC
+    UPDATE public.supplier_wallets
+    SET balance = balance - p_amount,
+        updated_at = NOW()
+    WHERE supplier_id = v_supplier_id;
+
+    -- F. THỰC THI 2: Update PO
+    v_new_paid := COALESCE(v_po_record.total_paid, 0) + p_amount;
+    
+    UPDATE public.purchase_orders
+    SET total_paid = v_new_paid,
+        payment_status = CASE 
+            WHEN v_new_paid >= (final_amount - 500) THEN 'paid' 
+            ELSE 'partial' 
+        END,
+        note = COALESCE(note, '') || E'\n[HỆ THỐNG]: Đã cấn trừ Ví NCC: ' || TO_CHAR(p_amount, 'FM999,999,999') || ' đ vào lúc ' || TO_CHAR(NOW(), 'DD/MM/YYYY HH24:MI'),
+        updated_at = NOW()
+    WHERE id = p_po_id;
+
+    -- G. THỰC THI 3: [CORE ADDED] Tạo giao dịch tài chính để Cân Bằng Báo Cáo
+    -- Giao dịch này sẽ ghi nhận là "Đã trả cho NCC", làm giảm công nợ trong báo cáo V33.6
+    INSERT INTO public.finance_transactions (
+        code,
+        partner_type, partner_id, partner_name_cache,
+        amount, flow, business_type, status,
+        fund_account_id, -- Gắn vào quỹ ảo
+        ref_type, ref_id,
+        description, created_by, created_at
+    ) VALUES (
+        'OFFSET-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || floor(random() * 1000)::text,
+        'supplier', v_supplier_id::TEXT, v_supplier_name,
+        p_amount, 
+        'out', -- Chi tiền (giảm nợ)
+        'other', -- Hoặc tạo type 'offset' nếu muốn kỹ hơn
+        'completed',
+        v_clearing_fund_id, -- Quỹ ảo
+        'purchase_order', v_po_id::TEXT,
+        'Cấn trừ công nợ từ Ví NCC cho đơn ' || v_po_code,
+        auth.uid(),
+        NOW()
+    );
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'message', 'Đã cấn trừ thành công.',
+        'new_wallet_balance', (v_wallet_balance - p_amount),
+        'new_po_paid', v_new_paid
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."pay_purchase_order_via_wallet"("p_po_id" bigint, "p_amount" numeric) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") RETURNS "jsonb"
@@ -9724,6 +10007,71 @@ $$;
 
 
 ALTER FUNCTION "public"."update_customer_b2c"("p_id" bigint, "p_customer_data" "jsonb", "p_guardians" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."update_full_supplier_program"("p_program_id" bigint, "p_program_data" "jsonb", "p_groups_data" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_group JSONB;
+    v_group_id BIGINT;
+    v_exists BOOLEAN;
+BEGIN
+    -- 1. Validation: Kiểm tra ID tồn tại
+    SELECT EXISTS(SELECT 1 FROM public.supplier_programs WHERE id = p_program_id) INTO v_exists;
+    IF NOT v_exists THEN
+        RAISE EXCEPTION 'Chương trình/Hợp đồng ID % không tồn tại.', p_program_id;
+    END IF;
+
+    -- 2. Update Header (Thông tin chung)
+    UPDATE public.supplier_programs
+    SET 
+        supplier_id = COALESCE((p_program_data->>'supplier_id')::BIGINT, supplier_id),
+        code = p_program_data->>'code',
+        name = p_program_data->>'name',
+        type = (p_program_data->>'type')::public.supplier_program_type,
+        valid_from = (p_program_data->>'valid_from')::DATE,
+        valid_to = (p_program_data->>'valid_to')::DATE,
+        document_code = p_program_data->>'document_code',
+        attachment_url = p_program_data->>'attachment_url',
+        description = p_program_data->>'description',
+        updated_at = NOW()
+    WHERE id = p_program_id;
+
+    -- 3. Xử lý Groups & Products (Chiến lược: Replace All)
+    -- Xóa các nhóm cũ thuộc chương trình này. 
+    -- (Các sản phẩm thuộc nhóm sẽ tự động bị xóa theo nhờ ON DELETE CASCADE tại bảng supplier_program_products)
+    DELETE FROM public.supplier_program_groups WHERE program_id = p_program_id;
+
+    -- 4. Insert lại Groups mới (Vòng lặp)
+    FOR v_group IN SELECT * FROM jsonb_array_elements(p_groups_data)
+    LOOP
+        INSERT INTO public.supplier_program_groups (
+            program_id, name, rule_type, rules, price_basis
+        ) VALUES (
+            p_program_id,
+            v_group->>'name',
+            v_group->>'rule_type',
+            v_group->'rules',
+            COALESCE(v_group->>'price_basis', 'pre_vat')
+        ) RETURNING id INTO v_group_id;
+
+        -- Insert Products cho Group này
+        -- Sử dụng INSERT SELECT UNNEST để tối ưu hiệu năng
+        IF (v_group->'product_ids') IS NOT NULL THEN
+            INSERT INTO public.supplier_program_products (group_id, product_id)
+            SELECT v_group_id, (value::BIGINT)
+            FROM jsonb_array_elements_text(v_group->'product_ids');
+        END IF;
+    END LOOP;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Cập nhật chính sách thành công');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_full_supplier_program"("p_program_id" bigint, "p_program_data" "jsonb", "p_groups_data" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_inventory_check_info"("p_check_id" bigint, "p_note" "text") RETURNS "void"
@@ -11870,6 +12218,32 @@ ALTER SEQUENCE "public"."products_id_seq" OWNED BY "public"."products"."id";
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."promotion_gifts" (
+    "id" bigint NOT NULL,
+    "name" "text" NOT NULL,
+    "type" "public"."gift_type" NOT NULL,
+    "quantity" integer DEFAULT 0,
+    "estimated_value" numeric DEFAULT 0,
+    "received_from_po_id" bigint,
+    "status" "text" DEFAULT 'active'::"text",
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."promotion_gifts" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."promotion_gifts" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."promotion_gifts_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."promotion_targets" (
     "id" bigint NOT NULL,
     "promotion_id" "uuid" NOT NULL,
@@ -11950,6 +12324,11 @@ CREATE TABLE IF NOT EXISTS "public"."purchase_order_items" (
     "conversion_factor" integer DEFAULT 1,
     "base_quantity" integer,
     "is_bonus" boolean DEFAULT false,
+    "vat_rate" numeric DEFAULT 0,
+    "rebate_rate" numeric DEFAULT 0,
+    "bonus_quantity" integer DEFAULT 0,
+    "allocated_shipping_fee" numeric DEFAULT 0,
+    "final_unit_cost" numeric DEFAULT 0,
     CONSTRAINT "check_conversion_factor_positive" CHECK (("conversion_factor" > 0)),
     CONSTRAINT "purchase_order_items_quantity_ordered_check" CHECK (("quantity_ordered" > 0)),
     CONSTRAINT "purchase_order_items_quantity_received_check" CHECK (("quantity_received" >= 0)),
@@ -12231,6 +12610,87 @@ ALTER SEQUENCE "public"."shipping_rules_id_seq" OWNER TO "postgres";
 
 ALTER SEQUENCE "public"."shipping_rules_id_seq" OWNED BY "public"."shipping_rules"."id";
 
+
+
+CREATE TABLE IF NOT EXISTS "public"."supplier_program_groups" (
+    "id" bigint NOT NULL,
+    "program_id" bigint,
+    "name" "text" NOT NULL,
+    "rule_type" "text",
+    "rules" "jsonb" DEFAULT '{}'::"jsonb",
+    "price_basis" "text" DEFAULT 'pre_vat'::"text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "supplier_program_groups_price_basis_check" CHECK (("price_basis" = ANY (ARRAY['pre_vat'::"text", 'post_vat'::"text"]))),
+    CONSTRAINT "supplier_program_groups_rule_type_check" CHECK (("rule_type" = ANY (ARRAY['rebate_revenue'::"text", 'buy_x_get_y'::"text", 'buy_amt_get_gift'::"text", 'direct_discount'::"text"])))
+);
+
+
+ALTER TABLE "public"."supplier_program_groups" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."supplier_program_groups" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."supplier_program_groups_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."supplier_program_products" (
+    "group_id" bigint NOT NULL,
+    "product_id" bigint NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."supplier_program_products" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."supplier_programs" (
+    "id" bigint NOT NULL,
+    "supplier_id" bigint NOT NULL,
+    "code" "text",
+    "name" "text" NOT NULL,
+    "type" "public"."supplier_program_type" NOT NULL,
+    "rebate_percentage" numeric DEFAULT 0,
+    "valid_from" "date" NOT NULL,
+    "valid_to" "date" NOT NULL,
+    "status" "text" DEFAULT 'active'::"text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "document_code" "text",
+    "attachment_url" "text",
+    "description" "text"
+);
+
+
+ALTER TABLE "public"."supplier_programs" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."supplier_programs" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."supplier_programs_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."supplier_wallets" (
+    "supplier_id" bigint NOT NULL,
+    "balance" numeric DEFAULT 0,
+    "total_earned" numeric DEFAULT 0,
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."supplier_wallets" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."suppliers" (
@@ -12879,6 +13339,11 @@ ALTER TABLE ONLY "public"."products"
 
 
 
+ALTER TABLE ONLY "public"."promotion_gifts"
+    ADD CONSTRAINT "promotion_gifts_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."promotion_targets"
     ADD CONSTRAINT "promotion_targets_pkey" PRIMARY KEY ("id");
 
@@ -12971,6 +13436,26 @@ ALTER TABLE ONLY "public"."shipping_partners"
 
 ALTER TABLE ONLY "public"."shipping_rules"
     ADD CONSTRAINT "shipping_rules_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."supplier_program_groups"
+    ADD CONSTRAINT "supplier_program_groups_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."supplier_program_products"
+    ADD CONSTRAINT "supplier_program_products_pkey" PRIMARY KEY ("group_id", "product_id");
+
+
+
+ALTER TABLE ONLY "public"."supplier_programs"
+    ADD CONSTRAINT "supplier_programs_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."supplier_wallets"
+    ADD CONSTRAINT "supplier_wallets_pkey" PRIMARY KEY ("supplier_id");
 
 
 
@@ -14056,6 +14541,31 @@ ALTER TABLE ONLY "public"."shipping_rules"
 
 
 
+ALTER TABLE ONLY "public"."supplier_program_groups"
+    ADD CONSTRAINT "supplier_program_groups_program_id_fkey" FOREIGN KEY ("program_id") REFERENCES "public"."supplier_programs"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."supplier_program_products"
+    ADD CONSTRAINT "supplier_program_products_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "public"."supplier_program_groups"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."supplier_program_products"
+    ADD CONSTRAINT "supplier_program_products_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."supplier_programs"
+    ADD CONSTRAINT "supplier_programs_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."supplier_wallets"
+    ADD CONSTRAINT "supplier_wallets_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."transaction_categories"
     ADD CONSTRAINT "transaction_categories_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."chart_of_accounts"("account_code");
 
@@ -14918,6 +15428,12 @@ GRANT ALL ON FUNCTION "public"."confirm_purchase_order"("p_po_id" bigint, "p_sta
 
 
 
+GRANT ALL ON FUNCTION "public"."confirm_purchase_order_financials"("p_po_id" bigint, "p_items_data" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."confirm_purchase_order_financials"("p_po_id" bigint, "p_items_data" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."confirm_purchase_order_financials"("p_po_id" bigint, "p_items_data" "jsonb") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."confirm_purchase_payment"("p_order_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_payment_method" "text", "p_note" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."confirm_purchase_payment"("p_order_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_payment_method" "text", "p_note" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."confirm_purchase_payment"("p_order_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_payment_method" "text", "p_note" "text") TO "service_role";
@@ -14981,6 +15497,12 @@ GRANT ALL ON FUNCTION "public"."create_customer_b2c"("p_customer_data" "jsonb", 
 GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_finance_transaction"("p_amount" numeric, "p_business_type" "text", "p_cash_tally" "jsonb", "p_category_id" bigint, "p_description" "text", "p_flow" "text", "p_fund_id" bigint, "p_partner_id" "text", "p_partner_name" "text", "p_partner_type" "text", "p_status" "text", "p_transaction_date" timestamp with time zone, "p_code" "text", "p_ref_type" "text", "p_ref_id" "text", "p_evidence_url" "text", "p_ref_advance_id" bigint, "p_created_by" "uuid", "p_target_bank_info" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."create_full_supplier_program"("p_program_data" "jsonb", "p_groups_data" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_full_supplier_program"("p_program_data" "jsonb", "p_groups_data" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_full_supplier_program"("p_program_data" "jsonb", "p_groups_data" "jsonb") TO "service_role";
 
 
 
@@ -15681,6 +16203,12 @@ GRANT ALL ON FUNCTION "public"."notify_users_by_permission"("p_permission_key" "
 
 
 
+GRANT ALL ON FUNCTION "public"."pay_purchase_order_via_wallet"("p_po_id" bigint, "p_amount" numeric) TO "anon";
+GRANT ALL ON FUNCTION "public"."pay_purchase_order_via_wallet"("p_po_id" bigint, "p_amount" numeric) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."pay_purchase_order_via_wallet"("p_po_id" bigint, "p_amount" numeric) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "service_role";
@@ -15983,6 +16511,12 @@ GRANT ALL ON FUNCTION "public"."update_customer_b2b"("p_id" bigint, "p_customer_
 GRANT ALL ON FUNCTION "public"."update_customer_b2c"("p_id" bigint, "p_customer_data" "jsonb", "p_guardians" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."update_customer_b2c"("p_id" bigint, "p_customer_data" "jsonb", "p_guardians" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_customer_b2c"("p_id" bigint, "p_customer_data" "jsonb", "p_guardians" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_full_supplier_program"("p_program_id" bigint, "p_program_data" "jsonb", "p_groups_data" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."update_full_supplier_program"("p_program_id" bigint, "p_program_data" "jsonb", "p_groups_data" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_full_supplier_program"("p_program_id" bigint, "p_program_data" "jsonb", "p_groups_data" "jsonb") TO "service_role";
 
 
 
@@ -16594,6 +17128,18 @@ GRANT ALL ON SEQUENCE "public"."products_id_seq" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."promotion_gifts" TO "anon";
+GRANT ALL ON TABLE "public"."promotion_gifts" TO "authenticated";
+GRANT ALL ON TABLE "public"."promotion_gifts" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."promotion_gifts_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."promotion_gifts_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."promotion_gifts_id_seq" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."promotion_targets" TO "anon";
 GRANT ALL ON TABLE "public"."promotion_targets" TO "authenticated";
 GRANT ALL ON TABLE "public"."promotion_targets" TO "service_role";
@@ -16723,6 +17269,42 @@ GRANT ALL ON TABLE "public"."shipping_rules" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."shipping_rules_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."shipping_rules_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."shipping_rules_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."supplier_program_groups" TO "anon";
+GRANT ALL ON TABLE "public"."supplier_program_groups" TO "authenticated";
+GRANT ALL ON TABLE "public"."supplier_program_groups" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."supplier_program_groups_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."supplier_program_groups_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."supplier_program_groups_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."supplier_program_products" TO "anon";
+GRANT ALL ON TABLE "public"."supplier_program_products" TO "authenticated";
+GRANT ALL ON TABLE "public"."supplier_program_products" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."supplier_programs" TO "anon";
+GRANT ALL ON TABLE "public"."supplier_programs" TO "authenticated";
+GRANT ALL ON TABLE "public"."supplier_programs" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."supplier_programs_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."supplier_programs_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."supplier_programs_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."supplier_wallets" TO "anon";
+GRANT ALL ON TABLE "public"."supplier_wallets" TO "authenticated";
+GRANT ALL ON TABLE "public"."supplier_wallets" TO "service_role";
 
 
 

@@ -1581,6 +1581,8 @@ export type Database = {
           note: string | null
           packages_received: number | null
           packages_sent: number | null
+          received_at: string | null
+          received_by: string | null
           source_warehouse_id: number
           status: string
           updated_at: string | null
@@ -1600,6 +1602,8 @@ export type Database = {
           note?: string | null
           packages_received?: number | null
           packages_sent?: number | null
+          received_at?: string | null
+          received_by?: string | null
           source_warehouse_id: number
           status?: string
           updated_at?: string | null
@@ -1619,6 +1623,8 @@ export type Database = {
           note?: string | null
           packages_received?: number | null
           packages_sent?: number | null
+          received_at?: string | null
+          received_by?: string | null
           source_warehouse_id?: number
           status?: string
           updated_at?: string | null
@@ -2298,6 +2304,39 @@ export type Database = {
           },
         ]
       }
+      promotion_gifts: {
+        Row: {
+          created_at: string | null
+          estimated_value: number | null
+          id: number
+          name: string
+          quantity: number | null
+          received_from_po_id: number | null
+          status: string | null
+          type: Database["public"]["Enums"]["gift_type"]
+        }
+        Insert: {
+          created_at?: string | null
+          estimated_value?: number | null
+          id?: number
+          name: string
+          quantity?: number | null
+          received_from_po_id?: number | null
+          status?: string | null
+          type: Database["public"]["Enums"]["gift_type"]
+        }
+        Update: {
+          created_at?: string | null
+          estimated_value?: number | null
+          id?: number
+          name?: string
+          quantity?: number | null
+          received_from_po_id?: number | null
+          status?: string | null
+          type?: Database["public"]["Enums"]["gift_type"]
+        }
+        Relationships: []
+      }
       promotion_targets: {
         Row: {
           created_at: string | null
@@ -2448,46 +2487,61 @@ export type Database = {
       }
       purchase_order_items: {
         Row: {
+          allocated_shipping_fee: number | null
           base_quantity: number | null
+          bonus_quantity: number | null
           conversion_factor: number | null
           created_at: string | null
+          final_unit_cost: number | null
           id: number
           is_bonus: boolean | null
           po_id: number
           product_id: number
           quantity_ordered: number
           quantity_received: number | null
+          rebate_rate: number | null
           unit: string | null
           unit_price: number
           uom_ordered: string | null
+          vat_rate: number | null
         }
         Insert: {
+          allocated_shipping_fee?: number | null
           base_quantity?: number | null
+          bonus_quantity?: number | null
           conversion_factor?: number | null
           created_at?: string | null
+          final_unit_cost?: number | null
           id?: number
           is_bonus?: boolean | null
           po_id: number
           product_id: number
           quantity_ordered: number
           quantity_received?: number | null
+          rebate_rate?: number | null
           unit?: string | null
           unit_price: number
           uom_ordered?: string | null
+          vat_rate?: number | null
         }
         Update: {
+          allocated_shipping_fee?: number | null
           base_quantity?: number | null
+          bonus_quantity?: number | null
           conversion_factor?: number | null
           created_at?: string | null
+          final_unit_cost?: number | null
           id?: number
           is_bonus?: boolean | null
           po_id?: number
           product_id?: number
           quantity_ordered?: number
           quantity_received?: number | null
+          rebate_rate?: number | null
           unit?: string | null
           unit_price?: number
           uom_ordered?: string | null
+          vat_rate?: number | null
         }
         Relationships: [
           {
@@ -2966,6 +3020,168 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "shipping_partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_program_groups: {
+        Row: {
+          created_at: string | null
+          id: number
+          name: string
+          price_basis: string | null
+          program_id: number | null
+          rule_type: string | null
+          rules: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          name: string
+          price_basis?: string | null
+          program_id?: number | null
+          rule_type?: string | null
+          rules?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          name?: string
+          price_basis?: string | null
+          program_id?: number | null
+          rule_type?: string | null
+          rules?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_program_groups_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_program_products: {
+        Row: {
+          created_at: string | null
+          group_id: number
+          product_id: number
+        }
+        Insert: {
+          created_at?: string | null
+          group_id: number
+          product_id: number
+        }
+        Update: {
+          created_at?: string | null
+          group_id?: number
+          product_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_program_products_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_program_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_program_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_programs: {
+        Row: {
+          attachment_url: string | null
+          code: string | null
+          created_at: string | null
+          description: string | null
+          document_code: string | null
+          id: number
+          name: string
+          rebate_percentage: number | null
+          status: string | null
+          supplier_id: number
+          type: Database["public"]["Enums"]["supplier_program_type"]
+          updated_at: string | null
+          valid_from: string
+          valid_to: string
+        }
+        Insert: {
+          attachment_url?: string | null
+          code?: string | null
+          created_at?: string | null
+          description?: string | null
+          document_code?: string | null
+          id?: number
+          name: string
+          rebate_percentage?: number | null
+          status?: string | null
+          supplier_id: number
+          type: Database["public"]["Enums"]["supplier_program_type"]
+          updated_at?: string | null
+          valid_from: string
+          valid_to: string
+        }
+        Update: {
+          attachment_url?: string | null
+          code?: string | null
+          created_at?: string | null
+          description?: string | null
+          document_code?: string | null
+          id?: number
+          name?: string
+          rebate_percentage?: number | null
+          status?: string | null
+          supplier_id?: number
+          type?: Database["public"]["Enums"]["supplier_program_type"]
+          updated_at?: string | null
+          valid_from?: string
+          valid_to?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_programs_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_wallets: {
+        Row: {
+          balance: number | null
+          supplier_id: number
+          total_earned: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          balance?: number | null
+          supplier_id: number
+          total_earned?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          balance?: number | null
+          supplier_id?: number
+          total_earned?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_wallets_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: true
+            referencedRelation: "suppliers"
             referencedColumns: ["id"]
           },
         ]
@@ -3514,6 +3730,10 @@ export type Database = {
         Args: { p_po_id: number; p_status: string }
         Returns: boolean
       }
+      confirm_purchase_order_financials: {
+        Args: { p_items_data: Json; p_po_id: number }
+        Returns: Json
+      }
       confirm_purchase_payment: {
         Args: {
           p_amount: number
@@ -3525,6 +3745,14 @@ export type Database = {
         Returns: Json
       }
       confirm_transaction: { Args: { p_id: number }; Returns: boolean }
+      confirm_transfer_inbound: {
+        Args: { p_actor_warehouse_id: number; p_transfer_id: number }
+        Returns: Json
+      }
+      confirm_transfer_outbound_fefo: {
+        Args: { p_transfer_id: number }
+        Returns: Json
+      }
       create_appointment_booking: {
         Args: {
           p_customer_id: number
@@ -3592,6 +3820,10 @@ export type Database = {
         }
         Returns: number
       }
+      create_full_supplier_program: {
+        Args: { p_groups_data: Json; p_program_data: Json }
+        Returns: number
+      }
       create_inventory_check: {
         Args: {
           p_int_val?: number
@@ -3611,6 +3843,15 @@ export type Database = {
           p_warehouse_id: number
         }
         Returns: number
+      }
+      create_manual_transfer: {
+        Args: {
+          p_dest_warehouse_id: number
+          p_items: Json
+          p_note: string
+          p_source_warehouse_id: number
+        }
+        Returns: Json
       }
       create_new_auth_user: {
         Args: { p_email: string; p_full_name: string; p_password: string }
@@ -3718,42 +3959,26 @@ export type Database = {
         }
         Returns: Json
       }
-      create_sales_order:
-        | {
-            Args: {
-              p_customer_b2b_id?: number
-              p_customer_b2c_id?: number
-              p_delivery_address?: string
-              p_delivery_method?: string
-              p_delivery_time?: string
-              p_discount_amount?: number
-              p_items?: Json
-              p_note?: string
-              p_order_type?: string
-              p_payment_method?: string
-              p_shipping_fee?: number
-              p_shipping_partner_id?: number
-              p_status?: string
-              p_warehouse_id?: number
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_customer_id: number
-              p_delivery_address: string
-              p_delivery_method?: string
-              p_delivery_time: string
-              p_discount_amount?: number
-              p_items: Json
-              p_note: string
-              p_shipping_fee?: number
-              p_shipping_partner_id?: number
-              p_status?: Database["public"]["Enums"]["order_status"]
-              p_warehouse_id?: number
-            }
-            Returns: string
-          }
+      create_sales_order: {
+        Args: {
+          p_customer_b2b_id?: number
+          p_customer_b2c_id?: number
+          p_customer_id?: number
+          p_delivery_address?: string
+          p_delivery_method?: string
+          p_delivery_time?: string
+          p_discount_amount?: number
+          p_items?: Json
+          p_note?: string
+          p_order_type?: string
+          p_payment_method?: string
+          p_shipping_fee?: number
+          p_shipping_partner_id?: number
+          p_status?: string
+          p_warehouse_id?: number
+        }
+        Returns: string
+      }
       create_service_package: {
         Args: { p_data: Json; p_items: Json }
         Returns: number
@@ -4393,6 +4618,30 @@ export type Database = {
           transaction_date: string
         }[]
       }
+      get_transfers: {
+        Args: {
+          p_creator_id?: string
+          p_date_from: string
+          p_date_to: string
+          p_page: number
+          p_page_size: number
+          p_receiver_id?: string
+          p_search: string
+          p_status: string
+        }
+        Returns: {
+          code: string
+          created_at: string
+          creator_name: string
+          dest_warehouse_name: string
+          full_count: number
+          id: number
+          note: string
+          receiver_name: string
+          source_warehouse_name: string
+          status: string
+        }[]
+      }
       get_user_pending_revenue: { Args: { p_user_id: string }; Returns: number }
       get_users_with_roles: {
         Args: never
@@ -4520,6 +4769,7 @@ export type Database = {
         Returns: Json
       }
       import_product_from_ai: { Args: { p_data: Json }; Returns: number }
+      import_suppliers_bulk: { Args: { p_suppliers: Json }; Returns: Json }
       invite_new_user: {
         Args: { p_email: string; p_full_name: string }
         Returns: string
@@ -4562,6 +4812,10 @@ export type Database = {
           p_type?: string
         }
         Returns: undefined
+      }
+      pay_purchase_order_via_wallet: {
+        Args: { p_amount: number; p_po_id: number }
+        Returns: Json
       }
       process_inbound_receipt: {
         Args: { p_items: Json; p_po_id: number; p_warehouse_id: number }
@@ -4655,11 +4909,13 @@ export type Database = {
         }[]
       }
       search_product_batches: {
-        Args: { p_product_id: number; p_warehouse_id?: number }
+        Args: { p_product_id: number; p_warehouse_id: number }
         Returns: {
           days_remaining: number
           expiry_date: string
+          id: number
           lot_number: string
+          quantity: number
         }[]
       }
       search_products_for_b2b_order: {
@@ -4691,6 +4947,22 @@ export type Database = {
           retail_unit: string
           sku: string
           wholesale_unit: string
+        }[]
+      }
+      search_products_for_transfer: {
+        Args: { p_keyword?: string; p_limit?: number; p_warehouse_id: number }
+        Returns: {
+          conversion_factor: number
+          current_stock: number
+          expiry_date: string
+          id: number
+          image_url: string
+          items_per_carton: number
+          lot_number: string
+          name: string
+          shelf_location: string
+          sku: string
+          unit: string
         }[]
       }
       search_products_pos: {
@@ -4758,6 +5030,14 @@ export type Database = {
       update_customer_b2c: {
         Args: { p_customer_data: Json; p_guardians: Json; p_id: number }
         Returns: undefined
+      }
+      update_full_supplier_program: {
+        Args: {
+          p_groups_data: Json
+          p_program_data: Json
+          p_program_id: number
+        }
+        Returns: Json
       }
       update_inventory_check_info: {
         Args: { p_check_id: number; p_note: string }
@@ -4922,11 +5202,13 @@ export type Database = {
         | "reimbursement"
         | "internal"
         | "other"
+        | "opening_balance"
       customer_b2c_type: "CaNhan" | "ToChuc"
       customer_gender: "Nam" | "Nß╗»" | "Kh├íc"
       employee_status: "pending_approval" | "active" | "inactive"
       fund_account_status: "active" | "locked"
       fund_account_type: "cash" | "bank"
+      gift_type: "artifact" | "scratch_card" | "gold" | "money" | "other"
       invoice_request_status: "none" | "pending" | "exported" | "issued"
       maintenance_exec_type: "internal" | "external"
       order_status:
@@ -4943,6 +5225,7 @@ export type Database = {
       service_package_type: "service" | "bundle"
       shipping_partner_type: "app" | "coach" | "internal"
       stock_management_type: "lot_date" | "lot_only" | "serial" | "simple"
+      supplier_program_type: "contract" | "promotion"
       template_module:
         | "pos"
         | "b2b"
@@ -5104,12 +5387,20 @@ export const Constants = {
         "checked_in",
       ],
       asset_status: ["active", "storage", "repair", "disposed"],
-      business_type: ["trade", "advance", "reimbursement", "internal", "other"],
+      business_type: [
+        "trade",
+        "advance",
+        "reimbursement",
+        "internal",
+        "other",
+        "opening_balance",
+      ],
       customer_b2c_type: ["CaNhan", "ToChuc"],
       customer_gender: ["Nam", "Nß╗»", "Kh├íc"],
       employee_status: ["pending_approval", "active", "inactive"],
       fund_account_status: ["active", "locked"],
       fund_account_type: ["cash", "bank"],
+      gift_type: ["artifact", "scratch_card", "gold", "money", "other"],
       invoice_request_status: ["none", "pending", "exported", "issued"],
       maintenance_exec_type: ["internal", "external"],
       order_status: [
@@ -5127,6 +5418,7 @@ export const Constants = {
       service_package_type: ["service", "bundle"],
       shipping_partner_type: ["app", "coach", "internal"],
       stock_management_type: ["lot_date", "lot_only", "serial", "simple"],
+      supplier_program_type: ["contract", "promotion"],
       template_module: [
         "pos",
         "b2b",

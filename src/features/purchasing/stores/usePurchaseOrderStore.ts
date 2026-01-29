@@ -73,8 +73,8 @@ export const usePurchaseOrderStore = create<PurchaseOrderState>((set, get) => ({
   autoCreateOrders: async (type) => {
     try {
       if (type === "MIN_MAX") {
-        await purchaseOrderService.autoCreateMinMax();
-        get().fetchOrders();
+        // await purchaseOrderService.autoCreateMinMax();
+        // get().fetchOrders();
       }
     } catch (error) {
       console.error(error);

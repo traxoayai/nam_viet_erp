@@ -286,6 +286,11 @@ const finalMenuItems: MenuItem[] = [
       <UserAddOutlined />
     ),
     getItem(
+      <Link to="/partners/policies">Chính sách & Hợp đồng</Link>,
+      "/partners/policies",
+      <AuditOutlined />
+    ),
+    getItem(
       <Link to="/partners/shipping">Đối tác Vận Chuyển</Link>,
       "/partners/shipping",
       <TruckOutlined />

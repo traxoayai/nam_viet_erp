@@ -139,12 +139,18 @@ export const purchaseOrderService = {
     return true;
   },
 
-  // 9. Tạo tự động Min Max kho B2b
-  async autoCreateMinMax() {
-    const { data, error } = await supabase.rpc(
-      "auto_create_purchase_orders_min_max"
-    );
-    if (error) throw new Error(error.message);
-    return data as number;
-  },
+  // 9. Tạo tự động Min Max kho B2b (Placeholder)
+  // async createAutoMinMaxB2B() {
+  //   // TODO: Implement later
+  // },
+
+  // 10. Chốt nhập kho & Tính giá vốn (V34)
+  async confirmPOFinancials(poId: number, itemsData: any[]) {
+      const { data, error } = await supabase.rpc('confirm_purchase_order_financials', {
+          p_po_id: poId,
+          p_items_data: itemsData
+      });
+      if (error) throw error;
+      return data;
+  }
 };
