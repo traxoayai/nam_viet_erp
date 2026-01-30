@@ -16,20 +16,22 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
   const [form] = Form.useForm();
   const [vatItems, setVatItems] = useState<any[]>([]);
 
-  // 1. Auto-fill (Giữ nguyên)
+  // 1. Auto-fill khi mở modal
   useEffect(() => {
-    if (visible) {
-      if (customer) {
+    if (visible && customer) {
         form.setFieldsValue({
-            customer_name: customer.name, 
-            tax_code: customer.tax_code || "", 
+            // Ưu tiên lấy buyer_name nếu có, không thì lấy name
+            customer_name: customer.buyer_name || customer.name || "", 
+            
+            // Map CCCD/MST vào chung 1 trường tax_code
+            tax_code: customer.tax_code || customer.id_card_number || "", 
+            
             address: customer.address || "",
             email: customer.email || ""
         });
-      } else {
+        checkVatBalance();
+    } else if (!visible) {
         form.resetFields();
-      }
-      checkVatBalance();
     }
   }, [visible, customer, orderItems]);
 
@@ -110,6 +112,9 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
     }
 
     try {
+        // [FIXED] Lấy dữ liệu mới nhất từ Form (Do người dùng đã check/sửa)
+        const values = form.getFieldsValue(); 
+
         // 2. Prepare Data Headers (Theo Template MISA/Viettel/VNPT phổ biến)
         const headers = [
             "Mã hóa đơn", "Mã số thuế", "Mã QHNSNN", "Tên đơn vị, tổ chức", "Người mua hàng", 
@@ -135,16 +140,28 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
             const netPrice = grossPrice / (1 + vatPercent);
             const netAmount = netPrice * item.vat_qty;
 
+            // --- LOGIC MAPPING MỚI ---
+            // 1. Tên Người Mua (Col E): Luôn lấy từ customer_name trên Form
+            const buyerName = values.customer_name || '';
+            
+            // 2. Tên Đơn vị (Col D): Nếu MST dài -> Công ty, ngược lại -> Trống (hoặc tùy logic Sếp)
+            const taxCode = values.tax_code || '';
+            const companyName = (taxCode.length >= 10 && !taxCode.includes('-')) ? values.customer_name : ''; 
+
+            // 3. Địa chỉ & Email
+            const address = values.address || '';
+            const email = values.email || '';
+
             return [
-                invoiceCode,                            // A: Mã tra cứu/Mã đơn
-                customer?.tax_code || '',               // B
+                invoiceCode,                            // A: Mã hóa đơn
+                taxCode,                                // B: Mã số thuế (Ưu tiên điền vào đây)
                 '',                                     // C
-                customer?.customer_name || '',          // D
-                customer?.buyer_name || '',             // E
-                '',                                     // F
-                customer?.address || '',                // G
-                customer?.phone || '',                  // H
-                customer?.email || '',                  // I
+                companyName,                            // D: Tên đơn vị
+                buyerName,                              // E: Người mua hàng (QUAN TRỌNG: Đã fix)
+                taxCode,                                // F: Số CCCD/Hộ chiếu (Điền luôn MST/CCCD vào đây cho chắc)
+                address,                                // G: Địa chỉ (QUAN TRỌNG: Đã fix)
+                customer?.phone || '',                  // H: SĐT
+                email,                                  // I: Email
                 isBaseRow ? paymentMethod : '',         // J
                 '', '', 0, '', '0',                     // K, L, M, N, O
                 item.name,                              // P: Tên hàng

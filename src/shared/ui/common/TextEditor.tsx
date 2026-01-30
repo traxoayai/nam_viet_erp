@@ -1,4 +1,4 @@
-// src/components/common/TextEditor.tsx
+// src/shared/ui/common/TextEditor.tsx
 import JoditEditor from "jodit-react";
 import React, { useMemo } from "react";
 
