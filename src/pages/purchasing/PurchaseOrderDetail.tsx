@@ -57,7 +57,12 @@ const PurchaseOrderDetailContent = () => {
                 suppliers={logic.suppliers}
                 supplierInfo={logic.supplierInfo}
                 onSupplierChange={logic.handleSupplierChange}
-                onShippingFeeChange={logic.handleShippingFeeChange} // [NEW] Kết nối dây thần kinh
+                onShippingFeeChange={logic.handleShippingFeeChange}
+                
+                // [NEW] Logistics Props
+                shippingPartners={logic.shippingPartners}
+                onPartnerChange={logic.handlePartnerChange}
+                form={logic.form}
               />
 
               <div
