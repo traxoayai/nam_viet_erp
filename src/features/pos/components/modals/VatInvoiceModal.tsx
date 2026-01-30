@@ -95,9 +95,9 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
       return '1'; 
   };
 
-  // [UPDATE] Export Excel với giá Net
+  // [FIXED] Export Excel với giá Net & Sửa lỗi Workbook Empty
   const handleExportExcel = async () => {
-    // Validate (Giữ nguyên)
+    // 1. Validate
     const invalidItems = vatItems.filter(i => i.vat_qty > i.max_vat_qty);
     if (invalidItems.length > 0) {
         message.error("Có sản phẩm vượt quá tồn kho VAT cho phép!");
@@ -110,7 +110,7 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
     }
 
     try {
-        // Header (Giữ nguyên)
+        // 2. Prepare Data Headers (Theo Template MISA/Viettel/VNPT phổ biến)
         const headers = [
             "Mã hóa đơn", "Mã số thuế", "Mã QHNSNN", "Tên đơn vị, tổ chức", "Người mua hàng", 
             "Số CCCD/Số hộ chiếu", "Địa chỉ", "Số điện thoại", "Email", "Hình thức thanh toán", 
@@ -119,27 +119,24 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
             "VAT", "Tổng tiền hàng", "Tổng tiền thuế", "Tổng tiền thanh toán"
         ];
 
-        const invoiceCode = `HD_${orderItems[0]?.code || Date.now()}`; // Fix: order_code -> code (nếu item map từ RPC)
+        const invoiceCode = `HD_${orderItems[0]?.code || Date.now()}`;
         const paymentMethod = getPaymentMethodCode(customer?.payment_method || 'cash'); 
         
+        // 3. Map Data Rows
         const excelRows = validItems.map((item, index) => {
             const isBaseRow = index === 0;
 
             let vatStr = String(item.vat_rate);
             if (vatStr === '0') vatStr = '0';
 
-            // [LOGIC MỚI] Tính toán cho từng dòng Excel
+            // Tính toán Net/Gross
             const vatPercent = item.vat_rate / 100;
-            const grossPrice = item.price; // Giá bán lẻ (đã gồm thuế)
-            
-            // Đơn giá (Net Price) để in lên hóa đơn
+            const grossPrice = item.price; 
             const netPrice = grossPrice / (1 + vatPercent);
-            
-            // Thành tiền (Net Amount)
             const netAmount = netPrice * item.vat_qty;
 
             return [
-                invoiceCode,                            // A
+                invoiceCode,                            // A: Mã tra cứu/Mã đơn
                 customer?.tax_code || '',               // B
                 '',                                     // C
                 customer?.customer_name || '',          // D
@@ -150,34 +147,38 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
                 customer?.email || '',                  // I
                 isBaseRow ? paymentMethod : '',         // J
                 '', '', 0, '', '0',                     // K, L, M, N, O
-                item.name,                              // P
-                item.unit || 'Cái',                     // Q
+                item.name,                              // P: Tên hàng
+                item.unit || 'Cái',                     // Q: ĐVT
                 item.vat_qty,                           // R: Số lượng
-                
-                // [FIX] Cột S: Xuất Đơn giá Net (Làm tròn 2 số lẻ nếu cần)
-                parseFloat(netPrice.toFixed(2)),        // S
-                
-                // [FIX] Cột T: Thành tiền Net
-                parseFloat(netAmount.toFixed(2)),       // T
-                
-                vatStr,                                 // U
-                
-                // Tổng (Chỉ dòng đầu)
-                isBaseRow ? parseFloat(totals.goods.toFixed(0)) : '',  // V
-                isBaseRow ? parseFloat(totals.tax.toFixed(0)) : '',    // W
-                isBaseRow ? parseFloat(totals.pay.toFixed(0)) : ''     // X: Tổng thanh toán (Khớp giá bán)
+                parseFloat(netPrice.toFixed(2)),        // S: Đơn giá (Trước thuế)
+                parseFloat(netAmount.toFixed(2)),       // T: Thành tiền (Trước thuế)
+                vatStr,                                 // U: Thuế suất
+                isBaseRow ? parseFloat(totals.goods.toFixed(0)) : '',  // V: Tổng tiền hàng
+                isBaseRow ? parseFloat(totals.tax.toFixed(0)) : '',    // W: Tổng tiền thuế
+                isBaseRow ? parseFloat(totals.pay.toFixed(0)) : ''     // X: Tổng thanh toán
             ];
         });
 
+        // 4. Create Workbook & Worksheet
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet([headers, ...excelRows]);
-        ws['!cols'] = [{wch:15}, {wch:15}, {wch:10}, {wch:30}, {wch:20}, {wch:15}, {wch:40}, {wch:15}, {wch:25}, {wch:10}, {wch:15}, {wch:15}, {wch:10}, {wch:20}, {wch:8}, {wch:30}, {wch:8}, {wch:10}, {wch:12}, {wch:15}, {wch:8}, {wch:15}, {wch:15}, {wch:15}];
 
+        // [FIX CRITICAL] THÊM DÒNG NÀY ĐỂ GHIM SHEET VÀO WORKBOOK
+        XLSX.utils.book_append_sheet(wb, ws, "Danh sách hàng hóa");
+
+        // 5. Format Column Width
+        ws['!cols'] = [
+            {wch:15}, {wch:15}, {wch:10}, {wch:30}, {wch:20}, {wch:15}, {wch:40}, {wch:15}, 
+            {wch:25}, {wch:10}, {wch:15}, {wch:15}, {wch:10}, {wch:20}, {wch:8}, {wch:30}, 
+            {wch:8}, {wch:10}, {wch:12}, {wch:15}, {wch:8}, {wch:15}, {wch:15}, {wch:15}
+        ];
+
+        // 6. Write File
         const fileName = `VAT_${invoiceCode}_${new Date().toISOString().slice(0,10)}.xlsx`;
         XLSX.writeFile(wb, fileName);
 
         if (onOk) onOk(); 
-        message.success("Đã xuất file Excel chuẩn định dạng!");
+        message.success("Đã xuất file Excel thành công!");
         onCancel();
 
     } catch (err: any) {
@@ -185,6 +186,96 @@ export const VatInvoiceModal: React.FC<Props> = ({ visible, onCancel, orderItems
         message.error("Lỗi tạo file Excel: " + err.message);
     }
   };
+  // [UPDATE] Export Excel với giá Net
+//   const handleExportExcel = async () => {
+//     // Validate (Giữ nguyên)
+//     const invalidItems = vatItems.filter(i => i.vat_qty > i.max_vat_qty);
+//     if (invalidItems.length > 0) {
+//         message.error("Có sản phẩm vượt quá tồn kho VAT cho phép!");
+//         return;
+//     }
+//     const validItems = vatItems.filter(i => i.vat_qty > 0);
+//     if (validItems.length === 0) {
+//         message.warning("Không có sản phẩm nào để xuất!");
+//         return;
+//     }
+
+//     try {
+//         // Header (Giữ nguyên)
+//         const headers = [
+//             "Mã hóa đơn", "Mã số thuế", "Mã QHNSNN", "Tên đơn vị, tổ chức", "Người mua hàng", 
+//             "Số CCCD/Số hộ chiếu", "Địa chỉ", "Số điện thoại", "Email", "Hình thức thanh toán", 
+//             "Số tài khoản ngân hàng", "Tên ngân hàng", "Tiền chiết khấu", "Ghi chú", "Loại hàng hóa", 
+//             "Tên hàng hóa", "Đơn vị tính", "Số lượng", "Đơn giá", "Thành tiền", 
+//             "VAT", "Tổng tiền hàng", "Tổng tiền thuế", "Tổng tiền thanh toán"
+//         ];
+
+//         const invoiceCode = `HD_${orderItems[0]?.code || Date.now()}`; // Fix: order_code -> code (nếu item map từ RPC)
+//         const paymentMethod = getPaymentMethodCode(customer?.payment_method || 'cash'); 
+        
+//         const excelRows = validItems.map((item, index) => {
+//             const isBaseRow = index === 0;
+
+//             let vatStr = String(item.vat_rate);
+//             if (vatStr === '0') vatStr = '0';
+
+//             // [LOGIC MỚI] Tính toán cho từng dòng Excel
+//             const vatPercent = item.vat_rate / 100;
+//             const grossPrice = item.price; // Giá bán lẻ (đã gồm thuế)
+            
+//             // Đơn giá (Net Price) để in lên hóa đơn
+//             const netPrice = grossPrice / (1 + vatPercent);
+            
+//             // Thành tiền (Net Amount)
+//             const netAmount = netPrice * item.vat_qty;
+
+//             return [
+//                 invoiceCode,                            // A
+//                 customer?.tax_code || '',               // B
+//                 '',                                     // C
+//                 customer?.customer_name || '',          // D
+//                 customer?.buyer_name || '',             // E
+//                 '',                                     // F
+//                 customer?.address || '',                // G
+//                 customer?.phone || '',                  // H
+//                 customer?.email || '',                  // I
+//                 isBaseRow ? paymentMethod : '',         // J
+//                 '', '', 0, '', '0',                     // K, L, M, N, O
+//                 item.name,                              // P
+//                 item.unit || 'Cái',                     // Q
+//                 item.vat_qty,                           // R: Số lượng
+                
+//                 // [FIX] Cột S: Xuất Đơn giá Net (Làm tròn 2 số lẻ nếu cần)
+//                 parseFloat(netPrice.toFixed(2)),        // S
+                
+//                 // [FIX] Cột T: Thành tiền Net
+//                 parseFloat(netAmount.toFixed(2)),       // T
+                
+//                 vatStr,                                 // U
+                
+//                 // Tổng (Chỉ dòng đầu)
+//                 isBaseRow ? parseFloat(totals.goods.toFixed(0)) : '',  // V
+//                 isBaseRow ? parseFloat(totals.tax.toFixed(0)) : '',    // W
+//                 isBaseRow ? parseFloat(totals.pay.toFixed(0)) : ''     // X: Tổng thanh toán (Khớp giá bán)
+//             ];
+//         });
+
+//         const wb = XLSX.utils.book_new();
+//         const ws = XLSX.utils.aoa_to_sheet([headers, ...excelRows]);
+//         ws['!cols'] = [{wch:15}, {wch:15}, {wch:10}, {wch:30}, {wch:20}, {wch:15}, {wch:40}, {wch:15}, {wch:25}, {wch:10}, {wch:15}, {wch:15}, {wch:10}, {wch:20}, {wch:8}, {wch:30}, {wch:8}, {wch:10}, {wch:12}, {wch:15}, {wch:8}, {wch:15}, {wch:15}, {wch:15}];
+
+//         const fileName = `VAT_${invoiceCode}_${new Date().toISOString().slice(0,10)}.xlsx`;
+//         XLSX.writeFile(wb, fileName);
+
+//         if (onOk) onOk(); 
+//         message.success("Đã xuất file Excel chuẩn định dạng!");
+//         onCancel();
+
+//     } catch (err: any) {
+//         console.error(err);
+//         message.error("Lỗi tạo file Excel: " + err.message);
+//     }
+//   };
 
   // 4. [UPDATE] Cấu hình cột hiển thị trên Modal
   const columns = [
