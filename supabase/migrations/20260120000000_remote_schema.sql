@@ -2029,13 +2029,149 @@ COMMENT ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") IS 
 
 
 
+CREATE OR REPLACE FUNCTION "public"."confirm_purchase_costing"("p_po_id" bigint, "p_items_data" "jsonb", "p_gifts_data" "jsonb", "p_total_shipping_fee" numeric) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_item JSONB;
+    v_gift JSONB;
+    v_supplier_id BIGINT;
+    v_total_rebate NUMERIC := 0;
+    v_po_code TEXT;
+    v_item_total NUMERIC;
+    v_final_base_cost NUMERIC;
+BEGIN
+    -- Lấy thông tin NCC và Mã đơn
+    SELECT supplier_id, code INTO v_supplier_id, v_po_code FROM public.purchase_orders WHERE id = p_po_id;
+
+    -- A. CẬP NHẬT HÀNG HÓA KINH DOANH (PRODUCTS)
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items_data)
+    LOOP
+        v_final_base_cost := COALESCE((v_item->>'final_unit_cost')::NUMERIC, 0);
+
+        -- 1. Lưu lịch sử giá vào PO Item (Snapshot)
+        UPDATE public.purchase_order_items
+        SET 
+            final_unit_cost = v_final_base_cost,
+            rebate_rate = COALESCE((v_item->>'rebate_rate')::NUMERIC, 0),
+            vat_rate = COALESCE((v_item->>'vat_rate')::NUMERIC, 0),
+            quantity_received = COALESCE((v_item->>'quantity_received')::INTEGER, quantity_received),
+            bonus_quantity = COALESCE((v_item->>'bonus_quantity')::INTEGER, 0)
+        WHERE id = (v_item->>'id')::BIGINT;
+
+        -- 2. Tính tổng Rebate (Để cộng ví)
+        SELECT (unit_price * quantity_ordered) INTO v_item_total 
+        FROM public.purchase_order_items WHERE id = (v_item->>'id')::BIGINT;
+        
+        v_total_rebate := v_total_rebate + (v_item_total * COALESCE((v_item->>'rebate_rate')::NUMERIC, 0) / 100.0);
+
+        -- 3. Cập nhật Giá Vốn vào bảng Products (Giá tham khảo Base)
+        UPDATE public.products
+        SET actual_cost = v_final_base_cost,
+            updated_at = NOW()
+        WHERE id = (v_item->>'product_id')::BIGINT;
+
+        -- 4. [CORE BUG FIX] Cập nhật Giá Vốn vào bảng Product Units
+        -- Thêm COALESCE(conversion_rate, 1) để tránh lỗi NULL * Number = NULL
+        UPDATE public.product_units
+        SET price_cost = v_final_base_cost * COALESCE(conversion_rate, 1),
+            updated_at = NOW()
+        WHERE product_id = (v_item->>'product_id')::BIGINT;
+
+    END LOOP;
+
+    -- B. CẬP NHẬT KHO QUÀ TẶNG (Giữ nguyên)
+    FOR v_gift IN SELECT * FROM jsonb_array_elements(p_gifts_data)
+    LOOP
+        IF EXISTS (SELECT 1 FROM public.promotion_gifts 
+                   WHERE supplier_id = v_supplier_id 
+                     AND ((code IS NOT NULL AND code = (v_gift->>'code')) OR name = (v_gift->>'name'))) THEN
+            
+            UPDATE public.promotion_gifts
+            SET stock_quantity = stock_quantity + (v_gift->>'quantity')::INT,
+                received_from_po_id = p_po_id,
+                estimated_value = COALESCE((v_gift->>'estimated_value')::NUMERIC, estimated_value),
+                image_url = COALESCE(v_gift->>'image_url', image_url),
+                updated_at = NOW()
+            WHERE supplier_id = v_supplier_id 
+              AND ((code IS NOT NULL AND code = (v_gift->>'code')) OR name = (v_gift->>'name'));
+        ELSE
+            INSERT INTO public.promotion_gifts (
+                name, code, type, quantity, stock_quantity, estimated_value, 
+                received_from_po_id, supplier_id, status, image_url, unit_name
+            ) VALUES (
+                v_gift->>'name',
+                COALESCE(v_gift->>'code', 'GIFT-' || floor(random() * 100000)::text),
+                'other',
+                (v_gift->>'quantity')::INT, 
+                (v_gift->>'quantity')::INT,
+                COALESCE((v_gift->>'estimated_value')::NUMERIC, 0),
+                p_po_id,
+                v_supplier_id,
+                'active',
+                v_gift->>'image_url',
+                COALESCE(v_gift->>'unit_name', 'Cái')
+            );
+        END IF;
+    END LOOP;
+
+    -- C. TÍCH LŨY VÍ NCC
+    IF v_total_rebate > 0 THEN
+        INSERT INTO public.supplier_wallets (supplier_id, balance, total_earned, updated_at)
+        VALUES (v_supplier_id, v_total_rebate, v_total_rebate, NOW())
+        ON CONFLICT (supplier_id) 
+        DO UPDATE SET 
+            balance = public.supplier_wallets.balance + EXCLUDED.balance,
+            total_earned = public.supplier_wallets.total_earned + EXCLUDED.total_earned,
+            updated_at = NOW();
+        
+        INSERT INTO public.supplier_wallet_transactions (
+            supplier_id, amount, type, reference_id, description
+        ) VALUES (
+            v_supplier_id, v_total_rebate, 'credit', v_po_code, 'Tích lũy Rebate từ đơn nhập ' || v_po_code
+        );
+    END IF;
+
+    -- D. HOÀN TẤT ĐƠN HÀNG
+    UPDATE public.purchase_orders 
+    SET status = 'COMPLETED', 
+        final_amount = final_amount + COALESCE(p_total_shipping_fee, 0),
+        updated_at = NOW()
+    WHERE id = p_po_id;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'message', 'Đã cập nhật giá vốn & công nợ thành công.',
+        'rebate_earned', v_total_rebate
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."confirm_purchase_costing"("p_po_id" bigint, "p_items_data" "jsonb", "p_gifts_data" "jsonb", "p_total_shipping_fee" numeric) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."confirm_purchase_order"("p_po_id" bigint, "p_status" "text") RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
+DECLARE
+    v_item_count INT;
 BEGIN
+    -- 1. Validate: Không được duyệt đơn rỗng
+    SELECT COUNT(*) INTO v_item_count
+    FROM public.purchase_order_items
+    WHERE po_id = p_po_id;
+
+    IF v_item_count = 0 THEN
+        RAISE EXCEPTION 'Đơn hàng rỗng, không thể duyệt. Vui lòng thêm sản phẩm.';
+    END IF;
+
+    -- 2. Cập nhật trạng thái
     UPDATE public.purchase_orders
     SET 
         status = p_status,
+        -- Tự động chuyển sang 'pending' (chờ giao) nếu user duyệt 'APPROVED'
+        delivery_status = CASE WHEN p_status = 'APPROVED' THEN 'pending' ELSE delivery_status END,
         updated_at = NOW()
     WHERE id = p_po_id;
     
@@ -10313,94 +10449,84 @@ $$;
 ALTER FUNCTION "public"."update_product_status"("p_ids" bigint[], "p_status" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."update_purchase_order"("p_po_id" bigint, "p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb", "p_delivery_method" "text" DEFAULT 'internal'::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_shipping_fee" numeric DEFAULT 0, "p_status" "text" DEFAULT 'DRAFT'::"text", "p_total_packages" integer DEFAULT 1, "p_carrier_name" "text" DEFAULT NULL::"text", "p_carrier_contact" "text" DEFAULT NULL::"text", "p_carrier_phone" "text" DEFAULT NULL::"text", "p_expected_time" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS boolean
+CREATE OR REPLACE FUNCTION "public"."update_purchase_order"("p_po_id" bigint, "p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb", "p_delivery_method" "text" DEFAULT 'internal'::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_shipping_fee" numeric DEFAULT 0, "p_status" "text" DEFAULT 'DRAFT'::"text", "p_total_packages" integer DEFAULT 1, "p_carrier_name" "text" DEFAULT NULL::"text", "p_carrier_contact" "text" DEFAULT NULL::"text", "p_carrier_phone" "text" DEFAULT NULL::"text", "p_expected_delivery_time" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-    DECLARE
-        v_item JSONB;
-        v_product_record RECORD;
-        v_conversion_factor INTEGER;
-        v_base_quantity INTEGER;
-        v_total_amount NUMERIC := 0;
-        v_qty_ordered INTEGER;
-        v_current_status TEXT;
-    BEGIN
-        -- Check trạng thái
-        SELECT status INTO v_current_status FROM public.purchase_orders WHERE id = p_po_id;
-        IF v_current_status NOT IN ('DRAFT', 'PENDING', 'REJECTED') THEN
-            RAISE EXCEPTION 'Không thể sửa đơn hàng đã được Duyệt hoặc Đang nhập kho.';
-        END IF;
+DECLARE
+    v_item JSONB;
+    v_total_amount NUMERIC := 0;
+    v_qty NUMERIC;
+    v_price NUMERIC;
+    v_po_status TEXT;
+    v_discount_amount NUMERIC;
+BEGIN
+    -- Check trạng thái
+    SELECT status, COALESCE(discount_amount, 0) 
+    INTO v_po_status, v_discount_amount 
+    FROM public.purchase_orders WHERE id = p_po_id;
+    
+    IF v_po_status NOT IN ('DRAFT', 'PENDING', 'REJECTED') THEN
+        RAISE EXCEPTION 'Không thể sửa đơn hàng đang xử lý hoặc đã hoàn tất (Status: %).', v_po_status;
+    END IF;
 
-        -- Update Header (Bao gồm cả thông tin vận chuyển)
-        UPDATE public.purchase_orders
-        SET 
-            supplier_id = p_supplier_id, 
-            expected_delivery_date = p_expected_date,
-            note = p_note, 
-            delivery_method = p_delivery_method,
-            shipping_partner_id = p_shipping_partner_id, 
-            shipping_fee = COALESCE(p_shipping_fee, 0),
-            status = p_status, 
-            
-            -- [LOGISTICS INFO UPDATE]
-            total_packages = COALESCE(p_total_packages, 1),
-            carrier_name = p_carrier_name,
-            carrier_contact = p_carrier_contact,
-            carrier_phone = p_carrier_phone,
-            expected_delivery_time = p_expected_time,
-            
-            updated_at = NOW()
-        WHERE id = p_po_id;
+    -- 1. Xóa items cũ để insert lại (Sync mới hoàn toàn)
+    DELETE FROM public.purchase_order_items WHERE po_id = p_po_id;
 
-        -- Reset Items cũ
-        DELETE FROM public.purchase_order_items WHERE po_id = p_po_id;
+    -- 2. Insert items mới và tính tổng tiền
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+        v_qty := COALESCE((v_item->>'quantity')::NUMERIC, (v_item->>'quantity_ordered')::NUMERIC, 0);
+        v_price := COALESCE((v_item->>'unit_price')::NUMERIC, 0);
 
-        -- Insert Items mới
-        FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-        LOOP
-            v_qty_ordered := COALESCE((v_item->>'quantity_ordered')::INTEGER, (v_item->>'quantity')::INTEGER, 1);
-
-            SELECT items_per_carton, wholesale_unit INTO v_product_record
-            FROM public.products WHERE id = (v_item->>'product_id')::BIGINT;
-
-            -- Logic quy đổi đơn vị
-            IF (COALESCE(v_item->>'uom_ordered', v_item->>'uom')) = v_product_record.wholesale_unit THEN
-                v_conversion_factor := COALESCE(v_product_record.items_per_carton, 1);
-            ELSE
-                v_conversion_factor := 1;
-            END IF;
-
-            v_base_quantity := v_qty_ordered * v_conversion_factor;
-
+        IF v_qty > 0 THEN
             INSERT INTO public.purchase_order_items (
-                po_id, product_id, quantity_ordered, uom_ordered, unit, unit_price, conversion_factor, base_quantity
-            )
-            VALUES (
+                po_id, product_id, quantity_ordered, unit_price, uom_ordered, unit, created_at
+            ) VALUES (
                 p_po_id,
                 (v_item->>'product_id')::BIGINT,
-                v_qty_ordered,
-                COALESCE(v_item->>'uom_ordered', v_item->>'uom'),
-                COALESCE(v_item->>'uom_ordered', v_item->>'uom'),
-                (v_item->>'unit_price')::NUMERIC,
-                v_conversion_factor,
-                v_base_quantity
+                v_qty,
+                v_price,
+                (v_item->>'uom')::TEXT,
+                (v_item->>'uom')::TEXT, 
+                NOW()
             );
 
-            v_total_amount := v_total_amount + (v_qty_ordered * (v_item->>'unit_price')::NUMERIC);
-        END LOOP;
+            -- Cộng dồn: SL * Đơn giá
+            v_total_amount := v_total_amount + (v_qty * v_price);
+        END IF;
+    END LOOP;
 
-        -- Update Tổng tiền cuối cùng
-        UPDATE public.purchase_orders
-        SET total_amount = v_total_amount,
-            final_amount = v_total_amount + COALESCE(p_shipping_fee, 0)
-        WHERE id = p_po_id;
+    -- 3. Update Master PO (Full Fields)
+    UPDATE public.purchase_orders
+    SET 
+        supplier_id = p_supplier_id,
+        expected_delivery_date = p_expected_date,
+        note = p_note,
+        delivery_method = p_delivery_method,
+        shipping_partner_id = p_shipping_partner_id,
+        shipping_fee = COALESCE(p_shipping_fee, 0),
+        status = p_status,
+        
+        -- [IMPORTANT] Cập nhật tổng tiền tự động
+        total_amount = v_total_amount,
+        final_amount = v_total_amount + COALESCE(p_shipping_fee, 0) - v_discount_amount,
+        
+        -- [NEW] Logistics Fields
+        total_packages = COALESCE(p_total_packages, 1),
+        carrier_name = p_carrier_name,
+        carrier_contact = p_carrier_contact,
+        carrier_phone = p_carrier_phone,
+        expected_delivery_time = p_expected_delivery_time,
+        
+        updated_at = NOW()
+    WHERE id = p_po_id;
 
-        RETURN TRUE;
-    END;
-    $$;
+    RETURN TRUE;
+END;
+$$;
 
 
-ALTER FUNCTION "public"."update_purchase_order"("p_po_id" bigint, "p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_total_packages" integer, "p_carrier_name" "text", "p_carrier_contact" "text", "p_carrier_phone" "text", "p_expected_time" timestamp with time zone) OWNER TO "postgres";
+ALTER FUNCTION "public"."update_purchase_order"("p_po_id" bigint, "p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_total_packages" integer, "p_carrier_name" "text", "p_carrier_contact" "text", "p_carrier_phone" "text", "p_expected_delivery_time" timestamp with time zone) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_self_profile"("p_profile_data" "jsonb") RETURNS "void"
@@ -12226,7 +12352,14 @@ CREATE TABLE IF NOT EXISTS "public"."promotion_gifts" (
     "estimated_value" numeric DEFAULT 0,
     "received_from_po_id" bigint,
     "status" "text" DEFAULT 'active'::"text",
-    "created_at" timestamp with time zone DEFAULT "now"()
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "code" "text",
+    "stock_quantity" integer DEFAULT 0,
+    "image_url" "text",
+    "unit_name" "text" DEFAULT 'Cái'::"text",
+    "description" "text",
+    "min_stock" integer DEFAULT 0,
+    "supplier_id" bigint
 );
 
 
@@ -12673,6 +12806,32 @@ ALTER TABLE "public"."supplier_programs" OWNER TO "postgres";
 
 ALTER TABLE "public"."supplier_programs" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
     SEQUENCE NAME "public"."supplier_programs_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."supplier_wallet_transactions" (
+    "id" bigint NOT NULL,
+    "supplier_id" bigint,
+    "amount" numeric NOT NULL,
+    "type" "text",
+    "reference_id" "text",
+    "description" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "supplier_wallet_transactions_type_check" CHECK (("type" = ANY (ARRAY['credit'::"text", 'debit'::"text"])))
+);
+
+
+ALTER TABLE "public"."supplier_wallet_transactions" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."supplier_wallet_transactions" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."supplier_wallet_transactions_id_seq"
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -13454,6 +13613,11 @@ ALTER TABLE ONLY "public"."supplier_programs"
 
 
 
+ALTER TABLE ONLY "public"."supplier_wallet_transactions"
+    ADD CONSTRAINT "supplier_wallet_transactions_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."supplier_wallets"
     ADD CONSTRAINT "supplier_wallets_pkey" PRIMARY KEY ("supplier_id");
 
@@ -13714,6 +13878,14 @@ CREATE INDEX "idx_finance_trans_ref_advance" ON "public"."finance_transactions" 
 
 
 CREATE INDEX "idx_finance_trans_status" ON "public"."finance_transactions" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_gifts_code" ON "public"."promotion_gifts" USING "btree" ("code");
+
+
+
+CREATE INDEX "idx_gifts_stock" ON "public"."promotion_gifts" USING "btree" ("stock_quantity");
 
 
 
@@ -14446,6 +14618,11 @@ ALTER TABLE ONLY "public"."products"
 
 
 
+ALTER TABLE ONLY "public"."promotion_gifts"
+    ADD CONSTRAINT "promotion_gifts_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id");
+
+
+
 ALTER TABLE ONLY "public"."promotion_targets"
     ADD CONSTRAINT "promotion_targets_promotion_id_fkey" FOREIGN KEY ("promotion_id") REFERENCES "public"."promotions"("id") ON DELETE CASCADE;
 
@@ -14558,6 +14735,11 @@ ALTER TABLE ONLY "public"."supplier_program_products"
 
 ALTER TABLE ONLY "public"."supplier_programs"
     ADD CONSTRAINT "supplier_programs_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."supplier_wallet_transactions"
+    ADD CONSTRAINT "supplier_wallet_transactions_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id") ON DELETE CASCADE;
 
 
 
@@ -14816,10 +14998,6 @@ CREATE POLICY "Enable all for authenticated" ON "public"."product_contents" TO "
 
 
 
-CREATE POLICY "Enable all for authenticated" ON "public"."product_units" TO "authenticated" USING (true) WITH CHECK (true);
-
-
-
 CREATE POLICY "Enable all for authenticated" ON "public"."purchase_orders" TO "authenticated" USING (true);
 
 
@@ -14845,6 +15023,10 @@ CREATE POLICY "Enable delete for authenticated users only" ON "public"."prescrip
 
 
 CREATE POLICY "Enable delete items" ON "public"."prescription_template_items" FOR DELETE USING (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "Enable full access for authenticated users" ON "public"."product_units" TO "authenticated" USING (true) WITH CHECK (true);
 
 
 
@@ -15419,6 +15601,12 @@ GRANT ALL ON FUNCTION "public"."confirm_order_payment"("p_order_ids" "uuid"[], "
 GRANT ALL ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."confirm_purchase_costing"("p_po_id" bigint, "p_items_data" "jsonb", "p_gifts_data" "jsonb", "p_total_shipping_fee" numeric) TO "anon";
+GRANT ALL ON FUNCTION "public"."confirm_purchase_costing"("p_po_id" bigint, "p_items_data" "jsonb", "p_gifts_data" "jsonb", "p_total_shipping_fee" numeric) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."confirm_purchase_costing"("p_po_id" bigint, "p_items_data" "jsonb", "p_gifts_data" "jsonb", "p_total_shipping_fee" numeric) TO "service_role";
 
 
 
@@ -16562,9 +16750,9 @@ GRANT ALL ON FUNCTION "public"."update_product_status"("p_ids" bigint[], "p_stat
 
 
 
-GRANT ALL ON FUNCTION "public"."update_purchase_order"("p_po_id" bigint, "p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_total_packages" integer, "p_carrier_name" "text", "p_carrier_contact" "text", "p_carrier_phone" "text", "p_expected_time" timestamp with time zone) TO "anon";
-GRANT ALL ON FUNCTION "public"."update_purchase_order"("p_po_id" bigint, "p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_total_packages" integer, "p_carrier_name" "text", "p_carrier_contact" "text", "p_carrier_phone" "text", "p_expected_time" timestamp with time zone) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."update_purchase_order"("p_po_id" bigint, "p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_total_packages" integer, "p_carrier_name" "text", "p_carrier_contact" "text", "p_carrier_phone" "text", "p_expected_time" timestamp with time zone) TO "service_role";
+GRANT ALL ON FUNCTION "public"."update_purchase_order"("p_po_id" bigint, "p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_total_packages" integer, "p_carrier_name" "text", "p_carrier_contact" "text", "p_carrier_phone" "text", "p_expected_delivery_time" timestamp with time zone) TO "anon";
+GRANT ALL ON FUNCTION "public"."update_purchase_order"("p_po_id" bigint, "p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_total_packages" integer, "p_carrier_name" "text", "p_carrier_contact" "text", "p_carrier_phone" "text", "p_expected_delivery_time" timestamp with time zone) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_purchase_order"("p_po_id" bigint, "p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_items" "jsonb", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_total_packages" integer, "p_carrier_name" "text", "p_carrier_contact" "text", "p_carrier_phone" "text", "p_expected_delivery_time" timestamp with time zone) TO "service_role";
 
 
 
@@ -17299,6 +17487,18 @@ GRANT ALL ON TABLE "public"."supplier_programs" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."supplier_programs_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."supplier_programs_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."supplier_programs_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."supplier_wallet_transactions" TO "anon";
+GRANT ALL ON TABLE "public"."supplier_wallet_transactions" TO "authenticated";
+GRANT ALL ON TABLE "public"."supplier_wallet_transactions" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."supplier_wallet_transactions_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."supplier_wallet_transactions_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."supplier_wallet_transactions_id_seq" TO "service_role";
 
 
 

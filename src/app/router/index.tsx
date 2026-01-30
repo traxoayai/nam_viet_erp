@@ -35,6 +35,7 @@ import SupplierPolicyListPage from "@/pages/partners/policies/SupplierPolicyList
 import SupplierPolicyFormPage from "@/pages/partners/policies/SupplierPolicyFormPage"; // [NEW]
 import PurchaseOrderDetail from "@/pages/purchasing/PurchaseOrderDetail";
 import PurchaseOrderMasterPage from "@/pages/purchasing/PurchaseOrderMasterPage";
+import PurchaseCostingPage from "@/pages/purchasing/PurchaseCostingPage"; // [NEW]
 import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
 import VaccinationTemplatePage from "@/pages/quick/VaccinationTemplatePage";
 import B2BOrderListPage from "@/pages/sales/B2BOrderListPage";
@@ -248,6 +249,10 @@ const routes: RouteObject[] = [
               {
                 path: ":id",
                 element: <PurchaseOrderDetail />,
+              },
+              {
+                path: "costing/:id",
+                element: <PurchaseCostingPage />, // [NEW] V35 Costing
               },
             ],
           },

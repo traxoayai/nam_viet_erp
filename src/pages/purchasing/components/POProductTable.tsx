@@ -11,6 +11,7 @@ import {
   Grid,
   Avatar,
   Form,
+  Checkbox, // [NEW]
 } from "antd";
 import React from "react";
 
@@ -198,9 +199,26 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
           parser={(v) => v!.replace(/\$\s?|(,*)/g, "") as unknown as number}
           onChange={(val) => onItemChange(idx, "unit_price", val)}
           addonAfter="₫"
+          disabled={r.is_bonus} // [NEW] Disable price if bonus
         />
       ),
     },
+    {
+       title: "Hàng tặng", // [NEW] Bonus Column
+       width: 90,
+       align: 'center' as const,
+       render: (_: any, r: POItem, idx: number) => (
+         <Checkbox 
+           checked={r.is_bonus}
+           onChange={(e) => {
+               const val = e.target.checked;
+               onItemChange(idx, "is_bonus", val);
+               if (val) onItemChange(idx, "unit_price", 0);
+           }}
+         />
+       )
+    },
+
     {
       title: "Thành tiền",
       align: "right" as const,

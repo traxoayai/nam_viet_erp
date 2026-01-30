@@ -1,5 +1,5 @@
 // src/pages/purchasing/PurchaseOrderMasterPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout, Typography } from 'antd';
 // import { HomeOutlined } from '@ant-design/icons';
 import { usePurchaseOrderMaster } from '../../features/purchasing/hooks/usePurchaseOrderMaster';
@@ -26,6 +26,15 @@ const PurchaseOrderMasterPage: React.FC = () => {
         autoCreate,
         fetchOrders
     } = usePurchaseOrderMaster();
+
+    // [NEW] Auto-refresh when window gets focus (e.g. Back from Detail)
+    useEffect(() => {
+        const onFocus = () => {
+            fetchOrders();
+        };
+        window.addEventListener("focus", onFocus);
+        return () => window.removeEventListener("focus", onFocus);
+    }, [fetchOrders]);
 
     // --- STATE CHO MODAL THANH TOÁN (Phiên bản mới) ---
     const [paymentModalVisible, setPaymentModalVisible] = useState(false);

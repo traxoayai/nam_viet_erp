@@ -2306,36 +2306,65 @@ export type Database = {
       }
       promotion_gifts: {
         Row: {
+          code: string | null
           created_at: string | null
+          description: string | null
           estimated_value: number | null
           id: number
+          image_url: string | null
+          min_stock: number | null
           name: string
           quantity: number | null
           received_from_po_id: number | null
           status: string | null
+          stock_quantity: number | null
+          supplier_id: number | null
           type: Database["public"]["Enums"]["gift_type"]
+          unit_name: string | null
         }
         Insert: {
+          code?: string | null
           created_at?: string | null
+          description?: string | null
           estimated_value?: number | null
           id?: number
+          image_url?: string | null
+          min_stock?: number | null
           name: string
           quantity?: number | null
           received_from_po_id?: number | null
           status?: string | null
+          stock_quantity?: number | null
+          supplier_id?: number | null
           type: Database["public"]["Enums"]["gift_type"]
+          unit_name?: string | null
         }
         Update: {
+          code?: string | null
           created_at?: string | null
+          description?: string | null
           estimated_value?: number | null
           id?: number
+          image_url?: string | null
+          min_stock?: number | null
           name?: string
           quantity?: number | null
           received_from_po_id?: number | null
           status?: string | null
+          stock_quantity?: number | null
+          supplier_id?: number | null
           type?: Database["public"]["Enums"]["gift_type"]
+          unit_name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "promotion_gifts_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       promotion_targets: {
         Row: {
@@ -3157,6 +3186,44 @@ export type Database = {
           },
         ]
       }
+      supplier_wallet_transactions: {
+        Row: {
+          amount: number
+          created_at: string | null
+          description: string | null
+          id: number
+          reference_id: string | null
+          supplier_id: number | null
+          type: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          description?: string | null
+          id?: number
+          reference_id?: string | null
+          supplier_id?: number | null
+          type?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          description?: string | null
+          id?: number
+          reference_id?: string | null
+          supplier_id?: number | null
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_wallet_transactions_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_wallets: {
         Row: {
           balance: number | null
@@ -3726,6 +3793,15 @@ export type Database = {
         Returns: Json
       }
       confirm_outbound_packing: { Args: { p_order_id: string }; Returns: Json }
+      confirm_purchase_costing: {
+        Args: {
+          p_gifts_data: Json
+          p_items_data: Json
+          p_po_id: number
+          p_total_shipping_fee: number
+        }
+        Returns: Json
+      }
       confirm_purchase_order: {
         Args: { p_po_id: number; p_status: string }
         Returns: boolean
@@ -5109,7 +5185,7 @@ export type Database = {
           p_carrier_phone?: string
           p_delivery_method?: string
           p_expected_date: string
-          p_expected_time?: string
+          p_expected_delivery_time?: string
           p_items: Json
           p_note: string
           p_po_id: number

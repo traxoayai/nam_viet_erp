@@ -19,6 +19,7 @@ export interface POItem {
   uom: string;
   unit_price: number;
   discount: number;
+  is_bonus?: boolean; // [NEW] V20 Bonus Item support
   
   // [NEW] Mảng đơn vị động trả về từ API
   available_units?: ProductUnitOption[]; 

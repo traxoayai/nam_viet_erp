@@ -1,5 +1,6 @@
 // src/pages/purchasing/PurchaseOrderDetail.tsx
 import { Layout, Form, Row, Col, ConfigProvider, App } from "antd";
+import { useNavigate, useParams } from "react-router-dom"; // [FIX] Import hook navigation
 import viVN from "antd/locale/vi_VN";
 //import React from "react";
 
@@ -22,6 +23,8 @@ const { Content } = Layout;
 
 const PurchaseOrderDetailContent = () => {
   const logic = usePurchaseOrderLogic();
+  const navigate = useNavigate(); // [FIX] Init hook
+  const { id } = useParams(); // [FIX] Get ID
 
   return (
     <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
@@ -34,7 +37,10 @@ const PurchaseOrderDetailContent = () => {
           onSave={() => logic.form.submit()}
           onSubmit={logic.confirmOrder}
           onRequestPayment={logic.requestPayment}
-          onCalculateInbound={logic.handleCalculateInbound} // [NEW]
+          // [FIX] Override navigation to ensure correct path /purchase-orders/costing/:id
+          onCalculateInbound={() => {
+             navigate(`/purchase-orders/costing/${id}`);
+          }}
         />
 
         <Content
@@ -51,6 +57,7 @@ const PurchaseOrderDetailContent = () => {
                 suppliers={logic.suppliers}
                 supplierInfo={logic.supplierInfo}
                 onSupplierChange={logic.handleSupplierChange}
+                onShippingFeeChange={logic.handleShippingFeeChange} // [NEW] Kết nối dây thần kinh
               />
 
               <div
@@ -93,9 +100,6 @@ const PurchaseOrderDetailContent = () => {
             <Col xs={24} lg={7}>
               <POPaymentSummary
                 financials={logic.financials}
-                form={logic.form}
-                calculateTotals={logic.calculateTotals}
-                shippingPartners={logic.shippingPartners}
               />
             </Col>
           </Row>

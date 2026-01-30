@@ -3,16 +3,16 @@ import {
   UserOutlined,
   PhoneOutlined,
   EnvironmentOutlined,
-  //CarOutlined, // Import thêm icon xe
+  CarOutlined, // [UNCOMMENT] Import thêm icon xe
 } from "@ant-design/icons";
 import {
   Card,
   Form,
   Select,
   DatePicker,
-  //TimePicker, // [QUAN TRỌNG] Nhớ import cái này
+  TimePicker, // [UNCOMMENT] [QUAN TRỌNG] Nhớ import cái này
   Input,
-  //InputNumber, // [QUAN TRỌNG] Nhớ import cái này
+  InputNumber, // [UNCOMMENT] [QUAN TRỌNG] Nhớ import cái này
   Row,
   Col,
   Typography,
@@ -29,12 +29,14 @@ interface Props {
   suppliers: any[]; // Danh sách NCC để đổ vào Select
   supplierInfo: any; // Thông tin chi tiết NCC đang chọn
   onSupplierChange: (id: number) => void; // Hàm xử lý khi chọn
+  onShippingFeeChange: (val: number | null) => void; // [NEW] Callback khi sửa phí ship
 }
 
 const POGeneralInfo: React.FC<Props> = ({
   suppliers,
   supplierInfo,
   onSupplierChange,
+  onShippingFeeChange,
 }) => {
   return (
     <Card
@@ -127,8 +129,8 @@ const POGeneralInfo: React.FC<Props> = ({
           </Form.Item>
         </Col>
 
-        {/* --- [NEW] LOGISTICS INFO (ĐÃ UNCOMMENT & CHỈNH SỬA) --- */}
-        {/* <Col span={24}>
+         {/* --- [NEW] LOGISTICS INFO (ĐÃ UNCOMMENT & CHỈNH SỬA) --- */}
+         <Col span={24}>
            <div style={{ marginBottom: 16, borderTop: '1px dashed #eee', paddingTop: 16 }}>
               <Typography.Text strong style={{ display: 'block', marginBottom: 12, color: '#1677ff' }}>
                 <CarOutlined /> Thông tin Vận chuyển (Logistics)
@@ -154,9 +156,25 @@ const POGeneralInfo: React.FC<Props> = ({
                           <TimePicker format="HH:mm" style={{ width: '100%' }} placeholder="HH:mm" />
                       </Form.Item>
                   </Col>
+
+                  {/* [NEW] Move Shipping Fee Here */}
+                  <Col xs={12} md={8}>
+                    <Form.Item name="shipping_fee" label="Phí vận chuyển" initialValue={0}>
+                        <InputNumber<number>
+                            style={{ width: '100%' }} 
+                            // formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                            formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                            parser={value => value!.replace(/\$\s?|(,*)/g, '') as unknown as number}
+                            addonAfter="₫"
+                            min={0}
+                            // [QUAN TRỌNG] Khi sửa ship -> Gọi callback tính lại tiền ngay
+                            onChange={onShippingFeeChange} 
+                        />
+                    </Form.Item>
+                </Col>
               </Row>
            </div>
-        </Col> */}
+        </Col>
 
         <Col span={24}>
           <Form.Item name="note" label="Ghi chú">

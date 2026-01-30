@@ -541,3 +541,38 @@ export const searchProductsForTransfer = async (keyword: string, warehouseId: nu
     }
     return data || []; 
 };
+
+// 15. [NEW] CẬP NHẬT GIÁ BÁN (Bulk Update - V35.6)
+// 15. [NEW] CẬP NHẬT GIÁ BÁN (Bulk Update - V35.6)
+export const updateProductPrices = async (updates: { id: number; price: number }[]) => {
+    if (!updates || updates.length === 0) return { success: true, count: 0 };
+
+    // Sử dụng Promise.all để chạy song song (vì số lượng ít)
+    // Nếu số lượng lớn cần dùng RPC hoặc chunk
+    try {
+        const promises = updates.map(u => 
+            supabase.from('product_units')
+                .update({ 
+                    price: u.price,       // Cột cũ
+                    price_sell: u.price,  // Cột mới (Update cả 2 để đồng bộ)
+                    updated_at: new Date().toISOString() 
+                }) 
+                .eq('id', u.id)
+                .select() // Quan trọng: Return data để kiểm tra có update thật không
+        );
+        
+        const results = await Promise.all(promises);
+        
+        // Đếm số dòng thực sự được update (data not null)
+        const successCount = results.filter(r => r.data && r.data.length > 0).length;
+        
+        if (successCount < updates.length) {
+            console.warn(`Chỉ update được ${successCount}/${updates.length} dòng. Có thể do lỗi quyền (RLS).`);
+        }
+
+        return { success: true, count: successCount };
+    } catch (err) {
+        console.error("Lỗi cập nhật giá bán:", err);
+        throw err;
+    }
+};

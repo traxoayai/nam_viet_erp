@@ -73,8 +73,8 @@ export const ProductSearchB2B = ({ onSelect, warehouseId = 1 }: ProductSearchB2B
         <Text strong style={{ color: "#cf1322", fontSize: 13 }}>
           {p.price_wholesale ? p.price_wholesale.toLocaleString() : 0} đ
         </Text>
-        <div style={{ fontSize: 11 }}>
-          Tồn: {p.stock_quantity}
+        <div style={{ fontSize: 11, color: (p.available_stock || 0) < (p.real_stock || 0) ? "#fa8c16" : "inherit" }}>
+          Tồn: <span style={{ fontWeight: 600 }}>{p.available_stock ?? p.stock_quantity}</span> / {p.real_stock ?? p.stock_quantity}
         </div>
       </div>
     </div>

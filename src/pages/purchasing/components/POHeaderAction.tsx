@@ -13,6 +13,7 @@ const { Title } = Typography;
 
 interface Props {
   isEditMode: boolean;
+  poId?: number; // [NEW] Needed for navigation
   poCode: string;
   poStatus?: string; // Nhận thêm status để ẩn/hiện nút
   loading: boolean;
@@ -107,15 +108,15 @@ const POHeaderAction: React.FC<Props> = ({
                 </Button>
               )}
               
-              {/* [NEW] Nút Tính toán & Nhập kho (V34) - Hiện khi Pending hoặc Shipping - DISABLED TEMP for CostingPage */}
-              {false && (poStatus === "PENDING" || poStatus === "SHIPPING") && (
+              {/* [NEW] Nút Tính toán & Nhập kho (V34) - Hiện khi Pending hoặc Shipping - ENABLED for V35 */}
+              {(poStatus === "PENDING" || poStatus === "SHIPPING") && (
                  <Button
                     type="primary"
                     style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
                     icon={<DollarCircleOutlined />}
                     onClick={onCalculateInbound}
                  >
-                    Tính toán & Nhập kho
+                    Tính Giá vốn
                  </Button>
               )}
             </Space>

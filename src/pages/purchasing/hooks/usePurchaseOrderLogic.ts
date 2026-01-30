@@ -147,7 +147,7 @@ export const usePurchaseOrderLogic = () => {
         items: mappedItems,
       });
 
-      calculateTotals(mappedItems, po.total_paid || 0); // Pass paid amount
+      calculateTotals(mappedItems); // Pass paid amount
     } catch (error: any) {
       message.error(error.message || "Lỗi tải đơn hàng");
       navigate("/purchase-orders");
@@ -180,53 +180,38 @@ export const usePurchaseOrderLogic = () => {
 
   // Tính tổng tiền & số thùng
   const calculateTotals = useCallback(
-    // [FIX] Payment V2: Final Amount = SL * Price * (1 + VAT)
-    // Note: VAT is currently only available in CostAllocationModal or from DB if confirmed.
-    // If not confirmed, we assume VAT=0 for display or we need to add VAT input to main table?
-    // Request says "Phải luôn hiển thị là Giá trị Hóa đơn cần thanh toán".
-    // If we don't have VAT input in main table, we can't show it accurately before Costing.
-    // However, if the order is Confirmed/Costing done, `vat_rate` might be in DB.
-    // Let's try to use `vat_rate` if it exists in item.
-    (currentItems: POItem[], currentPaid?: number) => {
+    (currentItems: POItem[]) => { // Bỏ tham số paid thừa
       let sub = 0;
-      let totalInvoice = 0;
       let cartons = 0;
       
       currentItems.forEach((item) => {
         const qty = Number(item.quantity) || 0;
-        const price = Number(item.unit_price) || 0;
+        const price = Number(item.unit_price) || 0; // Đảm bảo lấy giá mới nhất từ item
+        sub += qty * price;
+
+        // Tính thùng
         const packSize = item._items_per_carton || 1;
-        const vat = (item as any).vat_rate || 0; // Get VAT if available
-
-        const lineTotal = qty * price;
-        sub += lineTotal;
-        totalInvoice += lineTotal * (1 + vat / 100);
-
-        // Logic tính thùng
-        if (item.uom === item._wholesale_unit) {
-          cartons += qty;
-        } else {
-          cartons += qty / packSize;
-        }
+        if (item.uom === item._wholesale_unit) cartons += qty;
+        else cartons += qty / packSize;
       });
 
+      // Lấy shipping_fee trực tiếp từ Form
       const ship = form.getFieldValue("shipping_fee") || 0;
-      // Final Payment = Total Invoice + Ship (if Ship is external/separate bill? Or Ship is part of invoice?)
-      // Usually Ship is separate service. But `final_amount` usually means "Everything I need to pay for this PO".
-      // If Ship is "Allocated", it's part of COGS but maybe not part of Supplier Payment if paid to 3rd party.
-      // However, `shipping_fee` field in PO usually means fee paid to Supplier or Carrier.
-      // Let's assume Add Ship to Final.
       
-      setFinancials((prev) => ({
+      setFinancials(prev => ({
+        ...prev,
         subtotal: sub,
-        final: totalInvoice + ship, // [UPDATED] Use Invoice Value with VAT
-        paid: currentPaid !== undefined ? currentPaid : prev.paid,
+        final: sub + ship, // Tổng = Tiền hàng + Ship
         totalCartons: parseFloat(cartons.toFixed(1)),
       }));
     },
     [form]
+  );
 
- );
+  // [NEW] Handler khi thay đổi phí ship
+  const handleShippingFeeChange = () => {
+      calculateTotals(itemsList);
+  };
 
   // Khi chọn sản phẩm từ ô tìm kiếm
   // Khi chọn sản phẩm từ ô tìm kiếm
@@ -334,18 +319,20 @@ export const usePurchaseOrderLogic = () => {
       if (itemsList.length === 0)
         throw new Error("Vui lòng chọn ít nhất 1 sản phẩm");
 
-      // Map items (Có fallback quantity = 1 để tránh lỗi DB)
+      // 1. Lấy items từ State (itemsList) là chuẩn nhất vì nó chứa unit_price đã edit
+      // Tuyệt đối không lấy từ values.items của Form vì có thể chưa sync kịp
       const payloadItems = itemsList.map((item) => ({
         product_id: item.product_id,
-        quantity:
-          item.quantity && Number(item.quantity) > 0
-            ? Number(item.quantity)
-            : 1,
+        quantity: Number(item.quantity),
+        unit_price: Number(item.unit_price), // [CRITICAL] Giá này là giá user vừa nhập
         uom: item.uom,
-        unit_price: item.unit_price || 0,
-        is_bonus: (item as any).is_bonus || false, // [NEW] Support bonus items
+        is_bonus: (item as any).is_bonus || false,
       }));
 
+      // DEBUG: Log ra để kiểm tra
+      console.log("Saving Items Price:", payloadItems.map(i => i.unit_price));
+
+      // 2. Prepare Data
       const payloadData = {
         supplier_id: values.supplier_id,
         expected_delivery_date: values.expected_delivery_date,
@@ -364,14 +351,10 @@ export const usePurchaseOrderLogic = () => {
       };
 
       if (isEditMode) {
-        await purchaseOrderService.updatePO(
-          Number(id),
-          payloadData,
-          payloadItems
-        );
-        message.success("Cập nhật đơn hàng thành công");
-        // Reload lại để cập nhật state mới nhất nếu cần
-        loadOrderDetail(Number(id));
+        await purchaseOrderService.updatePO(Number(id), payloadData, payloadItems);
+        message.success("Đã cập nhật đơn hàng & tính lại tổng tiền!");
+         // [FIX] Reload data để đảm bảo đồng bộ
+         loadOrderDetail(Number(id));
       } else {
         const result = await purchaseOrderService.createPO({
             ...payloadData,
@@ -446,13 +429,16 @@ export const usePurchaseOrderLogic = () => {
     setPaymentModalOpen(true);
   };
 
-  // [NEW] Open Cost Modal
+  // [NEW] Open Cost Modal -> NOW Redirect to Page V35
   const handleCalculateInbound = () => {
-      if (itemsList.length === 0) {
-          message.warning("Đơn hàng chưa có sản phẩm!");
-          return;
-      }
-      setCostModalOpen(true);
+      // if (itemsList.length === 0) {
+      //     message.warning("Đơn hàng chưa có sản phẩm!");
+      //     return;
+      // }
+      // setCostModalOpen(true);
+      
+      // V35 Navigation
+      navigate(`/purchasing/costing/${id}`);
   };
 
   // [NEW] Submit Landed Cost Data to Backend
@@ -515,5 +501,6 @@ export const usePurchaseOrderLogic = () => {
     setCostModalOpen,
     handleCalculateInbound,
     handleConfirmFinancials,
+    handleShippingFeeChange, // Export hàm này để truyền vào POGeneralInfo
   };
 };
