@@ -89,28 +89,37 @@ export const usePurchaseOrderLogic = () => {
         setSupplierInfo(richInfo || po.supplier);
       }
 
-      const mappedItems: POItem[] = (po.items || []).map((item: any) => ({
-        id: item.id,
-        product_id: item.product_id,
-        sku: item.sku,
-        name: item.product_name,
-        image_url: item.image_url,
-        quantity: item.quantity_ordered,
-        available_units: item.available_units || [],
-        uom: item.uom_ordered || item.unit || item.wholesale_unit,
-        unit_price: Number(item.unit_price),
-        discount: 0,
-        _items_per_carton: item.items_per_carton || 1,
-        _wholesale_unit: item.wholesale_unit,
-        _retail_unit: item.retail_unit,
-        _base_price: Number(item.unit_price) /
-          (item.uom_ordered === item.wholesale_unit ? 1 : 1 / (item.items_per_carton || 1)),
-        vat_rate: item.vat_rate || 0,
-        rebate_rate: item.rebate_rate || 0,
-        allocated_shipping_fee: item.allocated_shipping_fee || 0,
-        bonus_quantity: item.bonus_quantity || 0,
-        is_bonus: item.is_bonus || false // [FIX] Map bonus status
-      }));
+      const mappedItems: POItem[] = (po.items || []).map((item: any) => {
+        // [FIX] Normalize Data Keys (Phòng trường hợp RPC trả về biến thể khác)
+        const wholesaleUnit = item.wholesale_unit || item.wholesaleUnit || "Hộp";
+        const retailUnit = item.retail_unit || item.retailUnit || "Vỉ";
+        const itemsPerCarton = item.items_per_carton || item.itemsPerCarton || 1;
+        
+        return {
+            id: item.id,
+            product_id: item.product_id,
+            sku: item.sku,
+            name: item.product_name,
+            image_url: item.image_url,
+            quantity: item.quantity_ordered,
+            available_units: item.available_units || [],
+            // [LOGIC] Ưu tiên lấy đơn vị đã lưu trong đơn hàng
+            uom: item.uom_ordered || item.unit || wholesaleUnit, 
+            unit_price: Number(item.unit_price),
+            discount: 0,
+            _items_per_carton: itemsPerCarton,
+            _wholesale_unit: wholesaleUnit,
+            _retail_unit: retailUnit,
+            // [LOGIC] Tính lại giá gốc (Wholesale Price) để dùng khi đổi ĐVT
+            _base_price: Number(item.unit_price) /
+            (item.uom_ordered === wholesaleUnit ? 1 : 1 / itemsPerCarton),
+            vat_rate: item.vat_rate || 0,
+            rebate_rate: item.rebate_rate || 0,
+            allocated_shipping_fee: item.allocated_shipping_fee || 0,
+            bonus_quantity: item.bonus_quantity || 0,
+            is_bonus: item.is_bonus || false 
+        };
+      });
 
       setItemsList(mappedItems);
 
@@ -127,7 +136,7 @@ export const usePurchaseOrderLogic = () => {
         carrier_phone: po.carrier_phone,
         total_packages: po.total_packages,
         expected_delivery_time: po.expected_delivery_time 
-            ? dayjs(po.expected_delivery_time) // [FIX] Ensure backend sends full timestamp or handled correctly
+            ? dayjs(po.expected_delivery_time) 
             : null, 
         items: mappedItems,
       });
@@ -169,7 +178,8 @@ export const usePurchaseOrderLogic = () => {
       
       currentItems.forEach((item) => {
         const qty = Number(item.quantity) || 0;
-        const price = Number(item.unit_price) || 0;
+        // Nếu là hàng tặng (Bonus) thì giá = 0, nhưng vẫn tính số kiện
+        const price = item.is_bonus ? 0 : (Number(item.unit_price) || 0);
         sub += qty * price;
 
         const packSize = item._items_per_carton || 1;
@@ -209,6 +219,7 @@ export const usePurchaseOrderLogic = () => {
       calculateTotals(itemsList);
   };
 
+  // [FIX CRITICAL] Xử lý chọn sản phẩm
   const handleSelectProduct = (_: any, option: any) => {
     setSearchKey((prev) => prev + 1);
     const p = option.product;
@@ -218,10 +229,19 @@ export const usePurchaseOrderLogic = () => {
       return;
     }
 
+    // 1. [FIX] Normalize Key Names (Chấp nhận cả snake_case và camelCase)
+    const wholesaleUnit = p.wholesale_unit || p.wholesaleUnit || "Hộp";
+    const retailUnit = p.retail_unit || p.retailUnit || "Vỉ";
+    const itemsPerCarton = p.items_per_carton || p.itemsPerCarton || 1;
+    // Giá cost: Ưu tiên giá nhập gần nhất -> giá vốn thực tế -> 0
+    const basePrice = p.latest_purchase_price || p.latestPurchasePrice || p.actual_cost || 0;
+
+    // 2. Logic tạo dropdown Units
     let unitsData = p.available_units || p.units || [];
     if (unitsData.length === 0) {
-       if (p.wholesale_unit) unitsData.push({ unit_name: p.wholesale_unit, conversion_rate: p.items_per_carton || 1, is_base: false });
-       if (p.retail_unit && p.retail_unit !== p.wholesale_unit) unitsData.push({ unit_name: p.retail_unit, conversion_rate: 1, is_base: true });
+       // Chỉ push nếu unit tồn tại và không trùng
+       if (wholesaleUnit) unitsData.push({ unit_name: wholesaleUnit, conversion_rate: itemsPerCarton, is_base: false });
+       if (retailUnit && retailUnit !== wholesaleUnit) unitsData.push({ unit_name: retailUnit, conversion_rate: 1, is_base: true });
     }
 
     const newItem: POItem = {
@@ -231,32 +251,55 @@ export const usePurchaseOrderLogic = () => {
       image_url: p.image_url,
       quantity: 1,
       available_units: unitsData,
-      uom: p.wholesale_unit || (unitsData.length > 0 ? unitsData[0].unit_name : "Hộp"),
-      unit_price: p.latest_purchase_price || p.actual_cost || 0,
+      
+      // 3. [FIX] Luôn set mặc định là Đơn vị nhập (Wholesale Unit)
+      uom: wholesaleUnit, 
+      
+      // Giá nhập mặc định theo Wholesale Unit
+      unit_price: basePrice,
+      
       discount: 0,
-      _items_per_carton: p.items_per_carton || 1,
-      _wholesale_unit: p.wholesale_unit || "Hộp",
-      _retail_unit: p.retail_unit || "Vỉ",
-      _base_price: p.actual_cost || 0,
+      _items_per_carton: itemsPerCarton,
+      _wholesale_unit: wholesaleUnit,
+      _retail_unit: retailUnit,
+      _base_price: basePrice, // Giá gốc tham chiếu
+      is_bonus: false
     };
 
     const newItems = [newItem, ...itemsList];
     setItemsList(newItems);
     form.setFieldsValue({ items: newItems });
     calculateTotals(newItems);
-    message.success("Đã thêm sản phẩm");
+    message.success(`Đã thêm: ${p.name}`);
   };
 
   const handleItemChange = (index: number, field: keyof POItem, value: any) => {
     const newItems = [...itemsList];
     const item = { ...newItems[index], [field]: value };
 
+    // Logic: Nếu đổi ĐVT -> Tự động tính lại đơn giá theo quy cách
     if (field === "uom") {
       if (value === item._wholesale_unit) {
+        // Chuyển về đơn vị lớn -> Giá = Giá gốc
         item.unit_price = item._base_price;
       } else {
+        // Chuyển về đơn vị nhỏ -> Giá = Giá gốc / Quy cách
         item.unit_price = item._base_price / (item._items_per_carton || 1);
       }
+    }
+    
+    // Logic: Nếu chọn Hàng tặng -> Giá về 0
+    if (field === "is_bonus") {
+        if (value === true) {
+            item.unit_price = 0;
+        } else {
+            // Khôi phục giá cũ dựa trên UOM hiện tại
+            if (item.uom === item._wholesale_unit) {
+                item.unit_price = item._base_price;
+            } else {
+                item.unit_price = item._base_price / (item._items_per_carton || 1);
+            }
+        }
     }
 
     newItems[index] = item;

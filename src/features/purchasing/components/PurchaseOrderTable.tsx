@@ -1,7 +1,6 @@
-// src/features/purchasing/components/PurchaseOrderTable.tsx
 import React from 'react';
 import { Table, Tag, Space, Button, Tooltip, Progress, Popconfirm } from 'antd';
-import { EyeOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EyeOutlined, DeleteOutlined, CopyOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { PurchaseOrderMaster } from '../types/purchase';
@@ -15,6 +14,7 @@ interface PurchaseOrderTableProps {
     setPagination: (val: any) => void;
     onDelete?: (id: number) => void;
     onOpenPaymentModal: (order: PurchaseOrderMaster) => void;
+    onClone?: (order: PurchaseOrderMaster) => void; // [NEW] Prop Clone
 }
 
 // [UPDATED] Helper lấy tên Logistics
@@ -29,7 +29,7 @@ const getLogisticsInfo = (r: PurchaseOrderMaster) => {
 };
 
 export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({ 
-    orders, loading, pagination, setPagination, onDelete, onOpenPaymentModal 
+    orders, loading, pagination, setPagination, onDelete, onOpenPaymentModal, onClone
 }) => {
     
     const columns = [
@@ -151,7 +151,7 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
             title: 'Hành động',
             key: 'action',
             fixed: 'right' as 'right',
-            width: 100,
+            width: 120, // Tăng width để chứa nút Copy
             render: (_: unknown, record: PurchaseOrderMaster) => (
                 <Space size="small">
                     <Tooltip title="Xem chi tiết">
@@ -159,6 +159,19 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
                             <Button size="small" icon={<EyeOutlined />} />
                         </Link>
                     </Tooltip>
+                    
+                    {/* [NEW] Nút Sao chép */}
+                    {onClone && (
+                        <Tooltip title="Sao chép đơn này">
+                            <Button 
+                                size="small" 
+                                icon={<CopyOutlined />} 
+                                style={{ color: '#1890ff', borderColor: '#1890ff' }}
+                                onClick={() => onClone(record)}
+                            />
+                        </Tooltip>
+                    )}
+
                     {onDelete && (
                         <Popconfirm
                             title="Bạn có chắc muốn xóa đơn này không?"

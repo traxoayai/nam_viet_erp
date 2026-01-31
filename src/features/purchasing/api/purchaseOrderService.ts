@@ -97,6 +97,7 @@ export const purchaseOrderService = {
             : 1,
         uom_ordered: item.uom,
         unit_price: item.unit_price || 0,
+        is_bonus: item.is_bonus || false // [FIX] Add bonus flag
       })),
       
       p_supplier_id: payload.supplier_id,

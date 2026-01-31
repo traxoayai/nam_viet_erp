@@ -1,6 +1,6 @@
 // src/components/search/ProductSearchB2B.tsx
 import { BarcodeOutlined, EnvironmentOutlined } from "@ant-design/icons";
-import { Select, Avatar, Tag, Typography, Spin, Empty } from "antd";
+import { Select, Avatar, Tag, Typography, Spin, Empty, Tooltip } from "antd";
 import { useState, useEffect } from "react";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { salesService } from "@/features/sales/api/salesService";
@@ -73,9 +73,32 @@ export const ProductSearchB2B = ({ onSelect, warehouseId = 1 }: ProductSearchB2B
         <Text strong style={{ color: "#cf1322", fontSize: 13 }}>
           {p.price_wholesale ? p.price_wholesale.toLocaleString() : 0} đ
         </Text>
-        <div style={{ fontSize: 11, color: (p.available_stock || 0) < (p.real_stock || 0) ? "#fa8c16" : "inherit" }}>
-          Tồn: <span style={{ fontWeight: 600 }}>{p.available_stock ?? p.stock_quantity}</span> / {p.real_stock ?? p.stock_quantity}
-        </div>
+        {/* [V20 LOGIC] Color Stock Display */}
+        {(() => {
+            const available = p.available_stock ?? p.stock_quantity ?? 0;
+            const real = p.real_stock ?? p.stock_quantity ?? 0;
+            
+            let color = "red"; // Default: Hết hàng (Real <= 0)
+            let statusText = "Hết hàng";
+
+            if (available > 0) {
+                color = "green";
+                statusText = `Sẵn sàng: ${available}`;
+            } else if (real > 0) {
+                color = "gold"; // Có hàng nhưng đã committed
+                statusText = "Đang giữ hàng";
+            }
+
+            return (
+                <div style={{ fontSize: 11, marginTop: 4 }}>
+                   <Tooltip title={`Thực tế: ${real} / Khả dụng: ${available}`}>
+                        <Tag color={color} style={{ marginRight: 0 }}>
+                            {available > 0 ? `Tồn: ${available}` : statusText}
+                        </Tag>
+                   </Tooltip>
+                </div>
+            );
+        })()}
       </div>
     </div>
   );

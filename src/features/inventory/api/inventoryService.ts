@@ -20,6 +20,16 @@ export const inventoryService = {
     return data;
   },
 
+  // [NEW] Check Tồn kho khả dụng (V20 Logic)
+  async getAvailability(warehouseId: number, productIds: number[]) {
+      const { data, error } = await supabase.rpc('get_product_available_stock', {
+        p_warehouse_id: warehouseId,
+        p_product_ids: productIds
+      });
+      if (error) throw error;
+      return data;
+  },
+
   // 2. Scan Label AI (Đọc vỏ hộp thuốc)
   async scanProductLabel(file: File) {
     // Upload ảnh tạm

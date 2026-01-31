@@ -1,6 +1,8 @@
 // src/pages/purchasing/PurchaseOrderMasterPage.tsx
 import React, { useState, useEffect } from 'react';
-import { Layout, Typography } from 'antd';
+import { useNavigate } from "react-router-dom"; // Adding hook
+import { purchaseOrderService } from '../../features/purchasing/api/purchaseOrderService';
+import { Layout, Typography, App } from 'antd';
 // import { HomeOutlined } from '@ant-design/icons';
 import { usePurchaseOrderMaster } from '../../features/purchasing/hooks/usePurchaseOrderMaster';
 import { LogisticsStatsWidget } from '../../features/purchasing/components/LogisticsStatsWidget';
@@ -27,6 +29,10 @@ const PurchaseOrderMasterPage: React.FC = () => {
         fetchOrders
     } = usePurchaseOrderMaster();
 
+    const { message } = App.useApp();
+    const navigate = useNavigate();
+    const [cloningId, setCloningId] = useState<number | null>(null); // State loading cục bộ cho từng dòng
+
     // [NEW] Auto-refresh when window gets focus (e.g. Back from Detail)
     useEffect(() => {
         const onFocus = () => {
@@ -39,6 +45,49 @@ const PurchaseOrderMasterPage: React.FC = () => {
     // --- STATE CHO MODAL THANH TOÁN (Phiên bản mới) ---
     const [paymentModalVisible, setPaymentModalVisible] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<PurchaseOrderMaster | null>(null);
+
+    // [LOGIC] Hàm xử lý sao chép
+    const handleCloneOrder = async (order: PurchaseOrderMaster) => {
+        setCloningId(order.id); // Bật loading
+        try {
+            // 1. Lấy chi tiết đơn cũ
+            const detail = await purchaseOrderService.getPODetail(order.id);
+            if (!detail) throw new Error("Không tải được dữ liệu gốc");
+    
+            // 2. Chuẩn bị Payload (Làm sạch dữ liệu)
+            const clonePayload = {
+                supplier_id: detail.supplier_id,
+                expected_date: null, // Reset ngày
+                note: `Sao chép từ đơn ${detail.code}`,
+                delivery_method: detail.delivery_method,
+                shipping_partner_id: detail.shipping_partner_id,
+                shipping_fee: detail.shipping_fee,
+                status: 'DRAFT', // Bắt buộc về nháp
+                
+                // Map lại items, bỏ ID cũ
+                items: (detail.items || []).map((i: any) => ({
+                    product_id: i.product_id,
+                    quantity: i.quantity_ordered,
+                    unit_price: i.unit_price,
+                    unit: i.uom_ordered || i.unit,
+                    is_bonus: i.is_bonus
+                }))
+            };
+    
+            // 3. Gọi API Tạo mới
+            const res = await purchaseOrderService.createPO(clonePayload as any);
+            
+            // 4. Thông báo & Chuyển trang
+            message.success("Sao chép thành công!");
+            const newId = res.id || res;
+            navigate(`/purchase-orders/${newId}`);
+    
+        } catch (error: any) {
+            message.error("Lỗi sao chép: " + error.message);
+        } finally {
+            setCloningId(null); // Tắt loading
+        }
+    };
 
     // Hàm mở Modal (Callback từ bảng)
     const handleOpenPayment = (order: PurchaseOrderMaster) => {
@@ -78,7 +127,7 @@ const PurchaseOrderMasterPage: React.FC = () => {
                 <div style={{ background: '#fff', padding: 24, borderRadius: 8 }}>
                     <PurchaseOrderTable 
                         orders={orders} 
-                        loading={loading} 
+                        loading={loading || (cloningId !== null)} 
                         pagination={{
                             current: pagination.page,
                             pageSize: pagination.pageSize,
@@ -87,6 +136,7 @@ const PurchaseOrderMasterPage: React.FC = () => {
                         setPagination={setPagination} 
                         onDelete={deleteOrder} 
                         onOpenPaymentModal={handleOpenPayment} 
+                        onClone={handleCloneOrder}
                     />
                 </div>
 

@@ -1,5 +1,4 @@
-// src/pages/purchasing/components/POProductTable.tsx
-import { DeleteOutlined } from "@ant-design/icons";
+import { DeleteOutlined, PictureOutlined } from "@ant-design/icons"; // [UPDATE] Import icon ảnh
 import {
   Table,
   Card,
@@ -84,7 +83,13 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
             styles={{ body: { padding: 12 } }}
           >
             <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-              <Avatar shape="square" size={64} src={item.image_url} />
+              <Avatar 
+                shape="square" 
+                size={64} 
+                src={item.image_url} 
+                icon={<PictureOutlined />}
+                style={{ backgroundColor: '#f5f5f5', border: '1px solid #d9d9d9' }}
+              />
               <div style={{ flex: 1 }}>
                 <Text strong>{item.name}</Text>
                 <div>
@@ -163,7 +168,13 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
       width: 300,
       render: (_: any, r: POItem) => (
         <Space>
-          <Avatar shape="square" size={48} src={r.image_url} />
+          <Avatar 
+            shape="square" 
+            size={48} 
+            src={r.image_url} 
+            icon={<PictureOutlined />} 
+            style={{ backgroundColor: '#f5f5f5', border: '1px solid #d9d9d9' }} 
+          />
           <div>
             <div style={{ fontWeight: 500 }}>{r.name}</div>
             <div style={{ fontSize: 12, color: "#888" }}>{r.sku}</div>
