@@ -4484,15 +4484,18 @@ export type Database = {
       get_purchase_order_details: { Args: { p_id: number }; Returns: Json }
       get_purchase_orders_master: {
         Args: {
-          p_date_from?: string
-          p_date_to?: string
-          p_page?: number
-          p_page_size?: number
-          p_search?: string
-          p_status_delivery?: string
-          p_status_payment?: string
+          p_date_from: string
+          p_date_to: string
+          p_page: number
+          p_page_size: number
+          p_search: string
+          p_status_delivery: string
+          p_status_payment: string
         }
         Returns: {
+          carrier_contact: string
+          carrier_name: string
+          carrier_phone: string
           code: string
           created_at: string
           delivery_method: string
@@ -4509,6 +4512,7 @@ export type Database = {
           supplier_id: number
           supplier_name: string
           total_cartons: number
+          total_packages: number
           total_paid: number
           total_quantity: number
         }[]

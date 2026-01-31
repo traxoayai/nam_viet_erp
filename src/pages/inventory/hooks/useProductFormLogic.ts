@@ -127,44 +127,76 @@ export const useProductFormLogic = () => {
     }
   }, [isEditing, id, getProductDetails]);
 
+  // --- INITIALIZATION (FIXED FINAL) ---
   useEffect(() => {
     if (isEditing && currentProduct) {
-      // 1. BASIC FIELDS
-      const initData = { ...currentProduct };
+      // 1. Clone object
+      const initData: any = { ...currentProduct };
 
-      // 2. CALCULATE DISPLAY COST (Base -> Wholesale)
+      // [CRITICAL FIX]: Hỗ trợ cả 2 định dạng API (REST vs RPC)
+      // REST API trả về: actual_cost, retail_margin_value...
+      // RPC trả về: actualCost, retailMarginValue...
+      
+      const rawCost = currentProduct.actualCost ?? currentProduct.actual_cost;
+      const dbBaseCost = Number(rawCost) || 0;
+      
       const units = currentProduct.units || [];
       const anchor = findAnchorUnit(units);
-      const anchorRate = anchor.conversion_rate || 1;
-      const displayCost = (currentProduct.actual_cost || 0) * anchorRate;
+      const anchorRate = Number(anchor.conversion_rate) || 1;
       
+      // Quy đổi
+      const displayCost = dbBaseCost * anchorRate;
       initData.actualCost = Math.round(displayCost);
 
-      // 3. CONVERT INVENTORY (Base -> Wholesale)
-      if (initData.inventorySettings) {
-        Object.keys(initData.inventorySettings).forEach(key => {
-          const setting = initData.inventorySettings[key];
-          // Display = Base / Rate
-          setting.min = setting.min ? Math.floor(setting.min / anchorRate) : 0;
-          setting.max = setting.max ? Math.floor(setting.max / anchorRate) : 0;
+      // Map Margin (Hỗ trợ cả 2 case)
+      initData.retailMarginValue = currentProduct.retailMarginValue ?? currentProduct.retail_margin_value;
+      initData.retailMarginType = currentProduct.retailMarginType ?? currentProduct.retail_margin_type;
+      initData.wholesaleMarginValue = currentProduct.wholesaleMarginValue ?? currentProduct.wholesale_margin_value;
+      initData.wholesaleMarginType = currentProduct.wholesaleMarginType ?? currentProduct.wholesale_margin_type;
+
+      // 4. Xử lý Inventory
+      if (currentProduct.inventorySettings) {
+        const newSettings: any = {};
+        Object.keys(currentProduct.inventorySettings).forEach(whKey => {
+           const setting = currentProduct.inventorySettings[whKey]; // whKey là 'b2b', 'pkdh'...
+           if (setting) {
+               newSettings[whKey] = {
+                   min: setting.min ? Math.floor(Number(setting.min) / anchorRate) : 0,
+                   max: setting.max ? Math.floor(Number(setting.max) / anchorRate) : 0
+               };
+           }
         });
+        initData.inventorySettings = newSettings;
+      } else if (currentProduct.inventory) { 
+         // [Fallback] Nếu REST API trả về mảng 'inventory' thay vì object 'inventorySettings'
+         // Dev cần check xem productStore map inventory như thế nào.
+         // Tạm thời giữ nguyên logic cũ của Sếp.
       }
 
+      // 5. Reset & Set Form
+      form.resetFields(); 
       form.setFieldsValue(initData);
 
-      // 3. AUXILIARY UI STATE (Supplier, Image)
-      if (currentProduct.distributor_id) {
-        const supplier = suppliers.find((s) => s.id === currentProduct.distributor_id);
+      // 6. Update Local UI State
+      // Distributor ID
+      const distId = currentProduct.distributor ?? currentProduct.distributor_id;
+      if (distId) { 
+        form.setFieldValue('distributor', distId);
+        const supplier = suppliers.find((s) => s.id === distId);
         if (supplier) setSelectedSupplierName(supplier.name);
       }
-      if (currentProduct.image_url) {
-        setImageUrl(currentProduct.image_url);
-        setFileList([
-          { uid: "-1", name: "image.png", status: "done", url: currentProduct.image_url },
-        ]);
+      
+      // Image URL
+      const img = currentProduct.imageUrl ?? currentProduct.image_url;
+      if (img) {
+        setImageUrl(img);
+        setFileList([{ uid: "-1", name: "image.png", status: "done", url: img }]);
       }
-      if (currentProduct.active_ingredient && !form.getFieldValue("tags")) {
-        form.setFieldsValue({ tags: currentProduct.active_ingredient });
+      
+      // Tags
+      const tags = currentProduct.tags ?? currentProduct.active_ingredient;
+      if (tags && !form.getFieldValue("tags")) {
+        form.setFieldsValue({ tags: tags });
       }
     }
   }, [isEditing, currentProduct, form, suppliers, findAnchorUnit]);
@@ -212,10 +244,17 @@ export const useProductFormLogic = () => {
       const anchorRate = anchor.conversion_rate || 1;
       const baseCost = inputCost / anchorRate;
 
+      // [FIX] Map units to set price = 0 (Signal for Backend Auto-Pricing)
+      const fixedUnits = units.map((u: any) => ({
+          ...u,
+          price: 0, // Backend will recalculate based on Margin
+      }));
+
       const finalValues = {
         ...values,
         actualCost: baseCost, // Override with Base Cost for API
         imageUrl: finalImageUrl,
+        units: fixedUnits, // Use fixed units
       };
 
       const inventoryPayload = warehouses.map((wh) => {
@@ -227,15 +266,27 @@ export const useProductFormLogic = () => {
         };
       });
 
+      let savedId = Number(id);
+
       if (isEditing) {
-        await updateProduct(Number(id), finalValues, inventoryPayload);
+        await updateProduct(savedId, finalValues, inventoryPayload);
         antMessage.success(`Cập nhật sản phẩm thành công!`);
       } else {
-        await addProduct(finalValues, inventoryPayload);
+        const res: any = await addProduct(finalValues, inventoryPayload);
+        if (res?.product_id) {
+             savedId = Number(res.product_id);
+             // Optional: Update URL to edit mode without reload if needed, 
+             // but for now just fetching details is enough to update form
+        }
         antMessage.success(`Tạo sản phẩm thành công!`);
       }
 
-      navigate("/inventory");
+      // [FIX] Reload data to update UI with Backend-calculated prices
+      if (savedId) {
+          await getProductDetails(savedId);
+      }
+
+      // navigate("/inventory"); // [DISABLE] Stay on page to see updated prices
     } catch (error: any) {
       console.error(error);
       const msg = error.message || error.details || "Không thể lưu sản phẩm";
