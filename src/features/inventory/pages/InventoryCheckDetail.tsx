@@ -1,5 +1,5 @@
 // src/features/inventory/pages/InventoryCheckDetail.tsx
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { Layout, Button, Typography, InputNumber, Row, Col, Tag, Space, message, Modal } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, AudioOutlined, CheckCircleOutlined, CloseCircleOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -128,46 +128,62 @@ export const InventoryCheckDetail = () => {
     }, [transcript, activeItemId, items]);
     // --- VOICE LOGIC END ---
     
-    // [NEW] Helper Component: Quantity Input with +/- Buttons
-    const QuantityInput = ({ label, value, onChange, max }: any) => (
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 500 }}>{label}</div>
-        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #d9d9d9', borderRadius: 8, overflow:'hidden' }}>
-          <Button 
-            type="text" 
-            icon={<MinusOutlined />} 
-            onClick={() => onChange(Math.max(0, value - 1))}
-            style={{ height: 40, width: 40, background: '#f5f5f5', borderRadius: 0 }}
-          />
-          <InputNumber
-            value={value}
-            onChange={onChange}
-            min={0}
-            max={max}
-            controls={false} // Tắt nút spinner mặc định bé xíu
-            style={{ flex: 1, textAlign: 'center', border: 'none', boxShadow: 'none', fontSize: 16, fontWeight: 'bold' }}
-            onFocus={() => {
-                // [Logic] Tắt Mic khi focus để tránh nhiễu
-                if (listening) {
-                    message.info("Tạm tắt Mic để nhập liệu");
-                    SpeechRecognition.stopListening();
-                }
-            }}
-          />
-          <Button 
-            type="text" 
-            icon={<PlusOutlined />} 
-            onClick={() => onChange(value + 1)}
-            style={{ height: 40, width: 40, background: '#f5f5f5', borderRadius: 0 }}
-          />
-        </div>
-      </div>
-    );
+    // [FIXED FINAL] QuantityInput Optimized (Local State + No Bubble)
+    const QuantityInput = ({ label, value, onChange, max }: any) => {
+      // [NEW] Local State để gõ mượt
+      const [localValue, setLocalValue] = useState<number | null>(value);
 
-    // --- SUB-COMPONENT: CARD SẢN PHẨM ---
-    const ItemCard = ({ item }: { item: any }) => {
-        const isActive = item.id === activeItemId;
-        
+      // Sync khi props value thay đổi từ bên ngoài (VD: bấm nút + - hoặc store update)
+      useEffect(() => {
+          setLocalValue(value);
+      }, [value]);
+
+      const commitChange = () => {
+          if (localValue !== value) {
+              onChange(localValue ?? 0);
+          }
+      };
+
+      return (
+        <div style={{ marginBottom: 12 }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 500 }}>{label}</div>
+          <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #d9d9d9', borderRadius: 8, overflow:'hidden', background: '#fff' }}>
+            
+            <Button 
+              type="text" icon={<MinusOutlined />} 
+              onClick={() => onChange(Math.max(0, (value || 0) - 1))} // Nút +/- vẫn gọi trực tiếp để update ngay (props change -> useEffect sync local)
+              style={{ height: 44, width: 44, background: '#f5f5f5', borderRadius: 0, borderRight: '1px solid #eee' }}
+            />
+            
+            <InputNumber
+              value={localValue}
+              onChange={(val) => setLocalValue(val)} // Chỉ update local state -> KHÔNG GÂY RENDER CHA
+              onBlur={commitChange} // Rời chuột mới update Store -> Render cha
+              onPressEnter={(e) => {
+                  commitChange();
+                  (e.target as HTMLInputElement).blur();
+              }}
+              min={0}
+              max={max}
+              controls={false}
+              inputMode="numeric" 
+              type="number"       
+              style={{ flex: 1, textAlign: 'center', border: 'none', boxShadow: 'none', fontSize: 20, fontWeight: 'bold', height: 44, paddingTop: 6 }}
+              onFocus={(e) => e.target.select()}
+            />
+            
+            <Button 
+              type="text" icon={<PlusOutlined />} 
+              onClick={() => onChange((value || 0) + 1)}
+              style={{ height: 44, width: 44, background: '#f5f5f5', borderRadius: 0, borderLeft: '1px solid #eee' }}
+            />
+          </div>
+        </div>
+      );
+    };
+
+    // --- SUB-COMPONENT: CARD SẢN PHẨM (Memoized) ---
+    const ItemCard = memo(({ item, isActive, onActivate, onUpdateQuantity, listening, transcript, itemRef }: any) => {
         // Tính toán hiển thị Hộp/Lẻ từ tổng actual_quantity
         const rate = item.retail_unit_rate || 1;
         const boxQty = Math.floor(item.actual_quantity / rate);
@@ -179,8 +195,8 @@ export const InventoryCheckDetail = () => {
 
         return (
             <div 
-                ref={(el) => { itemRefs.current[item.id] = el; }}
-                onClick={() => setActiveItem(item.id)}
+                ref={itemRef}
+                onClick={() => onActivate(item.id)}
                 style={{
                     marginBottom: 16,
                     border: isActive ? '2px solid #1890ff' : '1px solid #e8e8e8',
@@ -212,21 +228,22 @@ export const InventoryCheckDetail = () => {
                         <span><b>{sysBox}</b> {item.large_unit} {sysUnit > 0 && ` - ${sysUnit} ${item.unit}`}</span>
                     </div>
 
-                    {/* Dòng Input (Nhập liệu kép) - [UPDATED with QuantityInput] */}
+                    {/* Dòng Input (Nhập liệu kép) */}
                     <Row gutter={12}>
                         <Col span={12}>
                             <QuantityInput 
                                 label={`SL ${item.large_unit} (Chẵn)`}
                                 value={boxQty}
-                                onChange={(val: number) => updateItemQuantity(item.id, val, unitQty)}
+                                onChange={(val: number) => onUpdateQuantity(item.id, val, unitQty)}
+                                max={99999}
                             />
                         </Col>
                         <Col span={12}>
                             <QuantityInput 
                                 label={`SL ${item.unit} (Lẻ)`}
                                 value={unitQty}
+                                onChange={(val: number) => onUpdateQuantity(item.id, boxQty, val)}
                                 max={rate - 1}
-                                onChange={(val: number) => updateItemQuantity(item.id, boxQty, val)}
                             />
                         </Col>
                     </Row>
@@ -251,7 +268,14 @@ export const InventoryCheckDetail = () => {
                 )}
             </div>
         );
-    };
+    }, (prev, next) => {
+        // Custom comparison for memo
+        return prev.item.id === next.item.id 
+            && prev.item.actual_quantity === next.item.actual_quantity
+            && prev.isActive === next.isActive
+            && prev.listening === next.listening 
+            && prev.transcript === next.transcript;
+    });
 
     // Hàm xử lý hoàn tất
     const onComplete = () => {
@@ -357,7 +381,16 @@ export const InventoryCheckDetail = () => {
             {/* CONTENT */}
             <Content style={{ padding: '12px', paddingBottom: 100 }}>
                 {items.map(item => (
-                    <ItemCard key={item.id} item={item} />
+                    <ItemCard 
+                        key={item.id} 
+                        item={item} 
+                        isActive={item.id === activeItemId}
+                        onActivate={setActiveItem}
+                        onUpdateQuantity={updateItemQuantity}
+                        listening={listening}
+                        transcript={transcript}
+                        itemRef={(el: any) => { itemRefs.current[item.id] = el; }}
+                    />
                 ))}
             </Content>
 
