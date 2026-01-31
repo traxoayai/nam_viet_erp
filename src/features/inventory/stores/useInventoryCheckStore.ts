@@ -26,8 +26,10 @@ interface InventoryCheckState {
     completeSession: (userId: string) => Promise<void>;
 
     // [NEW ACTIONS]
+    // [NEW ACTIONS]
     saveCheckInfo: (note: string) => Promise<void>;
     cancelSession: () => Promise<void>;
+    addItemToCheck: (productId: number) => Promise<void>;
 }
 
 export const useInventoryCheckStore = create<InventoryCheckState>((set, get) => ({
@@ -132,6 +134,41 @@ export const useInventoryCheckStore = create<InventoryCheckState>((set, get) => 
         await inventoryService.cancelCheck(activeSession.id);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         set({ activeSession: { ...activeSession, status: 'CANCELLED' } as any });
+    },
+
+    // [IMPLEMENTATION]
+    addItemToCheck: async (productId) => {
+        const { activeSession } = get();
+        if (!activeSession) return;
+
+        set({ loading: true });
+        try {
+            // 1. Gọi RPC thêm
+            const res = await inventoryService.addItemToCheck(activeSession.id, productId);
+            
+            // 2. Xử lý phản hồi
+            if (res.status === 'exists') {
+                message.info("Sản phẩm đã có trong danh sách! Đang di chuyển tới...");
+                // Scroll tới sản phẩm đã có
+                set({ activeItemId: res.item_id });
+            } else if (res.status === 'success') {
+                message.success("Đã thêm sản phẩm mới vào phiếu!");
+                
+                // 3. Reload lại danh sách items để có dữ liệu đầy đủ (Join Product, Units...)
+                // Vì RPC add chỉ trả về ID, ta cần load lại để có full info hiển thị lên Card
+                await get().fetchSessionDetails(activeSession.id);
+                
+                // 4. Highlight sản phẩm mới thêm
+                set({ activeItemId: res.item_id });
+            } else {
+                message.error(res.message || "Không thể thêm sản phẩm");
+            }
+        } catch (error: any) {
+            console.error(error);
+            message.error(error.message || "Lỗi thêm sản phẩm");
+        } finally {
+            set({ loading: false });
+        }
     }
 }));
 

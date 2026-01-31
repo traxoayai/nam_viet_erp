@@ -59,6 +59,13 @@ CREATE EXTENSION IF NOT EXISTS "supabase_vault" WITH SCHEMA "vault";
 
 
 
+CREATE EXTENSION IF NOT EXISTS "unaccent" WITH SCHEMA "public";
+
+
+
+
+
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
@@ -347,6 +354,81 @@ CREATE TYPE "public"."transaction_type" AS ENUM (
 
 
 ALTER TYPE "public"."transaction_type" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."add_item_to_check_session"("p_check_id" bigint, "p_product_id" bigint) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_warehouse_id bigint;
+    v_check_status text;
+    v_system_qty numeric;
+    v_cost_price numeric;
+    v_location text;
+    v_new_id bigint;
+    v_exists_id bigint;
+BEGIN
+    -- 1. Validate Phiếu Kiểm
+    SELECT warehouse_id, status INTO v_warehouse_id, v_check_status 
+    FROM public.inventory_checks WHERE id = p_check_id;
+    
+    IF v_warehouse_id IS NULL THEN
+        RETURN jsonb_build_object('status', 'error', 'message', 'Phiếu kiểm kê không tồn tại');
+    END IF;
+
+    IF v_check_status = 'completed' OR v_check_status = 'cancelled' THEN
+        RETURN jsonb_build_object('status', 'error', 'message', 'Không thể thêm vào phiếu đã khóa/hủy');
+    END IF;
+    
+    -- 2. Kiểm tra trùng lặp (Idempotency)
+    SELECT id INTO v_exists_id FROM public.inventory_check_items 
+    WHERE check_id = p_check_id AND product_id = p_product_id;
+    
+    IF v_exists_id IS NOT NULL THEN
+        RETURN jsonb_build_object('status', 'exists', 'item_id', v_exists_id, 'message', 'Sản phẩm này đã có trong phiếu');
+    END IF;
+
+    -- 3. Snapshot Tồn kho & Vị trí (Quan trọng nhất của kiểm kê)
+    -- Lấy đúng tồn kho tại thời điểm thêm vào phiếu
+    SELECT 
+        COALESCE(stock_quantity, 0),
+        COALESCE(NULLIF(location_cabinet, '') || '-', '') || COALESCE(NULLIF(location_row, '') || '-', '') || COALESCE(location_slot, '')
+    INTO v_system_qty, v_location
+    FROM public.product_inventory 
+    WHERE warehouse_id = v_warehouse_id AND product_id = p_product_id;
+
+    -- 4. Lấy giá vốn tham khảo (cho báo cáo chênh lệch giá trị)
+    SELECT actual_cost INTO v_cost_price FROM public.products WHERE id = p_product_id;
+
+    -- 5. Insert dòng mới
+    INSERT INTO public.inventory_check_items (
+        check_id, 
+        product_id, 
+        system_quantity, -- Tồn kho hệ thống (Snapshot)
+        actual_quantity, -- Tồn kho thực tế (Mặc định 0 để bắt buộc đếm)
+        cost_price, 
+        location_snapshot, 
+        created_at, updated_at
+    ) VALUES (
+        p_check_id, 
+        p_product_id, 
+        v_system_qty, 
+        0, 
+        COALESCE(v_cost_price, 0), 
+        v_location, 
+        NOW(), NOW()
+    ) RETURNING id INTO v_new_id;
+
+    -- Update thời gian sửa đổi phiếu
+    UPDATE public.inventory_checks SET updated_at = NOW() WHERE id = p_check_id;
+
+    RETURN jsonb_build_object('status', 'success', 'item_id', v_new_id, 'message', 'Đã thêm sản phẩm vào phiếu kiểm');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."add_item_to_check_session"("p_check_id" bigint, "p_product_id" bigint) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."allocate_inbound_costs"("p_receipt_id" bigint) RETURNS "jsonb"
@@ -3631,8 +3713,9 @@ $$;
 ALTER FUNCTION "public"."create_product"("p_name" "text", "p_sku" "text", "p_barcode" "text", "p_active_ingredient" "text", "p_image_url" "text", "p_category_name" "text", "p_manufacturer_name" "text", "p_distributor_id" bigint, "p_status" "text", "p_invoice_price" numeric, "p_actual_cost" numeric, "p_wholesale_unit" "text", "p_retail_unit" "text", "p_conversion_factor" integer, "p_wholesale_margin_value" numeric, "p_wholesale_margin_type" "text", "p_retail_margin_value" numeric, "p_retail_margin_type" "text", "p_items_per_carton" integer, "p_carton_weight" numeric, "p_carton_dimensions" "text", "p_purchasing_policy" "text", "p_inventory_settings" "jsonb", "p_description" "text", "p_registration_number" "text", "p_packing_spec" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text" DEFAULT 'DRAFT'::"text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_items" "jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 DECLARE
     v_po_id BIGINT;
@@ -3680,6 +3763,7 @@ BEGIN
                 SELECT items_per_carton, wholesale_unit INTO v_product_record
                 FROM public.products WHERE id = (v_item->>'product_id')::BIGINT;
 
+                -- Tính toán conversion factor
                 IF (v_item->>'unit') = v_product_record.wholesale_unit THEN
                     v_conversion_factor := COALESCE(v_product_record.items_per_carton, 1);
                 ELSE
@@ -3687,7 +3771,7 @@ BEGIN
                 END IF;
                 v_base_qty := v_qty_ordered * v_conversion_factor;
 
-                -- Insert Item (Đầy đủ cột mới)
+                -- Insert Item
                 INSERT INTO public.purchase_order_items (
                     po_id, product_id, quantity_ordered, uom_ordered, unit, 
                     unit_price, is_bonus, conversion_factor, base_quantity
@@ -3713,7 +3797,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_items" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint DEFAULT NULL::bigint, "p_customer_b2c_id" bigint DEFAULT NULL::bigint, "p_discount_amount" numeric DEFAULT 0, "p_items" "jsonb" DEFAULT '[]'::"jsonb", "p_order_type" "text" DEFAULT 'POS'::"text", "p_payment_method" "text" DEFAULT 'cash'::"text", "p_shipping_fee" numeric DEFAULT 0, "p_status" "text" DEFAULT 'COMPLETED'::"text", "p_warehouse_id" bigint DEFAULT 1, "p_note" "text" DEFAULT NULL::"text", "p_delivery_address" "text" DEFAULT NULL::"text", "p_delivery_time" "text" DEFAULT NULL::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_delivery_method" "text" DEFAULT 'internal'::"text", "p_customer_id" bigint DEFAULT NULL::bigint) RETURNS "uuid"
@@ -5753,57 +5837,93 @@ CREATE OR REPLACE FUNCTION "public"."get_purchase_order_detail"("p_po_id" bigint
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-    DECLARE
-        v_result JSONB;
-    BEGIN
-        SELECT jsonb_build_object(
-            -- Header fields (giữ nguyên)
-            'id', po.id, 'code', po.code, 'status', po.status, 'delivery_status', po.delivery_status,
-            'payment_status', po.payment_status, 'expected_delivery_date', po.expected_delivery_date,
-            'created_at', po.created_at, 'note', po.note, 'total_amount', po.total_amount,
-            'final_amount', po.final_amount, 'discount_amount', po.discount_amount,
-            'delivery_method', po.delivery_method, 'shipping_fee', po.shipping_fee,
-            'shipping_partner_id', po.shipping_partner_id, 'total_packages', po.total_packages,
-            'carrier_name', po.carrier_name, 'carrier_contact', po.carrier_contact,
-            'carrier_phone', po.carrier_phone, 'expected_delivery_time', po.expected_delivery_time,
-            
-            'supplier', jsonb_build_object('id', s.id, 'name', s.name, 'phone', s.phone, 'address', s.address, 'tax_code', s.tax_code, 'debt', 0),
+DECLARE
+    v_result JSONB;
+BEGIN
+    SELECT jsonb_build_object(
+        -- Header fields
+        'id', po.id, 
+        'code', po.code, 
+        'status', po.status, 
+        'delivery_status', po.delivery_status,
+        'payment_status', po.payment_status, 
+        'expected_delivery_date', po.expected_delivery_date,
+        'created_at', po.created_at, 
+        'note', po.note, 
+        'total_amount', po.total_amount,
+        'final_amount', po.final_amount, 
+        'discount_amount', po.discount_amount,
+        'delivery_method', po.delivery_method, 
+        'shipping_fee', po.shipping_fee,
+        'shipping_partner_id', po.shipping_partner_id, 
+        'total_packages', po.total_packages,
+        'carrier_name', po.carrier_name, 
+        'carrier_contact', po.carrier_contact,
+        'carrier_phone', po.carrier_phone, 
+        'expected_delivery_time', po.expected_delivery_time,
+        
+        -- [FIX 1] Đưa supplier_id ra ngoài root (Để Frontend Clone/Edit dễ dàng)
+        'supplier_id', po.supplier_id, 
+        
+        -- [FIX 2] Supplier Object (Giữ nguyên cho UI hiển thị chi tiết)
+        'supplier', CASE 
+            WHEN s.id IS NOT NULL THEN jsonb_build_object('id', s.id, 'name', s.name, 'phone', s.phone, 'address', s.address, 'tax_code', s.tax_code, 'debt', 0)
+            ELSE NULL 
+        END,
 
-            'items', COALESCE((
-                SELECT jsonb_agg(jsonb_build_object(
-                    'key', poi.id, 'id', poi.id, 
-                    'quantity_ordered', poi.quantity_ordered, 'quantity_received', COALESCE(poi.quantity_received, 0),
-                    'uom_ordered', poi.uom_ordered, 'unit', poi.unit, 
-                    'unit_price', poi.unit_price, 'total_line', (poi.quantity_ordered * poi.unit_price),
-                    'conversion_factor', poi.conversion_factor, 'base_quantity', poi.base_quantity,
-                    
-                    'is_bonus', poi.is_bonus, -- [NEW FIELD RETURN]
-                    
-                    'product_id', p.id, 'product_name', p.name, 'sku', p.sku, 'image_url', p.image_url,
-                    'stock_management_type', p.stock_management_type,
-                    'available_units', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', pu.id, 'unit_name', pu.unit_name, 'conversion_rate', pu.conversion_rate, 'is_base', pu.is_base, 'barcode', pu.barcode, 'price_sell', pu.price_sell) ORDER BY pu.conversion_rate ASC) FROM public.product_units pu WHERE pu.product_id = p.id), '[]'::jsonb)
-                ) ORDER BY poi.id ASC)
-                FROM public.purchase_order_items poi
-                JOIN public.products p ON poi.product_id = p.id
-                WHERE poi.po_id = po.id
-            ), '[]'::jsonb)
-        )
-        INTO v_result
-        FROM public.purchase_orders po
-        LEFT JOIN public.suppliers s ON po.supplier_id = s.id
-        WHERE po.id = p_po_id;
+        -- Items Array
+        'items', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+                'key', poi.id, 
+                'id', poi.id, 
+                'quantity_ordered', poi.quantity_ordered, 
+                'quantity_received', COALESCE(poi.quantity_received, 0),
+                'uom_ordered', poi.uom_ordered, 
+                'unit', poi.unit, 
+                'unit_price', poi.unit_price, 
+                'total_line', (poi.quantity_ordered * poi.unit_price),
+                'conversion_factor', poi.conversion_factor, 
+                'base_quantity', poi.base_quantity,
+                
+                'is_bonus', poi.is_bonus, -- [FIX 3] Trả về trường Bonus
+                
+                'product_id', p.id, 
+                'product_name', p.name, 
+                'sku', p.sku, 
+                'image_url', p.image_url,
+                'stock_management_type', p.stock_management_type,
+                'wholesale_unit', p.wholesale_unit, 
+                'retail_unit', p.retail_unit,
+                'items_per_carton', p.items_per_carton,
+                
+                'available_units', COALESCE((
+                    SELECT jsonb_agg(jsonb_build_object(
+                        'id', pu.id, 
+                        'unit_name', pu.unit_name, 
+                        'conversion_rate', pu.conversion_rate, 
+                        'is_base', pu.is_base, 
+                        'price_sell', pu.price_sell
+                    ) ORDER BY pu.conversion_rate ASC) 
+                    FROM public.product_units pu WHERE pu.product_id = p.id
+                ), '[]'::jsonb)
+            ) ORDER BY poi.id ASC)
+            FROM public.purchase_order_items poi
+            JOIN public.products p ON poi.product_id = p.id
+            WHERE poi.po_id = po.id
+        ), '[]'::jsonb)
+    )
+    INTO v_result
+    FROM public.purchase_orders po
+    LEFT JOIN public.suppliers s ON po.supplier_id = s.id
+    WHERE po.id = p_po_id;
 
-        IF v_result IS NULL THEN RETURN NULL; END IF;
-        RETURN v_result;
-    END;
-    $$;
+    IF v_result IS NULL THEN RETURN NULL; END IF;
+    RETURN v_result;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."get_purchase_order_detail"("p_po_id" bigint) OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."get_purchase_order_detail"("p_po_id" bigint) IS 'V2: PO Detail + Logistics Info + Available Units';
-
 
 
 CREATE OR REPLACE FUNCTION "public"."get_purchase_order_details"("p_id" bigint) RETURNS json
@@ -9121,6 +9241,62 @@ $$;
 
 
 ALTER FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."search_products_for_stocktake"("p_keyword" "text", "p_warehouse_id" bigint) RETURNS TABLE("id" bigint, "sku" "text", "name" "text", "image_url" "text", "unit" "text", "wholesale_unit" "text", "retail_unit" "text", "items_per_carton" integer, "system_stock" numeric, "location" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_clean_keyword text;
+BEGIN
+    -- Làm sạch từ khóa: Bỏ khoảng trắng thừa
+    v_clean_keyword := trim(regexp_replace(p_keyword, '\s+', ' ', 'g'));
+    
+    RETURN QUERY
+    SELECT 
+        p.id,
+        p.sku,
+        p.name,
+        p.image_url,
+        COALESCE(u_base.unit_name, 'Đv') as unit,
+        p.wholesale_unit,
+        p.retail_unit,
+        COALESCE(p.items_per_carton, 1),
+        -- Lấy tồn kho của đúng kho đang kiểm (nếu null thì là 0)
+        COALESCE(inv.stock_quantity, 0) as system_stock,
+        -- Ghép vị trí thành chuỗi dễ đọc (Kệ-Tầng-Hộc)
+        COALESCE(NULLIF(inv.location_cabinet, '') || '-', '') || 
+        COALESCE(NULLIF(inv.location_row, '') || '-', '') || 
+        COALESCE(inv.location_slot, '') as location
+    FROM public.products p
+    -- Left Join tồn kho theo Warehouse ID
+    LEFT JOIN public.product_inventory inv 
+        ON p.id = inv.product_id AND inv.warehouse_id = p_warehouse_id
+    -- Lấy tên đơn vị cơ bản
+    LEFT JOIN public.product_units u_base 
+        ON p.id = u_base.product_id AND u_base.is_base = true
+    WHERE 
+        p.status = 'active'
+        AND (
+            -- Logic tìm kiếm thông minh:
+            -- 1. Tìm chính xác Barcode/SKU (Ưu tiên cao nhất, chạy nhanh nhất)
+            p.barcode ILIKE v_clean_keyword
+            OR p.sku ILIKE v_clean_keyword || '%'
+            -- 2. Tìm tên có dấu hoặc không dấu (Unaccent)
+            -- VD: Gõ "para" tìm được "Paracetamol", gõ "khau trang" tìm được "Khẩu trang"
+            OR unaccent(p.name) ILIKE '%' || unaccent(v_clean_keyword) || '%'
+        )
+    ORDER BY 
+        -- Ưu tiên hiển thị: Khớp SKU trước -> Khớp tên sau
+        CASE WHEN p.sku ILIKE v_clean_keyword || '%' THEN 1 ELSE 2 END,
+        p.name ASC
+    LIMIT 20; -- Giới hạn 20 kết quả để nhẹ giao diện
+END;
+$$;
+
+
+ALTER FUNCTION "public"."search_products_for_stocktake"("p_keyword" "text", "p_warehouse_id" bigint) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."search_products_for_transfer"("p_warehouse_id" bigint, "p_keyword" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 20) RETURNS TABLE("id" bigint, "sku" "text", "name" "text", "image_url" "text", "current_stock" integer, "shelf_location" "text", "lot_number" "text", "expiry_date" "date", "unit" "text", "conversion_factor" integer, "items_per_carton" integer)
@@ -15373,6 +15549,12 @@ GRANT ALL ON FUNCTION "public"."gtrgm_out"("public"."gtrgm") TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."add_item_to_check_session"("p_check_id" bigint, "p_product_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."add_item_to_check_session"("p_check_id" bigint, "p_product_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."add_item_to_check_session"("p_check_id" bigint, "p_product_id" bigint) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."allocate_inbound_costs"("p_receipt_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."allocate_inbound_costs"("p_receipt_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."allocate_inbound_costs"("p_receipt_id" bigint) TO "service_role";
@@ -15661,9 +15843,9 @@ GRANT ALL ON FUNCTION "public"."create_product"("p_name" "text", "p_sku" "text",
 
 
 
-GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_items" "jsonb", "p_status" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_items" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_items" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_items" "jsonb") TO "service_role";
 
 
 
@@ -16424,6 +16606,12 @@ GRANT ALL ON FUNCTION "public"."search_products_for_purchase"("p_keyword" "text"
 
 
 
+GRANT ALL ON FUNCTION "public"."search_products_for_stocktake"("p_keyword" "text", "p_warehouse_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."search_products_for_stocktake"("p_keyword" "text", "p_warehouse_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_products_for_stocktake"("p_keyword" "text", "p_warehouse_id" bigint) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."search_products_for_transfer"("p_warehouse_id" bigint, "p_keyword" "text", "p_limit" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."search_products_for_transfer"("p_warehouse_id" bigint, "p_keyword" "text", "p_limit" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."search_products_for_transfer"("p_warehouse_id" bigint, "p_keyword" "text", "p_limit" integer) TO "service_role";
@@ -16600,6 +16788,34 @@ GRANT ALL ON FUNCTION "public"."trigger_order_cancel_restore_stock"() TO "servic
 GRANT ALL ON FUNCTION "public"."trigger_refresh_on_criteria_change"() TO "anon";
 GRANT ALL ON FUNCTION "public"."trigger_refresh_on_criteria_change"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."trigger_refresh_on_criteria_change"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."unaccent"("text") TO "postgres";
+GRANT ALL ON FUNCTION "public"."unaccent"("text") TO "anon";
+GRANT ALL ON FUNCTION "public"."unaccent"("text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."unaccent"("text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."unaccent"("regdictionary", "text") TO "postgres";
+GRANT ALL ON FUNCTION "public"."unaccent"("regdictionary", "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."unaccent"("regdictionary", "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."unaccent"("regdictionary", "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."unaccent_init"("internal") TO "postgres";
+GRANT ALL ON FUNCTION "public"."unaccent_init"("internal") TO "anon";
+GRANT ALL ON FUNCTION "public"."unaccent_init"("internal") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."unaccent_init"("internal") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."unaccent_lexize"("internal", "internal", "internal", "internal") TO "postgres";
+GRANT ALL ON FUNCTION "public"."unaccent_lexize"("internal", "internal", "internal", "internal") TO "anon";
+GRANT ALL ON FUNCTION "public"."unaccent_lexize"("internal", "internal", "internal", "internal") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."unaccent_lexize"("internal", "internal", "internal", "internal") TO "service_role";
 
 
 

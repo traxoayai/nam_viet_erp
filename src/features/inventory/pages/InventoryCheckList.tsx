@@ -1,3 +1,4 @@
+// src/features/inventory/pages/InventoryCheckList.tsx
 import { useEffect, useState } from 'react';
 import { Layout, Table, Button, Tag, Typography, Select, Input, DatePicker, Card, Row, Col } from 'antd';
 import { PlusOutlined, AuditOutlined, SearchOutlined } from '@ant-design/icons';
@@ -190,7 +191,7 @@ export const InventoryCheckList = () => {
             </div>
 
             {/* Filter Bar */}
-            <Card bodyStyle={{padding: 16}} style={{marginBottom: 16, borderRadius: 8}}>
+            <Card styles={{ body: { padding: 16 } }} style={{marginBottom: 16, borderRadius: 8}}>
                 <Row gutter={[16, 16]} align="middle">
                     {/* Chọn Kho */}
                     <Col xs={24} sm={12} md={6} lg={5}>

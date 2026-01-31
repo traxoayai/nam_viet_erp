@@ -1,25 +1,35 @@
 // src/features/inventory/pages/InventoryCheckDetail.tsx
 import { useEffect, useRef, useState, memo } from 'react';
-import { Layout, Button, Typography, InputNumber, Row, Col, Tag, Space, message, Modal } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, AudioOutlined, CheckCircleOutlined, CloseCircleOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
+import { Layout, Button, Typography, InputNumber, Row, Col, Tag, Space, message, Modal, Avatar, Grid } from 'antd';
+import { 
+    ArrowLeftOutlined, SaveOutlined, AudioOutlined, CheckCircleOutlined, 
+    CloseCircleOutlined, PlusOutlined, MinusOutlined, PictureOutlined, UserOutlined 
+} from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useInventoryCheckStore } from '../stores/useInventoryCheckStore';
 import { useAuth } from '@/app/contexts/AuthProvider';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import { parseVoiceCommand } from '@/shared/utils/voiceUtils';
+import { DebounceSelect } from '@/shared/ui/common/DebounceSelect'; 
+import { inventoryService } from '../api/inventoryService';
+
 
 const { Header, Content, Footer } = Layout;
 const { Text, Title } = Typography;
+const { useBreakpoint } = Grid;
 
 export const InventoryCheckDetail = () => {
+ 
     const navigate = useNavigate();
     const { id } = useParams(); 
     const { user } = useAuth();
+    const screens = useBreakpoint(); // [NEW] Hook check màn hình
     
     const { 
         items, activeSession, fetchSessionDetails, 
         updateItemQuantity, activeItemId, setActiveItem, moveToNextItem, completeSession,
-        saveCheckInfo, cancelSession
+        saveCheckInfo, cancelSession,
+        addItemToCheck // [NEW] Lấy action mới
     } = useInventoryCheckStore();
 
     // Ref để quản lý Auto-Scroll
@@ -254,10 +264,17 @@ export const InventoryCheckDetail = () => {
                             <Text type={item.diff_quantity > 0 ? "success" : "danger"} strong>
                                 {item.diff_quantity > 0 ? "Thừa" : "Thiếu"}: {item.diff_quantity > 0 ? "+" : ""}{item.diff_quantity} {item.unit}
                             </Text>
+
                         ) : (
                             <Text type="success" style={{fontSize: 12}}><CheckCircleOutlined /> Khớp số liệu</Text>
                         )}
                     </div>
+                    {/* KPI Display */}
+                    {item.counted_at && (
+                         <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed #eee', fontSize: 11, color: '#999', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4 }}>
+                             <UserOutlined /> <span>Đã kiểm lúc {new Date(item.counted_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}</span>
+                         </div>
+                    )}
                 </div>
 
                 {/* Voice Indicator (Chỉ hiện khi Active) */}
@@ -321,58 +338,24 @@ export const InventoryCheckDetail = () => {
                 position: 'sticky', top: 0, zIndex: 100, borderBottom:'1px solid #ddd', height: 60, gap: 12
             }}>
                 <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} />
-                <div style={{
-                    flex: 1, 
-                    overflow:'hidden', 
-                    display: 'flex',           // [MỚI]
-                    flexDirection: 'column',   // [MỚI] Xếp dọc
-                    justifyContent: 'center'   // [MỚI] Căn giữa theo chiều dọc
-                    }}>
-                    {/* SỬA style của div Tiêu đề */}
-                    <div style={{
-                        fontWeight: 700, 
-                        fontSize: 16, 
-                        whiteSpace:'nowrap', 
-                        overflow:'hidden', 
-                        textOverflow:'ellipsis',
-                        lineHeight: '20px'     // [MỚI] Khống chế chiều cao dòng
-                    }}>
+                <div style={{ flex: 1, overflow:'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    {/* Trên Mobile chỉ hiện Mã phiếu, ẩn text phụ */}
+                    <div style={{ fontWeight: 700, fontSize: 16, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', lineHeight: '20px' }}>
                         {activeSession?.code || 'Đang tải...'}
                     </div>
-                    
-                    {/* SỬA style của Text Phụ đề */}
-                    <Text type="secondary" style={{
-                        fontSize: 11, 
-                        lineHeight: '14px'     // [MỚI] Khống chế chiều cao dòng
-                    }}>
-                        {items.length} sản phẩm cần kiểm
-                    </Text>
+                    {/* Chỉ hiện dòng này khi màn hình >= sm (Tablets trở lên) */}
+                    {screens.sm && (
+                        <Text type="secondary" style={{ fontSize: 11, lineHeight: '14px' }}>
+                            {items.length} sản phẩm cần kiểm
+                        </Text>
+                    )}
                 </div>
                 <Space>
                     {activeSession?.status === 'DRAFT' && (
                         <>
-                            <Button 
-                                danger 
-                                icon={<CloseCircleOutlined />} 
-                                onClick={onCancelSession}
-                            >
-                                Hủy
-                            </Button>
-                            
-                            <Button 
-                                icon={<SaveOutlined />} 
-                                onClick={onSaveDraft}
-                            >
-                                Lưu tạm
-                            </Button>
-
-                            <Button 
-                                type="primary" 
-                                icon={<CheckCircleOutlined />} 
-                                onClick={onComplete}
-                            >
-                                Hoàn tất
-                            </Button>
+                            <Button danger icon={<CloseCircleOutlined />} onClick={onCancelSession}>{!screens.xs && 'Hủy'}</Button>
+                            <Button icon={<SaveOutlined />} onClick={onSaveDraft}>{!screens.xs && 'Lưu'}</Button>
+                            <Button type="primary" icon={<CheckCircleOutlined />} onClick={onComplete}>Hoàn tất</Button>
                         </>
                     )}
                 </Space>
@@ -380,6 +363,83 @@ export const InventoryCheckDetail = () => {
 
             {/* CONTENT */}
             <Content style={{ padding: '12px', paddingBottom: 100 }}>
+                
+                {/* [UPDATE] STICKY SEARCH BAR - GHIM LẠI KHI CUỘN */}
+                {activeSession?.status === 'DRAFT' && (
+                    <div style={{ 
+                        position: 'sticky', // [FIX] Ghim thanh tìm kiếm
+                        top: 60,            // Cách top 60px (chiều cao Header)
+                        zIndex: 99,         // Nổi lên trên items
+                        marginBottom: 16, 
+                        background: '#f0f2f5', // Trùng màu nền để che nội dung trôi qua
+                        paddingBottom: 8,      // Tạo khoảng cách
+                        paddingTop: 8          // Tạo khoảng cách
+                    }}>
+                        <div style={{ 
+                            background: '#fff', 
+                            padding: '12px 16px', 
+                            borderRadius: 12, 
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)', 
+                            border: '1px solid #e6f7ff' 
+                        }}>
+                            <div style={{fontSize: 13, fontWeight: 600, marginBottom: 8, color:'#0050b3', display:'flex', alignItems:'center', gap: 6}}>
+                                <PlusOutlined /> Thêm sản phẩm ngoài danh sách
+                            </div>
+                            
+                            <DebounceSelect
+                                showSearch
+                                placeholder="Gõ tên thuốc (VD: panadol...)"
+                                fetchOptions={async (search: string) => {
+                                    if (!activeSession?.warehouse_id || !search) return [];
+                                    try {
+                                        const res = await inventoryService.searchProductForCheck(search, activeSession.warehouse_id);
+                                        return res.map((p: any) => {
+                                            const rate = p.items_per_carton || 1;
+                                            const stock = Number(p.system_stock || 0);
+                                            const box = Math.floor(stock / rate);
+                                            const unit = stock % rate;
+                                            
+                                            // [FIX] Ưu tiên hiển thị retail_unit ("Vỉ") thay vì unit mặc định ("Viên")
+                                            const retailUnitName = p.retail_unit || p.unit || 'Lẻ';
+                                            const wholesaleUnitName = p.wholesale_unit || 'Hộp';
+
+                                            let stockDisplay = '';
+                                            if (stock <= 0) {
+                                                stockDisplay = 'Hết hàng';
+                                            } else {
+                                                const parts = [];
+                                                if (box > 0) parts.push(`${box} ${wholesaleUnitName}`);
+                                                // Hiển thị phần lẻ với đơn vị bán lẻ (Vỉ)
+                                                if (unit > 0) parts.push(`${unit} ${retailUnitName}`);
+                                                stockDisplay = parts.join(' - ');
+                                            }
+
+                                            return {
+                                                value: p.id,
+                                                key: p.id,
+                                                label: (
+                                                    <div style={{display:'flex', alignItems:'center', gap: 12, padding: '4px 0'}}>
+                                                        <Avatar shape="square" size={48} src={p.image_url || undefined} icon={<PictureOutlined />} style={{flexShrink: 0, border: '1px solid #f0f0f0', backgroundColor: '#fafafa'}} />
+                                                        <div style={{flex: 1, overflow: 'hidden'}}>
+                                                            <div style={{fontWeight: 600, fontSize: 14, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{p.name}</div>
+                                                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop: 4}}>
+                                                                <Text type="secondary" style={{fontSize: 12}}>{p.sku}</Text>
+                                                                <Tag color={stock > 0 ? 'blue' : 'red'} style={{marginRight: 0, fontSize: 11}}>{stockDisplay}</Tag>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            };
+                                        });
+                                    } catch (e) { return []; }
+                                }}
+                                style={{ width: '100%' }}
+                                onChange={(newValue: any) => { if (newValue) addItemToCheck(Number(newValue.value)); }}
+                                value={null} 
+                            />
+                        </div>
+                    </div>
+                )}
                 {items.map(item => (
                     <ItemCard 
                         key={item.id} 

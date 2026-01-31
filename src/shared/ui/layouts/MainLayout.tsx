@@ -680,7 +680,7 @@ const MainLayout: React.FC = () => {
           onClose={() => setMobileOpen(false)}
           open={mobileOpen}
           width={280}
-          bodyStyle={{ padding: 0 }}
+          styles={{ body: { padding: 0 } }}
           closable={false} // Tắt nút X mặc định để tự custom
         >
           {/* Copy SidebarContent nhưng set collapsed = false để luôn hiện logo */}

@@ -67,9 +67,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           justifyContent: "center",
           alignItems: "center",
           background: "#f0f2f5",
+          flexDirection: "column" // [FIX] Stack vertical
         }}
       >
-        <Spin size="large" tip="Đang kết nối hệ thống..." />
+        <Spin size="large" />
+        <div style={{ marginTop: 16, color: '#1890ff', fontWeight: 500 }}>Đang kết nối hệ thống...</div>
       </div>
     );
   }

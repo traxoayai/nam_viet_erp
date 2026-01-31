@@ -3717,6 +3717,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_item_to_check_session: {
+        Args: { p_check_id: number; p_product_id: number }
+        Returns: Json
+      }
       allocate_inbound_costs: { Args: { p_receipt_id: number }; Returns: Json }
       approve_user: { Args: { p_user_id: string }; Returns: undefined }
       auto_create_purchase_orders_min_max: { Args: never; Returns: number }
@@ -4030,7 +4034,7 @@ export type Database = {
           p_note: string
           p_shipping_fee: number
           p_shipping_partner_id: number
-          p_status?: string
+          p_status: string
           p_supplier_id: number
         }
         Returns: Json
@@ -5029,6 +5033,21 @@ export type Database = {
           wholesale_unit: string
         }[]
       }
+      search_products_for_stocktake: {
+        Args: { p_keyword: string; p_warehouse_id: number }
+        Returns: {
+          id: number
+          image_url: string
+          items_per_carton: number
+          location: string
+          name: string
+          retail_unit: string
+          sku: string
+          system_stock: number
+          unit: string
+          wholesale_unit: string
+        }[]
+      }
       search_products_for_transfer: {
         Args: { p_keyword?: string; p_limit?: number; p_warehouse_id: number }
         Returns: {
@@ -5094,6 +5113,7 @@ export type Database = {
         Args: { p_batch_items: Json; p_transfer_id: number }
         Returns: Json
       }
+      unaccent: { Args: { "": string }; Returns: string }
       update_asset: {
         Args: {
           p_asset_data: Json

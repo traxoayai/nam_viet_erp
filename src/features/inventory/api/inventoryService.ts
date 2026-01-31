@@ -1,3 +1,4 @@
+// src/features/inventory/api/inventoryService.ts
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "@/shared/lib/supabaseClient";
 // Đảm bảo đường dẫn import types đúng với dự án
@@ -298,5 +299,30 @@ export const inventoryService = {
   async completeCheck(checkId: number, userId: string) {
     const { error } = await supabase.rpc('complete_inventory_check', { p_check_id: checkId, p_user_id: userId });
     if (error) throw error;
+  },
+
+  // =================================================================
+  // PHẦN 4: ACTIVE SCANNING (KIỂM KÊ CHỦ ĐỘNG) - [NEW V37]
+  // =================================================================
+
+  // 15. Tìm kiếm sản phẩm để thêm vào phiếu (Có unaccent, system snapshot)
+  async searchProductForCheck(keyword: string, warehouseId: number) {
+      const { data, error } = await supabase.rpc('search_products_for_stocktake', {
+          p_keyword: keyword,
+          p_warehouse_id: warehouseId
+      });
+      if (error) throw error;
+      return data; // Trả về mảng [{id, name, sku, system_stock, location...}]
+  },
+
+  // 16. Thêm sản phẩm vào phiếu (Snapshot tồn kho & giá vốn)
+  async addItemToCheck(checkId: number, productId: number) {
+      const { data, error } = await supabase.rpc('add_item_to_check_session', {
+          p_check_id: checkId,
+          p_product_id: productId
+      });
+      
+      if (error) throw error;
+      return data; // { status: 'success'|'exists', item_id, message }
   }
 };
