@@ -18,6 +18,7 @@ export interface CreateSalesOrderPayload {
   p_delivery_method: "internal" | "app" | "coach";
   p_shipping_partner_id?: number | null;
   p_warehouse_id: number; // [NEW] Trường bắt buộc mới
+  p_order_type: "B2B" | "POS";
   p_items: SalesOrderItemPayload[];
 }
 

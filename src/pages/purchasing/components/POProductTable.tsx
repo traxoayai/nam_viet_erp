@@ -80,7 +80,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
           <Card
             key={item.product_id}
             size="small"
-            styles={{ body: { padding: 12 } }}
+            styles={{ body: { padding: 8 } }}
           >
             <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
               <Avatar 
@@ -173,7 +173,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
             size={48} 
             src={r.image_url} 
             icon={<PictureOutlined />} 
-            style={{ backgroundColor: '#f5f5f5', border: '1px solid #d9d9d9' }} 
+            style={{ backgroundColor: '#f5f5f5', border: '1px solid #747474ff' }} 
           />
           <div>
             <div style={{ fontWeight: 500 }}>{r.name}</div>
