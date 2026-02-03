@@ -1,7 +1,8 @@
 // src/pages/pos/PosPage.tsx
 import { useEffect, useState } from "react";
 import { Tabs, Layout, Select, Space, Typography, Button, Tag, notification, Modal, message } from "antd"; // Import Tabs
-import { PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined, HomeOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom"; // [NEW]
 
 import { usePosCartStore } from "../../features/pos/stores/usePosCartStore";
 import { posService } from "../../features/pos/api/posService";
@@ -38,6 +39,7 @@ const PosPage = () => {
       createOrder, setActiveOrder, removeOrder, addToCart, clearCart 
   } = usePosCartStore();
   // const searchRef = useRef<any>(null); // Không cần ref nữa vì dùng ScannerListener
+  const navigate = useNavigate(); // [NEW] Hook điều hướng
 
   const [warehouses, setWarehouses] = useState<WarehousePosData[]>([]);
   const [assignModalVisible, setAssignModalVisible] = useState(false); // [NEW]
@@ -197,6 +199,13 @@ const PosPage = () => {
        }}>
            {/* Khu vực 1: Logo & Chọn Kho */}
            <Space>
+               {/* [NEW] Nút Home về Dashboard */}
+               <Button 
+                   type="text" 
+                   icon={<HomeOutlined style={{fontSize: 18, color: '#fff'}} />} 
+                   onClick={() => navigate('/dashboard')} 
+                   title="Về trang chủ"
+               />
                <Title level={4} style={{ margin: 0, color: '#fff', whiteSpace: 'nowrap', fontSize: 18 }}>NAM VIỆT POS</Title>
                <Select 
                    value={warehouseId}

@@ -4,6 +4,7 @@ import { Modal, Form, Input, DatePicker, Radio, Row, Col, message, Divider, Typo
 import { UserOutlined, PhoneOutlined, HomeOutlined, IdcardOutlined, GiftOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { supabase } from '@/shared/lib/supabaseClient';
 import dayjs from 'dayjs';
+import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 
 const { Text } = Typography;
 
@@ -17,6 +18,31 @@ interface Props {
 export const CustomerFormModal: React.FC<Props> = ({ visible, onCancel, customerToEdit, onSuccess }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
+    
+    // [NEW] Lấy user hiện tại
+    const { user } = useAuthStore(); 
+    
+    // [NEW] Biến theo dõi ngày sinh để tính tuổi Realtime
+    const dobValue = Form.useWatch('dob', form);
+    const [ageString, setAgeString] = useState('');
+
+    // [NEW] Hàm tính tuổi chi tiết
+    useEffect(() => {
+        if (dobValue) {
+            const now = dayjs();
+            const birth = dayjs(dobValue);
+            if (birth.isValid() && birth.isBefore(now)) {
+                const years = now.diff(birth, 'year');
+                const months = now.diff(birth.add(years, 'year'), 'month');
+                const days = now.diff(birth.add(years, 'year').add(months, 'month'), 'day');
+                setAgeString(`${years} tuổi ${months} tháng ${days} ngày`);
+            } else {
+                setAgeString('');
+            }
+        } else {
+            setAgeString('');
+        }
+    }, [dobValue]);
 
     // Reset hoặc Fill dữ liệu khi mở Modal
     useEffect(() => {
@@ -50,7 +76,8 @@ export const CustomerFormModal: React.FC<Props> = ({ visible, onCancel, customer
                 allergies: values.allergies,
                 medical_history: values.medical_history,
                 type: 'CaNhan', // POS chỉ tạo khách cá nhân
-                updated_at: new Date().toISOString()
+                updated_at: new Date().toISOString(),
+                updated_by: user?.id 
             };
 
             let data, error;
@@ -149,7 +176,7 @@ export const CustomerFormModal: React.FC<Props> = ({ visible, onCancel, customer
                             <Form.Item 
                                 name="dob" 
                                 label={<Space><GiftOutlined /> Ngày sinh</Space>}
-                                extra={<span style={{fontSize: 11, color: '#1890ff'}}>👉 "Xin ngày sinh để Nhà thuốc gửi quà/voucher chúc mừng sinh nhật ạ!"</span>}
+                                help={ageString ? <span style={{color: '#096dd9', fontWeight: 600}}>👉 {ageString}</span> : null} // [NEW] Hiển thị tuổi ở đây
                             >
                                 <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Chọn ngày sinh" />
                             </Form.Item>

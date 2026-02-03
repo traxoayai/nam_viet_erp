@@ -9,8 +9,9 @@ import {
   Input,
   message,
 } from "antd";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react"; // [MOD] Added useEffect
+import { useNavigate, useParams } from "react-router-dom";
+import { supabase } from "@/shared/lib/supabaseClient"; // [NEW]
 
 import { salesService } from "@/features/sales/api/salesService";
 import { PaymentSummary } from "@/features/sales/components/Footer/PaymentSummary";
@@ -32,6 +33,8 @@ const { TextArea } = Input;
 
 const CreateB2BOrderPage = () => {
   const navigate = useNavigate();
+  const { id } = useParams(); // [NEW] Lấy ID từ URL
+  const isEditMode = !!id;    // [NEW] Biến cờ check chế độ sửa
   const [loading, setLoading] = useState(false);
 
   // SỬA LỖI: Destructure thêm biến shippingFee từ hook
@@ -54,45 +57,176 @@ const CreateB2BOrderPage = () => {
     setNote,
     setVoucher,
     setShippingFee,
+    // [NEW] Actions từ Hook cập nhật
+    setItems,
+    setManualDiscount,
     reset,
     validateOrder,
   } = useCreateOrderB2B();
+
+  // [NEW] Logic Hydration (Load dữ liệu sửa) - Theo yêu cầu Dev
+  useEffect(() => {
+    // [REPLACE] Thay thế toàn bộ hàm fetchOrderForEdit cũ
+
+    const fetchOrderForEdit = async () => {
+        if (!id) return; 
+
+        try {
+            setLoading(true);
+
+            // 1. QUERY AN TOÀN (Bỏ !inner, dùng maybeSingle)
+            const { data: orderData, error } = await supabase
+                .from('orders')
+                .select(`
+                    *,
+                    customer:customers(*), 
+                    items:order_items(
+                        *,
+                        product:products(
+                            name, 
+                            sku, 
+                            image_url,
+                            active_ingredient
+                        )
+                    )
+                `)
+                .eq('id', id)
+                .maybeSingle(); // [FIX] Dùng maybeSingle để không bị crash nếu 0 dòng
+
+            if (error) throw error;
+            
+            // Kiểm tra thủ công để báo lỗi rõ ràng hơn
+            if (!orderData) {
+                message.error("Không tìm thấy đơn hàng (hoặc bạn không có quyền xem).");
+                navigate("/b2b/orders");
+                return;
+            }
+
+            // 2. HYDRATION KHÁCH HÀNG (Có check null an toàn)
+            if (orderData.customer) {
+                const mappedCustomer = {
+                    ...orderData.customer,
+                    shipping_address: orderData.delivery_address || orderData.customer.address || "", 
+                    current_debt: orderData.customer.current_debt || 0
+                };
+                setCustomer(mappedCustomer);
+            } else {
+                // Trường hợp hy hữu: Đơn hàng mất liên kết khách
+                message.warning("Đơn hàng này không tìm thấy thông tin khách hàng gốc.");
+            }
+            
+            // 3. HYDRATION SẢN PHẨM
+            // Nếu items null/undefined thì fallback về mảng rỗng
+            const safeItems = orderData.items || [];
+            const mappedItems = safeItems.map((item: any) => {
+                const productInfo = item.product || {};
+                
+                return {
+                    id: item.product_id,
+                    key: `${item.product_id}_${Date.now()}_${Math.random()}`,
+                    
+                    // Tên hiển thị
+                    name: productInfo.name || item.product_name || "Sản phẩm (Mất info)", 
+                    sku: productInfo.sku || item.sku || "---",
+                    image_url: productInfo.image_url || null,
+                    
+                    // Giá & Số lượng
+                    price_wholesale: item.unit_price,
+                    quantity: item.quantity,
+                    wholesale_unit: item.uom || "Cái", // Luôn ưu tiên UOM lịch sử
+                    
+                    discount: item.discount || 0,
+                    stock_quantity: 9999, // Bypass tồn kho
+                    total: (item.quantity * item.unit_price) - (item.discount || 0),
+                    
+                    active_ingredient: productInfo.active_ingredient
+                };
+            });
+            
+            if(mappedItems.length > 0) {
+                 setItems(mappedItems);
+            }
+
+            // 4. HYDRATION TÀI CHÍNH
+            if (orderData.discount_amount > 0) setManualDiscount(orderData.discount_amount);
+            setShippingFee(orderData.shipping_fee || 0);
+            setNote(orderData.note || "");
+            
+            if (orderData.delivery_method) setDeliveryMethod(orderData.delivery_method);
+            if (orderData.shipping_partner_id) selectShippingPartner(orderData.shipping_partner_id);
+            
+        } catch (err: any) {
+            console.error("Hydration Error:", err);
+            message.error("Lỗi tải đơn hàng: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    fetchOrderForEdit();
+  }, [id]); // Giữ dependency gọn gàng 
 
   const handleSubmit = async (status: "DRAFT" | "QUOTE" | "CONFIRMED") => {
     if (!validateOrder()) return;
 
     setLoading(true);
     try {
-      await salesService.createOrder({
-        p_customer_id: customer!.id,
-        p_delivery_address: customer!.shipping_address,
-        p_delivery_time: estimatedDeliveryText,
-        p_note: note,
-        p_discount_amount: financials.discountAmount,
-        p_shipping_fee: shippingFee,
-        p_status: status,
-        p_delivery_method: deliveryMethod,
-        p_shipping_partner_id:
-          deliveryMethod === "internal" ? null : shippingPartnerId,
-        p_warehouse_id: 1, // [NEW] B2B tạm thời lấy kho ID = 1
-        p_order_type: 'B2B',
-        p_items: items.map((i) => ({
-          product_id: i.id,
-          quantity: i.quantity,
-          uom: i.wholesale_unit,
-          unit_price: i.price_wholesale,
-          discount: i.discount,
-          is_gift: false,
-        })),
-      });
+      if (isEditMode && id) {
+          // --- LOGIC SỬA ĐƠN (MỚI) ---
+          await salesService.updateOrder({
+              p_order_id: id,
+              p_customer_id: customer!.id, // Map ID khách hàng vào đây
+              p_delivery_address: customer!.shipping_address || "",
+              p_delivery_time: estimatedDeliveryText,
+              p_note: note,
+              p_discount_amount: financials.discountAmount,
+              p_shipping_fee: shippingFee,
+              p_status: status,
+              p_items: items.map(i => ({
+                  product_id: i.id,
+                  quantity: i.quantity,
+                  uom: i.wholesale_unit, // Hoặc đơn vị đang chọn
+                  unit_price: i.price_wholesale,
+                  discount: i.discount || 0,
+                  is_gift: false, // Hoặc logic quà tặng nếu có
+                  note: "" 
+              }))
+          });
+          message.success("Cập nhật đơn hàng thành công!");
+          navigate("/b2b/orders");
+      } else {
+          // --- LOGIC TẠO MỚI (GIỮ NGUYÊN) ---
+          await salesService.createOrder({
+            p_customer_id: customer!.id,
+            p_delivery_address: customer!.shipping_address,
+            p_delivery_time: estimatedDeliveryText,
+            p_note: note,
+            p_discount_amount: financials.discountAmount,
+            p_shipping_fee: shippingFee,
+            p_status: status,
+            p_delivery_method: deliveryMethod,
+            p_shipping_partner_id:
+              deliveryMethod === "internal" ? null : shippingPartnerId,
+            p_warehouse_id: 1, // [NEW] B2B tạm thời lấy kho ID = 1
+            p_order_type: 'B2B',
+            p_items: items.map((i) => ({
+              product_id: i.id,
+              quantity: i.quantity,
+              uom: i.wholesale_unit,
+              unit_price: i.price_wholesale,
+              discount: i.discount,
+              is_gift: false,
+            })),
+          });
 
-      message.success(
-        status === "QUOTE"
-          ? "Đã tạo báo giá thành công"
-          : "Tạo đơn hàng thành công"
-      );
-      reset();
-      navigate("/b2b/orders");
+          message.success(
+            status === "QUOTE"
+              ? "Đã tạo báo giá thành công"
+              : "Tạo đơn hàng thành công"
+          );
+          reset();
+          navigate("/b2b/orders");
+      }
     } catch (e: any) {
       message.error(e.message || "Lỗi tạo đơn");
     } finally {
@@ -157,7 +291,7 @@ const CreateB2BOrderPage = () => {
             onClick={() => navigate(-1)}
           />
           <Title level={4} style={{ margin: 0 }}>
-            Tạo Đơn Bán Buôn (B2B)
+            {isEditMode ? "Cập nhật Đơn Bán Buôn (B2B)" : "Tạo Đơn Bán Buôn (B2B)"}
           </Title>
         </div>
       </div>

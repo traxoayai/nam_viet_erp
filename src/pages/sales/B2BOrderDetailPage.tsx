@@ -6,6 +6,7 @@ import {
   UserOutlined,
   PhoneOutlined,
   EnvironmentOutlined,
+  EditOutlined, // [NEW]
 } from "@ant-design/icons";
 import {
   Affix,
@@ -326,6 +327,14 @@ const B2BOrderDetailPage = () => {
           {/* Conditional Buttons based on Status */}
           {(order?.status === "DRAFT" || order?.status === "QUOTE") && (
             <>
+               {/* [NEW] Nút Sửa Đơn */}
+               <Button 
+                icon={<EditOutlined />} 
+                onClick={() => navigate(`/b2b/orders/edit/${order.id}`)}
+              >
+                Sửa đơn hàng
+              </Button>
+
               <Button 
                 danger 
                 onClick={() => confirmAction("CANCELLED", "Hủy đơn hàng")} 

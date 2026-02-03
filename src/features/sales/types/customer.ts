@@ -48,6 +48,9 @@ export interface CustomerB2C {
   contact_person_phone: string | null;
   loyalty_points: number;
   status: CustomerStatus;
+  age_formatted?: string;    // Backend trả về: "39 tuổi 2 tháng"
+  updated_by?: string;       // ID người sửa
+  updated_at?: string;
 }
 
 // --- 5. Cấu trúc cho Bảng (Output của RPC `get_customers_b2c_list`) ---
@@ -93,6 +96,9 @@ export interface CustomerFormData {
   contact_person_phone: string | null;
   loyalty_points: number;
   status: CustomerStatus;
+  age_formatted?: string;    // Backend trả về: "39 tuổi 2 tháng"
+  updated_by?: string;       // ID người sửa
+  updated_at?: string;
 }
 
 // --- 7. "Khuôn mẫu" cho Bộ não (Zustand Store) ---

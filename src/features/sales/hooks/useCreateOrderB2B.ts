@@ -134,6 +134,7 @@ export const useCreateOrderB2B = () => {
 
     // Action Exports
     setCustomer: store.setCustomer,
+    setItems: store.setItems, // [NEW]
     addItem: store.addItem,
     updateItem: store.updateItem,
     removeItem: store.removeItem,
@@ -144,6 +145,7 @@ export const useCreateOrderB2B = () => {
 
     // FIX: Dùng action setShippingFee thay vì setState
     setShippingFee: store.setShippingFee,
+    setManualDiscount: store.setManualDiscount, // [NEW]
 
     reset: store.reset,
     validateOrder,

@@ -8,6 +8,27 @@ import {
   CreateSalesOrderPayload,
 } from "@/features/sales/types/b2b_sales"; // Import Type mới nhất
 
+// [NEW] Interface cho Update Order
+export interface UpdateOrderPayload {
+  p_order_id: string;
+  p_customer_id: number;
+  p_delivery_address: string;
+  p_delivery_time: string;
+  p_note: string;
+  p_discount_amount: number;
+  p_shipping_fee: number;
+  p_status?: 'DRAFT' | 'QUOTE' | 'CONFIRMED';
+  p_items: {
+    product_id: number;
+    quantity: number;
+    uom: string;
+    unit_price: number;
+    discount: number;
+    is_gift: boolean;
+    note?: string;
+  }[];
+}
+
 export const salesService = {
   // 1. Tìm khách hàng B2B
   async searchCustomers(keyword: string): Promise<CustomerB2B[]> {
@@ -60,7 +81,15 @@ export const salesService = {
     // Payload lúc này đã bao gồm: p_delivery_method, p_shipping_partner_id
     const { data, error } = await supabase.rpc("create_sales_order", payload);
     if (error) throw error;
+
     return data; // Trả về UUID đơn hàng
+  },
+
+  // 5.1 [NEW] Cập nhật đơn hàng (Spec V41)
+  async updateOrder(payload: UpdateOrderPayload) {
+      const { error } = await supabase.rpc('update_sales_order', payload);
+      if (error) throw error;
+      return true;
   },
 
   // 6. [NEW] Lấy danh sách đơn hàng (Unified via RPC V8)

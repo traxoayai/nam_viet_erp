@@ -152,6 +152,11 @@ const routes: RouteObject[] = [
             path: "b2b/create-order",
             element: <CreateB2BOrderPage />,
           },
+          // [NEW] Route Sửa đơn hàng
+          {
+            path: "b2b/orders/edit/:id", 
+            element: <CreateB2BOrderPage />, 
+          },
           {
             path: "b2b/orders",
             element: <B2BOrderListPage />,

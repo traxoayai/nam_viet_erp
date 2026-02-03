@@ -13,9 +13,9 @@ export const StockStatusCell = ({ stock, ordered, unit }: Props) => {
 
   if (isShortage) {
     return (
-      <Tooltip title={`Thiếu hàng! Trong kho chỉ còn ${stock} ${unit}`}>
+      <Tooltip title={`Thiếu hàng! Trong kho chỉ còn ${stock || 0} ${unit}`}>
         <Tag color="error" icon={<WarningOutlined />}>
-          {stock.toLocaleString()} (Thiếu {ordered - stock})
+          {(stock || 0).toLocaleString()} (Thiếu {ordered - (stock || 0)})
         </Tag>
       </Tooltip>
     );
@@ -24,7 +24,7 @@ export const StockStatusCell = ({ stock, ordered, unit }: Props) => {
   return (
     <span style={{ color: stock > 0 ? "green" : "red", fontSize: 12 }}>
       {stock > 0 ? <CheckCircleOutlined /> : <WarningOutlined />} Tồn:{" "}
-      <b>{stock.toLocaleString()}</b> {unit}
+      <b>{(stock || 0).toLocaleString()}</b> {unit}
     </span>
   );
 };

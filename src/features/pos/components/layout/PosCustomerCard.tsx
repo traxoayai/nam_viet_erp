@@ -1,5 +1,6 @@
 // src/features/pos/components/layout/PosCustomerCard.tsx
 import { useState, useEffect } from "react";
+import dayjs from 'dayjs';
 import { Card, Button, Tag, Space, Typography, Tooltip, Divider } from "antd";
 import { UserOutlined, CloseCircleOutlined, EditOutlined, GiftOutlined, MedicineBoxOutlined, WarningOutlined } from "@ant-design/icons";
 import { usePosCartStore } from "../../stores/usePosCartStore";
@@ -14,6 +15,26 @@ export const PosCustomerCard = () => {
   const { setCustomer, fetchVouchers, getCurrentOrder, setAvailableVouchers } = usePosCartStore();
   const currentOrder = getCurrentOrder();
   const customer = currentOrder?.customer;
+
+  // [NEW] Helper tính tuổi gọn cho POS
+  const getCompactAge = (dobString: string) => {
+      if (!dobString) return null;
+      const birth = dayjs(dobString);
+      if (!birth.isValid()) return null;
+      
+      const now = dayjs();
+      const years = now.diff(birth, 'year');
+      const months = now.diff(birth.add(years, 'year'), 'month');
+      
+      if (years === 0 && months === 0) {
+          const days = now.diff(birth, 'day');
+          return `${days} ngày tuổi`;
+      }
+      if (years === 0) return `${months} tháng tuổi`;
+      
+      // Nếu > 0 tháng thì hiện lẻ tháng, nếu chẵn năm thì thôi
+      return months > 0 ? `${years} tuổi ${months} tháng` : `${years} tuổi`;
+  };
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
@@ -101,8 +122,12 @@ export const PosCustomerCard = () => {
                 <div>
                    <div style={{display:'flex', alignItems:'center', gap: 8}}>
                        <Text strong style={{ fontSize: 16 }}>{customer.name}</Text>
-                       {/* Hiển thị Tuổi nếu có (dữ liệu từ RPC get_customer_pos_detail) */}
-                       {customer.age_formatted && <Tag color="cyan" style={{margin:0, fontSize: 10}}>{customer.age_formatted}</Tag>}
+                       {/* [UPDATE] Ưu tiên dữ liệu tính toán tại FE nếu BE chưa trả về format chuẩn */}
+                       {(customer.age_formatted || getCompactAge(customer.dob)) && (
+                           <Tag color="cyan" style={{margin:0, fontSize: 11, fontWeight: 500}}>
+                               {customer.age_formatted || getCompactAge(customer.dob)}
+                           </Tag>
+                       )}
                    </div>
                    
                    <div style={{marginTop: 2}}>

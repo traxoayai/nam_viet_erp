@@ -219,7 +219,7 @@ const WarehouseReceiptPage = () => {
               value={record.input_quantity}
               onChange={(val) => updateWorkingItem(record.product_id, { input_quantity: val || 0 })}
               style={{ width: "100%" }}
-              disabled={record.quantity_remaining <= 0}
+              //disabled={record.quantity_remaining <= 0}
               placeholder="0"
               status={((record.input_quantity || 0) > 0) ? "warning" : ""}
           />
@@ -227,7 +227,7 @@ const WarehouseReceiptPage = () => {
     },
     // SPLIT COLUMNS LOGIC
     {
-        title: "Số Lô (Batch)",
+        title: "Số Lô",
         width: 100,
         render: (_: any, record: InboundDetailItem) => {
              if (record.stock_management_type !== 'lot_date') return <Text disabled>--</Text>;
@@ -236,7 +236,7 @@ const WarehouseReceiptPage = () => {
                     placeholder="Nhập số lô"
                     value={record.input_lot}
                     onChange={(e) => updateWorkingItem(record.product_id, { input_lot: e.target.value })}
-                    disabled={(record.input_quantity || 0) === 0}
+                    //disabled={(record.input_quantity || 0) === 0}
                  />
              )
         }
@@ -253,7 +253,7 @@ const WarehouseReceiptPage = () => {
                     format="DD/MM/YYYY"
                     value={record.input_expiry ? dayjs(record.input_expiry) : null}
                     onChange={(date) => updateWorkingItem(record.product_id, { input_expiry: date ? date.toISOString() : undefined })}
-                    disabled={(record.input_quantity || 0) === 0}
+                    //disabled={(record.input_quantity || 0) === 0}
                  />
              )
         }

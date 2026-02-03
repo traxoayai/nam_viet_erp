@@ -21,9 +21,11 @@ interface SalesState {
   estDeliveryDate: string | null;
   selectedVoucher: VoucherRecord | null;
   note: string;
+  manualDiscount: number; // [NEW] Hỗ trợ giảm giá thủ công (khi load đơn cũ hoặc Override)
 
   // --- ACTIONS ---
   setCustomer: (c: CustomerB2B | null) => void;
+  setItems: (items: CartItem[]) => void; // [NEW] Hydration Action
   addItem: (p: ProductB2B, qty?: number) => void;
   updateItem: (key: string, field: keyof CartItem, value: any) => void;
   removeItem: (key: string) => void;
@@ -33,6 +35,7 @@ interface SalesState {
 
   // FIX: Thêm action cụ thể thay vì dùng setState generic
   setShippingFee: (fee: number) => void;
+  setManualDiscount: (d: number) => void; // [NEW]
 
   setVoucher: (v: VoucherRecord | null) => void;
   setNote: (s: string) => void;
@@ -58,6 +61,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
   estDeliveryDate: null,
   selectedVoucher: null,
   note: "",
+  manualDiscount: 0,
 
   setCustomer: (c) => set({ customer: c, selectedVoucher: null }),
 
@@ -84,6 +88,9 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       message.success(`Đã thêm: ${p.name}`);
     }
   },
+
+  setItems: (items) => set({ items }), // [NEW]
+
 
   updateItem: (key, field, value) => {
     const { items } = get();
@@ -115,6 +122,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
   // FIX: Action mới
   setShippingFee: (fee) => set({ shippingFee: fee }),
+  setManualDiscount: (d) => set({ manualDiscount: d }), // [NEW]
 
   setVoucher: (v) => set({ selectedVoucher: v }),
   setNote: (s) => set({ note: s }),
@@ -130,6 +138,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       totalPackages: 1,
       shippingFee: 0,
       estDeliveryDate: null,
+      manualDiscount: 0,
     }),
 
   getSummary: () => {
@@ -138,7 +147,12 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     const totalQty = s.items.reduce((sum, i) => sum + i.quantity, 0);
 
     let discountAmount = 0;
-    if (s.selectedVoucher) {
+    
+    // Ưu tiên Manual Discount nếu có (Override)
+    if (s.manualDiscount > 0) {
+        discountAmount = s.manualDiscount;
+    } 
+    else if (s.selectedVoucher) {
       const v = s.selectedVoucher;
       if (subTotal >= v.min_order_value) {
         discountAmount =

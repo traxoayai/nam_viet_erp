@@ -13,6 +13,7 @@ import {
   DeleteOutlined,
   SafetyOutlined,
   FilePdfOutlined, // [NEW] Icon PDF
+  HistoryOutlined, // [NEW] Icon Thẻ kho
 } from "@ant-design/icons";
 import {
   Input,
@@ -49,6 +50,7 @@ import { aiService } from "@/features/product/api/aiService"; // [NEW]
 import { updateProduct } from "@/features/product/api/productService"; // [NEW] Hàm update cũ
 import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { ProductCardexModal } from "@/features/inventory/components/ProductCardexModal"; // [NEW]
 
 const { Title, Text } = Typography;
 
@@ -80,7 +82,12 @@ const ProductListPage = () => {
   
   // [NEW] AI Scanner State
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
   const [targetProductForAi, setTargetProductForAi] = useState<Product | null>(null);
+
+  // [NEW] Cardex State
+  const [cardexVisible, setCardexVisible] = useState(false);
+  const [selectedCardexProduct, setSelectedCardexProduct] = useState<{id: number, name: string} | null>(null);
 
   const debouncedSearch = useDebounce(searchQuery, 500); // Tải data chung (Kho, NCC - đã đổi tên)
 
@@ -308,7 +315,11 @@ const ProductListPage = () => {
       key: "name",
       render: (text: string, record: Product) => (
         <div>
-          <Text strong style={{ color: "#003a78" }}>
+          <Text 
+              strong 
+              style={{ color: "#1890ff", cursor: 'pointer' }}
+              onClick={() => navigate(`/inventory/edit/${record.id}`)}
+          >
             {text}
           </Text>
           <br />
@@ -394,6 +405,18 @@ const ProductListPage = () => {
               onClick={() => {
                  setTargetProductForAi(record);
                  setIsScannerOpen(true);
+              }}
+            />
+          </Tooltip>
+          
+          {/* [NEW] Nút xem Thẻ kho */}
+          <Tooltip title="Xem thẻ kho">
+            <Button 
+              type="text" 
+              icon={<HistoryOutlined style={{ color: '#fa8c16' }} />} 
+              onClick={() => {
+                  setSelectedCardexProduct({ id: record.id, name: record.name });
+                  setCardexVisible(true);
               }}
             />
           </Tooltip>
@@ -621,12 +644,20 @@ const ProductListPage = () => {
       </Card>
     </Spin>
 
-    {/* [NEW] AI Scanner Modal */}
     <ProductAiScannerModal 
         open={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         mode="update_existing"
         onSuccess={handleAiUpdateSuccess}
+    />
+    
+    {/* [NEW] Thẻ kho Modal */}
+    <ProductCardexModal 
+        visible={cardexVisible}
+        onClose={() => setCardexVisible(false)}
+        productId={selectedCardexProduct?.id || null}
+        productName={selectedCardexProduct?.name || ''}
+        warehouseId={1} // Tạm fix kho 1
     />
   );
     </>

@@ -655,6 +655,7 @@ export type Database = {
           tax_code: string | null
           type: Database["public"]["Enums"]["customer_b2c_type"]
           updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           address?: string | null
@@ -683,6 +684,7 @@ export type Database = {
           tax_code?: string | null
           type?: Database["public"]["Enums"]["customer_b2c_type"]
           updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           address?: string | null
@@ -711,6 +713,7 @@ export type Database = {
           tax_code?: string | null
           type?: Database["public"]["Enums"]["customer_b2c_type"]
           updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -1152,6 +1155,10 @@ export type Database = {
           batch_code: string | null
           check_id: number
           cost_price: number | null
+          counted_at: string | null
+          counted_by: string | null
+          created_at: string | null
+          created_by: string | null
           diff_quantity: number | null
           difference_reason: string | null
           expiry_date: string | null
@@ -1159,12 +1166,17 @@ export type Database = {
           location_snapshot: string | null
           product_id: number
           system_quantity: number | null
+          updated_at: string | null
         }
         Insert: {
           actual_quantity?: number | null
           batch_code?: string | null
           check_id: number
           cost_price?: number | null
+          counted_at?: string | null
+          counted_by?: string | null
+          created_at?: string | null
+          created_by?: string | null
           diff_quantity?: number | null
           difference_reason?: string | null
           expiry_date?: string | null
@@ -1172,12 +1184,17 @@ export type Database = {
           location_snapshot?: string | null
           product_id: number
           system_quantity?: number | null
+          updated_at?: string | null
         }
         Update: {
           actual_quantity?: number | null
           batch_code?: string | null
           check_id?: number
           cost_price?: number | null
+          counted_at?: string | null
+          counted_by?: string | null
+          created_at?: string | null
+          created_by?: string | null
           diff_quantity?: number | null
           difference_reason?: string | null
           expiry_date?: string | null
@@ -1185,6 +1202,7 @@ export type Database = {
           location_snapshot?: string | null
           product_id?: number
           system_quantity?: number | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -4457,6 +4475,25 @@ export type Database = {
           real_stock: number
         }[]
       }
+      get_product_cardex: {
+        Args: {
+          p_from_date?: string
+          p_product_id: number
+          p_to_date?: string
+          p_warehouse_id: number
+        }
+        Returns: {
+          business_type: string
+          created_by_name: string
+          description: string
+          partner_name: string
+          quantity: number
+          ref_code: string
+          transaction_date: string
+          type: string
+          unit_price: number
+        }[]
+      }
       get_product_details: { Args: { p_id: number }; Returns: Json }
       get_products_list: {
         Args: {
@@ -5003,20 +5040,8 @@ export type Database = {
         }[]
       }
       search_products_for_b2b_order: {
-        Args: { p_keyword: string; p_warehouse_id?: number }
-        Returns: {
-          expiry_date: string
-          id: number
-          image_url: string
-          items_per_carton: number
-          lot_number: string
-          name: string
-          price_wholesale: number
-          shelf_location: string
-          sku: string
-          stock_quantity: number
-          wholesale_unit: string
-        }[]
+        Args: { p_keyword: string; p_warehouse_id: number }
+        Returns: Json
       }
       search_products_for_purchase: {
         Args: { p_keyword: string }
@@ -5128,7 +5153,7 @@ export type Database = {
         Returns: undefined
       }
       update_customer_b2c: {
-        Args: { p_customer_data: Json; p_guardians: Json; p_id: number }
+        Args: { p_customer_data: Json; p_guardians?: Json; p_id: number }
         Returns: undefined
       }
       update_full_supplier_program: {
@@ -5142,6 +5167,10 @@ export type Database = {
       update_inventory_check_info: {
         Args: { p_check_id: number; p_note: string }
         Returns: undefined
+      }
+      update_inventory_check_item_quantity: {
+        Args: { p_actual_quantity: number; p_item_id: number }
+        Returns: Json
       }
       update_outbound_package_count: {
         Args: { p_count: number; p_order_id: string }
@@ -5220,6 +5249,20 @@ export type Database = {
           p_total_packages?: number
         }
         Returns: boolean
+      }
+      update_sales_order: {
+        Args: {
+          p_customer_id: number
+          p_delivery_address: string
+          p_delivery_time: string
+          p_discount_amount: number
+          p_items: Json
+          p_note: string
+          p_order_id: string
+          p_shipping_fee: number
+          p_status?: string
+        }
+        Returns: undefined
       }
       update_self_profile: {
         Args: { p_profile_data: Json }

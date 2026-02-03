@@ -4,6 +4,19 @@ import { supabase } from "@/shared/lib/supabaseClient";
 // Đảm bảo đường dẫn import types đúng với dự án
 import { InventoryCheckItem, InventoryCheckSession } from "../types/inventory.types"; 
 
+// [NEW] Interface cho Thẻ kho (Spec V41)
+export interface ProductCardexItem {
+  transaction_date: string; // ISO String
+  type: 'in' | 'out';       // 'in' = Nhập, 'out' = Xuất
+  business_type: string;    // 'sale', 'purchase', 'import', 'export', 'check'...
+  quantity: number;         // Luôn là số dương
+  unit_price: number;       // Giá tại thời điểm giao dịch
+  ref_code: string | null;  // Mã phiếu (VD: SO-260202-1234)
+  partner_name: string;     // [MỚI] Tên NCC hoặc Khách hàng liên quan (Đã xử lý N/A ở BE)
+  description: string | null;
+  created_by_name: string;  // Tên nhân viên thực hiện
+} 
+
 export const inventoryService = {
   // =================================================================
   // PHẦN 1: NGHIỆP VỤ NHẬP KHO (INBOUND & AI) - [GIỮ NGUYÊN TỪ CODE CŨ]
@@ -324,5 +337,26 @@ export const inventoryService = {
       
       if (error) throw error;
       return data; // { status: 'success'|'exists', item_id, message }
+  },
+
+  // 17. [HOTFIX] Lấy thẻ kho (Spec V41)
+  async getProductCardex(
+    productId: number, 
+    warehouseId: number, 
+    fromDate?: string, 
+    toDate?: string
+  ): Promise<ProductCardexItem[]> {
+    const { data, error } = await supabase.rpc('get_product_cardex', {
+      p_product_id: productId,
+      p_warehouse_id: warehouseId,
+      p_from_date: fromDate || null,
+      p_to_date: toDate || null
+    });
+
+    if (error) {
+      console.error('Lỗi lấy thẻ kho:', error);
+      return [];
+    }
+    return data || [];
   }
 };
