@@ -4,19 +4,21 @@ import {
   CloseOutlined,
   FileTextOutlined,
   PrinterOutlined,
-  SaveOutlined
+  SaveOutlined,
+  SnippetsOutlined // [NEW]
 } from "@ant-design/icons";
 import { Button, Space, Popconfirm, Alert } from "antd";
 import { useNavigate } from "react-router-dom";
 
 interface Props {
   loading: boolean;
-  isOverLimit: boolean;
+  isOverLimit?: boolean;
   onSubmit: (status: "DRAFT" | "QUOTE" | "CONFIRMED") => void;
   onPrint?: () => void;
+  onPrintPicking?: () => void; // [NEW]
 }
 
-export const ActionButtons = ({ loading, isOverLimit, onSubmit, onPrint }: Props) => {
+export const ActionButtons = ({ loading, isOverLimit, onSubmit, onPrint, onPrintPicking }: Props) => {
   const navigate = useNavigate();
 
   return (
@@ -50,6 +52,18 @@ export const ActionButtons = ({ loading, isOverLimit, onSubmit, onPrint }: Props
         </Popconfirm>
 
         <Space>
+           {/* [NEW] Nút In Phiếu Nhặt */}
+           {onPrintPicking && (
+            <Button 
+                icon={<SnippetsOutlined />} 
+                size="large"
+                onClick={onPrintPicking}
+                loading={loading}
+            >
+                In Phiếu Nhặt
+            </Button>
+          )}
+
           <Button
             icon={<PrinterOutlined />}
             size="large"

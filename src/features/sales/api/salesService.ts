@@ -208,6 +208,29 @@ export const salesService = {
       return true;
   },
 
+  // [NEW] Thêm hàm này để lấy chi tiết đơn hàng cho việc in ấn
+  async getOrderDetail(orderId: number | string) {
+        const { data, error } = await supabase
+            .from('orders')
+            .select(`
+                *,
+                customer:customer_id(id, name, phone, shipping_address, tax_code, email),
+                items:order_items(
+                    id, quantity, unit_price, total_line,
+                    product:product_id(
+                        id, name, sku, image_url, wholesale_unit,
+                        product_inventory(warehouse_id, shelf_location, stock_quantity)
+                    )
+                ),
+                sales_invoices(id, status, invoice_number, created_at)
+            `)
+            .eq('id', orderId)
+            .single();
+
+        if (error) throw error;
+        return data;
+  },
+
   // 11. [NEW] Xóa đơn hàng (Admin Only)
   async deleteOrder(orderId: string | number) {
       const { error } = await supabase.from('orders').delete().eq('id', orderId);

@@ -1,3 +1,4 @@
+// src/features/inventory/components/print/PickingListTemplate.tsx
 import { OutboundOrderInfo, OutboundPickItem } from "@/features/inventory/types/outbound";
 
 interface PickingListTemplateProps {
@@ -14,7 +15,7 @@ export const PickingListTemplate = ({ orderInfo, items }: PickingListTemplatePro
 
   return (
     <div className="print-source" style={{ fontFamily: 'Arial, sans-serif', color: '#000', lineHeight: 1.4 }}>
-      {/* CSS cho in ấn */}
+      {/* CSS in ấn giữ nguyên */}
       <style>{`
         .print-source { display: none; }
         @media print {
@@ -30,7 +31,6 @@ export const PickingListTemplate = ({ orderInfo, items }: PickingListTemplatePro
           th { background-color: #f0f0f0; font-weight: bold; text-align: center; }
           .text-center { text-align: center; }
           .text-right { text-align: right; }
-          .no-print { display: none !important; }
         }
       `}</style>
 
@@ -66,19 +66,14 @@ export const PickingListTemplate = ({ orderInfo, items }: PickingListTemplatePro
         </thead>
         <tbody>
           {sortedItems.map((item, idx) => (
-            <tr key={item.product_id}>
+            <tr key={item.product_id || idx}>
               <td className="text-center">{idx + 1}</td>
-              <td className="text-center">
-                {item.shelf_location || "-"}
-                {item.fefo_suggestion && (
-                    <div style={{fontSize: 10, fontStyle: 'italic'}}>(Lô: {item.fefo_suggestion.batch_code})</div>
-                )}
-              </td>
+              <td className="text-center">{item.shelf_location || "-"}</td>
               <td>{item.sku}</td>
               <td>{item.product_name}</td>
               <td className="text-center">{item.unit}</td>
               <td className="text-center"><b>{item.quantity_ordered}</b></td>
-              <td></td> {/* Ô trống để tích */}
+              <td></td>
             </tr>
           ))}
         </tbody>

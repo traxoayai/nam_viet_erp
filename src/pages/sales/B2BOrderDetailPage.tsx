@@ -37,6 +37,9 @@ import {
   B2B_STATUS_LABEL,
 } from "@/shared/utils/b2bConstants";
 import { useOrderPrint } from "@/features/sales/hooks/useOrderPrint"; // [NEW]
+import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint"; // [NEW]
+import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate"; // [NEW]
+import { SnippetsOutlined } from "@ant-design/icons"; // [NEW]
 
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
@@ -46,6 +49,7 @@ const B2BOrderDetailPage = () => {
   const navigate = useNavigate();
   const screens = useBreakpoint();
   const { printOrder } = useOrderPrint(); // [NEW]
+  const { printById: printPicking, printData: pickingData } = usePickingListPrint(); // [NEW]
 
   const [order, setOrder] = useState<B2BOrderDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -274,6 +278,7 @@ const B2BOrderDetailPage = () => {
       </Spin>
 
       {/* FOOTER ACTIONS */}
+      {/* FOOTER ACTIONS */}
       <Affix offsetBottom={0}>
         <div
           style={{
@@ -285,21 +290,20 @@ const B2BOrderDetailPage = () => {
             gap: 10,
           }}
         >
-          {/* [NEW] Nút Xuất VAT (Góc trái) */}
+          {/* 1. Nút Xuất VAT (Luôn hiện bên trái) */}
           <div style={{ marginRight: 'auto' }}> 
              {order && (
                <VatActionButton 
+                  /* ... Giữ nguyên props cũ ... */
                   invoice={order.sales_invoices ? {
                       id: order.sales_invoices.id,
                       status: order.sales_invoices.status,
-                      code: order.sales_invoices.invoice_number || order.code // Map invoice_number to code, fallback to order code
+                      code: order.sales_invoices.invoice_number || order.code
                   } : { id: -1, status: 'pending', code: order.code }} 
                   orderItems={order.items.map((item: any) => ({
                       ...item,
-                      // [FIX] Map ID sản phẩm (BigInt) để Modal query kho đúng
                       id: Number(item.product_id), 
                       name: item.product_name,
-                      // Logic đơn vị: Ưu tiên đơn vị lưu -> Đơn vị buôn -> Đơn vị lẻ
                       unit: item.unit_name || item.wholesale_unit || item.retail_unit || 'Cái',
                       price: Number(item.unit_price) || 0,
                       qty: Number(item.quantity) || 0
@@ -324,15 +328,33 @@ const B2BOrderDetailPage = () => {
              )}
           </div>
 
-          {/* Conditional Buttons based on Status */}
+          {/* 2. CÁC NÚT IN ẤN (LUÔN HIỆN TRỪ KHI ĐÃ HỦY) */}
+          {order?.status !== "CANCELLED" && (
+            <>
+                <Button 
+                    icon={<SnippetsOutlined />} 
+                    onClick={() => order && printPicking(order.id)}
+                >
+                    In Phiếu Nhặt
+                </Button>
+
+                <Button 
+                    icon={<PrinterOutlined />} 
+                    onClick={() => order && printOrder(order)}
+                >
+                    In Hóa Đơn
+                </Button>
+            </>
+          )}
+
+          {/* 3. CÁC NÚT THAO TÁC (TÙY TRẠNG THÁI) */}
           {(order?.status === "DRAFT" || order?.status === "QUOTE") && (
             <>
-               {/* [NEW] Nút Sửa Đơn */}
                <Button 
                 icon={<EditOutlined />} 
                 onClick={() => navigate(`/b2b/orders/edit/${order.id}`)}
               >
-                Sửa đơn hàng
+                Sửa đơn
               </Button>
 
               <Button 
@@ -354,18 +376,21 @@ const B2BOrderDetailPage = () => {
           )}
 
           {order?.status === "CONFIRMED" && (
-             <>
-                <Button 
-                    icon={<PrinterOutlined />} 
-                    onClick={() => order && printOrder(order)}
-                >
-                    In phiếu
-                </Button>
-                
-                <Button
-                  onClick={() => handleUpdateStatus("DELIVERED")}
-                  type="primary">Giao hàng</Button>
-             </>
+             <Button
+               onClick={() => handleUpdateStatus("SHIPPING")} // Logic cũ là DELIVERED, nên đổi thành SHIPPING hoặc DELIVERED tùy quy trình
+               type="primary"
+             >
+               Giao hàng
+             </Button>
+          )}
+          
+          {order?.status === "SHIPPING" && (
+             <Button
+               onClick={() => handleUpdateStatus("DELIVERED")}
+               type="primary"
+             >
+               Hoàn tất đơn
+             </Button>
           )}
            
           {order?.status === "CANCELLED" && (
@@ -373,6 +398,16 @@ const B2BOrderDetailPage = () => {
           )}
         </div>
       </Affix>
+      
+      {/* [NEW] HIDDEN PICKING PRINT */}
+      {pickingData && (
+        
+            <PickingListTemplate 
+                orderInfo={pickingData.orderInfo} 
+                items={pickingData.items} 
+            />
+        
+      )}
     </div>
   );
 };

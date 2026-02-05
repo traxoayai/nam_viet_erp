@@ -35,6 +35,9 @@ import { VatActionButton } from '@/features/pos/components/VatActionButton';
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
 import { Access } from "@/shared/components/auth/Access"; // [NEW]
 import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
+import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint";
+import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate";
+import { SnippetsOutlined } from "@ant-design/icons";
 
 const { Text } = Typography;
 
@@ -44,6 +47,7 @@ const B2BOrderListPage = () => {
   // --- 1. STATE & HOOKS ---
   const { tableProps, filterProps, stats, currentFilters, refresh } = useSalesOrders({ orderType: 'B2B' });
   const { printOrder } = useOrderPrint(); // [NEW]
+  const { printById: printPicking, printData: pickingData } = usePickingListPrint(); // [NEW] Fetch & Print Picking
 
   // State Xuất Hóa Đơn
   const [exportInvoiceLoading, setExportInvoiceLoading] = useState(false);
@@ -226,6 +230,17 @@ const B2BOrderListPage = () => {
                     onClick={(e) => {
                         e.stopPropagation(); // Tránh click vào row nhảy sang trang chi tiết
                         printOrder(record);
+                    }}
+                />
+                
+                {/* [NEW] Nút In Phiếu Nhặt */}
+                <Button 
+                    type="text" 
+                    icon={<SnippetsOutlined />} 
+                    title="In Phiếu Nhặt Hàng"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        printPicking(record.id);
                     }}
                 />
                 
@@ -558,6 +573,15 @@ const B2BOrderListPage = () => {
          } : undefined}
       />
 
+      {/* [NEW] HIDDEN PICKING PRINT */}
+      {pickingData && (
+        <div style={{ display: 'none' }}>
+            <PickingListTemplate 
+                orderInfo={pickingData.orderInfo} 
+                items={pickingData.items} 
+            />
+        </div>
+      )}
     </div>
   );
 };
