@@ -64,6 +64,7 @@ import QuickLocationUpdate from "@/pages/quick/QuickLocationUpdate";
 import InventoryCheckList from '@/features/inventory/pages/InventoryCheckList';
 import InventoryCheckDetail from '@/features/inventory/pages/InventoryCheckDetail';
 import OpeningStockImport from "@/features/inventory/pages/OpeningStockImport";
+import ProductMasterDataPage from "@/pages/settings/data/ProductMasterDataPage"; // [NEW]
 import QuickUnitPage from "@/pages/quick/QuickUnitPage";
 import QuickMinMaxPage from "@/pages/quick/QuickMinMaxPage";
 import QuickPricePage from "@/pages/quick/QuickPricePage";
@@ -641,6 +642,11 @@ const routes: RouteObject[] = [
               {
                 path: "settings/audit-log",
                 element: <PagePlaceholder title="Nhật ký Hệ thống" />,
+              },
+               // [NEW] Quản lý Master Data (Import/Export Excel)
+              {
+                path: "settings/data/master", 
+                element: <ProductMasterDataPage />,
               },
             ]
           },

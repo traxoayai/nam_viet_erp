@@ -4166,6 +4166,32 @@ export type Database = {
           type: Database["public"]["Enums"]["customer_b2c_type"]
         }[]
       }
+      export_product_master_v2: {
+        Args: never
+        Returns: {
+          barcode: string
+          base_unit_name: string
+          cost_price: number
+          distributor_id: number
+          image_url: string
+          logistic_conversion_rate: number
+          logistic_unit_name: string
+          manufacturer_name: string
+          name: string
+          product_id: number
+          retail_conversion_rate: number
+          retail_margin_type: string
+          retail_margin_value: number
+          retail_unit_name: string
+          sku: string
+          status: string
+          warehouse_settings: Json
+          wholesale_conversion_rate: number
+          wholesale_margin_type: string
+          wholesale_margin_value: number
+          wholesale_unit_name: string
+        }[]
+      }
       export_products_list: {
         Args: {
           category_filter: string
@@ -4393,6 +4419,28 @@ export type Database = {
           system_snapshot: number
         }[]
       }
+      get_inventory_setup_grid: {
+        Args: {
+          p_has_setup_only?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_warehouse_id: number
+        }
+        Returns: {
+          actual_cost: number
+          conversion_rate: number
+          current_stock: number
+          image_url: string
+          max_stock: number
+          min_stock: number
+          name: string
+          product_id: number
+          sku: string
+          total_count: number
+          unit_name: string
+        }[]
+      }
       get_mapped_product: {
         Args: {
           p_product_name: string
@@ -4495,6 +4543,42 @@ export type Database = {
         }[]
       }
       get_product_details: { Args: { p_id: number }; Returns: Json }
+      get_product_full_info_grid: {
+        Args: {
+          p_category?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          active_ingredient: string
+          actual_cost: number
+          barcode: string
+          base_unit_name: string
+          category_name: string
+          created_at: string
+          image_url: string
+          logistic_conversion_rate: number
+          logistic_unit_name: string
+          manufacturer_name: string
+          name: string
+          product_id: number
+          retail_conversion_rate: number
+          retail_margin_type: string
+          retail_margin_value: number
+          retail_price: number
+          retail_unit_name: string
+          sku: string
+          status: string
+          total_count: number
+          total_system_stock: number
+          wholesale_conversion_rate: number
+          wholesale_margin_type: string
+          wholesale_margin_value: number
+          wholesale_unit_name: string
+        }[]
+      }
       get_products_list: {
         Args: {
           category_filter: string
@@ -4890,6 +4974,7 @@ export type Database = {
         Returns: Json
       }
       import_product_from_ai: { Args: { p_data: Json }; Returns: number }
+      import_product_master_v2: { Args: { p_data: Json }; Returns: undefined }
       import_suppliers_bulk: { Args: { p_suppliers: Json }; Returns: Json }
       invite_new_user: {
         Args: { p_email: string; p_full_name: string }
@@ -5116,6 +5201,7 @@ export type Database = {
           p_manufacturer?: string
           p_offset?: number
           p_status?: string
+          p_warehouse_id?: number
         }
         Returns: Json
       }

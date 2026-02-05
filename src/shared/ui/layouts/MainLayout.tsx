@@ -501,6 +501,12 @@ const finalMenuItems: MenuItem[] = [
       "/settings/opening-stock",
       <ImportOutlined />
     ),
+    // [NEW] Master Data
+    getItem(
+      <Link to="/settings/data/master">Import/Export Sản Phẩm</Link>,
+      "/settings/data/master",
+      <DatabaseOutlined />
+    ),
   ]),
 ];
 

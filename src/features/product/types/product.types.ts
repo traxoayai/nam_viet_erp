@@ -64,6 +64,7 @@ export interface ProductFilters {
   category_filter?: string;
   manufacturer_filter?: string;
   status_filter?: "active" | "inactive";
+  warehouse_id?: number | null;
 }
 
 export interface ProductStoreState {

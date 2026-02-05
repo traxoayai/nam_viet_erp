@@ -2,15 +2,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
     Table, InputNumber, Typography, Card, 
-    Button, message, Statistic, Row, Col, Select, Tag, Input 
+    Button, message, Statistic, Row, Col, Select, Tag, Input,
+    Checkbox 
 } from 'antd';
 import { 
     AudioOutlined, CheckCircleOutlined, 
     SyncOutlined, DollarCircleOutlined 
 } from '@ant-design/icons';
-import { getAllProductsLite, upsertProduct, getProducts } from '@/features/product/api/productService';
+import { upsertProduct } from '@/features/product/api/productService';
 import { getWarehouses } from '@/features/inventory/api/warehouseService';
 import { useDebounce } from '@/shared/hooks/useDebounce';
+import { getProductDetails } from '@/features/product/api/productService'; // Ensure this is imported for handleSaveRow
+import { supabase } from "@/shared/lib/supabaseClient";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -45,13 +48,19 @@ const QuickMinMaxPage: React.FC = () => {
     const [searchText, setSearchText] = useState('');
     const debouncedSearch = useDebounce(searchText, 500);
 
+    // [New] Pagination & Filter State (V43)
+    const [total, setTotal] = useState(0);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20); 
+    const [showHasStockOnly, setShowHasStockOnly] = useState(false);
+
     // Voice Buffer State
     const [voiceBuffer, setVoiceBuffer] = useState<{min?: number, max?: number}>({});
 
     // Refs
     const recognitionRef = useRef<any>(null);
 
-    // Calculate Totals
+    // Calculate Totals (Updated to handle NaN and conversion)
     const totalMinValue = products.reduce((sum, p) => sum + (p.min_stock || 0) * (p.conversion_rate || 1) * (p.actual_cost || 0), 0);
     const totalMaxValue = products.reduce((sum, p) => sum + (p.max_stock || 0) * (p.conversion_rate || 1) * (p.actual_cost || 0), 0);
 
@@ -63,16 +72,12 @@ const QuickMinMaxPage: React.FC = () => {
         }
     }, []);
 
-    useEffect(() => {
-        loadProducts(debouncedSearch);
-    }, [debouncedSearch]);
-
-    // Khi chọn kho khác -> Load lại data tồn kho chuẩn của kho đó
+    // Effect for Search & Pagination
     useEffect(() => {
         if (selectedWarehouseId) {
-            loadProducts(searchText); // Reload để lấy Min/Max của kho mới
+            loadProducts(debouncedSearch, currentPage, pageSize);
         }
-    }, [selectedWarehouseId]);
+    }, [debouncedSearch, currentPage, pageSize, selectedWarehouseId, showHasStockOnly]);
 
     const loadWarehouses = async () => {
         try {
@@ -86,92 +91,59 @@ const QuickMinMaxPage: React.FC = () => {
         }
     };
 
-    const loadProducts = async (term: string = '') => {
-        setLoading(true);
-        try {
-            let data = [];
-            // 1. Get Product List
-            if (term) {
-                 const res = await getProducts({ 
-                    filters: { search_query: term }, 
-                    page: 1, 
-                    pageSize: 50 
-                 });
-                 data = res.data;
-            } else {
-                 const res = await getAllProductsLite();
-                 data = res.data;
-                 // Note: QuickMinMax currently handles 100 items limit manually in slices or just takes all.
-                 // The previous logic was: if (data.length > 100) data = data.slice(0, 100);
-                 // Since getAllProductsLite now does pagination, we might get 20 by default if not specified?
-                 // Let's check getAllProductsLite signature from previous context.
-                 // It defaults to page=1, pageSize=20.
-                 // QuickMinMax seems to want a list (maybe more?).
-                 // Let's explicitly ask for more if needed, or handle pagination here too.
-                 // For now, to fix the TYPE error, we just access .data.
-                 // Old logic: "data = await getAllProductsLite(); if (data.length > 100)..."
-                 // New API returns {data, total}.
-                 
-                 // However, we should probably fetch more for MinMax setup if it doesn't have pagination yet.
-                 // But simply fixing the type error first:
-                 // data = res.data;
-                 
-                 // Wait, getAllProductsLite() uses default page=1, pageSize=20.
-                 // If we want "all" or "many", we should pass arguments.
-                 // But QuickMinMaxPage logic has `pagination={{ pageSize: 50 }}` in Table but Client-side logic for "all loaded"?
-                 // No, line 85: `loadProducts` fetches data.
-                 // Let's fetch 100 items to match previous "slice(0, 100)" intent.
-                 // const res = await getAllProductsLite(1, 100);
-                 // data = res.data;
-            }
-            
-            // 2. Fetch Inventory for selected warehouse (Optional optimization: fetch in bulk)
-            // Hiện tại getAllProductsLite chưa trả về inventory detail của từng kho.
-            // Để hiển thị đúng Min/Max của kho đang chọn, ta cần map từ dữ liệu chi tiết.
-            // Tuy nhiên getAllProductsLite lấy nhanh nên không có detail.
-            // TẠM THỜI: Để đơn giản và nhanh, ta sẽ lấy inventorySettings từ getProductDetails khi user focus hoặc lazy load.
-            // NHƯNG ĐỂ HIỂN THỊ ĐÚNG NGAY TỪ ĐẦU: Cần lấy inventory data.
-            // Giải pháp: Nếu API getAllProductsLite hỗ trợ trả về inventory array thì tốt.
-            // Nếu không, ta chấp nhận hiển thị 0 ban đầu, hoặc update API getAllProductsLite.
-            // Ở đây, giả định API đã trả về inventory_settings (nếu có update).
-            // Nếu chưa, ta sẽ dùng mock 0 và khi save sẽ update.
-            // [BETTER]: Gọi thêm 1 API lấy inventory list cho warehouse này.
-            
-            // Map data
-            const rows = data.map((p: any) => {
-                const wholesaleUnit = p.product_units?.find((u: any) => !u.is_base && (u.unit_type === 'wholesale' || u.conversion_rate > 1));
-                const conversion = wholesaleUnit?.conversion_rate || p.items_per_carton || 1;
+    // [REPLACE] Hàm loadProducts mới (Sử dụng RPC get_inventory_setup_grid)
 
-                // Tìm setting của kho đang chọn (nếu data có trả về)
-                // Giả sử p.product_inventory là mảng inventory
-                let currentMin = 0;
-                let currentMax = 0;
-                
-                // Note: Nếu getAllProductsLite chưa join bảng inventory, số này sẽ là 0.
-                // Sếp chấp nhận load 0, nhưng khi save phải đúng.
-                
-                return {
-                    key: p.id,
-                    id: p.id,
-                    sku: p.sku,
-                    name: p.name,
-                    actual_cost: p.actual_cost,
-                    wholesale_unit: wholesaleUnit?.unit_name || p.wholesale_unit || 'Hộp',
-                    conversion_rate: conversion,
-                    
-                    min_stock: currentMin / conversion, // Display in Wholesale Unit
-                    max_stock: currentMax / conversion, 
-                    
-                    is_dirty: false
-                };
+    // [REPLACE] Hàm loadProducts mới (Sử dụng RPC get_inventory_setup_grid)
+
+    const loadProducts = async (term: string = '', page: number = 1, size: number = 20) => {
+        if (!selectedWarehouseId) return;
+        setLoading(true);
+        
+        try {
+            // GỌI RPC MỚI - DỮ LIỆU PHẲNG
+            // Không cần filter local, Backend đã làm hết
+            const { data, error } = await supabase.rpc('get_inventory_setup_grid', {
+                p_warehouse_id: selectedWarehouseId,
+                p_search: term,
+                p_limit: size,
+                p_offset: (page - 1) * size,
+                p_has_setup_only: showHasStockOnly // Filter "Đã cài đặt"
             });
+
+            if (error) throw error;
+
+            // Map dữ liệu (Backend trả về đã chuẩn, chỉ cần tính lại giá trị hiển thị)
+            const rows = (data || []).map((p: any) => ({
+                key: p.product_id,
+                id: p.product_id,
+                sku: p.sku,
+                name: p.name,
+                
+                // Các trường tính toán
+                actual_cost: Number(p.actual_cost) || 0,
+                wholesale_unit: p.unit_name,        // Backend đã chọn giúp đơn vị hiển thị
+                conversion_rate: p.conversion_rate, // Backend đã lấy tỷ lệ quy đổi
+                
+                // Min/Max trong DB lưu theo Base Unit -> Chia tỷ lệ để ra đơn vị hiển thị
+                min_stock: (p.min_stock || 0) / p.conversion_rate,
+                max_stock: (p.max_stock || 0) / p.conversion_rate,
+                
+                is_dirty: false
+            }));
             
             setProducts(rows);
-            // Set first row active if not set
+            
+            // Lấy total_count từ dòng đầu tiên để phân trang
+            // Nếu không có dữ liệu thì total = 0
+            const totalRecords = data && data.length > 0 ? Number(data[0].total_count) : 0;
+            setTotal(totalRecords);
+            
+            // UX: Tự động focus dòng đầu
             if (rows.length > 0 && activeRowKey === null) setActiveRowKey(rows[0].id);
 
-        } catch (error) {
-            message.error("Lỗi tải data");
+        } catch (error: any) {
+            console.error("Lỗi tải data:", error);
+            message.error("Lỗi tải dữ liệu: " + error.message);
         } finally {
             setLoading(false);
         }
@@ -189,7 +161,7 @@ const QuickMinMaxPage: React.FC = () => {
         const recognition = new Speech();
         recognition.continuous = true; 
         recognition.lang = 'vi-VN';
-        recognition.interimResults = true; // [IMPORTANT] Real-time
+        recognition.interimResults = true; 
         
         recognition.onstart = () => {
             console.log("Voice started");
@@ -204,8 +176,6 @@ const QuickMinMaxPage: React.FC = () => {
         recognition.onresult = (event: any) => {
             const result = event.results[event.results.length - 1];
             const transcript = result[0].transcript.toLowerCase();
-            
-            // Call realtime processing
             processRealtimeVoice(transcript, result.isFinal);
         };
         
@@ -227,7 +197,7 @@ const QuickMinMaxPage: React.FC = () => {
             try {
                 recognitionRef.current?.start();
             } catch (e) {
-                console.error(e); // Có thể đã start rồi
+                console.error(e); 
             }
         }
     };
@@ -238,7 +208,6 @@ const QuickMinMaxPage: React.FC = () => {
         let minVal: number | undefined = undefined;
         let maxVal: number | undefined = undefined;
 
-        // Logic Regex Greedy
         if (text.includes("min")) {
             const match = text.match(/min\s*(\d+)/i);
             if (match) minVal = parseInt(match[1]);
@@ -248,7 +217,6 @@ const QuickMinMaxPage: React.FC = () => {
             if (match) maxVal = parseInt(match[1]);
         }
         
-        // Fallback simple numbers
         if (minVal === undefined && maxVal === undefined) {
              const numbers = text.match(/\d+/g);
              if (numbers && numbers.length >= 2) {
@@ -259,7 +227,6 @@ const QuickMinMaxPage: React.FC = () => {
              }
         }
 
-        // 2. Update UI immediately (Visual Feedback)
         if (minVal !== undefined || maxVal !== undefined) {
             setProducts(prev => prev.map(p => {
                 if (p.id === activeRowKey) {
@@ -270,14 +237,12 @@ const QuickMinMaxPage: React.FC = () => {
                 return p;
             }));
             
-            // Update buffer
             setVoiceBuffer(prev => ({
                 min: minVal !== undefined ? minVal : prev.min,
                 max: maxVal !== undefined ? maxVal : prev.max
             }));
         }
 
-        // 3. Auto Next Logic
         const currentBuffer = { 
             min: minVal !== undefined ? minVal : voiceBuffer.min, 
             max: maxVal !== undefined ? maxVal : voiceBuffer.max 
@@ -287,31 +252,15 @@ const QuickMinMaxPage: React.FC = () => {
             if (window.voiceTimeout) clearTimeout(window.voiceTimeout);
             
             window.voiceTimeout = setTimeout(() => {
-                // Trigger save for active row
-                // Lấy data mới nhất từ state products (do đã update ở trên)
-                // Tuy nhiên trong timeout closure, products là cũ. 
-                // Cần trick hoặc dùng ref. Ở đây đơn giản nhất là gọi save với activeRowKey
-                // và handleSaveRow sẽ tự tìm trong products (nếu dùng functional update hoặc ref).
-                // Do handleSaveRow đang dùng `row` object truyền vào, ta cần đảm bảo object đó có data mới nhất.
-                
-                // Workaround: Pass values directly to save function
-                // const rowToSave = { 
-                //    id: activeRowKey, 
-                //    min_stock: currentBuffer.min, 
-                //    max_stock: currentBuffer.max 
-                // };
-                // Chúng ta cần thêm các field khác của row để tính toán (conversion_rate)
-                // Nên tìm trong setProducts callback để chắc chắn
                 setProducts(prev => {
                     const found = prev.find(p => p.id === activeRowKey);
                     if (found) {
                         const mergedRow = { ...found, min_stock: currentBuffer.min, max_stock: currentBuffer.max };
-                        handleSaveRow(mergedRow, true); // Save
-                        moveToNextRow(prev); // Next
+                        handleSaveRow(mergedRow, true); 
+                        moveToNextRow(prev); 
                     }
                     return prev;
                 });
-                
                 setVoiceBuffer({});
             }, 1000); 
         }
@@ -335,11 +284,10 @@ const QuickMinMaxPage: React.FC = () => {
         
         setSavingId(row.id);
         try {
-            // [LOGIC QUAN TRỌNG] Convert to Base Unit
             const realMin = (row.min_stock || 0) * row.conversion_rate;
             const realMax = (row.max_stock || 0) * row.conversion_rate;
 
-            const currentDetail = await import('@/features/product/api/productService').then(m => m.getProductDetails(row.id));
+            const currentDetail = await getProductDetails(row.id);
             
             let invList: any[] = [];
             if (Array.isArray(currentDetail.inventorySettings)) {
@@ -348,60 +296,25 @@ const QuickMinMaxPage: React.FC = () => {
                  invList = Object.values(currentDetail.inventorySettings);
             }
             
-            // Remove old entry
             invList = invList.filter((i:any) => i.warehouse_id !== selectedWarehouseId);
             
-            // [FIX ERROR B] Correct Field Names for Backend (min_stock, max_stock)
-            invList.push({
+            const newItem = {
                 warehouse_id: selectedWarehouseId,
-                min_stock: realMin, // [FIXED] Changed from 'min' to 'min_stock'
-                max_stock: realMax, // [FIXED] Changed from 'max' to 'max_stock'
+                min: realMin,       
+                max: realMax,       
+                min_stock: realMin, 
+                max_stock: realMax, 
                 shelf_location: "", 
                 location_cabinet: "",
                 location_row: "",
                 location_slot: "" 
-            });
-            
-            // Backend V7 expects 'inventorySettings' which productService converts to 'p_inventory_json'
-            // productService maps: item.min -> min_stock. 
-            // WAIT! Check productService code:
-            // "min_stock: item.min," -> So productService expects 'min'.
-            // "max_stock: item.max," -> So productService expects 'max'.
-            
-            // NẾU PRODUCT SERVICE ĐANG MAP: min -> min_stock
-            // THÌ Ở ĐÂY GỬI: min LÀ ĐÚNG.
-            
-            // NHƯNG SẾP BẢO KHÔNG LƯU ĐƯỢC.
-            // CÓ THỂ DO LOGIC: "if (!item.warehouse_id) return null;" trong productService
-            // HOẶC: inventorySettings object structure in currentDetail is creating issues (key-based vs array).
-            
-            // HÃY GỬI CẢ 2 KEY ĐỂ CHẮC CHẮN (Backup)
-            const newItem = {
-                warehouse_id: selectedWarehouseId,
-                min: realMin,       // Cho productService cũ
-                max: realMax,       // Cho productService cũ
-                min_stock: realMin, // Cho Backend trực tiếp (nếu bypass)
-                max_stock: realMax, // Cho Backend trực tiếp
             };
             
-            // Re-push
             invList.push(newItem);
-
-            // GỌI TRỰC TIẾP upsertProduct wrapper
-            // Lưu ý: productService.ts dòng ~220 convert inventorySettings object values to array map min->min_stock.
-            // Nên gửi 'min' ở đây là đúng với code FE hiện tại. 
-            // TUY NHIÊN, nãy Dev gửi: inventorySettings: invList (là Array).
-            // Dòng 219: if (!Array.isArray(inventoryJson) && typeof inventoryJson === 'object')
-            // Nếu gửi Array, nó BỎ QUA logic map.
-            // => Nó gửi nguyên xi Array lên RPC.
-            // => RPC cần key `min_stock`.
-            // => Vậy Dev phải gửi key `min_stock` trong Array này!
-            
-            // CHỐT: Gửi key `min_stock` và `max_stock` là CHÍNH XÁC vì gửi Array.
             
             const payload = {
                 ...currentDetail,
-                inventorySettings: invList // Array with min_stock/max_stock keys
+                inventorySettings: invList 
             };
             
             await upsertProduct(payload);
@@ -467,8 +380,16 @@ const QuickMinMaxPage: React.FC = () => {
             title: 'Vốn dự trữ (Min)', 
             width: 150, 
             render: (_: any, r: any) => {
-                const value = (r.min_stock || 0) * r.conversion_rate * r.actual_cost;
-                return <Text type="secondary">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)}</Text>
+                // [FIX 4] Prevent NaN
+                const cost = r.actual_cost || 0;
+                const min = r.min_stock || 0;
+                const conv = r.conversion_rate || 1;
+                
+                const value = min * conv * cost;
+                
+                return <Text type="secondary">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)}
+                </Text>
             }
         },
         { 
@@ -481,6 +402,10 @@ const QuickMinMaxPage: React.FC = () => {
             }
         }
     ];
+
+    // Filter Logic
+    // Filter Logic: Backend handles filtering via `p_has_setup_only` param
+    const displayedProducts = products;
 
     return (
         <div style={{ padding: 24 }}>
@@ -509,6 +434,14 @@ const QuickMinMaxPage: React.FC = () => {
                                 <Option key={w.id} value={w.id}>{w.name}</Option>
                             ))}
                         </Select>
+                    </Col>
+                    <Col span={4}>
+                         <Checkbox 
+                            checked={showHasStockOnly} 
+                            onChange={e => setShowHasStockOnly(e.target.checked)}
+                        >
+                            Chỉ hiện SP đã cài Min/Max
+                        </Checkbox>
                     </Col>
                     <Col span={4} style={{ textAlign: 'right' }}>
                         <Button 
@@ -542,10 +475,19 @@ const QuickMinMaxPage: React.FC = () => {
             <Card bodyStyle={{ padding: 0 }}>
                 <Table
                     columns={columns}
-                    dataSource={products}
+                    dataSource={displayedProducts}
                     loading={loading}
                     rowKey="id"
-                    pagination={{ pageSize: 50 }}
+                    pagination={{ 
+                        current: currentPage,
+                        pageSize: pageSize,
+                        total: total,
+                        showSizeChanger: true,
+                        onChange: (page, size) => {
+                            setCurrentPage(page);
+                            setPageSize(size);
+                        }
+                    }}
                     size="middle"
                     scroll={{ y: 600 }}
                     rowClassName={(record) => record.id === activeRowKey ? 'highlight-row' : ''}
