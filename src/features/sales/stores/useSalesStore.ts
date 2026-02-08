@@ -79,6 +79,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     } else {
       const newItem: CartItem = {
         ...p,
+        stock_quantity: p.stock_quantity || 0, // [NEW] Ensure stock info is preserved
         key: `${p.id}_${Date.now()}`,
         quantity: qty,
         discount: 0,

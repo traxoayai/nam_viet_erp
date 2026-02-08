@@ -1,28 +1,24 @@
+// src/features/connect/api/connectService.ts
 import { supabase } from "@/shared/lib/supabaseClient";
 import { ConnectPost, CreatePostPayload } from "../types/connect.types";
 
 export const connectService = {
-  // 1. Lấy danh sách bài đăng
-  async fetchPosts(category: string): Promise<ConnectPost[]> {
-    // Tạm thời query bảng, sau này có thể viết RPC get_posts_secure nếu cần join nhiều
-    const { data, error } = await supabase
-      .from('connect_posts')
-      .select('*')
-      .eq('category', category)
-      .eq('status', 'published') // Chỉ lấy bài đã xuất bản
-      .order('is_pinned', { ascending: false })
-      .order('created_at', { ascending: false });
+  // 1. Lấy danh sách bài đăng (Dùng RPC V2 Smart Search)
+  async fetchPosts(category: string, search?: string): Promise<ConnectPost[]> {
+    const { data, error } = await supabase.rpc('get_connect_posts', {
+      p_category: category,
+      p_search: search || null,
+      p_limit: 50,
+      p_offset: 0
+    });
 
     if (error) throw error;
-    
-    // Mock thêm thông tin author để UI đẹp (Do chưa join bảng profile)
-    return data.map((post: any) => ({
+
+    // RPC trả về attachments dạng Json, cần map về obj nếu chưa đúng format
+    return (data || []).map((post: any) => ({
       ...post,
-      author_name: post.is_anonymous ? 'Ẩn danh' : 'Ban Giám Đốc',
-      role: post.is_anonymous ? 'Nhân viên' : 'Administrator',
-      likes_count: Math.floor(Math.random() * 50), // Mock
-      comments_count: Math.floor(Math.random() * 10), // Mock
-    }));
+      attachments: post.attachments ? (typeof post.attachments === 'string' ? JSON.parse(post.attachments) : post.attachments) : []
+    })) as ConnectPost[];
   },
 
   // 2. Tạo bài viết (Dùng RPC Core đã viết)
@@ -64,7 +60,51 @@ export const connectService = {
       // updated_at: new Date().toISOString() // Supabase trigger usually handles this, but can add if needed
     };
     
-    const { error } = await supabase.from('connect_posts').update(dbPayload).eq('id', id);
+      const { error } = await supabase.from('connect_posts').update(dbPayload).eq('id', id);
     if (error) throw error;
+  },
+
+  // 7. Toggle Like (REST API)
+  async toggleLike(postId: number, isLiked: boolean) {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error("Unauthorized");
+
+    if (isLiked) {
+      // Unlike
+      const { error } = await supabase.from('connect_likes')
+        .delete()
+        .match({ post_id: postId, user_id: user.id });
+      if (error) throw error;
+    } else {
+      // Like
+      const { error } = await supabase.from('connect_likes')
+        .insert({ post_id: postId, user_id: user.id });
+      if (error) throw error;
+    }
+  },
+
+  // 8. Gửi Comment
+  async sendComment(postId: number, content: string) {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error("Unauthorized");
+    
+    const { error } = await supabase.from('connect_comments')
+      .insert({ post_id: postId, content: content.trim(), user_id: user.id }); // Ensure user_id is sent if RLS requires it or it's not auto-inferred
+    if (error) throw error;
+  },
+
+  // 9. Lấy danh sách Comment
+  async fetchComments(postId: number) {
+    const { data, error } = await supabase
+      .from('connect_comments')
+      .select(`
+        id, content, created_at, user_id,
+        users ( full_name, avatar_url )
+      `)
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true });
+      
+    if (error) throw error;
+    return data;
   }
 };

@@ -817,6 +817,7 @@ export type Database = {
           business_license_number: string | null
           business_license_url: string | null
           created_at: string | null
+          current_debt: number | null
           customer_code: string | null
           debt_limit: number | null
           email: string | null
@@ -842,6 +843,7 @@ export type Database = {
           business_license_number?: string | null
           business_license_url?: string | null
           created_at?: string | null
+          current_debt?: number | null
           customer_code?: string | null
           debt_limit?: number | null
           email?: string | null
@@ -867,6 +869,7 @@ export type Database = {
           business_license_number?: string | null
           business_license_url?: string | null
           created_at?: string | null
+          current_debt?: number | null
           customer_code?: string | null
           debt_limit?: number | null
           email?: string | null
@@ -4404,6 +4407,38 @@ export type Database = {
           valid_to: string
         }[]
       }
+      get_connect_posts: {
+        Args: {
+          p_category: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+        }
+        Returns: {
+          attachments: Json
+          category: string
+          comments_count: number
+          content: string
+          created_at: string
+          creator_avatar: string
+          creator_id: string
+          creator_name: string
+          feedback_response: string
+          id: number
+          is_anonymous: boolean
+          is_pinned: boolean
+          likes_count: number
+          must_confirm: boolean
+          priority: string
+          reward_points: number
+          status: string
+          summary: string
+          tags: string[]
+          title: string
+          updated_at: string
+          user_has_liked: boolean
+        }[]
+      }
       get_customer_b2b_details: { Args: { p_id: number }; Returns: Json }
       get_customer_b2c_details: { Args: { p_id: number }; Returns: Json }
       get_customer_debt_info: {
@@ -4419,12 +4454,12 @@ export type Database = {
       }
       get_customers_b2b_list: {
         Args: {
-          page_num: number
-          page_size: number
-          sales_staff_filter: string
-          search_query: string
+          page_num?: number
+          page_size?: number
+          sales_staff_filter?: string
+          search_query?: string
           sort_by_debt?: string
-          status_filter: string
+          status_filter?: string
         }
         Returns: {
           current_debt: number

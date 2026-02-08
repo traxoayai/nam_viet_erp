@@ -1,14 +1,14 @@
 // src/features/connect/components/ConnectList.tsx
 import { 
-  MessageSquare, Eye, Paperclip, 
-  Edit, Trash2, Lock, Inbox 
+  MessageSquare, Paperclip, 
+  Edit, Trash2, Lock, Inbox, ThumbsUp 
 } from 'lucide-react';
 import { useConnectStore } from '../hooks/useConnectStore';
 import dayjs from 'dayjs';
 import { Modal, message } from 'antd';
 
 export const ConnectList = () => {
-  const { posts, selectedPost, setSelectedPost, activeTab, deletePost, toggleLockPost, setEditingPost } = useConnectStore();
+  const { posts, selectedPost, setSelectedPost, activeTab, deletePost, toggleLockPost, setEditingPost, toggleLikeAction } = useConnectStore();
 
   const handleAction = (e: any, action: string, post: any) => {
       e.stopPropagation();
@@ -90,15 +90,31 @@ export const ConnectList = () => {
                   <div className="text-slate-500 text-xs truncate max-w-xl">{post.summary || '...'}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="font-medium text-slate-700 text-xs">
-                      {post.is_anonymous ? 'Người giấu tên' : (post.author_name || 'Admin')}
+                  <div className="flex items-center gap-2">
+                      {post.creator_avatar ? 
+                         <img src={post.creator_avatar} alt="" className="w-6 h-6 rounded-full object-cover"/> 
+                         : <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500">{post.creator_name?.charAt(0)}</div>
+                       }
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-700 text-xs">{post.creator_name}</span>
+                        {post.is_anonymous && <span className="text-[10px] text-slate-400 italic">Ẩn danh</span>}
+                      </div>
                   </div>
-                  <div className="text-[10px] text-slate-400">{post.role || 'Nhân viên'}</div>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-3 text-slate-400 text-xs">
-                    {(post.comments_count || 0) > 0 && <span className="flex items-center gap-1"><MessageSquare size={12}/> {post.comments_count}</span>}
-                    {(post.likes_count || 0) > 0 && <span className="flex items-center gap-1"><Eye size={12}/> {post.likes_count}</span>}
+                    <span title="Bình luận" className="flex items-center gap-1"><MessageSquare size={12}/> {post.comments_count}</span>
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            toggleLikeAction(post);
+                        }}
+                        className={`flex items-center gap-1 hover:text-blue-600 transition ${post.user_has_liked ? 'text-blue-600 font-bold' : ''}`}
+                        title="Thích"
+                    >
+                        <ThumbsUp size={12} fill={post.user_has_liked ? "currentColor" : "none"}/> {post.likes_count}
+                    </button>
+                    {post.attachments && post.attachments.length > 0 && <span title="Đính kèm" className="flex items-center gap-1 text-blue-500"><Paperclip size={12}/> {post.attachments.length}</span>}
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right text-slate-500 font-mono text-xs">

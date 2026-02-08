@@ -364,7 +364,7 @@ const ProductListPage = () => {
         : "-",
     },
     {
-        title: "Tổng Kho",
+        title: "Tổng Hệ Thống",
         dataIndex: "total_stock",
         key: "total_stock",
         width: 100,

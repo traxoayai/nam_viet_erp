@@ -164,7 +164,29 @@ const CreateB2BOrderPage = () => {
   }, [id]);
 
   const handleSubmit = async (status: "DRAFT" | "QUOTE" | "CONFIRMED") => {
+    // 1. Validate cơ bản (Form)
     if (!validateOrder()) return;
+
+    // [NEW] 2. VALIDATE TỒN KHO (FE GUARD)
+    // Chỉ kiểm tra khi tạo đơn CONFIRMED (Trừ kho thật). 
+    // Nếu là DRAFT hoặc QUOTE (Báo giá) thì cho phép nhập thoải mái.
+    if (status === 'CONFIRMED') {
+        const outOfStockItems = items.filter(item => {
+            // Lưu ý: item.stock_quantity cần được lấy từ dữ liệu sản phẩm lúc add vào
+            // Nếu không có dữ liệu tồn (ví dụ undefined), mặc định cho qua (hoặc chặn tùy Sếp)
+            const currentStock = item.stock_quantity || 0;
+            return item.quantity > currentStock;
+        });
+
+        if (outOfStockItems.length > 0) {
+            const errorMsg = outOfStockItems.map(i => `${i.name} (Tồn: ${i.stock_quantity || 0})`).join(', ');
+            message.error({
+                content: `Không đủ tồn kho để tạo đơn! Vui lòng kiểm tra lại: ${errorMsg}`,
+                duration: 5
+            });
+            return; // CHẶN ĐỨNG TẠI ĐÂY
+        }
+    }
 
     setLoading(true);
     try {
