@@ -40,14 +40,15 @@ import {
   //ShopFilled,
   //ShoppingFilled,
   ThunderboltOutlined,
+  FileTextOutlined,
   AuditOutlined,
   AudioOutlined,
 } from "@ant-design/icons";
-import { 
-  LogOut, CircleChevronLeft, CircleChevronRight, 
-  Home, Store, Stethoscope, Briefcase, Gift, Package, Rocket, 
-  Handshake, Users, Megaphone, ClipboardList, CircleDollarSign, 
-  PieChart, Settings 
+import {
+  LogOut, CircleChevronLeft, CircleChevronRight,
+  Home, Store, Stethoscope, Briefcase, Gift, Package, Rocket,
+  Handshake, Users, Megaphone, ClipboardList, CircleDollarSign,
+  PieChart, Settings, ChevronRight, ChevronLeft 
 } from "lucide-react";
 import {
   Layout,
@@ -86,6 +87,7 @@ function getItem(
 const finalMenuItems: MenuItem[] = [
   // 1. Trang chủ
   getItem(<Link to="/">Trang chủ</Link>, "/", <Home size={20} color="#4b5563" strokeWidth={1.5} />),
+  getItem(<Link to="/connect">Thông báo & Ý kiến</Link>, "/connect", <Megaphone size={20} color="#4b5563" strokeWidth={1.5} />),
 
   // 2. Kênh Cửa Hàng
   getItem("Kênh Cửa Hàng", "store", <Store size={20} color="#4b5563" strokeWidth={1.5} />, [
@@ -94,10 +96,16 @@ const finalMenuItems: MenuItem[] = [
       "/store/dashboard",
       <AppstoreOutlined />
     ),
+    // [MODIFIED] Đổi từ Link sang Key trigger modal
     getItem(
-      <Link to="/store/appointments">Đặt Lịch Hẹn</Link>,
-      "/store/appointments",
+      "Đặt Lịch Hẹn", // Label thường, không bọc Link
+      "TRIGGER_BOOKING_MODAL", // Key đặc biệt để bắt sự kiện
       <ScheduleOutlined />
+    ),
+    getItem(
+      <Link to="/store/products">Sản phẩm store</Link>,
+      "/store/products",
+      <FileTextOutlined />
     ),
     getItem(
       <Link to="/blank/pos">Tạo đơn tại Cửa Hàng [POS]</Link>,
@@ -608,76 +616,94 @@ const MainLayout: React.FC = () => {
     },
   ];
 
-  // Sidebar Content (Tách ra để dùng chung cho cả Sider và Drawer)
-  const SidebarContent = (
-    <>
-      <div
-        style={{
-          height: "64px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "0 10px",
-          borderBottom: "1px solid #ffffffff",
-        }}
-      >
-        <img
-          src={Logo}
-          alt="Logo"
-          style={{
-            height: 32,
-            marginRight: collapsed ? 0 : 8,
-            transition: "all 0.2s",
-          }}
-        />
-        {!collapsed && (
-          <span
-            style={{
-              fontSize: "16px",
-              fontWeight: 700,
-              color: "#00b96b",
-              whiteSpace: "nowrap",
-            }}
-          >
-            DƯỢC NAM VIỆT
-          </span>
-        )}
-      </div>
-      <Menu
-        mode="inline"
-        defaultSelectedKeys={[location.pathname]}
-        defaultOpenKeys={[]} // Không mở sẵn nhóm nào
-        items={visibleMenuItems} // (Biến finalMenuItems lấy từ code cũ của Sếp)
-        style={{ borderRight: 0 }}
-      />
-    </>
-  );
+
+
+  // [NEW] Hàm xử lý click menu
+  const onMenuClick: MenuProps['onClick'] = (e) => {
+    if (e.key === 'TRIGGER_BOOKING_MODAL') {
+      setIsBookingOpen(true);
+    } else {
+      // Nếu là các key khác (có Link bên trong label), React Router sẽ tự xử lý
+    }
+  };
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
       {/* 1. SIDEBAR CHO DESKTOP (Ẩn khi màn hình nhỏ) */}
       {screens.md ? (
-        <Sider
-          trigger={null}
-          collapsible
-          collapsed={collapsed}
-          width={290}
-          collapsedWidth={55}
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={(value) => setCollapsed(value)}
+        width={250}
+        collapsedWidth={55}
+        style={{
+          background: "#fff",
+          borderRight: "1px solid #f0f0f0",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          position: "fixed",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 1001, 
+        }}
+        trigger={
+           <div className="w-full h-10 flex items-center justify-center bg-gray-50 border-t border-gray-100 text-gray-500 hover:text-blue-600 transition-colors">
+              {collapsed ? <ChevronRight size={18} /> : <div className="flex items-center gap-2 text-xs font-semibold"><ChevronLeft size={16}/> Thu gọn sidebar</div>}
+           </div>
+        }
+      >
+        <div
           style={{
-            background: "#ffffffff",
-            borderRight: "1px solid #c0c0c0ff",
-            position: "fixed",
-            left: 0,
-            top: 0,
-            bottom: 0,
-            overflowY: "auto",
-            overflowX: "hidden",
-            zIndex: 10,
+            height: 64,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderBottom: "1px solid #f0f0f0",
+            overflow: "hidden" // [QUAN TRỌNG] Để ẩn chữ khi thu gọn
           }}
         >
-          {SidebarContent}
-        </Sider>
-      ) : null}
+          {/* 1. LOGO (Có hiệu ứng trượt margin) */}
+          <img 
+            src={Logo} 
+            alt="Logo" 
+            style={{ 
+                height: 32, // Kích thước chuẩn
+                // Nếu đóng thì margin = 0, nếu mở thì cách phải 8px
+                marginRight: collapsed ? 0 : 8, 
+                transition: "all 0.2s" 
+            }} 
+          />
+
+          {/* 2. CHỮ THƯƠNG HIỆU (Chỉ hiện khi MENU MỞ) */}
+          {!collapsed && (
+            <span
+              style={{
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "#00b96b", // Màu xanh thương hiệu
+                whiteSpace: "nowrap", // Không xuống dòng
+                opacity: collapsed ? 0 : 1,
+                transition: "opacity 0.3s",
+              }}
+            >
+              DƯỢC NAM VIỆT
+            </span>
+          )}
+        </div>
+        
+        {/* Scrollable Area for Menu */}
+        <div className="custom-scrollbar" style={{ height: "calc(100vh - 110px)", overflowY: "auto", overflowX: 'hidden' }}>
+            <Menu
+            theme="light"
+            defaultSelectedKeys={[location.pathname]}
+            mode="inline"
+            items={visibleMenuItems} // Sử dụng menu đã lọc
+            style={{ borderRight: 0 }}
+            onClick={onMenuClick} // [NEW] Thêm prop này
+            />
+        </div>
+      </Sider>) : null}
 
       {/* 2. DRAWER CHO MOBILE (Chỉ hiện khi màn hình nhỏ) */}
       {!screens.md && (
@@ -700,12 +726,27 @@ const MainLayout: React.FC = () => {
               borderBottom: "0px solid #f0f0f0",
             }}
           >
-            <img src={Logo} alt="Logo" style={{ height: 32, marginRight: 8 }} />
+            <img src={Logo} alt="Logo" 
+            style={{ 
+                height: 32, 
+                // Biến collapsed chỉ tồn tại ở file này
+                marginRight: collapsed ? 0 : 8, 
+                transition: "all 0.2s" 
+            }} />
+            {!collapsed && (
             <span
-              style={{ fontSize: "16px", fontWeight: 700, color: "#00b96b" }}
+              style={{
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "#00b96b",
+                whiteSpace: "nowrap",
+                opacity: collapsed ? 0 : 1,
+                transition: "opacity 0.3s",
+              }}
             >
               DƯỢC NAM VIỆT
             </span>
+          )}
           </div>
           <Menu
             mode="inline"
@@ -719,7 +760,7 @@ const MainLayout: React.FC = () => {
       {/* 3. MAIN LAYOUT */}
       <Layout
         style={{
-          marginLeft: screens.md ? (collapsed ? 55 : 280) : 0,
+          marginLeft: screens.md ? (collapsed ? 55 : 250) : 0,
           transition: "margin-left 0.1s",
         }}
       >
@@ -739,7 +780,6 @@ const MainLayout: React.FC = () => {
         >
           <div style={{ display: "flex", alignItems: "center" }}>
             {screens.md ? (
-              // Nút Toggle cho Desktop
               // Nút Toggle cho Desktop
               <Button
                 type="text"
@@ -767,15 +807,7 @@ const MainLayout: React.FC = () => {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <NotificationBell />
             
-            {/* BOOKING BUTTON */}
-            <Button 
-                type="primary" 
-                icon={<PlusOutlined />} 
-                onClick={() => setIsBookingOpen(true)}
-                style={{ borderRadius: 20 }}
-            >
-                {screens.md ? "Tạo Lịch Hẹn" : "Đặt Lịch"}
-            </Button>
+            {/* [REMOVED] Đã xóa nút Button "Tạo Lịch Hẹn" ở đây */}
 
             <Dropdown menu={{ items: userMenuItems }} trigger={["click"]}>
               <Button

@@ -276,7 +276,7 @@ export const generateB2BOrderHTML = (order: any) => {
                
                ${oldDebt !== 0 ? `
                    <div class="total-row" style="color: #d4380d;">
-                       <span>${oldDebt > 0 ? 'Nợ cũ (Cộng dồn):' : 'Thanh toán khác:'}</span> 
+                       <span>${oldDebt > 0 ? 'Nợ cũ (Cộng dồn):' : ''}</span> 
                        <span>${Math.abs(oldDebt).toLocaleString()} ₫</span>
                    </div>
                ` : ''}

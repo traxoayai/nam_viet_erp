@@ -69,7 +69,12 @@ const LoginPage = () => {
             <img
               src={Logo}
               alt="Logo Dược Nam Việt"
-              style={{ width: 100, marginBottom: 16 }}
+              style={{ 
+                  width: 100, 
+                  // [FIX] Thêm display block và margin auto để căn giữa bất chấp Tailwind
+                  display: "block",
+                  margin: "0 auto 16px auto" 
+              }}
             />
 
             <Title level={2} style={{ margin: 0 }}>

@@ -37,7 +37,7 @@ import { Access } from "@/shared/components/auth/Access"; // [NEW]
 import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint";
 import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate";
-import { SnippetsOutlined } from "@ant-design/icons";
+
 
 const { Text } = Typography;
 
@@ -47,7 +47,7 @@ const B2BOrderListPage = () => {
   // --- 1. STATE & HOOKS ---
   const { tableProps, filterProps, stats, currentFilters, refresh } = useSalesOrders({ orderType: 'B2B' });
   const { printOrder } = useOrderPrint(); // [NEW]
-  const { printById: printPicking, printData: pickingData } = usePickingListPrint(); // [NEW] Fetch & Print Picking
+  const { printData: pickingData } = usePickingListPrint(); // [NEW] Fetch & Print Picking
 
   // State Xuất Hóa Đơn
   const [exportInvoiceLoading, setExportInvoiceLoading] = useState(false);
@@ -233,7 +233,7 @@ const B2BOrderListPage = () => {
                     }}
                 />
                 
-                {/* [NEW] Nút In Phiếu Nhặt */}
+                {/* [NEW] Nút In Phiếu Nhặt
                 <Button 
                     type="text" 
                     icon={<SnippetsOutlined />} 
@@ -243,7 +243,7 @@ const B2BOrderListPage = () => {
                         printPicking(record.id);
                     }}
                 />
-                
+                 */}
                 {/* [NEW] Nút Thanh Toán (Chỉ hiện khi chưa trả hết) */}
                 {record.payment_status !== 'paid' && record.status !== 'CANCELLED' && (
                     <Button 

@@ -69,6 +69,8 @@ import QuickUnitPage from "@/pages/quick/QuickUnitPage";
 import QuickMinMaxPage from "@/pages/quick/QuickMinMaxPage";
 import QuickPricePage from "@/pages/quick/QuickPricePage";
 import QuickBarcodePage from "@/pages/quick/QuickBarcodePage";
+import ConnectPage from "@/features/connect/pages/ConnectPage"; // [NEW]
+
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -95,6 +97,10 @@ const routes: RouteObject[] = [
           },
 
           // 2. Kênh Cửa Hàng
+          {
+             path: "connect",
+             element: <ConnectPage />,
+          },
           {
             path: "store/dashboard",
             element: <PagePlaceholder title="Dashboard Cửa hàng" />,

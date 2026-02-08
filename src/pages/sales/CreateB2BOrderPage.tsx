@@ -8,6 +8,7 @@ import {
   Card,
   Input,
   message,
+  Alert,
 } from "antd";
 import { useState, useEffect } from "react"; 
 import { useNavigate, useParams } from "react-router-dom";
@@ -293,6 +294,7 @@ const CreateB2BOrderPage = () => {
 
   return (
     <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
+      {/* --- KHU VỰC HEADER --- */}
       <div
         style={{
           padding: "12px 24px",
@@ -302,16 +304,12 @@ const CreateB2BOrderPage = () => {
           top: 0,
           zIndex: 100,
           boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          display: "flex",             // [NEW] Flex layout
+          justifyContent: "space-between", // [NEW] Đẩy 2 bên
+          alignItems: "center"
         }}
       >
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: "0 auto",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center" }}>
           <ArrowLeftOutlined
             style={{ fontSize: 18, marginRight: 12, cursor: "pointer" }}
             onClick={() => navigate(-1)}
@@ -319,6 +317,18 @@ const CreateB2BOrderPage = () => {
           <Title level={4} style={{ margin: 0 }}>
             {isEditMode ? "Cập nhật Đơn Bán Buôn (B2B)" : "Tạo Đơn Bán Buôn (B2B)"}
           </Title>
+        </div>
+
+        {/* [NEW] ĐƯA NÚT BẤM LÊN ĐÂY */}
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+             <ActionButtons
+                loading={loading}
+                // isOverLimit={financials.isOverLimit} // Bỏ prop này ở đây
+                onSubmit={handleSubmit}
+                onPrint={handlePrintPreview}
+                onPrintPicking={handlePrintPickingPreview}
+                style={{ marginTop: 0 }} // Reset margin
+              />
         </div>
       </div>
 
@@ -379,6 +389,17 @@ const CreateB2BOrderPage = () => {
 
           <Col span={8}>
             <div style={{ position: "sticky", top: 80 }}>
+              
+              {/* [NEW] HIỂN THỊ ALERT Ở ĐÂY (Thay vì trong nút bấm) */}
+              {financials.isOverLimit && (
+                <Alert
+                  message="Cảnh báo: Vượt quá hạn mức tín dụng!"
+                  type="error"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                />
+              )}
+
               <Card
                 title="Thanh toán"
                 size="small"
@@ -401,13 +422,7 @@ const CreateB2BOrderPage = () => {
                 />
               </Card>
 
-              <ActionButtons
-                loading={loading}
-                isOverLimit={financials.isOverLimit}
-                onSubmit={handleSubmit}
-                onPrint={handlePrintPreview}
-                onPrintPicking={handlePrintPickingPreview} // [NEW] Pass function
-              />
+              {/* [REMOVED] Đã xóa ActionButtons ở dưới cùng này */}
             </div>
           </Col>
         </Row>

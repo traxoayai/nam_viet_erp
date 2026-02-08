@@ -2,36 +2,29 @@
 import {
   SendOutlined,
   CloseOutlined,
-  FileTextOutlined,
+  //FileTextOutlined,
   PrinterOutlined,
   SaveOutlined,
   SnippetsOutlined // [NEW]
 } from "@ant-design/icons";
-import { Button, Space, Popconfirm, Alert } from "antd";
+import { Button, Popconfirm, Space } from "antd";
 import { useNavigate } from "react-router-dom";
 
 interface Props {
   loading: boolean;
-  isOverLimit?: boolean;
   onSubmit: (status: "DRAFT" | "QUOTE" | "CONFIRMED") => void;
   onPrint?: () => void;
   onPrintPicking?: () => void; // [NEW]
 }
 
-export const ActionButtons = ({ loading, isOverLimit, onSubmit, onPrint, onPrintPicking }: Props) => {
+// Sửa lại Component để linh hoạt hơn
+export const ActionButtons = ({ loading, onSubmit, onPrint, onPrintPicking, style }: Props & { style?: React.CSSProperties }) => {
   const navigate = useNavigate();
 
+  // [REMOVED] Đã tách Alert ra ngoài để component này chỉ chứa nút bấm thuần túy
+  
   return (
-    <div style={{ marginTop: 24 }}>
-      {isOverLimit ? (
-        <Alert
-          message="Cảnh báo: Đơn hàng này sẽ khiến khách hàng vượt quá hạn mức tín dụng!"
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-      ) : null}
-
+    <div style={{ display: "flex", alignItems: "center", gap: 8, ...style }}>
       <div
         style={{
           display: "flex",
@@ -70,16 +63,16 @@ export const ActionButtons = ({ loading, isOverLimit, onSubmit, onPrint, onPrint
             onClick={onPrint}
             loading={loading}
           >
-            In Báo Giá
+            In Đơn
           </Button>
-          <Button
+          {/* <Button
             icon={<FileTextOutlined />}
             size="large"
             onClick={() => onSubmit("QUOTE")}
             loading={loading}
           >
             Báo giá
-          </Button>
+          </Button> */}
           <Button
             icon={<SaveOutlined />}
             size="large"
@@ -100,7 +93,7 @@ export const ActionButtons = ({ loading, isOverLimit, onSubmit, onPrint, onPrint
               minWidth: 150,
             }}
           >
-            TẠO ĐƠN HÀNG
+            TẠO ĐƠN
           </Button>
         </Space>
       </div>

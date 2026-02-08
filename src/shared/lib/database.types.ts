@@ -433,6 +433,98 @@ export type Database = {
           },
         ]
       }
+      connect_posts: {
+        Row: {
+          attachments: Json[] | null
+          category: string
+          content: string | null
+          created_at: string | null
+          creator_id: string | null
+          feedback_response: string | null
+          id: number
+          is_anonymous: boolean | null
+          is_locked: boolean | null
+          is_pinned: boolean | null
+          must_confirm: boolean | null
+          priority: string | null
+          responded_at: string | null
+          response_by: string | null
+          reward_points: number | null
+          status: string | null
+          summary: string | null
+          tags: string[] | null
+          title: string
+        }
+        Insert: {
+          attachments?: Json[] | null
+          category: string
+          content?: string | null
+          created_at?: string | null
+          creator_id?: string | null
+          feedback_response?: string | null
+          id?: number
+          is_anonymous?: boolean | null
+          is_locked?: boolean | null
+          is_pinned?: boolean | null
+          must_confirm?: boolean | null
+          priority?: string | null
+          responded_at?: string | null
+          response_by?: string | null
+          reward_points?: number | null
+          status?: string | null
+          summary?: string | null
+          tags?: string[] | null
+          title: string
+        }
+        Update: {
+          attachments?: Json[] | null
+          category?: string
+          content?: string | null
+          created_at?: string | null
+          creator_id?: string | null
+          feedback_response?: string | null
+          id?: number
+          is_anonymous?: boolean | null
+          is_locked?: boolean | null
+          is_pinned?: boolean | null
+          must_confirm?: boolean | null
+          priority?: string | null
+          responded_at?: string | null
+          response_by?: string | null
+          reward_points?: number | null
+          status?: string | null
+          summary?: string | null
+          tags?: string[] | null
+          title?: string
+        }
+        Relationships: []
+      }
+      connect_reads: {
+        Row: {
+          confirmed_at: string | null
+          post_id: number
+          user_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          post_id: number
+          user_id?: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          post_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connect_reads_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "connect_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_b2b_contacts: {
         Row: {
           created_at: string | null
@@ -3810,11 +3902,17 @@ export type Database = {
       confirm_finance_transaction:
         | { Args: { p_id: number }; Returns: undefined }
         | { Args: { p_id: number; p_target_status: string }; Returns: boolean }
-      confirm_order_payment: {
-        Args: { p_fund_account_id: number; p_order_ids: string[] }
-        Returns: Json
-      }
+      confirm_order_payment:
+        | {
+            Args: { p_fund_account_id: number; p_order_ids: number[] }
+            Returns: Json
+          }
+        | {
+            Args: { p_fund_account_id: number; p_order_ids: string[] }
+            Returns: Json
+          }
       confirm_outbound_packing: { Args: { p_order_id: string }; Returns: Json }
+      confirm_post_read: { Args: { p_post_id: number }; Returns: undefined }
       confirm_purchase_costing: {
         Args: {
           p_gifts_data: Json
@@ -3885,6 +3983,18 @@ export type Database = {
           p_warehouse_id: number
         }
         Returns: number
+      }
+      create_connect_post: {
+        Args: {
+          p_attachments?: Json[]
+          p_category: string
+          p_content: string
+          p_is_anonymous?: boolean
+          p_must_confirm?: boolean
+          p_reward_points?: number
+          p_title: string
+        }
+        Returns: undefined
       }
       create_customer_b2b: {
         Args: { p_contacts: Json[]; p_customer_data: Json }

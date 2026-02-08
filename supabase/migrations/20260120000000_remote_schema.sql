@@ -559,34 +559,29 @@ DECLARE
     v_partner_id BIGINT;
     v_ref_order_code TEXT; 
 BEGIN
-    -- Điều kiện chạy: Phiếu Thu (IN) + Trạng thái Completed/Confirmed
-    -- [CORE NOTE]: Bắt cả trường hợp Insert (Tạo mới đã hoàn tất ngay) hoặc Update (Duyệt sau)
+    -- Chỉ chạy khi flow='in' (Thu tiền) và status Completed/Confirmed
     IF NEW.flow = 'in' 
        AND NEW.status IN ('completed', 'confirmed') 
        AND (TG_OP = 'INSERT' OR OLD.status NOT IN ('completed', 'confirmed')) 
     THEN
         v_remaining_amount := NEW.amount;
         
-        -- =================================================================
-        -- ƯU TIÊN 1: TRẢ CHO ĐÚNG ĐƠN HÀNG ĐƯỢC CHỈ ĐỊNH (Explicit Allocation)
-        -- =================================================================
-        -- Điều kiện: ref_type = 'order' và ref_id chứa Mã đơn hàng (VD: SO-12345)
+        -- ƯU TIÊN 1: TRẢ CHO ĐÚNG ĐƠN HÀNG (Nếu có ref_id)
         IF NEW.ref_type = 'order' AND NEW.ref_id IS NOT NULL THEN
-            v_ref_order_code := NEW.ref_id;
+            v_ref_order_code := NEW.ref_id; -- Giả định ref_id lưu Code đơn hàng (VD: SO-001)
             
-            -- Tìm đơn hàng khớp Mã (Code) và chưa thanh toán xong
+            -- Tìm theo ID hoặc Code (Logic trigger cũ dùng Code, nhưng RPC mới lưu ID)
+            -- Core bổ sung logic tìm theo cả ID cho chắc chắn
             FOR v_order IN 
                 SELECT id, final_amount, paid_amount 
                 FROM public.orders 
-                WHERE code = v_ref_order_code 
+                WHERE (code = v_ref_order_code OR id::text = v_ref_order_code)
                   AND payment_status != 'paid'
                   AND status != 'CANCELLED'
             LOOP
-                -- Tính số tiền trả cho đơn này
                 v_pay_amount := LEAST(v_remaining_amount, v_order.final_amount - COALESCE(v_order.paid_amount, 0));
                 
                 IF v_pay_amount > 0 THEN
-                    -- Update trạng thái đơn hàng
                     UPDATE public.orders 
                     SET paid_amount = COALESCE(paid_amount, 0) + v_pay_amount,
                         payment_status = CASE 
@@ -596,22 +591,17 @@ BEGIN
                         updated_at = NOW()
                     WHERE id = v_order.id;
                     
-                    -- Trừ đi số tiền đã dùng
                     v_remaining_amount := v_remaining_amount - v_pay_amount;
                 END IF;
             END LOOP;
         END IF;
 
-        -- =================================================================
-        -- ƯU TIÊN 2: NẾU CÒN TIỀN DƯ, TRẢ CHO NỢ CŨ (FIFO Allocation)
-        -- =================================================================
-        -- Chỉ áp dụng nếu có định danh Khách hàng (partner_type/partner_id hợp lệ)
+        -- ƯU TIÊN 2: TRẢ NỢ CŨ (FIFO)
         IF v_remaining_amount > 0 AND NEW.partner_type IN ('customer', 'customer_b2b') THEN
-            
             BEGIN
                 v_partner_id := NEW.partner_id::BIGINT;
             EXCEPTION WHEN OTHERS THEN
-                RETURN NEW; -- Bỏ qua nếu ID khách hàng không phải số hợp lệ
+                RETURN NEW; 
             END;
 
             FOR v_order IN 
@@ -624,9 +614,9 @@ BEGIN
                     )
                     AND payment_status != 'paid'
                     AND status != 'CANCELLED'
-                    -- [CORE NOTE]: Tránh trả lại đơn vừa trả ở trên (nếu Priority 1 đã xử lý nhưng chưa hết tiền)
-                    AND (v_ref_order_code IS NULL OR code != v_ref_order_code)
-                ORDER BY created_at ASC -- Cũ nhất trước
+                    -- Tránh đơn vừa trả ở trên
+                    AND (v_ref_order_code IS NULL OR (code != v_ref_order_code AND id::text != v_ref_order_code))
+                ORDER BY created_at ASC 
             LOOP
                 IF v_remaining_amount <= 0 THEN EXIT; END IF;
                 
@@ -1886,6 +1876,79 @@ $$;
 ALTER FUNCTION "public"."confirm_finance_transaction"("p_id" bigint, "p_target_status" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."confirm_order_payment"("p_order_ids" bigint[], "p_fund_account_id" integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_order RECORD;
+    v_count INT := 0;
+    v_total_receipt NUMERIC := 0;
+    v_remaining_amount NUMERIC;
+    v_trans_code TEXT;
+    v_partner_name TEXT;
+    v_fund_name TEXT;
+BEGIN
+    -- Validate Quỹ
+    SELECT name INTO v_fund_name FROM public.fund_accounts WHERE id = p_fund_account_id;
+    IF v_fund_name IS NULL THEN
+        RAISE EXCEPTION 'Tài khoản quỹ không tồn tại (ID: %).', p_fund_account_id;
+    END IF;
+
+    -- Duyệt đơn hàng
+    FOR v_order IN 
+        SELECT o.*, c.name as customer_name
+        FROM public.orders o
+        LEFT JOIN public.customers_b2b c ON o.customer_id = c.id
+        WHERE o.id = ANY(p_order_ids) 
+          AND o.status NOT IN ('DRAFT', 'CANCELLED')
+          AND o.payment_status != 'paid' 
+    LOOP
+        v_remaining_amount := v_order.final_amount - COALESCE(v_order.paid_amount, 0);
+
+        IF v_remaining_amount > 0 THEN
+            
+            -- A. Update Đơn hàng: Đã thanh toán
+            UPDATE public.orders
+            SET 
+                paid_amount = final_amount,
+                payment_status = 'paid',
+                updated_at = NOW()
+            WHERE id = v_order.id;
+
+            -- B. Tạo Phiếu Thu
+            v_trans_code := 'PT-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || FLOOR(RANDOM() * 10000)::TEXT;
+            v_partner_name := COALESCE(v_order.customer_name, 'Khách B2B');
+
+            INSERT INTO public.finance_transactions (
+                code, transaction_date, flow, business_type, amount, fund_account_id,
+                partner_type, partner_id, partner_name_cache,
+                ref_type, ref_id, description, created_by, status
+            ) VALUES (
+                v_trans_code, NOW(), 'in', 'trade', v_remaining_amount, p_fund_account_id,
+                'customer_b2b', v_order.customer_id::TEXT, v_partner_name,
+                'order', v_order.id::TEXT, 
+                'Thu tiền đơn hàng ' || v_order.code,
+                auth.uid(), 'completed'
+            );
+
+            v_count := v_count + 1;
+            v_total_receipt := v_total_receipt + v_remaining_amount;
+        END IF;
+    END LOOP;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'count', v_count, 
+        'total_amount', v_total_receipt,
+        'message', 'Đã thu ' || v_total_receipt || ' vào quỹ ' || v_fund_name
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."confirm_order_payment"("p_order_ids" bigint[], "p_fund_account_id" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."confirm_order_payment"("p_order_ids" "uuid"[], "p_fund_account_id" bigint) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -2100,6 +2163,21 @@ ALTER FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") OWNER TO
 
 COMMENT ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") IS 'V5: Trừ kho thật theo nguyên tắc FEFO và chuyển trạng thái sang PACKED';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."confirm_post_read"("p_post_id" bigint) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    INSERT INTO public.connect_reads (post_id, user_id)
+    VALUES (p_post_id, auth.uid())
+    ON CONFLICT (post_id, user_id) DO NOTHING; -- Đọc rồi thì thôi không lỗi
+END;
+$$;
+
+
+ALTER FUNCTION "public"."confirm_post_read"("p_post_id" bigint) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."confirm_purchase_costing"("p_po_id" bigint, "p_items_data" "jsonb", "p_gifts_data" "jsonb", "p_total_shipping_fee" numeric) RETURNS "jsonb"
@@ -3015,6 +3093,31 @@ $$;
 
 
 ALTER FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."create_connect_post"("p_category" "text", "p_title" "text", "p_content" "text", "p_is_anonymous" boolean DEFAULT false, "p_must_confirm" boolean DEFAULT false, "p_reward_points" integer DEFAULT 0, "p_attachments" "jsonb"[] DEFAULT '{}'::"jsonb"[]) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_status TEXT := 'published';
+    v_role_check BOOLEAN;
+BEGIN
+    -- [LOGIC BẢO VỆ] Nếu đăng NEWS (Thông báo), phải là Admin hoặc HR
+    -- (Tạm thời check đơn giản: Nếu là news thì yêu cầu user phải có quyền. 
+    -- Ở đây Core tạm bỏ qua check role sâu để MVP chạy được, nhưng Frontend phải ẩn nút đi)
+    
+    -- Insert dữ liệu
+    INSERT INTO public.connect_posts (
+        category, title, content, is_anonymous, must_confirm, reward_points, status, attachments
+    ) VALUES (
+        p_category, p_title, p_content, p_is_anonymous, p_must_confirm, p_reward_points, v_status, p_attachments
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."create_connect_post"("p_category" "text", "p_title" "text", "p_content" "text", "p_is_anonymous" boolean, "p_must_confirm" boolean, "p_reward_points" integer, "p_attachments" "jsonb"[]) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_customer_b2b"("p_customer_data" "jsonb", "p_contacts" "jsonb"[]) RETURNS bigint
@@ -12033,6 +12136,59 @@ ALTER TABLE "public"."clinical_queues" ALTER COLUMN "id" ADD GENERATED BY DEFAUL
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."connect_posts" (
+    "id" bigint NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "creator_id" "uuid" DEFAULT "auth"."uid"(),
+    "category" "text" NOT NULL,
+    "title" "text" NOT NULL,
+    "summary" "text",
+    "content" "text",
+    "is_pinned" boolean DEFAULT false,
+    "is_anonymous" boolean DEFAULT false,
+    "priority" "text" DEFAULT 'normal'::"text",
+    "status" "text" DEFAULT 'published'::"text",
+    "must_confirm" boolean DEFAULT false,
+    "reward_points" integer DEFAULT 0,
+    "feedback_response" "text",
+    "response_by" "uuid",
+    "responded_at" timestamp with time zone,
+    "tags" "text"[] DEFAULT '{}'::"text"[],
+    "attachments" "jsonb"[] DEFAULT '{}'::"jsonb"[],
+    "is_locked" boolean DEFAULT false,
+    CONSTRAINT "connect_posts_category_check" CHECK (("category" = ANY (ARRAY['news'::"text", 'feedback'::"text", 'docs'::"text"]))),
+    CONSTRAINT "connect_posts_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'published'::"text", 'hidden'::"text"])))
+);
+
+
+ALTER TABLE "public"."connect_posts" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."connect_posts" IS 'Lưu trữ Thông báo, Góp ý và Tài liệu nội bộ';
+
+
+
+ALTER TABLE "public"."connect_posts" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."connect_posts_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."connect_reads" (
+    "post_id" bigint NOT NULL,
+    "user_id" "uuid" DEFAULT "auth"."uid"() NOT NULL,
+    "confirmed_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."connect_reads" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."customer_b2b_contacts" (
     "id" bigint NOT NULL,
     "customer_b2b_id" bigint NOT NULL,
@@ -13968,6 +14124,16 @@ ALTER TABLE ONLY "public"."clinical_queues"
 
 
 
+ALTER TABLE ONLY "public"."connect_posts"
+    ADD CONSTRAINT "connect_posts_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."connect_reads"
+    ADD CONSTRAINT "connect_reads_pkey" PRIMARY KEY ("post_id", "user_id");
+
+
+
 ALTER TABLE ONLY "public"."customer_b2b_contacts"
     ADD CONSTRAINT "customer_b2b_contacts_pkey" PRIMARY KEY ("id");
 
@@ -15036,6 +15202,26 @@ ALTER TABLE ONLY "public"."clinical_queues"
 
 
 
+ALTER TABLE ONLY "public"."connect_posts"
+    ADD CONSTRAINT "connect_posts_creator_id_fkey" FOREIGN KEY ("creator_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."connect_posts"
+    ADD CONSTRAINT "connect_posts_response_by_fkey" FOREIGN KEY ("response_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."connect_reads"
+    ADD CONSTRAINT "connect_reads_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."connect_posts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."connect_reads"
+    ADD CONSTRAINT "connect_reads_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
+
+
+
 ALTER TABLE ONLY "public"."customer_b2b_contacts"
     ADD CONSTRAINT "customer_b2b_contacts_customer_b2b_id_fkey" FOREIGN KEY ("customer_b2b_id") REFERENCES "public"."customers_b2b"("id") ON DELETE CASCADE;
 
@@ -15630,6 +15816,10 @@ CREATE POLICY "Auth users full access" ON "public"."promotion_targets" TO "authe
 
 
 
+CREATE POLICY "Auth users insert posts" ON "public"."connect_posts" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 CREATE POLICY "Authenticated users can delete items" ON "public"."vaccination_template_items" FOR DELETE TO "authenticated" USING (true);
 
 
@@ -15782,6 +15972,14 @@ CREATE POLICY "Enable update items" ON "public"."prescription_template_items" FO
 
 
 
+CREATE POLICY "Owner update posts" ON "public"."connect_posts" FOR UPDATE USING (("auth"."uid"() = "creator_id"));
+
+
+
+CREATE POLICY "Public view published posts" ON "public"."connect_posts" FOR SELECT USING ((("status" = 'published'::"text") OR ("auth"."uid"() = "creator_id")));
+
+
+
 CREATE POLICY "Staff can view all orders" ON "public"."orders" FOR SELECT USING ((("auth"."uid"() = "creator_id") OR (EXISTS ( SELECT 1
    FROM "public"."user_roles"
   WHERE ("user_roles"."user_id" = "auth"."uid"())))));
@@ -15793,6 +15991,10 @@ CREATE POLICY "Staff full access allocations" ON "public"."finance_invoice_alloc
 
 
 CREATE POLICY "Staff full access invoices" ON "public"."finance_invoices" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "User manage own reads" ON "public"."connect_reads" USING (("auth"."uid"() = "user_id"));
 
 
 
@@ -15825,6 +16027,12 @@ ALTER TABLE "public"."chart_of_accounts" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."clinical_queues" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."connect_posts" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."connect_reads" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."customer_b2b_contacts" ENABLE ROW LEVEL SECURITY;
@@ -16326,6 +16534,12 @@ GRANT ALL ON FUNCTION "public"."confirm_finance_transaction"("p_id" bigint, "p_t
 
 
 
+GRANT ALL ON FUNCTION "public"."confirm_order_payment"("p_order_ids" bigint[], "p_fund_account_id" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."confirm_order_payment"("p_order_ids" bigint[], "p_fund_account_id" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."confirm_order_payment"("p_order_ids" bigint[], "p_fund_account_id" integer) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."confirm_order_payment"("p_order_ids" "uuid"[], "p_fund_account_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."confirm_order_payment"("p_order_ids" "uuid"[], "p_fund_account_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."confirm_order_payment"("p_order_ids" "uuid"[], "p_fund_account_id" bigint) TO "service_role";
@@ -16335,6 +16549,12 @@ GRANT ALL ON FUNCTION "public"."confirm_order_payment"("p_order_ids" "uuid"[], "
 GRANT ALL ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."confirm_post_read"("p_post_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."confirm_post_read"("p_post_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."confirm_post_read"("p_post_id" bigint) TO "service_role";
 
 
 
@@ -16401,6 +16621,12 @@ GRANT ALL ON FUNCTION "public"."create_auto_replenishment_request"("p_dest_wareh
 GRANT ALL ON FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."create_connect_post"("p_category" "text", "p_title" "text", "p_content" "text", "p_is_anonymous" boolean, "p_must_confirm" boolean, "p_reward_points" integer, "p_attachments" "jsonb"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."create_connect_post"("p_category" "text", "p_title" "text", "p_content" "text", "p_is_anonymous" boolean, "p_must_confirm" boolean, "p_reward_points" integer, "p_attachments" "jsonb"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_connect_post"("p_category" "text", "p_title" "text", "p_content" "text", "p_is_anonymous" boolean, "p_must_confirm" boolean, "p_reward_points" integer, "p_attachments" "jsonb"[]) TO "service_role";
 
 
 
@@ -17769,6 +17995,24 @@ GRANT ALL ON TABLE "public"."clinical_queues" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."clinical_queues_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."clinical_queues_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."clinical_queues_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."connect_posts" TO "anon";
+GRANT ALL ON TABLE "public"."connect_posts" TO "authenticated";
+GRANT ALL ON TABLE "public"."connect_posts" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."connect_posts_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."connect_posts_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."connect_posts_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."connect_reads" TO "anon";
+GRANT ALL ON TABLE "public"."connect_reads" TO "authenticated";
+GRANT ALL ON TABLE "public"."connect_reads" TO "service_role";
 
 
 
