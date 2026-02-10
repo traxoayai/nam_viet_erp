@@ -140,6 +140,19 @@ export const FinanceFormModal: React.FC<Props> = ({
      checkWallet();
   }, [open, initialValues]);
 
+  // [NEW] Auto-select Fund based on payment_method
+  useEffect(() => {
+    if (open && initialValues?.payment_method && funds.length > 0) {
+        const targetType = initialValues.payment_method === 'cash' ? 'cash' : 'bank';
+        // Tìm quỹ đầu tiên khớp loại và đang hoạt động
+        const defaultFund = funds.find((f: any) => f.type === targetType && f.status === 'active');
+        
+        if (defaultFund) {
+            form.setFieldValue('fund_account_id', defaultFund.id);
+        }
+    }
+  }, [open, initialValues, funds]);
+
 
   // [NEW] Auto-fill Partner Details when Opened with Initial Values
   useEffect(() => {

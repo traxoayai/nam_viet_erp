@@ -66,7 +66,6 @@ import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 
 import Logo from "@/assets/logo.png";
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
-import { BookingModal } from "@/features/booking/components/BookingModal";
 import { useAutoLogout } from "@/shared/hooks/useAutoLogout"; // [NEW]
 import { NotificationBell } from "@/features/notifications/components/NotificationBell"; // [NEW]
 
@@ -96,10 +95,9 @@ const finalMenuItems: MenuItem[] = [
       "/store/dashboard",
       <AppstoreOutlined />
     ),
-    // [MODIFIED] Đổi từ Link sang Key trigger modal
     getItem(
-      "Đặt Lịch Hẹn", // Label thường, không bọc Link
-      "TRIGGER_BOOKING_MODAL", // Key đặc biệt để bắt sự kiện
+      <Link to="/medical/reception">Tiếp Đón & Lịch Hẹn</Link>,
+      "/medical/reception",
       <ScheduleOutlined />
     ),
     getItem(
@@ -541,7 +539,7 @@ const MainLayout: React.FC = () => {
   const screens = useBreakpoint(); // Kiểm tra màn hình (xs, sm, md...)
   const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false); // State cho Mobile Drawer
-  const [isBookingOpen, setIsBookingOpen] = useState(false);
+
 
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
@@ -618,14 +616,7 @@ const MainLayout: React.FC = () => {
 
 
 
-  // [NEW] Hàm xử lý click menu
-  const onMenuClick: MenuProps['onClick'] = (e) => {
-    if (e.key === 'TRIGGER_BOOKING_MODAL') {
-      setIsBookingOpen(true);
-    } else {
-      // Nếu là các key khác (có Link bên trong label), React Router sẽ tự xử lý
-    }
-  };
+
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -700,7 +691,7 @@ const MainLayout: React.FC = () => {
             mode="inline"
             items={visibleMenuItems} // Sử dụng menu đã lọc
             style={{ borderRight: 0 }}
-            onClick={onMenuClick} // [NEW] Thêm prop này
+
             />
         </div>
       </Sider>) : null}
@@ -850,7 +841,6 @@ const MainLayout: React.FC = () => {
           </div>
         </Content>
       </Layout>
-      <BookingModal visible={isBookingOpen} onCancel={() => setIsBookingOpen(false)} />
     </Layout>
   );
 };

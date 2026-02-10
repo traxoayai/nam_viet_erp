@@ -63,6 +63,7 @@ const B2BOrderListPage = () => {
   // [NEW] State cho Thanh toán Đơn lẻ (Use Finance Modal)
   const [financeModalOpen, setFinanceModalOpen] = useState(false);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
+  const [initialPaymentMethod, setInitialPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash'); // [NEW]
 
   // State Users (Sales Staff)
   const [creators, setCreators] = useState<any[]>([]);
@@ -150,45 +151,43 @@ const B2BOrderListPage = () => {
   // [NEW] Handler: Khi bấm nút $
   const handlePaymentClick = (order: any) => {
       Modal.confirm({
-          title: `Xác nhận thanh toán đơn ${order.code}`,
-          content: 'Khách hàng thanh toán qua hình thức nào?',
-          okText: 'Tiền mặt',
-          cancelText: 'Chuyển khoản',
+          title: `Thanh toán đơn ${order.code}`,
+          content: 'Chọn hình thức thanh toán:',
+          okButtonProps: { style: { display: 'none' } },
+          cancelButtonProps: { style: { display: 'none' } },
           closable: true,
           maskClosable: true,
-          onOk: () => {
-              // Mở form thu tiền mặt
-              setSelectedOrderForPayment(order);
-              setFinanceModalOpen(true);
-          },
-          // Custom footer để handle nút Cancel là Chuyển khoản
           footer: (_, { }) => (
-            <div style={{textAlign: 'right', marginTop: 10}}>
+            <div style={{ textAlign: 'right', marginTop: 10 }}>
                 <Button onClick={() => Modal.destroyAll()} style={{ marginRight: 8 }}>Hủy</Button>
-                <Button onClick={async () => {
-                     Modal.destroyAll();
-                     await handleMarkAsTransfer(order);
-                }} style={{ marginRight: 8 }}>Chuyển khoản</Button>
+
+                {/* Nút CHUYỂN KHOẢN -> Mở Modal, Set type = bank_transfer */}
+                <Button 
+                    onClick={() => {
+                        Modal.destroyAll();
+                        setSelectedOrderForPayment(order);
+                        setInitialPaymentMethod('bank_transfer'); 
+                        setFinanceModalOpen(true);
+                    }} 
+                    style={{ marginRight: 8, borderColor: '#1890ff', color: '#1890ff' }}
+                >
+                    Chuyển khoản
+                </Button>
+                {/* Nút TIỀN MẶT -> Mở Modal, Set type = cash */}
                 <Button type="primary" onClick={() => {
-                     Modal.destroyAll();
-                     setSelectedOrderForPayment(order);
-                     setFinanceModalOpen(true);
-                }}>Tiền mặt</Button>
+                    Modal.destroyAll();
+                    setSelectedOrderForPayment(order);
+                    setInitialPaymentMethod('cash');
+                    setFinanceModalOpen(true);
+                }}>
+                    Tiền mặt
+                </Button>
             </div>
           )
       });
   };
 
-  // [NEW] Logic đánh dấu Chuyển khoản
-  const handleMarkAsTransfer = async (order: any) => {
-      try {
-          await salesService.markOrderAsBankTransfer(order.id);
-          message.success("Đã chuyển sang hình thức CK. Vui lòng sang trang Đối soát để kiểm tra.");
-          refresh(); // Reload bảng
-      } catch (e: any) {
-          message.error("Lỗi: " + e.message);
-      }
-  };
+
 
   // [NEW] Xóa đơn
   const handleDelete = (order: any) => {
@@ -558,7 +557,7 @@ const B2BOrderListPage = () => {
          initialFlow="in" // Phiếu Thu
          onSuccess={() => {
              setFinanceModalOpen(false);
-             refresh();
+             refresh(); // Reload bảng để thấy trạng thái "Đã TT"
              message.success("Đã lập phiếu thu thành công!");
          }}
          initialValues={selectedOrderForPayment ? {
@@ -567,9 +566,15 @@ const B2BOrderListPage = () => {
              partner_id: selectedOrderForPayment.customer_id, // Auto-select customer
              partner_name: selectedOrderForPayment.customer_name, // Fallback name
              amount: Math.max(0, selectedOrderForPayment.final_amount - (selectedOrderForPayment.paid_amount || 0)), // Số tiền còn thiếu
+             
              ref_type: 'order',
-             ref_id: selectedOrderForPayment.code, // Link mã đơn
-             description: `Thu tiền đơn hàng ${selectedOrderForPayment.code}`
+             // ⚠️ [CRITICAL] Core yêu cầu: Dùng CODE, không dùng ID
+             ref_id: selectedOrderForPayment.code, 
+
+             description: `Thu tiền đơn hàng ${selectedOrderForPayment.code}`,
+
+             // Truyền hình thức để Modal tự chọn Quỹ
+             payment_method: initialPaymentMethod 
          } : undefined}
       />
 

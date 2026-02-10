@@ -1,3 +1,4 @@
+// src/features/finance/api/posTransactionService.ts
 import { supabase } from "@/shared/lib/supabaseClient";
 import { RemittanceResponse } from "../types/pos.finance.types";
 

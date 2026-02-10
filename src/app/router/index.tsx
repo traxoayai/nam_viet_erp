@@ -14,7 +14,9 @@ import CustomerB2BPage from "@/pages/crm/CustomerB2BPage";
 import CustomerB2COrgForm from "@/pages/crm/CustomerB2COrgForm";
 import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
 import AssetManagementPage from "@/pages/finance/AssetManagementPage";
-// --- IMPORT TRANG MỚI: HÓA ĐƠN ---
+import ReceptionPage from "@/pages/medical/ReceptionPage"; // [NEW]
+
+
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 import FinanceTransactionPage from "@/pages/finance/FinanceTransactionPage";
 import InvoiceListPage from "@/pages/finance/invoices/InvoiceListPage";
@@ -137,6 +139,11 @@ const routes: RouteObject[] = [
           },
 
           // 3. Nghiệp vụ Y Tế
+
+          {
+            path: "medical/reception", // [NEW]
+            element: <ReceptionPage />,
+          },
           {
             path: "medical/dashboard",
             element: <PagePlaceholder title="Dashboard Y Tế" />,

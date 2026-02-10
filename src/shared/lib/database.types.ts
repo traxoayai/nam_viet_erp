@@ -17,11 +17,15 @@ export type Database = {
       appointments: {
         Row: {
           appointment_time: string
+          contact_status: string | null
           created_at: string | null
           customer_id: number
           doctor_id: string | null
           id: string
           note: string | null
+          priority: string | null
+          room_id: number | null
+          service_ids: number[] | null
           service_type:
             | Database["public"]["Enums"]["appointment_service_type"]
             | null
@@ -31,11 +35,15 @@ export type Database = {
         }
         Insert: {
           appointment_time: string
+          contact_status?: string | null
           created_at?: string | null
           customer_id: number
           doctor_id?: string | null
           id?: string
           note?: string | null
+          priority?: string | null
+          room_id?: number | null
+          service_ids?: number[] | null
           service_type?:
             | Database["public"]["Enums"]["appointment_service_type"]
             | null
@@ -45,11 +53,15 @@ export type Database = {
         }
         Update: {
           appointment_time?: string
+          contact_status?: string | null
           created_at?: string | null
           customer_id?: number
           doctor_id?: string | null
           id?: string
           note?: string | null
+          priority?: string | null
+          room_id?: number | null
+          service_ids?: number[] | null
           service_type?:
             | Database["public"]["Enums"]["appointment_service_type"]
             | null
@@ -63,6 +75,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]
@@ -433,6 +452,84 @@ export type Database = {
           },
         ]
       }
+      connect_comments: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: number
+          post_id: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: number
+          post_id: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: number
+          post_id?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connect_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "connect_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connect_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      connect_likes: {
+        Row: {
+          created_at: string | null
+          id: number
+          post_id: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          post_id: number
+          user_id?: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          post_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connect_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "connect_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connect_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connect_posts: {
         Row: {
           attachments: Json[] | null
@@ -454,6 +551,7 @@ export type Database = {
           summary: string | null
           tags: string[] | null
           title: string
+          updated_at: string | null
         }
         Insert: {
           attachments?: Json[] | null
@@ -475,6 +573,7 @@ export type Database = {
           summary?: string | null
           tags?: string[] | null
           title: string
+          updated_at?: string | null
         }
         Update: {
           attachments?: Json[] | null
@@ -496,6 +595,7 @@ export type Database = {
           summary?: string | null
           tags?: string[] | null
           title?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -4415,7 +4515,7 @@ export type Database = {
           p_search?: string
         }
         Returns: {
-          attachments: Json
+          attachments: Json[]
           category: string
           comments_count: number
           content: string
@@ -4785,6 +4885,27 @@ export type Database = {
           total_packages: number
           total_paid: number
           total_quantity: number
+        }[]
+      }
+      get_reception_queue: {
+        Args: { p_date?: string; p_search?: string }
+        Returns: {
+          appointment_time: string
+          contact_status: string
+          customer_code: string
+          customer_gender: string
+          customer_id: number
+          customer_name: string
+          customer_phone: string
+          customer_yob: number
+          doctor_name: string
+          id: string
+          priority: string
+          room_id: number
+          room_name: string
+          service_ids: number[]
+          service_names: string[]
+          status: string
         }[]
       }
       get_sales_orders_view: {

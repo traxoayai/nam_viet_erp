@@ -1696,7 +1696,6 @@ COMMENT ON FUNCTION "public"."check_vat_availability"("p_product_id" bigint, "p_
 
 CREATE OR REPLACE FUNCTION "public"."complete_inventory_check"("p_check_id" bigint, "p_user_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
 DECLARE
     v_check_record RECORD;
@@ -1704,68 +1703,56 @@ DECLARE
     v_batch_id BIGINT;
     v_diff_qty INTEGER;
     v_trans_type TEXT;
-    
-    -- Biến xử lý Batch
     v_final_batch_code TEXT;
     v_final_expiry DATE;
 BEGIN
-    -- A. Lấy thông tin phiếu (Khóa dòng để tránh conflict)
+    -- A. Lấy thông tin phiếu
     SELECT * INTO v_check_record 
     FROM public.inventory_checks 
     WHERE id = p_check_id AND status = 'DRAFT' 
     FOR UPDATE;
 
     IF v_check_record IS NULL THEN 
-        RAISE EXCEPTION 'Phiếu kiểm kê không hợp lệ (Không tồn tại hoặc đã hoàn tất).'; 
+        RAISE EXCEPTION 'Phiếu kiểm kê không hợp lệ.'; 
     END IF;
 
-    -- B. Duyệt qua từng dòng chi tiết đã đếm
+    -- B. Duyệt qua từng dòng
     FOR v_item IN SELECT * FROM public.inventory_check_items WHERE check_id = p_check_id
     LOOP
-        -- [FIX LOGIC] Xử lý trường hợp không có Batch Code
-        -- Nếu null hoặc rỗng -> Gán là 'DEFAULT'
-        IF v_item.batch_code IS NULL OR TRIM(v_item.batch_code) = '' THEN
-            v_final_batch_code := 'DEFAULT';
-        ELSE
-            v_final_batch_code := TRIM(v_item.batch_code);
-        END IF;
-
-        -- Xử lý hạn sử dụng mặc định nếu không có (Default 1 năm sau)
+        v_final_batch_code := COALESCE(NULLIF(TRIM(v_item.batch_code), ''), 'DEFAULT');
         v_final_expiry := COALESCE(v_item.expiry_date, CURRENT_DATE + 365);
 
-        -- 1. Tìm ID của Batch (hoặc tạo mới)
+        -- 1. Tìm hoặc tạo Batch
         SELECT id INTO v_batch_id 
         FROM public.batches 
-        WHERE product_id = v_item.product_id AND batch_code = v_final_batch_code;
+        WHERE product_id = v_item.product_id AND batch_code = v_final_batch_code
+        LIMIT 1;
 
         IF v_batch_id IS NULL THEN
-            -- Tạo Batch mới (với mã đã được xử lý 'DEFAULT' nếu cần)
             INSERT INTO public.batches (product_id, batch_code, expiry_date, inbound_price, created_at)
             VALUES (v_item.product_id, v_final_batch_code, v_final_expiry, 0, NOW())
             RETURNING id INTO v_batch_id;
         END IF;
 
-        -- 2. Tính lệch để ghi Lịch sử (Transaction)
-        -- Lệch = Thực tế - Sổ sách (System Snapshot)
+        -- 2. Tính lệch & Ghi Transaction
         v_diff_qty := COALESCE(v_item.actual_quantity, 0) - COALESCE(v_item.system_quantity, 0);
 
         IF v_diff_qty <> 0 THEN
             v_trans_type := CASE WHEN v_diff_qty > 0 THEN 'IN_ADJUST' ELSE 'OUT_ADJUST' END;
             
             INSERT INTO public.inventory_transactions (
-                warehouse_id, product_id, batch_id, 
-                type, quantity, ref_id, 
+                warehouse_id, product_id, batch_id,
+                type, quantity, ref_id,
                 note, created_at, created_by
             )
             VALUES (
                 v_check_record.warehouse_id, v_item.product_id, v_batch_id,
-                v_trans_type, ABS(v_diff_qty), v_check_record.code, 
-                'Kiểm kê lệch: ' || COALESCE(v_item.difference_reason, ''), NOW(), p_user_id
+                v_trans_type, ABS(v_diff_qty), v_check_record.code,
+                'Kiểm kê: ' || COALESCE(v_item.difference_reason, ''), NOW(), p_user_id
             );
         END IF;
 
-        -- 3. CẬP NHẬT TỒN KHO THẬT (GHI ĐÈ SỐ THỰC TẾ VÀO KHO)
-        -- Logic: Inventory Batches = Actual Quantity
+        -- 3. CẬP NHẬT TỒN KHO THẬT (Kích hoạt Trigger ở bước 1)
         INSERT INTO public.inventory_batches (
             warehouse_id, product_id, batch_id, quantity, updated_at
         )
@@ -1774,27 +1761,15 @@ BEGIN
         )
         ON CONFLICT (warehouse_id, product_id, batch_id)
         DO UPDATE SET 
-            quantity = EXCLUDED.quantity, -- Quan trọng: Đè số lượng kiểm kê vào
+            quantity = EXCLUDED.quantity,
             updated_at = NOW();
             
-        -- Trigger 'sync_inventory_batch_to_total' (nếu có) sẽ tự động chạy để update bảng product_inventory
-        -- Nếu hệ thống chưa có trigger này, ta cần update tay bảng product_inventory tại đây (nhưng thường là có rồi).
-        
     END LOOP;
 
-    -- C. Đổi trạng thái phiếu -> COMPLETED
+    -- C. Hoàn tất phiếu
     UPDATE public.inventory_checks
-    SET 
-        status = 'COMPLETED', 
-        verified_by = p_user_id, 
-        completed_at = NOW(),
-        -- Tính lại tổng giá trị thực tế lần cuối
-        total_actual_value = (
-            SELECT SUM(COALESCE(actual_quantity, 0) * COALESCE(cost_price, 0)) 
-            FROM public.inventory_check_items WHERE check_id = p_check_id
-        )
+    SET status = 'COMPLETED', verified_by = p_user_id, completed_at = NOW()
     WHERE id = p_check_id;
-
 END;
 $$;
 
@@ -4746,6 +4721,151 @@ $$;
 ALTER FUNCTION "public"."export_products_list"("search_query" "text", "category_filter" "text", "manufacturer_filter" "text", "status_filter" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_sync_inventory_batch_to_total"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_product_id BIGINT;
+    v_warehouse_id BIGINT;
+    v_total_qty INTEGER;
+BEGIN
+    v_product_id := COALESCE(NEW.product_id, OLD.product_id);
+    v_warehouse_id := COALESCE(NEW.warehouse_id, OLD.warehouse_id);
+
+    -- Tính tổng các lô (Chỉ lấy lô dương để hiển thị an toàn, hoặc lấy tất cả tùy Sếp)
+    -- Ở đây Core lấy SUM tất cả để trung thực với dữ liệu
+    SELECT COALESCE(SUM(quantity), 0)
+    INTO v_total_qty
+    FROM public.inventory_batches
+    WHERE product_id = v_product_id AND warehouse_id = v_warehouse_id;
+
+    -- Update vào bảng tổng Product Inventory
+    INSERT INTO public.product_inventory (product_id, warehouse_id, stock_quantity, updated_at)
+    VALUES (v_product_id, v_warehouse_id, v_total_qty, NOW())
+    ON CONFLICT (product_id, warehouse_id) 
+    DO UPDATE SET 
+        stock_quantity = EXCLUDED.stock_quantity,
+        updated_at = NOW();
+
+    RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_sync_inventory_batch_to_total"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_trigger_update_customer_debt"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_diff numeric;
+BEGIN
+    -- [CASE 1]: INSERT (Tạo phiếu thu/chi mới và đã Hoàn thành)
+    IF (TG_OP = 'INSERT') AND NEW.status = 'completed' THEN
+        IF NEW.partner_type = 'customer_b2b' AND NEW.partner_id IS NOT NULL THEN
+            IF NEW.flow = 'in' THEN
+                -- Thu tiền -> Giảm nợ
+                UPDATE public.customers_b2b SET current_debt = current_debt - NEW.amount WHERE id = NEW.partner_id::bigint;
+            ELSIF NEW.flow = 'out' THEN
+                -- Trả lại tiền -> Tăng nợ (hoặc giảm số âm)
+                UPDATE public.customers_b2b SET current_debt = current_debt + NEW.amount WHERE id = NEW.partner_id::bigint;
+            END IF;
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    -- [CASE 2]: UPDATE (Sửa đổi phiếu)
+    IF (TG_OP = 'UPDATE') THEN
+        -- A. Nếu trạng thái chuyển sang 'completed' (Duyệt phiếu)
+        IF OLD.status != 'completed' AND NEW.status = 'completed' THEN
+            IF NEW.partner_type = 'customer_b2b' AND NEW.partner_id IS NOT NULL THEN
+                IF NEW.flow = 'in' THEN
+                    UPDATE public.customers_b2b SET current_debt = current_debt - NEW.amount WHERE id = NEW.partner_id::bigint;
+                ELSIF NEW.flow = 'out' THEN
+                    UPDATE public.customers_b2b SET current_debt = current_debt + NEW.amount WHERE id = NEW.partner_id::bigint;
+                END IF;
+            END IF;
+            RETURN NEW;
+        END IF;
+
+        -- B. Nếu đã 'completed' mà sửa số tiền
+        IF OLD.status = 'completed' AND NEW.status = 'completed' THEN
+            IF NEW.partner_type = 'customer_b2b' AND NEW.partner_id IS NOT NULL THEN
+                v_diff := NEW.amount - OLD.amount;
+                IF v_diff != 0 THEN
+                    IF NEW.flow = 'in' THEN
+                        UPDATE public.customers_b2b SET current_debt = current_debt - v_diff WHERE id = NEW.partner_id::bigint;
+                    ELSIF NEW.flow = 'out' THEN
+                        UPDATE public.customers_b2b SET current_debt = current_debt + v_diff WHERE id = NEW.partner_id::bigint;
+                    END IF;
+                END IF;
+            END IF;
+            RETURN NEW;
+        END IF;
+    END IF;
+
+    -- [CASE 3]: DELETE (Xóa phiếu đã hoàn thành)
+    IF (TG_OP = 'DELETE') AND OLD.status = 'completed' THEN
+        IF OLD.partner_type = 'customer_b2b' AND OLD.partner_id IS NOT NULL THEN
+            IF OLD.flow = 'in' THEN
+                -- Xóa phiếu thu -> Trả lại nợ (Tăng nợ)
+                UPDATE public.customers_b2b SET current_debt = current_debt + OLD.amount WHERE id = OLD.partner_id::bigint;
+            ELSIF OLD.flow = 'out' THEN
+                -- Xóa phiếu chi -> Giảm nợ
+                UPDATE public.customers_b2b SET current_debt = current_debt - OLD.amount WHERE id = OLD.partner_id::bigint;
+            END IF;
+        END IF;
+        RETURN OLD;
+    END IF;
+
+    RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trigger_update_customer_debt"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_trigger_update_debt_from_orders"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    -- Chỉ xử lý đơn có customer_id (B2B)
+    IF NEW.customer_id IS NOT NULL THEN
+        
+        -- Case 1: Đơn hàng được Xác nhận/Giao hàng (Ghi nhận nợ)
+        -- Chuyển từ trạng thái nháp/báo giá sang trạng thái chính thức
+        IF (OLD.status IN ('DRAFT', 'QUOTE') AND NEW.status IN ('CONFIRMED', 'SHIPPING', 'DELIVERED')) THEN
+             UPDATE public.customers_b2b
+             SET current_debt = current_debt + NEW.final_amount
+             WHERE id = NEW.customer_id;
+        END IF;
+
+        -- Case 2: Đơn hàng bị Hủy sau khi đã ghi nợ (Trừ lại nợ)
+        IF (OLD.status IN ('CONFIRMED', 'SHIPPING', 'DELIVERED', 'COMPLETED') AND NEW.status = 'CANCELLED') THEN
+             UPDATE public.customers_b2b
+             SET current_debt = current_debt - OLD.final_amount
+             WHERE id = NEW.customer_id;
+        END IF;
+        
+        -- Case 3: Chỉnh sửa giá trị đơn hàng khi đang ở trạng thái ghi nợ
+        IF (NEW.status IN ('CONFIRMED', 'SHIPPING', 'DELIVERED', 'COMPLETED') AND OLD.final_amount != NEW.final_amount) THEN
+             UPDATE public.customers_b2b
+             SET current_debt = current_debt + (NEW.final_amount - OLD.final_amount)
+             WHERE id = NEW.customer_id;
+        END IF;
+
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_trigger_update_debt_from_orders"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_active_shipping_partners"() RETURNS TABLE("id" bigint, "name" "text", "phone" "text", "contact_person" "text", "speed_hours" integer, "base_fee" numeric)
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -4968,32 +5088,98 @@ $$;
 ALTER FUNCTION "public"."get_available_vouchers"("p_customer_id" bigint, "p_order_total" numeric) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_connect_posts"("p_category" "text", "p_search" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS TABLE("id" bigint, "category" "text", "title" "text", "summary" "text", "content" "text", "is_pinned" boolean, "is_anonymous" boolean, "priority" "text", "status" "text", "must_confirm" boolean, "reward_points" integer, "feedback_response" "text", "created_at" timestamp with time zone, "creator_id" "uuid", "attachments" "jsonb"[], "tags" "text"[], "updated_at" timestamp with time zone, "likes_count" bigint, "comments_count" bigint, "creator_name" "text", "creator_avatar" "text", "user_has_liked" boolean)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        p.id, p.category, p.title, p.summary, p.content, 
+        p.is_pinned, p.is_anonymous, p.priority, p.status,
+        p.must_confirm, p.reward_points, p.feedback_response,
+        p.created_at, p.creator_id, p.attachments, p.tags, p.updated_at,
+        
+        -- 1. Đếm Like
+        (SELECT COUNT(*) FROM public.connect_likes l WHERE l.post_id = p.id)::BIGINT as likes_count,
+        
+        -- 2. Đếm Comment
+        (SELECT COUNT(*) FROM public.connect_comments c WHERE c.post_id = p.id)::BIGINT as comments_count,
+
+        -- 3. Lấy tên người tạo
+        CASE 
+            WHEN p.is_anonymous THEN 'Người ẩn danh'
+            ELSE COALESCE(u.full_name, u.email, 'Unknown')
+        END as creator_name,
+
+        -- 4. Lấy Avatar
+        CASE 
+            WHEN p.is_anonymous THEN NULL
+            ELSE u.avatar_url
+        END as creator_avatar,
+
+        -- 5. [QUAN TRỌNG] User hiện tại đã like chưa?
+        EXISTS (
+            SELECT 1 FROM public.connect_likes cl 
+            WHERE cl.post_id = p.id AND cl.user_id = auth.uid()
+        ) as user_has_liked
+
+    FROM public.connect_posts p
+    LEFT JOIN public.users u ON p.creator_id = u.id
+    WHERE 
+        p.status = 'published'
+        AND (p_category IS NULL OR p_category = 'ALL' OR p.category = p_category)
+        AND (
+            p_search IS NULL OR TRIM(p_search) = '' 
+            OR (p.title ILIKE '%' || TRIM(p_search) || '%' OR p.content ILIKE '%' || TRIM(p_search) || '%')
+        )
+    ORDER BY p.is_pinned DESC, p.created_at DESC
+    LIMIT p_limit OFFSET p_offset;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_connect_posts"("p_category" "text", "p_search" "text", "p_limit" integer, "p_offset" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_customer_b2b_details"("p_id" bigint) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 DECLARE
-  v_details JSONB;
+    v_customer jsonb;
+    v_contacts jsonb;
+    v_history jsonb;
 BEGIN
-  SELECT
-    jsonb_build_object(
-      -- 1. Thông tin chính
-      'customer', to_jsonb(c.*),
-      
-      -- 2. Gom mảng Người liên hệ
-      'contacts', (
-        SELECT jsonb_agg(to_jsonb(cc.*))
-        FROM public.customer_b2b_contacts cc
-        WHERE cc.customer_b2b_id = c.id
-      ),
-      
-      -- 3. Gom mảng Lịch sử GD (Tạm thời)
-      'history', '[]'::JSONB
-    )
-  INTO v_details
-  FROM public.customers_b2b c
-  WHERE c.id = p_id;
-  
-  RETURN v_details;
+    -- Lấy thông tin chính
+    SELECT to_jsonb(c.*) INTO v_customer
+    FROM public.customers_b2b c
+    WHERE c.id = p_id;
+
+    -- Lấy contacts
+    SELECT jsonb_agg(to_jsonb(ct.*)) INTO v_contacts
+    FROM public.customer_b2b_contacts ct
+    WHERE ct.customer_b2b_id = p_id;
+
+    -- Lấy 5 đơn hàng gần nhất
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'key', o.id,
+            'date', o.created_at,
+            'code', o.code,
+            'content', 'Đơn hàng ' || o.code,
+            'total', o.final_amount,
+            'status', o.status
+        )
+    ) INTO v_history
+    FROM public.orders o
+    WHERE o.customer_id = p_id
+    ORDER BY o.created_at DESC
+    LIMIT 5;
+
+    RETURN jsonb_build_object(
+        'customer', v_customer,
+        'contacts', COALESCE(v_contacts, '[]'::jsonb),
+        'history', COALESCE(v_history, '[]'::jsonb)
+    );
 END;
 $$;
 
@@ -5082,76 +5268,42 @@ $$;
 ALTER FUNCTION "public"."get_customer_debt_info"("p_customer_id" bigint) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text", "page_num" integer, "page_size" integer, "sort_by_debt" "text" DEFAULT NULL::"text") RETURNS TABLE("key" "text", "id" bigint, "customer_code" "text", "name" "text", "phone" "text", "sales_staff_name" "text", "debt_limit" numeric, "status" "public"."account_status", "current_debt" numeric, "total_count" bigint)
+CREATE OR REPLACE FUNCTION "public"."get_customers_b2b_list"("search_query" "text" DEFAULT NULL::"text", "sales_staff_filter" "uuid" DEFAULT NULL::"uuid", "status_filter" "text" DEFAULT NULL::"text", "page_num" integer DEFAULT 1, "page_size" integer DEFAULT 10, "sort_by_debt" "text" DEFAULT NULL::"text") RETURNS TABLE("key" "text", "id" bigint, "customer_code" "text", "name" "text", "phone" "text", "sales_staff_name" "text", "status" "public"."account_status", "debt_limit" numeric, "current_debt" numeric, "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
-    BEGIN
-        RETURN QUERY
-        WITH debt_calc AS (
-            -- Tính nợ B2B: Dựa trên customer_id
-            SELECT 
-                o.customer_id,
-                SUM(o.final_amount - COALESCE(o.paid_amount, 0)) as debt
-            FROM public.orders o
-            WHERE o.payment_status != 'paid' 
-              AND o.status NOT IN ('DRAFT', 'QUOTE', 'QUOTE_EXPIRED', 'CANCELLED')
-              AND o.customer_id IS NOT NULL -- Chỉ tính đơn B2B
-            GROUP BY o.customer_id
-        ),
-        filtered_customers AS (
-            SELECT 
-                c.id, 
-                c.customer_code, 
-                c.name, 
-                c.phone, 
-                -- Lấy tên nhân viên sales từ bảng users (auth + public users)
-                -- Lưu ý: c.sales_staff_id là UUID, join với public.users.id hoặc auth.users.id đều được
-                -- Ở đây ta ưu tiên lấy từ public.users (vì có full_name chuẩn)
-                COALESCE(u.full_name, 'Chưa phân công') as sales_staff_name,
-                c.debt_limit, 
-                c.status,
-                COALESCE(d.debt, 0) as current_debt
-            FROM public.customers_b2b c
-            LEFT JOIN public.users u ON c.sales_staff_id = u.id
-            LEFT JOIN debt_calc d ON c.id = d.customer_id
-            WHERE 
-                (search_query IS NULL OR search_query = '' OR 
-                    c.name ILIKE ('%' || search_query || '%') OR 
-                    c.customer_code ILIKE ('%' || search_query || '%') OR
-                    c.phone ILIKE ('%' || search_query || '%') OR
-                    c.tax_code ILIKE ('%' || search_query || '%')
-                )
-                AND (sales_staff_filter IS NULL OR c.sales_staff_id = sales_staff_filter)
-                AND (status_filter IS NULL OR c.status = status_filter::public.account_status)
-        )
-        SELECT 
-            fc.id::TEXT as key, -- Cast sang Text cho Frontend
-            fc.id,
-            fc.customer_code,
-            fc.name,
-            fc.phone,
-            fc.sales_staff_name,
-            fc.debt_limit,
-            fc.status,
-            fc.current_debt,
-            (COUNT(*) OVER())::bigint as total_count
-        FROM filtered_customers fc
-        ORDER BY 
-            -- Logic Sắp xếp theo Nợ
-            CASE WHEN sort_by_debt = 'desc' THEN fc.current_debt END DESC NULLS LAST,
-            CASE WHEN sort_by_debt = 'asc' THEN fc.current_debt END ASC NULLS LAST,
-            -- Default sort
-            fc.id DESC
-        LIMIT page_size OFFSET (page_num - 1) * page_size;
-    END;
-    $$;
+BEGIN
+    RETURN QUERY
+    SELECT 
+        c.id::TEXT as key,
+        c.id,
+        c.customer_code,
+        c.name,
+        c.phone,
+        COALESCE(u.full_name, 'Chưa phân công') as sales_staff_name,
+        c.status,
+        COALESCE(c.debt_limit, 0),
+        COALESCE(c.current_debt, 0), -- Lấy từ cột vật lý
+        COUNT(*) OVER()::bigint as total_count
+    FROM public.customers_b2b c
+    LEFT JOIN public.users u ON c.sales_staff_id = u.id
+    WHERE 
+        (search_query IS NULL OR search_query = '' OR 
+         c.name ILIKE ('%' || search_query || '%') OR 
+         c.phone ILIKE ('%' || search_query || '%') OR
+         c.customer_code ILIKE ('%' || search_query || '%'))
+        AND (sales_staff_filter IS NULL OR c.sales_staff_id = sales_staff_filter)
+        AND (status_filter IS NULL OR c.status = status_filter::public.account_status)
+    ORDER BY 
+        CASE WHEN sort_by_debt = 'asc' THEN c.current_debt END ASC,
+        CASE WHEN sort_by_debt = 'desc' THEN c.current_debt END DESC,
+        c.created_at DESC
+    LIMIT page_size
+    OFFSET (page_num - 1) * page_size;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."get_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text", "page_num" integer, "page_size" integer, "sort_by_debt" "text") OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."get_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text", "page_num" integer, "page_size" integer, "sort_by_debt" "text") IS 'V2: Get Customers B2B List with Debt Calculation';
-
 
 
 CREATE OR REPLACE FUNCTION "public"."get_customers_b2c_list"("search_query" "text", "type_filter" "text", "status_filter" "text", "page_num" integer, "page_size" integer, "sort_by_debt" "text" DEFAULT NULL::"text") RETURNS TABLE("key" "text", "id" bigint, "customer_code" "text", "name" "text", "type" "public"."customer_b2c_type", "phone" "text", "loyalty_points" integer, "status" "public"."account_status", "avatar_url" "text", "current_debt" numeric, "total_count" bigint)
@@ -6481,6 +6633,63 @@ $$;
 
 
 ALTER FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_reception_queue"("p_date" "date" DEFAULT CURRENT_DATE, "p_search" "text" DEFAULT ''::"text") RETURNS TABLE("id" "uuid", "appointment_time" timestamp with time zone, "customer_id" bigint, "customer_name" "text", "customer_phone" "text", "customer_code" "text", "customer_gender" "text", "customer_yob" integer, "service_ids" bigint[], "room_id" bigint, "service_names" "text"[], "room_name" "text", "priority" "text", "doctor_name" "text", "status" "text", "contact_status" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        a.id,
+        a.appointment_time,
+        c.id as customer_id,
+        c.name as customer_name,         -- [CHECKED] Schema có cột 'name'
+        c.phone,
+        c.customer_code as customer_code, -- [FIXED] Đổi c.code -> c.customer_code
+        c.gender::text,                  -- Cast enum sang text cho an toàn
+        CAST(EXTRACT(YEAR FROM c.dob) AS INTEGER) as customer_yob,
+        
+        COALESCE(a.service_ids, '{}') as service_ids,
+        a.room_id,
+        
+        -- Mapping Services Names
+        ARRAY(
+            SELECT sp.name 
+            FROM public.service_packages sp 
+            WHERE sp.id = ANY(a.service_ids)
+        ) as service_names,
+
+        -- Mapping Room Name
+        COALESCE(w.name, 'Chưa xếp phòng') as room_name,
+
+        a.priority,
+        COALESCE(u.full_name, 'Chưa chỉ định') as doctor_name,
+        a.status::text,
+        a.contact_status
+
+    FROM public.appointments a
+    JOIN public.customers c ON a.customer_id = c.id
+    LEFT JOIN public.users u ON a.doctor_id = u.id
+    LEFT JOIN public.warehouses w ON a.room_id = w.id
+    WHERE 
+        -- Lọc theo ngày
+        DATE(a.appointment_time AT TIME ZONE 'Asia/Ho_Chi_Minh') = p_date
+        AND (
+            p_search = '' 
+            OR c.name ILIKE '%' || p_search || '%' 
+            OR c.phone ILIKE '%' || p_search || '%'
+            -- [FIXED] Tìm kiếm theo mã khách hàng
+            OR c.customer_code ILIKE '%' || p_search || '%'
+        )
+    ORDER BY 
+        CASE WHEN a.priority = 'emergency' THEN 0 ELSE 1 END,
+        a.appointment_time ASC;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_reception_queue"("p_date" "date", "p_search" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_sales_orders_view"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_search" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_order_type" "text" DEFAULT NULL::"text", "p_remittance_status" "text" DEFAULT NULL::"text", "p_creator_id" "uuid" DEFAULT NULL::"uuid", "p_payment_status" "text" DEFAULT NULL::"text", "p_invoice_status" "text" DEFAULT NULL::"text", "p_payment_method" "text" DEFAULT NULL::"text", "p_warehouse_id" bigint DEFAULT NULL::bigint, "p_customer_id" bigint DEFAULT NULL::bigint) RETURNS "jsonb"
@@ -9371,6 +9580,9 @@ ALTER FUNCTION "public"."save_outbound_progress"("p_order_id" "uuid", "p_items" 
 CREATE OR REPLACE FUNCTION "public"."search_customers_b2b_v2"("p_keyword" "text") RETURNS TABLE("id" bigint, "name" "text", "tax_code" "text", "vat_address" "text", "shipping_address" "text", "phone" "text", "debt_limit" numeric, "current_debt" numeric, "loyalty_points" integer, "contacts" "jsonb")
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
+DECLARE
+    -- Chuẩn hóa từ khóa tìm kiếm: Xóa khoảng trắng thừa, chuyển về chữ thường
+    v_clean_keyword text := TRIM(p_keyword); 
 BEGIN
     RETURN QUERY
     SELECT 
@@ -9381,17 +9593,10 @@ BEGIN
         c.shipping_address,
         c.phone,
         COALESCE(c.debt_limit, 0),
+        COALESCE(c.current_debt, 0),
+        COALESCE(c.loyalty_points, 0), -- Cột này là Integer
         
-        -- Logic tính Nợ: Bây giờ cột final_amount và paid_amount đã chắc chắn tồn tại
-        COALESCE((
-            SELECT SUM(o.final_amount - o.paid_amount)
-            FROM public.orders o
-            WHERE o.customer_id = c.id 
-              AND o.status NOT IN ('DRAFT', 'CANCELLED')
-        ), 0) as current_debt,
-        
-        COALESCE(c.loyalty_points, 0),
-        
+        -- Lấy danh sách liên hệ (giữ nguyên để không lỗi giao diện)
         COALESCE((
             SELECT jsonb_agg(jsonb_build_object(
                 'name', cc.name,
@@ -9406,13 +9611,25 @@ BEGIN
     WHERE 
         c.status = 'active'
         AND (
-            p_keyword IS NULL OR p_keyword = '' OR
-            c.name ILIKE '%' || p_keyword || '%' OR
-            c.phone ILIKE '%' || p_keyword || '%' OR
-            c.tax_code ILIKE '%' || p_keyword || '%' OR
-            c.customer_code ILIKE '%' || p_keyword || '%'
+            v_clean_keyword IS NULL OR v_clean_keyword = '' 
+            OR
+            -- Tìm theo Tên (Chứa từ khóa, không phân biệt hoa thường)
+            -- VD: "ngọc du" sẽ tìm thấy trong "Quầy Thuốc Ngọc Duy"
+            c.name ILIKE '%' || v_clean_keyword || '%' 
+            OR
+            -- Tìm theo SĐT
+            c.phone ILIKE '%' || v_clean_keyword || '%' 
+            OR
+            -- Tìm theo Mã số thuế
+            c.tax_code ILIKE '%' || v_clean_keyword || '%' 
+            OR
+            -- Tìm theo Mã khách hàng
+            c.customer_code ILIKE '%' || v_clean_keyword || '%'
         )
-    ORDER BY c.name ASC
+    ORDER BY 
+        -- Ưu tiên: Nếu tên bắt đầu bằng từ khóa thì lên đầu (Tăng trải nghiệm tìm kiếm)
+        CASE WHEN c.name ILIKE v_clean_keyword || '%' THEN 0 ELSE 1 END,
+        c.name ASC
     LIMIT 20;
 END;
 $$;
@@ -11901,7 +12118,11 @@ CREATE TABLE IF NOT EXISTS "public"."appointments" (
     "symptoms" "jsonb" DEFAULT '[]'::"jsonb",
     "note" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "priority" "text" DEFAULT 'normal'::"text",
+    "contact_status" "text" DEFAULT 'pending'::"text",
+    "room_id" bigint,
+    "service_ids" bigint[] DEFAULT '{}'::bigint[]
 );
 
 
@@ -12136,6 +12357,60 @@ ALTER TABLE "public"."clinical_queues" ALTER COLUMN "id" ADD GENERATED BY DEFAUL
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."connect_comments" (
+    "id" bigint NOT NULL,
+    "post_id" bigint NOT NULL,
+    "user_id" "uuid" DEFAULT "auth"."uid"() NOT NULL,
+    "content" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."connect_comments" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."connect_comments_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."connect_comments_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "public"."connect_comments_id_seq" OWNED BY "public"."connect_comments"."id";
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."connect_likes" (
+    "id" bigint NOT NULL,
+    "post_id" bigint NOT NULL,
+    "user_id" "uuid" DEFAULT "auth"."uid"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."connect_likes" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."connect_likes_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."connect_likes_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "public"."connect_likes_id_seq" OWNED BY "public"."connect_likes"."id";
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."connect_posts" (
     "id" bigint NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"(),
@@ -12156,6 +12431,7 @@ CREATE TABLE IF NOT EXISTS "public"."connect_posts" (
     "tags" "text"[] DEFAULT '{}'::"text"[],
     "attachments" "jsonb"[] DEFAULT '{}'::"jsonb"[],
     "is_locked" boolean DEFAULT false,
+    "updated_at" timestamp with time zone DEFAULT "now"(),
     CONSTRAINT "connect_posts_category_check" CHECK (("category" = ANY (ARRAY['news'::"text", 'feedback'::"text", 'docs'::"text"]))),
     CONSTRAINT "connect_posts_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'published'::"text", 'hidden'::"text"])))
 );
@@ -12386,7 +12662,8 @@ CREATE TABLE IF NOT EXISTS "public"."customers_b2b" (
     "bank_account_number" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "loyalty_points" integer DEFAULT 0
+    "loyalty_points" integer DEFAULT 0,
+    "current_debt" numeric DEFAULT 0
 );
 
 
@@ -13985,6 +14262,14 @@ ALTER TABLE ONLY "public"."banks" ALTER COLUMN "id" SET DEFAULT "nextval"('"publ
 
 
 
+ALTER TABLE ONLY "public"."connect_comments" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."connect_comments_id_seq"'::"regclass");
+
+
+
+ALTER TABLE ONLY "public"."connect_likes" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."connect_likes_id_seq"'::"regclass");
+
+
+
 ALTER TABLE ONLY "public"."customer_b2b_contacts" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."customer_b2b_contacts_id_seq"'::"regclass");
 
 
@@ -14121,6 +14406,21 @@ ALTER TABLE ONLY "public"."chart_of_accounts"
 
 ALTER TABLE ONLY "public"."clinical_queues"
     ADD CONSTRAINT "clinical_queues_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."connect_comments"
+    ADD CONSTRAINT "connect_comments_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."connect_likes"
+    ADD CONSTRAINT "connect_likes_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."connect_likes"
+    ADD CONSTRAINT "connect_likes_unique_user_post" UNIQUE ("post_id", "user_id");
 
 
 
@@ -14644,7 +14944,15 @@ CREATE INDEX "idx_allocations_po" ON "public"."finance_invoice_allocations" USIN
 
 
 
+CREATE INDEX "idx_appointments_appointment_time" ON "public"."appointments" USING "btree" ("appointment_time");
+
+
+
 CREATE INDEX "idx_appointments_customer" ON "public"."appointments" USING "btree" ("customer_id");
+
+
+
+CREATE INDEX "idx_appointments_room_id" ON "public"."appointments" USING "btree" ("room_id");
 
 
 
@@ -14673,6 +14981,10 @@ CREATE INDEX "idx_clinical_queues_status" ON "public"."clinical_queues" USING "b
 
 
 CREATE INDEX "idx_customer_b2b_contacts_customer_id" ON "public"."customer_b2b_contacts" USING "btree" ("customer_b2b_id");
+
+
+
+CREATE INDEX "idx_customers_b2b_current_debt" ON "public"."customers_b2b" USING "btree" ("current_debt");
 
 
 
@@ -15004,6 +15316,10 @@ CREATE INDEX "trgm_idx_products_name" ON "public"."products" USING "gin" ("name"
 
 
 
+CREATE OR REPLACE TRIGGER "on_connect_posts_updated" BEFORE UPDATE ON "public"."connect_posts" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
 CREATE OR REPLACE TRIGGER "on_finance_transaction_change" AFTER INSERT OR DELETE OR UPDATE ON "public"."finance_transactions" FOR EACH ROW EXECUTE FUNCTION "public"."handle_fund_balance_update"();
 
 
@@ -15132,6 +15448,18 @@ CREATE OR REPLACE TRIGGER "trg_notify_payment" AFTER INSERT OR UPDATE ON "public
 
 
 
+CREATE OR REPLACE TRIGGER "trg_sync_batch_to_total" AFTER INSERT OR DELETE OR UPDATE ON "public"."inventory_batches" FOR EACH ROW EXECUTE FUNCTION "public"."fn_sync_inventory_batch_to_total"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_update_customer_debt" AFTER INSERT OR DELETE OR UPDATE ON "public"."finance_transactions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trigger_update_customer_debt"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_update_debt_from_orders" AFTER UPDATE ON "public"."orders" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trigger_update_debt_from_orders"();
+
+
+
 ALTER TABLE ONLY "public"."appointments"
     ADD CONSTRAINT "appointments_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE CASCADE;
 
@@ -15139,6 +15467,11 @@ ALTER TABLE ONLY "public"."appointments"
 
 ALTER TABLE ONLY "public"."appointments"
     ADD CONSTRAINT "appointments_doctor_id_fkey" FOREIGN KEY ("doctor_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."appointments"
+    ADD CONSTRAINT "appointments_room_id_fkey" FOREIGN KEY ("room_id") REFERENCES "public"."warehouses"("id") ON DELETE SET NULL;
 
 
 
@@ -15199,6 +15532,26 @@ ALTER TABLE ONLY "public"."clinical_queues"
 
 ALTER TABLE ONLY "public"."clinical_queues"
     ADD CONSTRAINT "clinical_queues_doctor_id_fkey" FOREIGN KEY ("doctor_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."connect_comments"
+    ADD CONSTRAINT "connect_comments_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."connect_posts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."connect_comments"
+    ADD CONSTRAINT "connect_comments_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."connect_likes"
+    ADD CONSTRAINT "connect_likes_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."connect_posts"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."connect_likes"
+    ADD CONSTRAINT "connect_likes_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -15808,6 +16161,18 @@ CREATE POLICY "Allow authenticated write access (Temporary)" ON "public"."chart_
 
 
 
+CREATE POLICY "Allow delete for Owner OR Admin" ON "public"."connect_posts" FOR DELETE USING ((("auth"."uid"() = "creator_id") OR (("auth"."jwt"() ->> 'email'::"text") = ANY (ARRAY['hung.leviet2023@gmail.com'::"text", 'admin@namviet.com'::"text", 'quanly@namviet.com'::"text", 'traxoay.ai@gmail.com'::"text"]))));
+
+
+
+CREATE POLICY "Auth user insert comments" ON "public"."connect_comments" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "Auth user insert likes" ON "public"."connect_likes" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
 CREATE POLICY "Auth users full access" ON "public"."customer_vouchers" TO "authenticated" USING (true) WITH CHECK (true);
 
 
@@ -15972,7 +16337,27 @@ CREATE POLICY "Enable update items" ON "public"."prescription_template_items" FO
 
 
 
+CREATE POLICY "Owner delete likes" ON "public"."connect_likes" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Owner or Admin delete comments" ON "public"."connect_comments" FOR DELETE USING ((("auth"."uid"() = "user_id") OR (("auth"."jwt"() ->> 'email'::"text") = ANY (ARRAY['hung.leviet2023@gmail.com'::"text", 'admin@namviet.com'::"text"]))));
+
+
+
+CREATE POLICY "Owner update comments" ON "public"."connect_comments" FOR UPDATE USING (("auth"."uid"() = "user_id"));
+
+
+
 CREATE POLICY "Owner update posts" ON "public"."connect_posts" FOR UPDATE USING (("auth"."uid"() = "creator_id"));
+
+
+
+CREATE POLICY "Public view comments" ON "public"."connect_comments" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Public view likes" ON "public"."connect_likes" FOR SELECT USING (true);
 
 
 
@@ -16027,6 +16412,12 @@ ALTER TABLE "public"."chart_of_accounts" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."clinical_queues" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."connect_comments" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."connect_likes" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."connect_posts" ENABLE ROW LEVEL SECURITY;
@@ -16834,6 +17225,24 @@ GRANT ALL ON FUNCTION "public"."export_products_list"("search_query" "text", "ca
 
 
 
+GRANT ALL ON FUNCTION "public"."fn_sync_inventory_batch_to_total"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_sync_inventory_batch_to_total"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_sync_inventory_batch_to_total"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."fn_trigger_update_customer_debt"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_trigger_update_customer_debt"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_trigger_update_customer_debt"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."fn_trigger_update_debt_from_orders"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_trigger_update_debt_from_orders"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_trigger_update_debt_from_orders"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_active_shipping_partners"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_active_shipping_partners"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_active_shipping_partners"() TO "service_role";
@@ -16873,6 +17282,12 @@ GRANT ALL ON FUNCTION "public"."get_available_vat_rates_for_product"("p_product_
 GRANT ALL ON FUNCTION "public"."get_available_vouchers"("p_customer_id" bigint, "p_order_total" numeric) TO "anon";
 GRANT ALL ON FUNCTION "public"."get_available_vouchers"("p_customer_id" bigint, "p_order_total" numeric) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_available_vouchers"("p_customer_id" bigint, "p_order_total" numeric) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_connect_posts"("p_category" "text", "p_search" "text", "p_limit" integer, "p_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_connect_posts"("p_category" "text", "p_search" "text", "p_limit" integer, "p_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_connect_posts"("p_category" "text", "p_search" "text", "p_limit" integer, "p_offset" integer) TO "service_role";
 
 
 
@@ -17059,6 +17474,12 @@ GRANT ALL ON FUNCTION "public"."get_purchase_order_details"("p_id" bigint) TO "s
 GRANT ALL ON FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "anon";
 GRANT ALL ON FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_reception_queue"("p_date" "date", "p_search" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_reception_queue"("p_date" "date", "p_search" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_reception_queue"("p_date" "date", "p_search" "text") TO "service_role";
 
 
 
@@ -17995,6 +18416,30 @@ GRANT ALL ON TABLE "public"."clinical_queues" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."clinical_queues_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."clinical_queues_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."clinical_queues_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."connect_comments" TO "anon";
+GRANT ALL ON TABLE "public"."connect_comments" TO "authenticated";
+GRANT ALL ON TABLE "public"."connect_comments" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."connect_comments_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."connect_comments_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."connect_comments_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."connect_likes" TO "anon";
+GRANT ALL ON TABLE "public"."connect_likes" TO "authenticated";
+GRANT ALL ON TABLE "public"."connect_likes" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."connect_likes_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."connect_likes_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."connect_likes_id_seq" TO "service_role";
 
 
 
