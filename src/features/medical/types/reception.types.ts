@@ -24,6 +24,8 @@ export interface ReceptionAppointment {
   doctor_name: string;     // Đã là tên thật (VD: BS. Hùng)
   status: string;          // 'pending', 'confirmed', ...
   contact_status: 'pending' | 'confirmed' | 'failed';
+  creator_name: string;      // [NEW] Tên nhân viên tạo
+  payment_status: string;    // [NEW] Trạng thái thanh toán
 }
 
 export interface CreateAppointmentPayload {

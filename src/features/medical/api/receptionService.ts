@@ -55,5 +55,18 @@ export const receptionService = {
     });
     if (error) throw error;
     return data || [];
+  },
+
+  // 6. Cập nhật trạng thái (Check-in / Hủy)
+  updateStatus: async (id: string, status: string, cancelReason?: string) => {
+    const payload: any = { status, updated_at: new Date().toISOString() };
+    if (cancelReason) payload.note = `[Hủy: ${cancelReason}]`; // Hoặc lưu vào cột cancel_reason nếu có
+    
+    const { error } = await supabase
+        .from('appointments')
+        .update(payload)
+        .eq('id', id);
+    
+    if (error) throw error;
   }
 };

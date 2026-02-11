@@ -1,3 +1,4 @@
+// src/shared/utils/printTemplates.ts
 import dayjs from "dayjs";
 
 // Config tài khoản ngân hàng nhận tiền (Sau này đưa vào Setting)
@@ -351,4 +352,69 @@ export const generatePaymentVoucherHTML = (trans: any) => {
       </body>
     </html>
   `;
+};
+
+// 5. IN PHIẾU HẸN KHÁM / SỐ THỨ TỰ (K80)
+export const printAppointmentSlip = (appt: any) => {
+  const html = `
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body { font-family: sans-serif; }
+            .container { width: 80mm; margin: 0 auto; padding: 5px; text-align: center; }
+            .title { font-size: 18px; font-weight: bold; margin: 10px 0; text-transform: uppercase; }
+            .info { text-align: left; font-size: 12px; margin-top: 10px; }
+            .info div { margin-bottom: 4px; }
+            .big-number { font-size: 32px; font-weight: bold; margin: 10px 0; border: 2px solid #000; display: inline-block; padding: 5px 15px; border-radius: 8px; }
+            .footer { font-size: 10px; font-style: italic; margin-top: 15px; }
+            .dashed { border-top: 1px dashed #000; margin: 10px 0; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div style="font-weight: bold; font-size: 14px;">PHÒNG KHÁM NAM VIỆT</div>
+            <div style="font-size: 10px;">ĐC: Số 17, Đường Bắc Sơn, Hữu Lũng, LS</div>
+            
+            <div class="dashed"></div>
+            
+            <div class="title">PHIẾU HẸN KHÁM</div>
+            
+            <div class="big-number">${dayjs(appt.appointment_time).format('HH:mm')}</div>
+            
+            <div class="info">
+                <div><b>Khách hàng:</b> ${appt.customer_name}</div>
+                <div><b>Năm sinh:</b> ${appt.customer_yob || '...'} (${appt.customer_gender === 'male' ? 'Nam' : 'Nữ'})</div>
+                <div><b>SĐT:</b> ${appt.customer_phone}</div>
+                <div class="dashed"></div>
+                <div><b>Dịch vụ đăng ký:</b></div>
+                <ul style="padding-left: 15px; margin: 2px 0;">
+                    ${(appt.service_names_mapped || []).map((name: string) => `<li>${name}</li>`).join('')}
+                </ul>
+                <div class="dashed"></div>
+                <div><b>Phòng khám:</b> ${appt.room_name || 'Lễ tân sắp xếp'}</div>
+                <div><b>Ngày hẹn:</b> ${dayjs(appt.appointment_time).format('DD/MM/YYYY')}</div>
+            </div>
+
+            <div class="footer">
+                Vui lòng cầm phiếu này đến quầy/phòng khám để được phục vụ.<br/>
+                Xin cảm ơn!
+            </div>
+        </div>
+    </body>
+    </html>
+  `;
+  
+  // Gọi hàm triggerPrint cũ
+  const printWindow = window.open('', '', 'height=600,width=800');
+  if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+  }
 };
