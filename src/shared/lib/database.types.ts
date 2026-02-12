@@ -17,8 +17,10 @@ export type Database = {
       appointments: {
         Row: {
           appointment_time: string
+          check_in_time: string | null
           contact_status: string | null
           created_at: string | null
+          created_by: string | null
           customer_id: number
           doctor_id: string | null
           id: string
@@ -35,8 +37,10 @@ export type Database = {
         }
         Insert: {
           appointment_time: string
+          check_in_time?: string | null
           contact_status?: string | null
           created_at?: string | null
+          created_by?: string | null
           customer_id: number
           doctor_id?: string | null
           id?: string
@@ -53,8 +57,10 @@ export type Database = {
         }
         Update: {
           appointment_time?: string
+          check_in_time?: string | null
           contact_status?: string | null
           created_at?: string | null
+          created_by?: string | null
           customer_id?: number
           doctor_id?: string | null
           id?: string
@@ -394,6 +400,106 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "chart_of_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinical_prescription_items: {
+        Row: {
+          id: string
+          prescription_id: string | null
+          product_id: number | null
+          product_unit_id: number | null
+          quantity: number
+          unit_price_snapshot: number | null
+          usage_note: string | null
+        }
+        Insert: {
+          id?: string
+          prescription_id?: string | null
+          product_id?: number | null
+          product_unit_id?: number | null
+          quantity: number
+          unit_price_snapshot?: number | null
+          usage_note?: string | null
+        }
+        Update: {
+          id?: string
+          prescription_id?: string | null
+          product_id?: number | null
+          product_unit_id?: number | null
+          quantity?: number
+          unit_price_snapshot?: number | null
+          usage_note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinical_prescription_items_prescription_id_fkey"
+            columns: ["prescription_id"]
+            isOneToOne: false
+            referencedRelation: "clinical_prescriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinical_prescription_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinical_prescription_items_product_unit_id_fkey"
+            columns: ["product_unit_id"]
+            isOneToOne: false
+            referencedRelation: "product_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinical_prescriptions: {
+        Row: {
+          advice: string | null
+          code: string | null
+          created_at: string | null
+          customer_id: number | null
+          doctor_id: string | null
+          id: string
+          re_exam_date: string | null
+          visit_id: string | null
+        }
+        Insert: {
+          advice?: string | null
+          code?: string | null
+          created_at?: string | null
+          customer_id?: number | null
+          doctor_id?: string | null
+          id?: string
+          re_exam_date?: string | null
+          visit_id?: string | null
+        }
+        Update: {
+          advice?: string | null
+          code?: string | null
+          created_at?: string | null
+          customer_id?: number | null
+          doctor_id?: string | null
+          id?: string
+          re_exam_date?: string | null
+          visit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinical_prescriptions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinical_prescriptions_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "medical_visits"
             referencedColumns: ["id"]
           },
         ]
@@ -1860,6 +1966,147 @@ export type Database = {
           },
         ]
       }
+      medical_visits: {
+        Row: {
+          appointment_id: string | null
+          birth_height: number | null
+          birth_weight: number | null
+          bmi: number | null
+          bp_diastolic: number | null
+          bp_systolic: number | null
+          created_at: string | null
+          created_by: string | null
+          customer_id: number | null
+          dental_status: string | null
+          diagnosis: string | null
+          doctor_id: string | null
+          doctor_notes: string | null
+          examination_summary: string | null
+          feeding_status: string | null
+          fontanelle: string | null
+          head_circumference: number | null
+          height: number | null
+          icd_code: string | null
+          id: string
+          jaundice: string | null
+          language_development: string | null
+          lifestyle_alcohol: boolean | null
+          lifestyle_smoking: boolean | null
+          motor_development: string | null
+          puberty_stage: string | null
+          pulse: number | null
+          reflexes: string | null
+          respiratory_rate: number | null
+          scoliosis_status: string | null
+          sp02: number | null
+          status: string | null
+          symptoms: string | null
+          temperature: number | null
+          updated_at: string | null
+          updated_by: string | null
+          visual_acuity_left: string | null
+          visual_acuity_right: string | null
+          weight: number | null
+        }
+        Insert: {
+          appointment_id?: string | null
+          birth_height?: number | null
+          birth_weight?: number | null
+          bmi?: number | null
+          bp_diastolic?: number | null
+          bp_systolic?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          customer_id?: number | null
+          dental_status?: string | null
+          diagnosis?: string | null
+          doctor_id?: string | null
+          doctor_notes?: string | null
+          examination_summary?: string | null
+          feeding_status?: string | null
+          fontanelle?: string | null
+          head_circumference?: number | null
+          height?: number | null
+          icd_code?: string | null
+          id?: string
+          jaundice?: string | null
+          language_development?: string | null
+          lifestyle_alcohol?: boolean | null
+          lifestyle_smoking?: boolean | null
+          motor_development?: string | null
+          puberty_stage?: string | null
+          pulse?: number | null
+          reflexes?: string | null
+          respiratory_rate?: number | null
+          scoliosis_status?: string | null
+          sp02?: number | null
+          status?: string | null
+          symptoms?: string | null
+          temperature?: number | null
+          updated_at?: string | null
+          updated_by?: string | null
+          visual_acuity_left?: string | null
+          visual_acuity_right?: string | null
+          weight?: number | null
+        }
+        Update: {
+          appointment_id?: string | null
+          birth_height?: number | null
+          birth_weight?: number | null
+          bmi?: number | null
+          bp_diastolic?: number | null
+          bp_systolic?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          customer_id?: number | null
+          dental_status?: string | null
+          diagnosis?: string | null
+          doctor_id?: string | null
+          doctor_notes?: string | null
+          examination_summary?: string | null
+          feeding_status?: string | null
+          fontanelle?: string | null
+          head_circumference?: number | null
+          height?: number | null
+          icd_code?: string | null
+          id?: string
+          jaundice?: string | null
+          language_development?: string | null
+          lifestyle_alcohol?: boolean | null
+          lifestyle_smoking?: boolean | null
+          motor_development?: string | null
+          puberty_stage?: string | null
+          pulse?: number | null
+          reflexes?: string | null
+          respiratory_rate?: number | null
+          scoliosis_status?: string | null
+          sp02?: number | null
+          status?: string | null
+          symptoms?: string | null
+          temperature?: number | null
+          updated_at?: string | null
+          updated_by?: string | null
+          visual_acuity_left?: string | null
+          visual_acuity_right?: string | null
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medical_visits_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: true
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medical_visits_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string | null
@@ -2122,6 +2369,7 @@ export type Database = {
         Row: {
           id: number
           product_id: number
+          product_unit_id: number | null
           quantity: number
           template_id: number
           usage_instruction: string
@@ -2129,6 +2377,7 @@ export type Database = {
         Insert: {
           id?: number
           product_id: number
+          product_unit_id?: number | null
           quantity: number
           template_id: number
           usage_instruction: string
@@ -2136,6 +2385,7 @@ export type Database = {
         Update: {
           id?: number
           product_id?: number
+          product_unit_id?: number | null
           quantity?: number
           template_id?: number
           usage_instruction?: string
@@ -2146,6 +2396,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prescription_template_items_product_unit_id_fkey"
+            columns: ["product_unit_id"]
+            isOneToOne: false
+            referencedRelation: "product_units"
             referencedColumns: ["id"]
           },
           {
@@ -2161,6 +2418,7 @@ export type Database = {
         Row: {
           created_at: string
           diagnosis: string | null
+          doctor_id: string | null
           id: number
           name: string
           note: string | null
@@ -2170,6 +2428,7 @@ export type Database = {
         Insert: {
           created_at?: string
           diagnosis?: string | null
+          doctor_id?: string | null
           id?: number
           name: string
           note?: string | null
@@ -2179,6 +2438,7 @@ export type Database = {
         Update: {
           created_at?: string
           diagnosis?: string | null
+          doctor_id?: string | null
           id?: number
           name?: string
           note?: string | null
@@ -4164,6 +4424,10 @@ export type Database = {
         }
         Returns: Json
       }
+      create_medical_visit: {
+        Args: { p_appointment_id: string; p_customer_id: number; p_data: Json }
+        Returns: string
+      }
       create_new_auth_user: {
         Args: { p_email: string; p_full_name: string; p_password: string }
         Returns: string
@@ -4746,6 +5010,7 @@ export type Database = {
         Returns: {
           created_at: string
           diagnosis: string | null
+          doctor_id: string | null
           id: number
           name: string
           note: string | null
@@ -4892,6 +5157,7 @@ export type Database = {
         Returns: {
           appointment_time: string
           contact_status: string
+          creator_name: string
           customer_code: string
           customer_gender: string
           customer_id: number
@@ -4900,6 +5166,7 @@ export type Database = {
           customer_yob: number
           doctor_name: string
           id: string
+          payment_status: string
           priority: string
           room_id: number
           room_name: string
@@ -5395,7 +5662,7 @@ export type Database = {
         Returns: Json
       }
       search_products_for_purchase: {
-        Args: { p_keyword: string }
+        Args: { p_keyword?: string }
         Returns: {
           actual_cost: number
           barcode: string
@@ -5523,6 +5790,10 @@ export type Database = {
       update_inventory_check_item_quantity: {
         Args: { p_actual_quantity: number; p_item_id: number }
         Returns: Json
+      }
+      update_medical_visit: {
+        Args: { p_data: Json; p_visit_id: string }
+        Returns: undefined
       }
       update_outbound_package_count: {
         Args: { p_count: number; p_order_id: string }
@@ -5690,6 +5961,7 @@ export type Database = {
         | "completed"
         | "cancelled"
         | "checked_in"
+        | "waiting"
       asset_status: "active" | "storage" | "repair" | "disposed"
       business_type:
         | "trade"
@@ -5880,6 +6152,7 @@ export const Constants = {
         "completed",
         "cancelled",
         "checked_in",
+        "waiting",
       ],
       asset_status: ["active", "storage", "repair", "disposed"],
       business_type: [

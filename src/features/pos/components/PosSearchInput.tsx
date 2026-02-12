@@ -1,3 +1,4 @@
+// src/features/pos/components/PosSearchInput.tsx
 import React, { useEffect, useState } from "react";
 import { Select, Avatar, Tag, Typography, Empty, Spin } from "antd";
 import { ScanOutlined, MedicineBoxOutlined } from "@ant-design/icons";

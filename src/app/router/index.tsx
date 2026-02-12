@@ -15,6 +15,8 @@ import CustomerB2COrgForm from "@/pages/crm/CustomerB2COrgForm";
 import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
 import AssetManagementPage from "@/pages/finance/AssetManagementPage";
 import ReceptionPage from "@/pages/medical/ReceptionPage"; // [NEW]
+import DoctorPage from "@/pages/medical/DoctorPage";
+import DoctorQueuePage from "@/pages/medical/DoctorQueuePage";
 
 
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
@@ -148,13 +150,14 @@ const routes: RouteObject[] = [
             path: "medical/dashboard",
             element: <PagePlaceholder title="Dashboard Y Tế" />,
           },
+          // [NEW] Route Bác sĩ làm việc
           {
-            path: "medical/clinic",
-            element: <PagePlaceholder title="Phòng Khám" />,
+            path: "medical/examination",
+            element: <DoctorQueuePage />, // Trang danh sách chờ
           },
           {
-            path: "medical/vaccination",
-            element: <PagePlaceholder title="Tiêm Chủng" />,
+            path: "medical/examination/:id", // Trang khám chi tiết
+            element: <DoctorPage />,
           },
 
           // 4. Bán buôn (B2B)

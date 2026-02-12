@@ -30,6 +30,7 @@
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.5",
     "react-speech-recognition": "^4.0.1",
+    "recharts": "^3.7.0",
     "regenerator-runtime": "^0.14.1",
     "string-similarity": "^4.0.4",
     "uuid": "^13.0.0",

@@ -40,7 +40,7 @@ import {
   //ShopFilled,
   //ShoppingFilled,
   ThunderboltOutlined,
-  FileTextOutlined,
+  // FileTextOutlined,
   AuditOutlined,
   AudioOutlined,
 } from "@ant-design/icons";
@@ -100,11 +100,11 @@ const finalMenuItems: MenuItem[] = [
       "/medical/reception",
       <ScheduleOutlined />
     ),
-    getItem(
-      <Link to="/store/products">Sản phẩm store</Link>,
-      "/store/products",
-      <FileTextOutlined />
-    ),
+    // getItem(
+    //   <Link to="/store/products">Sản phẩm store</Link>,
+    //   "/store/products",
+    //   <FileTextOutlined />
+    // ),
     getItem(
       <Link to="/blank/pos">Tạo đơn tại Cửa Hàng [POS]</Link>,
       "/blank/pos",
@@ -149,14 +149,9 @@ const finalMenuItems: MenuItem[] = [
       <AppstoreOutlined />
     ),
     getItem(
-      <Link to="/medical/clinic">Phòng Khám</Link>,
-      "/medical/clinic",
-      <MedicineBoxOutlined />
-    ),
-    getItem(
-      <Link to="/medical/vaccination">Tiêm Chủng</Link>,
-      "/medical/vaccination",
-      <ExperimentOutlined />
+      <Link to="/medical/examination">Khám & Tiêm</Link>,
+      "/medical/examination",
+      <Stethoscope size={18} />
     ),
   ]),
 

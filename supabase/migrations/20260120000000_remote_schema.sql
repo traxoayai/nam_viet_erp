@@ -118,7 +118,8 @@ CREATE TYPE "public"."appointment_status" AS ENUM (
     'confirmed',
     'completed',
     'cancelled',
-    'checked_in'
+    'checked_in',
+    'waiting'
 );
 
 
@@ -1537,61 +1538,23 @@ ALTER FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", "p_reason" "
 
 CREATE OR REPLACE FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid" DEFAULT NULL::"uuid", "p_priority" "text" DEFAULT 'normal'::"text", "p_symptoms" "jsonb" DEFAULT '[]'::"jsonb", "p_notes" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
-    DECLARE
-        v_queue_num INTEGER;
-        v_appt_id UUID;
-        v_queue_id BIGINT;
-    BEGIN
-        -- 1. Lấy số thứ tự tiếp theo trong ngày
-        SELECT COALESCE(MAX(queue_number), 0) + 1 INTO v_queue_num
-        FROM public.clinical_queues
-        WHERE date(created_at) = CURRENT_DATE;
+DECLARE
+    v_queue_num INTEGER; v_appt_id UUID; v_queue_id BIGINT;
+BEGIN
+    SELECT COALESCE(MAX(queue_number), 0) + 1 INTO v_queue_num FROM public.clinical_queues WHERE date(created_at) = CURRENT_DATE;
 
-        -- 2. Tạo Appointment "tức thì" (Status = checked_in)
-        INSERT INTO public.appointments (
-            customer_id, 
-            doctor_id, 
-            appointment_time, 
-            status, 
-            symptoms, 
-            note, 
-            service_type
-        ) VALUES (
-            p_customer_id, 
-            p_doctor_id, 
-            now(), 
-            'checked_in', 
-            p_symptoms, 
-            p_notes, 
-            'examination'
-        ) RETURNING id INTO v_appt_id;
-
-        -- 3. Đẩy vào hàng đợi
-        INSERT INTO public.clinical_queues (
-            appointment_id, 
-            customer_id, 
-            doctor_id, 
-            queue_number, 
-            status, 
-            priority_level
-        ) VALUES (
-            v_appt_id, 
-            p_customer_id, 
-            p_doctor_id, 
-            v_queue_num, 
-            'waiting', 
-            p_priority::public.queue_priority
-        ) RETURNING id INTO v_queue_id;
-
-        RETURN jsonb_build_object(
-            'success', true, 
-            'queue_number', v_queue_num, 
-            'queue_id', v_queue_id
-        );
-    END;
-    $$;
+    INSERT INTO public.appointments (customer_id, doctor_id, appointment_time, status, symptoms, note, service_type, check_in_time) 
+    VALUES (p_customer_id, p_doctor_id, now(), 'waiting', p_symptoms, p_notes, 'examination', now()) 
+    RETURNING id INTO v_appt_id;
+    
+    INSERT INTO public.clinical_queues (appointment_id, customer_id, doctor_id, queue_number, status, priority_level) 
+    VALUES (v_appt_id, p_customer_id, p_doctor_id, v_queue_num, 'waiting', p_priority::public.queue_priority) 
+    RETURNING id INTO v_queue_id;
+    
+    RETURN jsonb_build_object('success', true, 'queue_number', v_queue_num, 'queue_id', v_queue_id);
+END;
+$$;
 
 
 ALTER FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") OWNER TO "postgres";
@@ -3575,6 +3538,65 @@ $$;
 ALTER FUNCTION "public"."create_manual_transfer"("p_source_warehouse_id" bigint, "p_dest_warehouse_id" bigint, "p_note" "text", "p_items" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."create_medical_visit"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_data" "jsonb") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_visit_id UUID;
+    v_doctor_id UUID;
+BEGIN
+    -- Lấy ID bác sĩ từ người đang đăng nhập (hoặc từ appointment nếu cần logic khác)
+    v_doctor_id := auth.uid();
+
+    INSERT INTO public.medical_visits (
+        appointment_id, customer_id, doctor_id, created_by, status,
+        
+        -- Chỉ số cơ bản
+        pulse, temperature, sp02, respiratory_rate, bp_systolic, bp_diastolic,
+        weight, height, bmi, head_circumference, birth_weight, birth_height,
+        
+        -- Lâm sàng chung
+        symptoms, examination_summary, diagnosis, icd_code, doctor_notes,
+        
+        -- [NEW] Chuyên sâu Nhi & Dậy thì
+        fontanelle, reflexes, jaundice, feeding_status,
+        dental_status, motor_development, language_development,
+        puberty_stage, scoliosis_status, visual_acuity_left, visual_acuity_right,
+        lifestyle_alcohol, lifestyle_smoking
+    )
+    VALUES (
+        p_appointment_id, p_customer_id, v_doctor_id, v_doctor_id, 'in_progress',
+        
+        -- Parse JSON Phẳng
+        (p_data->>'pulse')::INT, (p_data->>'temperature')::NUMERIC, (p_data->>'sp02')::INT, (p_data->>'respiratory_rate')::INT,
+        (p_data->>'bp_systolic')::INT, (p_data->>'bp_diastolic')::INT,
+        (p_data->>'weight')::NUMERIC, (p_data->>'height')::NUMERIC, (p_data->>'bmi')::NUMERIC,
+        (p_data->>'head_circumference')::NUMERIC, (p_data->>'birth_weight')::NUMERIC, (p_data->>'birth_height')::NUMERIC,
+        
+        p_data->>'symptoms', p_data->>'examination_summary', p_data->>'diagnosis', p_data->>'icd_code', p_data->>'doctor_notes',
+        
+        -- [NEW] Mapping phẳng 1-1
+        p_data->>'fontanelle', p_data->>'reflexes', p_data->>'jaundice', p_data->>'feeding_status',
+        p_data->>'dental_status', p_data->>'motor_development', p_data->>'language_development',
+        p_data->>'puberty_stage', p_data->>'scoliosis_status', p_data->>'visual_acuity_left', p_data->>'visual_acuity_right',
+        (p_data->>'lifestyle_alcohol')::BOOLEAN, (p_data->>'lifestyle_smoking')::BOOLEAN
+    )
+    RETURNING id INTO v_visit_id;
+
+    -- Update trạng thái Appointment thành 'examining'
+    UPDATE public.appointments SET status = 'examining' WHERE id = p_appointment_id;
+    -- Update trạng thái Queue
+    UPDATE public.clinical_queues SET status = 'examining' WHERE appointment_id = p_appointment_id;
+
+    RETURN v_visit_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."create_medical_visit"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_data" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."create_new_auth_user"("p_email" "text", "p_password" "text", "p_full_name" "text") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -5237,30 +5259,38 @@ DECLARE
     v_debt NUMERIC;
     v_name TEXT;
 BEGIN
-    -- Lấy thông tin hạn mức
+    -- 1. Lấy thông tin cơ bản
     SELECT name, debt_limit INTO v_name, v_limit 
     FROM public.customers_b2b 
     WHERE id = p_customer_id;
 
-    IF v_name IS NULL THEN RETURN; END IF; -- Không tìm thấy khách
+    IF v_name IS NULL THEN RETURN; END IF;
 
-    -- Tính nợ hiện tại: Tổng (Final Amount - Paid Amount) của các đơn chưa hoàn tất thanh toán
-    -- Loại trừ đơn Đã hủy (CANCELLED) và Đơn Nháp (DRAFT - chưa chốt nợ)
-    SELECT COALESCE(SUM(final_amount - paid_amount), 0)
+    -- 2. TÍNH NỢ THEO NGUỒN CHÂN LÝ: TỔNG DƯ NỢ CÁC ĐƠN HÀNG
+    -- (Đây chính là Logic Path 3 Sếp yêu cầu)
+    SELECT COALESCE(SUM(final_amount - COALESCE(paid_amount, 0)), 0)
     INTO v_debt
     FROM public.orders
     WHERE customer_id = p_customer_id
-      AND status NOT IN ('DRAFT', 'CANCELLED') -- Chỉ tính nợ các đơn đã chốt
-      AND payment_status != 'paid';            -- Chưa thanh toán hết
+      -- Loại bỏ đơn nháp, đơn hủy, báo giá
+      AND status NOT IN ('DRAFT', 'CANCELLED', 'QUOTE', 'QUOTE_EXPIRED')
+      -- Chỉ lấy đơn chưa trả hết tiền
+      AND payment_status != 'paid';
 
-    -- Trả về kết quả
+    -- 3. CẬP NHẬT NGƯỢC LẠI VÀO BẢNG KHÁCH HÀNG (CACHE)
+    -- Để lần sau danh sách bên ngoài hiển thị đúng luôn mà không cần tính toán lại
+    UPDATE public.customers_b2b 
+    SET current_debt = v_debt 
+    WHERE id = p_customer_id;
+
+    -- 4. Trả về kết quả
     RETURN QUERY SELECT 
         p_customer_id,
         v_name,
         COALESCE(v_limit, 0),
         v_debt,
-        (COALESCE(v_limit, 0) - v_debt),
-        (v_debt > COALESCE(v_limit, 0));
+        (COALESCE(v_limit, 0) - v_debt), -- Hạn mức khả dụng
+        (v_debt > COALESCE(v_limit, 0)); -- Cảnh báo nợ xấu nếu vượt hạn mức
 END;
 $$;
 
@@ -6118,6 +6148,7 @@ CREATE TABLE IF NOT EXISTS "public"."prescription_templates" (
     "status" "text" DEFAULT 'active'::"text",
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "doctor_id" "uuid",
     CONSTRAINT "prescription_templates_status_check" CHECK (("status" = ANY (ARRAY['active'::"text", 'inactive'::"text"])))
 );
 
@@ -6635,52 +6666,74 @@ $$;
 ALTER FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_reception_queue"("p_date" "date" DEFAULT CURRENT_DATE, "p_search" "text" DEFAULT ''::"text") RETURNS TABLE("id" "uuid", "appointment_time" timestamp with time zone, "customer_id" bigint, "customer_name" "text", "customer_phone" "text", "customer_code" "text", "customer_gender" "text", "customer_yob" integer, "service_ids" bigint[], "room_id" bigint, "service_names" "text"[], "room_name" "text", "priority" "text", "doctor_name" "text", "status" "text", "contact_status" "text")
+CREATE OR REPLACE FUNCTION "public"."get_reception_queue"("p_date" "date" DEFAULT CURRENT_DATE, "p_search" "text" DEFAULT ''::"text") RETURNS TABLE("id" "uuid", "appointment_time" timestamp with time zone, "customer_id" bigint, "customer_name" "text", "customer_phone" "text", "customer_code" "text", "customer_gender" "text", "customer_yob" integer, "service_ids" bigint[], "room_id" bigint, "service_names" "text"[], "room_name" "text", "priority" "text", "doctor_name" "text", "creator_name" "text", "payment_status" "text", "status" "text", "contact_status" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
+DECLARE
+    v_text_part TEXT;
+    v_phone_part TEXT;
 BEGIN
+    -- Logic tách từ khóa tìm kiếm (Smart Search)
+    v_phone_part := regexp_replace(p_search, '[^0-9]', '', 'g');
+    v_text_part := trim(regexp_replace(p_search, '[0-9]', '', 'g'));
+    
+    IF v_phone_part = '' THEN v_phone_part := NULL; END IF;
+    IF v_text_part = '' THEN v_text_part := NULL; END IF;
+
     RETURN QUERY
     SELECT 
         a.id,
         a.appointment_time,
         c.id as customer_id,
-        c.name as customer_name,         -- [CHECKED] Schema có cột 'name'
-        c.phone,
-        c.customer_code as customer_code, -- [FIXED] Đổi c.code -> c.customer_code
-        c.gender::text,                  -- Cast enum sang text cho an toàn
+        COALESCE(c.name, 'Khách vãng lai') as customer_name, 
+        c.phone as customer_phone,
+        c.customer_code, -- [CORE FIXED]: Sửa từ c.code thành c.customer_code
+        c.gender::text,
         CAST(EXTRACT(YEAR FROM c.dob) AS INTEGER) as customer_yob,
         
         COALESCE(a.service_ids, '{}') as service_ids,
         a.room_id,
         
-        -- Mapping Services Names
         ARRAY(
             SELECT sp.name 
             FROM public.service_packages sp 
             WHERE sp.id = ANY(a.service_ids)
         ) as service_names,
-
-        -- Mapping Room Name
+        
         COALESCE(w.name, 'Chưa xếp phòng') as room_name,
-
         a.priority,
-        COALESCE(u.full_name, 'Chưa chỉ định') as doctor_name,
-        a.status::text,
+        
+        COALESCE(u_doc.raw_user_meta_data->>'full_name', u_doc.email, 'Chưa chỉ định') as doctor_name,
+        
+        -- Lấy tên người tạo
+        COALESCE(u_creator.raw_user_meta_data->>'full_name', u_creator.email, 'System') as creator_name,
+        
+        -- Check trạng thái thanh toán (Lấy đơn hàng mới nhất trong ngày)
+        (
+            SELECT o.payment_status 
+            FROM public.orders o 
+            WHERE o.customer_b2c_id = c.id 
+              AND DATE(o.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = p_date 
+            ORDER BY o.created_at DESC 
+            LIMIT 1
+        ) as payment_status,
+        
+        a.status::text, 
         a.contact_status
-
     FROM public.appointments a
     JOIN public.customers c ON a.customer_id = c.id
-    LEFT JOIN public.users u ON a.doctor_id = u.id
-    LEFT JOIN public.warehouses w ON a.room_id = w.id
+    LEFT JOIN auth.users u_doc ON a.doctor_id = u_doc.id 
+    LEFT JOIN auth.users u_creator ON a.created_by = u_creator.id 
+    LEFT JOIN public.warehouses w ON a.room_id = w.id 
     WHERE 
-        -- Lọc theo ngày
         DATE(a.appointment_time AT TIME ZONE 'Asia/Ho_Chi_Minh') = p_date
         AND (
             p_search = '' 
-            OR c.name ILIKE '%' || p_search || '%' 
-            OR c.phone ILIKE '%' || p_search || '%'
-            -- [FIXED] Tìm kiếm theo mã khách hàng
-            OR c.customer_code ILIKE '%' || p_search || '%'
+            OR (
+                (v_text_part IS NULL OR c.name ILIKE '%' || v_text_part || '%') 
+                AND 
+                (v_phone_part IS NULL OR c.phone ILIKE '%' || v_phone_part || '%')
+            )
         )
     ORDER BY 
         CASE WHEN a.priority = 'emergency' THEN 0 ELSE 1 END,
@@ -9974,7 +10027,7 @@ $_$;
 ALTER FUNCTION "public"."search_products_for_b2b_order"("p_keyword" "text", "p_warehouse_id" bigint) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."search_products_for_purchase"("p_keyword" "text") RETURNS TABLE("id" bigint, "name" "text", "sku" "text", "barcode" "text", "image_url" "text", "wholesale_unit" "text", "retail_unit" "text", "items_per_carton" integer, "actual_cost" numeric, "latest_purchase_price" numeric)
+CREATE OR REPLACE FUNCTION "public"."search_products_for_purchase"("p_keyword" "text" DEFAULT NULL::"text") RETURNS TABLE("id" bigint, "name" "text", "sku" "text", "barcode" "text", "image_url" "text", "wholesale_unit" "text", "retail_unit" "text", "items_per_carton" integer, "actual_cost" numeric, "latest_purchase_price" numeric)
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 BEGIN
@@ -9985,19 +10038,42 @@ BEGIN
         p.sku,
         p.barcode,
         p.image_url,
-        COALESCE(p.wholesale_unit, 'Hộp') AS wholesale_unit,
-        COALESCE(p.retail_unit, 'Vỉ') AS retail_unit,
-        COALESCE(p.items_per_carton, 1) AS items_per_carton,
+        
+        -- [FIX 1] Lấy Đơn vị Bán buôn (Wholesale) chuẩn xác từ bảng product_units
+        COALESCE(
+            (SELECT unit_name FROM public.product_units pu WHERE pu.product_id = p.id AND pu.unit_type = 'wholesale' LIMIT 1),
+            -- Nếu không có type 'wholesale', lấy đơn vị có hệ số quy đổi lớn nhất
+            (SELECT unit_name FROM public.product_units pu WHERE pu.product_id = p.id AND pu.conversion_rate > 1 ORDER BY pu.conversion_rate DESC LIMIT 1),
+            p.wholesale_unit, -- Fallback về cột cũ
+            'Hộp' -- Default cuối cùng
+        ) AS wholesale_unit,
+
+        -- [FIX 2] Lấy Đơn vị Bán lẻ (Base/Retail) chuẩn xác
+        COALESCE(
+            (SELECT unit_name FROM public.product_units pu WHERE pu.product_id = p.id AND pu.is_base = true LIMIT 1),
+            (SELECT unit_name FROM public.product_units pu WHERE pu.product_id = p.id AND pu.unit_type = 'retail' LIMIT 1),
+            p.retail_unit,
+            'Vỉ'
+        ) AS retail_unit,
+
+        -- [FIX 3] Lấy quy cách đóng gói (items_per_carton) chuẩn xác
+        -- Tính toán lại từ tỷ lệ chuyển đổi của đơn vị bán buôn tìm được ở trên
+        COALESCE(
+            (SELECT conversion_rate FROM public.product_units pu WHERE pu.product_id = p.id AND pu.unit_type = 'wholesale' LIMIT 1),
+            (SELECT conversion_rate FROM public.product_units pu WHERE pu.product_id = p.id AND pu.conversion_rate > 1 ORDER BY pu.conversion_rate DESC LIMIT 1),
+            p.items_per_carton,
+            1
+        )::integer AS items_per_carton,
+
         COALESCE(p.actual_cost, 0) AS actual_cost,
         
-        -- LOGIC LẤY GIÁ NHẬP GẦN NHẤT (Subquery tối ưu)
+        -- LOGIC LẤY GIÁ NHẬP GẦN NHẤT (Giữ nguyên vì logic này tốt)
         COALESCE(
             (
                 SELECT poi.unit_price
                 FROM public.purchase_order_items poi
                 JOIN public.purchase_orders po ON poi.po_id = po.id
                 WHERE poi.product_id = p.id
-                -- Chỉ tính các đơn chưa bị hủy
                 AND po.status <> 'CANCELLED'
                 ORDER BY po.created_at DESC
                 LIMIT 1
@@ -10008,13 +10084,13 @@ BEGIN
     FROM
         public.products p
     WHERE
-        p.status = 'active' -- Chỉ lấy hàng đang kinh doanh
+        p.status = 'active'
         AND (
             p_keyword IS NULL 
             OR p_keyword = '' 
             OR p.name ILIKE '%' || p_keyword || '%' 
             OR p.sku ILIKE '%' || p_keyword || '%'
-            OR p.barcode ILIKE '%' || p_keyword || '%' -- Tìm theo Barcode
+            OR p.barcode ILIKE '%' || p_keyword || '%'
         )
     ORDER BY
         p.created_at DESC
@@ -10895,6 +10971,89 @@ CREATE OR REPLACE FUNCTION "public"."trigger_refresh_on_criteria_change"() RETUR
 ALTER FUNCTION "public"."trigger_refresh_on_criteria_change"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."trigger_sync_order_payment"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    -- [CASE 1] KHI PHIẾU THU ĐƯỢC DUYỆT (Pending -> Completed) 
+    -- HOẶC TẠO MỚI Ở TRẠNG THÁI COMPLETED NGAY LẬP TỨC
+    IF (TG_OP = 'INSERT' AND NEW.status = 'completed') OR 
+       (TG_OP = 'UPDATE' AND NEW.status = 'completed' AND OLD.status != 'completed') THEN
+        
+        -- Chỉ xử lý phiếu Thu (flow='in') và loại tham chiếu là Đơn hàng (ref_type='order')
+        IF NEW.flow = 'in' AND NEW.ref_type = 'order' THEN
+            
+            UPDATE public.orders
+            SET 
+                -- a. Cộng dồn số tiền đã trả (Xử lý null bằng 0)
+                paid_amount = COALESCE(paid_amount, 0) + NEW.amount,
+                
+                -- b. Cập nhật thông tin đối soát
+                remittance_transaction_id = NEW.id,
+                remittance_status = 'deposited', 
+                
+                -- c. Tự động đổi trạng thái thanh toán
+                payment_status = CASE 
+                    WHEN (COALESCE(paid_amount, 0) + NEW.amount) >= final_amount THEN 'paid'
+                    ELSE 'partially_paid' 
+                END,
+                
+                updated_at = NOW()
+            WHERE code = NEW.ref_id; -- ⚠️ LƯU Ý: Frontend phải gửi Mã Đơn (VD: SO-123) vào cột ref_id
+            
+        END IF;
+    END IF;
+
+    -- [CASE 2] KHI HỦY PHIẾU THU ĐÃ DUYỆT (Completed -> Cancelled)
+    -- Trừ lại tiền và reset trạng thái nếu lỡ duyệt sai
+    IF (TG_OP = 'UPDATE' AND NEW.status = 'cancelled' AND OLD.status = 'completed') THEN
+        
+        IF NEW.flow = 'in' AND NEW.ref_type = 'order' THEN
+            UPDATE public.orders
+            SET 
+                -- Trừ số tiền của phiếu bị hủy (Không cho phép âm)
+                paid_amount = GREATEST(0, COALESCE(paid_amount, 0) - OLD.amount),
+                
+                -- Gỡ thông tin đối soát của phiếu này
+                remittance_transaction_id = NULL,
+                remittance_status = 'pending', 
+                
+                -- Tính lại trạng thái thanh toán dựa trên số tiền còn lại
+                payment_status = CASE 
+                    WHEN (GREATEST(0, COALESCE(paid_amount, 0) - OLD.amount)) >= final_amount THEN 'paid'
+                    WHEN (GREATEST(0, COALESCE(paid_amount, 0) - OLD.amount)) > 0 THEN 'partially_paid' 
+                    ELSE 'unpaid'
+                END,
+                
+                updated_at = NOW()
+            WHERE code = NEW.ref_id;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."trigger_sync_order_payment"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."trigger_update_check_in_time"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    -- Nếu trạng thái đổi sang 'waiting' và chưa có giờ check-in -> Gán giờ hiện tại
+    IF NEW.status = 'waiting' AND OLD.status != 'waiting' AND NEW.check_in_time IS NULL THEN
+        NEW.check_in_time = NOW();
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."trigger_update_check_in_time"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."update_asset"("p_id" bigint, "p_asset_data" "jsonb", "p_maintenance_plans" "jsonb", "p_maintenance_history" "jsonb") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -11204,6 +11363,62 @@ $$;
 
 
 ALTER FUNCTION "public"."update_inventory_check_item_quantity"("p_item_id" bigint, "p_actual_quantity" numeric) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    UPDATE public.medical_visits
+    SET
+        updated_by = auth.uid(),
+        updated_at = NOW(),
+        
+        -- Chỉ số cơ bản
+        pulse = COALESCE((p_data->>'pulse')::INT, pulse),
+        temperature = COALESCE((p_data->>'temperature')::NUMERIC, temperature),
+        sp02 = COALESCE((p_data->>'sp02')::INT, sp02),
+        respiratory_rate = COALESCE((p_data->>'respiratory_rate')::INT, respiratory_rate),
+        bp_systolic = COALESCE((p_data->>'bp_systolic')::INT, bp_systolic),
+        bp_diastolic = COALESCE((p_data->>'bp_diastolic')::INT, bp_diastolic),
+        weight = COALESCE((p_data->>'weight')::NUMERIC, weight),
+        height = COALESCE((p_data->>'height')::NUMERIC, height),
+        bmi = COALESCE((p_data->>'bmi')::NUMERIC, bmi),
+        head_circumference = COALESCE((p_data->>'head_circumference')::NUMERIC, head_circumference),
+        birth_weight = COALESCE((p_data->>'birth_weight')::NUMERIC, birth_weight),
+        birth_height = COALESCE((p_data->>'birth_height')::NUMERIC, birth_height),
+        
+        -- Lâm sàng
+        symptoms = COALESCE(p_data->>'symptoms', symptoms),
+        examination_summary = COALESCE(p_data->>'examination_summary', examination_summary),
+        diagnosis = COALESCE(p_data->>'diagnosis', diagnosis),
+        icd_code = COALESCE(p_data->>'icd_code', icd_code),
+        doctor_notes = COALESCE(p_data->>'doctor_notes', doctor_notes),
+        
+        -- [NEW] Chuyên sâu
+        fontanelle = COALESCE(p_data->>'fontanelle', fontanelle),
+        reflexes = COALESCE(p_data->>'reflexes', reflexes),
+        jaundice = COALESCE(p_data->>'jaundice', jaundice),
+        feeding_status = COALESCE(p_data->>'feeding_status', feeding_status),
+        dental_status = COALESCE(p_data->>'dental_status', dental_status),
+        motor_development = COALESCE(p_data->>'motor_development', motor_development),
+        language_development = COALESCE(p_data->>'language_development', language_development),
+        puberty_stage = COALESCE(p_data->>'puberty_stage', puberty_stage),
+        scoliosis_status = COALESCE(p_data->>'scoliosis_status', scoliosis_status),
+        visual_acuity_left = COALESCE(p_data->>'visual_acuity_left', visual_acuity_left),
+        visual_acuity_right = COALESCE(p_data->>'visual_acuity_right', visual_acuity_right),
+        lifestyle_alcohol = COALESCE((p_data->>'lifestyle_alcohol')::BOOLEAN, lifestyle_alcohol),
+        lifestyle_smoking = COALESCE((p_data->>'lifestyle_smoking')::BOOLEAN, lifestyle_smoking),
+        
+        -- Cho phép update trạng thái nếu có gửi lên (VD: 'completed')
+        status = COALESCE(p_data->>'status', status)
+    WHERE id = p_visit_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_outbound_package_count"("p_order_id" "uuid", "p_count" integer) RETURNS "jsonb"
@@ -12122,7 +12337,9 @@ CREATE TABLE IF NOT EXISTS "public"."appointments" (
     "priority" "text" DEFAULT 'normal'::"text",
     "contact_status" "text" DEFAULT 'pending'::"text",
     "room_id" bigint,
-    "service_ids" bigint[] DEFAULT '{}'::bigint[]
+    "service_ids" bigint[] DEFAULT '{}'::bigint[],
+    "created_by" "uuid",
+    "check_in_time" timestamp with time zone
 );
 
 
@@ -12327,6 +12544,35 @@ CREATE TABLE IF NOT EXISTS "public"."chart_of_accounts" (
 
 
 ALTER TABLE "public"."chart_of_accounts" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."clinical_prescription_items" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "prescription_id" "uuid",
+    "product_id" bigint,
+    "product_unit_id" bigint,
+    "quantity" numeric NOT NULL,
+    "usage_note" "text",
+    "unit_price_snapshot" numeric DEFAULT 0
+);
+
+
+ALTER TABLE "public"."clinical_prescription_items" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."clinical_prescriptions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "visit_id" "uuid",
+    "customer_id" bigint,
+    "doctor_id" "uuid",
+    "code" "text",
+    "advice" "text",
+    "re_exam_date" "date",
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."clinical_prescriptions" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."clinical_queues" (
@@ -13165,6 +13411,52 @@ ALTER TABLE "public"."inventory_transfers" ALTER COLUMN "id" ADD GENERATED BY DE
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."medical_visits" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "appointment_id" "uuid",
+    "customer_id" bigint,
+    "doctor_id" "uuid",
+    "created_by" "uuid",
+    "updated_by" "uuid",
+    "pulse" integer,
+    "temperature" numeric(4,1),
+    "sp02" integer,
+    "respiratory_rate" integer,
+    "bp_systolic" integer,
+    "bp_diastolic" integer,
+    "weight" numeric(5,2),
+    "height" numeric(5,2),
+    "bmi" numeric(4,2),
+    "head_circumference" numeric(4,1),
+    "birth_weight" numeric(5,2),
+    "birth_height" numeric(5,2),
+    "symptoms" "text",
+    "examination_summary" "text",
+    "diagnosis" "text",
+    "icd_code" "text",
+    "doctor_notes" "text",
+    "status" "text" DEFAULT 'in_progress'::"text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "fontanelle" "text",
+    "reflexes" "text",
+    "jaundice" "text",
+    "feeding_status" "text",
+    "dental_status" "text",
+    "motor_development" "text",
+    "language_development" "text",
+    "puberty_stage" "text",
+    "scoliosis_status" "text",
+    "visual_acuity_left" "text",
+    "visual_acuity_right" "text",
+    "lifestyle_alcohol" boolean,
+    "lifestyle_smoking" boolean
+);
+
+
+ALTER TABLE "public"."medical_visits" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."notifications" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "user_id" "uuid" NOT NULL,
@@ -13256,6 +13548,7 @@ CREATE TABLE IF NOT EXISTS "public"."prescription_template_items" (
     "product_id" bigint NOT NULL,
     "quantity" integer NOT NULL,
     "usage_instruction" "text" NOT NULL,
+    "product_unit_id" bigint,
     CONSTRAINT "prescription_template_items_quantity_check" CHECK (("quantity" > 0))
 );
 
@@ -14404,6 +14697,16 @@ ALTER TABLE ONLY "public"."chart_of_accounts"
 
 
 
+ALTER TABLE ONLY "public"."clinical_prescription_items"
+    ADD CONSTRAINT "clinical_prescription_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."clinical_prescriptions"
+    ADD CONSTRAINT "clinical_prescriptions_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."clinical_queues"
     ADD CONSTRAINT "clinical_queues_pkey" PRIMARY KEY ("id");
 
@@ -14586,6 +14889,16 @@ ALTER TABLE ONLY "public"."inventory_transfers"
 
 ALTER TABLE ONLY "public"."inventory_transfers"
     ADD CONSTRAINT "inventory_transfers_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."medical_visits"
+    ADD CONSTRAINT "medical_visits_appointment_id_key" UNIQUE ("appointment_id");
+
+
+
+ALTER TABLE ONLY "public"."medical_visits"
+    ADD CONSTRAINT "medical_visits_pkey" PRIMARY KEY ("id");
 
 
 
@@ -14945,6 +15258,10 @@ CREATE INDEX "idx_allocations_po" ON "public"."finance_invoice_allocations" USIN
 
 
 CREATE INDEX "idx_appointments_appointment_time" ON "public"."appointments" USING "btree" ("appointment_time");
+
+
+
+CREATE INDEX "idx_appointments_created_by" ON "public"."appointments" USING "btree" ("created_by");
 
 
 
@@ -15444,7 +15761,15 @@ CREATE OR REPLACE TRIGGER "trg_auto_refresh_segment" AFTER UPDATE ON "public"."c
 
 
 
+CREATE OR REPLACE TRIGGER "trg_auto_sync_order_payment" AFTER INSERT OR UPDATE ON "public"."finance_transactions" FOR EACH ROW EXECUTE FUNCTION "public"."trigger_sync_order_payment"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_notify_payment" AFTER INSERT OR UPDATE ON "public"."finance_transactions" FOR EACH ROW EXECUTE FUNCTION "public"."notify_sales_on_payment"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_set_check_in_time" BEFORE UPDATE ON "public"."appointments" FOR EACH ROW EXECUTE FUNCTION "public"."trigger_update_check_in_time"();
 
 
 
@@ -15457,6 +15782,11 @@ CREATE OR REPLACE TRIGGER "trg_update_customer_debt" AFTER INSERT OR DELETE OR U
 
 
 CREATE OR REPLACE TRIGGER "trg_update_debt_from_orders" AFTER UPDATE ON "public"."orders" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trigger_update_debt_from_orders"();
+
+
+
+ALTER TABLE ONLY "public"."appointments"
+    ADD CONSTRAINT "appointments_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id");
 
 
 
@@ -15517,6 +15847,36 @@ ALTER TABLE ONLY "public"."batches"
 
 ALTER TABLE ONLY "public"."chart_of_accounts"
     ADD CONSTRAINT "chart_of_accounts_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "public"."chart_of_accounts"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."clinical_prescription_items"
+    ADD CONSTRAINT "clinical_prescription_items_prescription_id_fkey" FOREIGN KEY ("prescription_id") REFERENCES "public"."clinical_prescriptions"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."clinical_prescription_items"
+    ADD CONSTRAINT "clinical_prescription_items_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id");
+
+
+
+ALTER TABLE ONLY "public"."clinical_prescription_items"
+    ADD CONSTRAINT "clinical_prescription_items_product_unit_id_fkey" FOREIGN KEY ("product_unit_id") REFERENCES "public"."product_units"("id");
+
+
+
+ALTER TABLE ONLY "public"."clinical_prescriptions"
+    ADD CONSTRAINT "clinical_prescriptions_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id");
+
+
+
+ALTER TABLE ONLY "public"."clinical_prescriptions"
+    ADD CONSTRAINT "clinical_prescriptions_doctor_id_fkey" FOREIGN KEY ("doctor_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."clinical_prescriptions"
+    ADD CONSTRAINT "clinical_prescriptions_visit_id_fkey" FOREIGN KEY ("visit_id") REFERENCES "public"."medical_visits"("id");
 
 
 
@@ -15785,6 +16145,31 @@ ALTER TABLE ONLY "public"."inventory_transfers"
 
 
 
+ALTER TABLE ONLY "public"."medical_visits"
+    ADD CONSTRAINT "medical_visits_appointment_id_fkey" FOREIGN KEY ("appointment_id") REFERENCES "public"."appointments"("id");
+
+
+
+ALTER TABLE ONLY "public"."medical_visits"
+    ADD CONSTRAINT "medical_visits_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."medical_visits"
+    ADD CONSTRAINT "medical_visits_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id");
+
+
+
+ALTER TABLE ONLY "public"."medical_visits"
+    ADD CONSTRAINT "medical_visits_doctor_id_fkey" FOREIGN KEY ("doctor_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."medical_visits"
+    ADD CONSTRAINT "medical_visits_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "auth"."users"("id");
+
+
+
 ALTER TABLE ONLY "public"."notifications"
     ADD CONSTRAINT "notifications_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
 
@@ -15836,7 +16221,17 @@ ALTER TABLE ONLY "public"."prescription_template_items"
 
 
 ALTER TABLE ONLY "public"."prescription_template_items"
+    ADD CONSTRAINT "prescription_template_items_product_unit_id_fkey" FOREIGN KEY ("product_unit_id") REFERENCES "public"."product_units"("id");
+
+
+
+ALTER TABLE ONLY "public"."prescription_template_items"
     ADD CONSTRAINT "prescription_template_items_template_id_fkey" FOREIGN KEY ("template_id") REFERENCES "public"."prescription_templates"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."prescription_templates"
+    ADD CONSTRAINT "prescription_templates_doctor_id_fkey" FOREIGN KEY ("doctor_id") REFERENCES "auth"."users"("id");
 
 
 
@@ -16411,6 +16806,12 @@ ALTER TABLE "public"."batches" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."chart_of_accounts" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."clinical_prescription_items" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."clinical_prescriptions" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."clinical_queues" ENABLE ROW LEVEL SECURITY;
 
 
@@ -16478,6 +16879,9 @@ ALTER TABLE "public"."inventory_transfer_items" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."inventory_transfers" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."medical_visits" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."notifications" ENABLE ROW LEVEL SECURITY;
@@ -17060,6 +17464,12 @@ GRANT ALL ON FUNCTION "public"."create_inventory_receipt"("p_po_id" bigint, "p_w
 GRANT ALL ON FUNCTION "public"."create_manual_transfer"("p_source_warehouse_id" bigint, "p_dest_warehouse_id" bigint, "p_note" "text", "p_items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_manual_transfer"("p_source_warehouse_id" bigint, "p_dest_warehouse_id" bigint, "p_note" "text", "p_items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_manual_transfer"("p_source_warehouse_id" bigint, "p_dest_warehouse_id" bigint, "p_note" "text", "p_items" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."create_medical_visit"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_data" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_medical_visit"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_data" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_medical_visit"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_data" "jsonb") TO "service_role";
 
 
 
@@ -18101,6 +18511,18 @@ GRANT ALL ON FUNCTION "public"."trigger_refresh_on_criteria_change"() TO "servic
 
 
 
+GRANT ALL ON FUNCTION "public"."trigger_sync_order_payment"() TO "anon";
+GRANT ALL ON FUNCTION "public"."trigger_sync_order_payment"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."trigger_sync_order_payment"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."trigger_update_check_in_time"() TO "anon";
+GRANT ALL ON FUNCTION "public"."trigger_update_check_in_time"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."trigger_update_check_in_time"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."unaccent"("text") TO "postgres";
 GRANT ALL ON FUNCTION "public"."unaccent"("text") TO "anon";
 GRANT ALL ON FUNCTION "public"."unaccent"("text") TO "authenticated";
@@ -18162,6 +18584,12 @@ GRANT ALL ON FUNCTION "public"."update_inventory_check_info"("p_check_id" bigint
 GRANT ALL ON FUNCTION "public"."update_inventory_check_item_quantity"("p_item_id" bigint, "p_actual_quantity" numeric) TO "anon";
 GRANT ALL ON FUNCTION "public"."update_inventory_check_item_quantity"("p_item_id" bigint, "p_actual_quantity" numeric) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_inventory_check_item_quantity"("p_item_id" bigint, "p_actual_quantity" numeric) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") TO "service_role";
 
 
 
@@ -18404,6 +18832,18 @@ GRANT ALL ON SEQUENCE "public"."batches_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."chart_of_accounts" TO "anon";
 GRANT ALL ON TABLE "public"."chart_of_accounts" TO "authenticated";
 GRANT ALL ON TABLE "public"."chart_of_accounts" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."clinical_prescription_items" TO "anon";
+GRANT ALL ON TABLE "public"."clinical_prescription_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."clinical_prescription_items" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."clinical_prescriptions" TO "anon";
+GRANT ALL ON TABLE "public"."clinical_prescriptions" TO "authenticated";
+GRANT ALL ON TABLE "public"."clinical_prescriptions" TO "service_role";
 
 
 
@@ -18710,6 +19150,12 @@ GRANT ALL ON TABLE "public"."inventory_transfers" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."inventory_transfers_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."inventory_transfers_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."inventory_transfers_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."medical_visits" TO "anon";
+GRANT ALL ON TABLE "public"."medical_visits" TO "authenticated";
+GRANT ALL ON TABLE "public"."medical_visits" TO "service_role";
 
 
 

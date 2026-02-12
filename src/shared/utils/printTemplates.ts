@@ -418,3 +418,88 @@ export const printAppointmentSlip = (appt: any) => {
       }, 500);
   }
 };
+
+// 6. IN PHIẾU KHÁM BỆNH (A4)
+export const printMedicalVisit = (data: any) => {
+  // data bao gồm: patientInfo, vitals, clinical, prescriptionItems, doctorName
+  const win = window.open('', '', 'height=700,width=900');
+  if (!win) return;
+
+  const rows = data.prescriptionItems?.map((item: any, idx: number) => `
+    <tr>
+        <td style="text-align: center">${idx + 1}</td>
+        <td>
+            <b>${item.product_name}</b><br>
+            <i style="font-size: 11px">${item.usage_note || ''}</i>
+        </td>
+        <td style="text-align: center">${item.quantity} ${item.unit_name}</td>
+    </tr>
+  `).join('');
+
+  const content = `
+    <html>
+      <head>
+        <title>Phiếu Khám Bệnh</title>
+        <style>
+          body { font-family: 'Times New Roman', serif; padding: 20px; }
+          .title { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 20px; }
+          .section { margin-bottom: 15px; }
+          .label { font-weight: bold; width: 100px; display: inline-block; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th, td { border: 1px solid #333; padding: 5px; }
+          .footer { margin-top: 30px; text-align: right; }
+        </style>
+      </head>
+      <body>
+        <div class="title">PHIẾU KẾT QUẢ KHÁM BỆNH</div>
+        
+        <div class="section">
+          <div><span class="label">Họ tên:</span> ${data.patientInfo.full_name || data.patientInfo.name} (${data.patientInfo.gender === 'male' ? 'Nam' : 'Nữ'})</div>
+          <div><span class="label">Năm sinh:</span> ${new Date(data.patientInfo.dob).getFullYear()} (${new Date().getFullYear() - new Date(data.patientInfo.dob).getFullYear()} tuổi)</div>
+          <div><span class="label">Địa chỉ:</span> ${data.patientInfo.address || '...'}</div>
+        </div>
+
+        <div class="section">
+          <b>1. KHÁM LÂM SÀNG:</b><br>
+          - Cân nặng: ${data.vitals?.weight || '_'} kg | Chiều cao: ${data.vitals?.height || '_'} cm<br>
+          - Huyết áp: ${data.vitals?.bp_systolic || '_'}/${data.vitals?.bp_diastolic || '_'} mmHg | Mạch: ${data.vitals?.pulse || '_'} l/p<br>
+          - Triệu chứng: ${data.clinical?.symptoms || ''}<br>
+          - Chẩn đoán: <b>${data.clinical?.diagnosis || ''}</b>
+        </div>
+
+        <div class="section">
+          <b>2. CHỈ ĐỊNH ĐIỀU TRỊ (ĐƠN THUỐC):</b>
+          <table>
+            <thead>
+                <tr>
+                    <th width="5%">STT</th>
+                    <th>Tên thuốc / Cách dùng</th>
+                    <th width="15%">Số lượng</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <b>3. LỜI DẶN:</b><br>
+          ${data.clinical?.doctor_notes || 'Không có lời dặn đặc biệt.'}<br>
+          ${data.reExamDate ? `<b>Hẹn tái khám ngày: ${new Date(data.reExamDate).toLocaleDateString('vi-VN')}</b>` : ''}
+        </div>
+
+        <div class="footer">
+          <div>
+            <i>Ngày ${new Date().getDate()} tháng ${new Date().getMonth() + 1} năm ${new Date().getFullYear()}</i><br>
+            <b>BÁC SĨ ĐIỀU TRỊ</b><br>
+            <br><br><br>
+            ${data.doctorName || 'Ký tên'}
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  win.document.write(content);
+  win.document.close();
+  win.print();
+};
