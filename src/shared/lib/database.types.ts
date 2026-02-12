@@ -558,6 +558,76 @@ export type Database = {
           },
         ]
       }
+      clinical_service_requests: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          doctor_id: string | null
+          id: number
+          imaging_result: string | null
+          medical_visit_id: string | null
+          patient_id: number | null
+          results_json: Json | null
+          service_name_snapshot: string | null
+          service_package_id: number | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          doctor_id?: string | null
+          id?: number
+          imaging_result?: string | null
+          medical_visit_id?: string | null
+          patient_id?: number | null
+          results_json?: Json | null
+          service_name_snapshot?: string | null
+          service_package_id?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          doctor_id?: string | null
+          id?: number
+          imaging_result?: string | null
+          medical_visit_id?: string | null
+          patient_id?: number | null
+          results_json?: Json | null
+          service_name_snapshot?: string | null
+          service_package_id?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinical_service_requests_medical_visit_id_fkey"
+            columns: ["medical_visit_id"]
+            isOneToOne: false
+            referencedRelation: "medical_visits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinical_service_requests_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinical_service_requests_service_package_id_fkey"
+            columns: ["service_package_id"]
+            isOneToOne: false
+            referencedRelation: "service_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connect_comments: {
         Row: {
           content: string
@@ -1995,6 +2065,7 @@ export type Database = {
           motor_development: string | null
           puberty_stage: string | null
           pulse: number | null
+          red_flags: Json | null
           reflexes: string | null
           respiratory_rate: number | null
           scoliosis_status: string | null
@@ -2004,6 +2075,7 @@ export type Database = {
           temperature: number | null
           updated_at: string | null
           updated_by: string | null
+          vac_screening: Json | null
           visual_acuity_left: string | null
           visual_acuity_right: string | null
           weight: number | null
@@ -2036,6 +2108,7 @@ export type Database = {
           motor_development?: string | null
           puberty_stage?: string | null
           pulse?: number | null
+          red_flags?: Json | null
           reflexes?: string | null
           respiratory_rate?: number | null
           scoliosis_status?: string | null
@@ -2045,6 +2118,7 @@ export type Database = {
           temperature?: number | null
           updated_at?: string | null
           updated_by?: string | null
+          vac_screening?: Json | null
           visual_acuity_left?: string | null
           visual_acuity_right?: string | null
           weight?: number | null
@@ -2077,6 +2151,7 @@ export type Database = {
           motor_development?: string | null
           puberty_stage?: string | null
           pulse?: number | null
+          red_flags?: Json | null
           reflexes?: string | null
           respiratory_rate?: number | null
           scoliosis_status?: string | null
@@ -2086,6 +2161,7 @@ export type Database = {
           temperature?: number | null
           updated_at?: string | null
           updated_by?: string | null
+          vac_screening?: Json | null
           visual_acuity_left?: string | null
           visual_acuity_right?: string | null
           weight?: number | null
@@ -2103,6 +2179,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medical_visits_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -5791,10 +5874,12 @@ export type Database = {
         Args: { p_actual_quantity: number; p_item_id: number }
         Returns: Json
       }
-      update_medical_visit: {
-        Args: { p_data: Json; p_visit_id: string }
-        Returns: undefined
-      }
+      update_medical_visit:
+        | { Args: { p_data: Json; p_visit_id: string }; Returns: undefined }
+        | {
+            Args: { p_data: Json; p_doctor_id?: string; p_visit_id: string }
+            Returns: undefined
+          }
       update_outbound_package_count: {
         Args: { p_count: number; p_order_id: string }
         Returns: Json
@@ -5962,6 +6047,7 @@ export type Database = {
         | "cancelled"
         | "checked_in"
         | "waiting"
+        | "examining"
       asset_status: "active" | "storage" | "repair" | "disposed"
       business_type:
         | "trade"
@@ -6153,6 +6239,7 @@ export const Constants = {
         "cancelled",
         "checked_in",
         "waiting",
+        "examining",
       ],
       asset_status: ["active", "storage", "repair", "disposed"],
       business_type: [

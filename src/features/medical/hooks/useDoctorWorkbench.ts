@@ -43,7 +43,11 @@ export const useDoctorWorkbench = () => {
         fontanelle: null, reflexes: null, jaundice: null, feeding_status: null,
         dental_status: null, motor_development: null, language_development: null,
         puberty_stage: null, scoliosis_status: null, visual_acuity_left: null, visual_acuity_right: null,
-        lifestyle_alcohol: false, lifestyle_smoking: false
+        lifestyle_alcohol: false, lifestyle_smoking: false,
+        
+        // NEW INTELLIGENCE FIELDS
+        red_flags: [] as string[],
+        vac_screening: {} as Record<string, string>
     });
 
     // Kê đơn
@@ -116,7 +120,11 @@ export const useDoctorWorkbench = () => {
                     visual_acuity_left: visitData.visual_acuity_left,
                     visual_acuity_right: visitData.visual_acuity_right,
                     lifestyle_alcohol: visitData.lifestyle_alcohol,
-                    lifestyle_smoking: visitData.lifestyle_smoking
+                    lifestyle_smoking: visitData.lifestyle_smoking,
+                    
+                    // Map new fields (Ensure they exist or default)
+                    red_flags: visitData.red_flags || [],
+                    vac_screening: visitData.vac_screening || {}
                 });
             }
 
@@ -250,6 +258,7 @@ export const useDoctorWorkbench = () => {
         serviceOrders, setServiceOrders,
         handleSave,
         handlePrint,
-        handleScheduleFollowUp
+        handleScheduleFollowUp,
+        medicalVisitId: visit.id
     };
 };

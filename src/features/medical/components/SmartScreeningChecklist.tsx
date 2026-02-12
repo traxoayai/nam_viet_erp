@@ -1,6 +1,6 @@
 // src/features/medical/components/SmartScreeningChecklist.tsx
-import React, { useState } from 'react';
-import { Card, Tag, Radio, Divider, Collapse, Badge, Alert } from 'antd';
+import React from 'react';
+import { Card, Tag, Radio, Collapse, Badge, Alert } from 'antd';
 import { ShieldAlert, Syringe } from 'lucide-react';
 import { CLINICAL_RED_FLAGS, VACCINATION_SCREENING } from '../constants/clinicalKnowledge';
 

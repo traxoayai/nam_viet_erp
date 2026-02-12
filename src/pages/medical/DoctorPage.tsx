@@ -1,8 +1,9 @@
 // src/pages/medical/DoctorPage.tsx
-import { useMemo } from 'react';
-import { Layout, Spin, Row, Col, Card, Input, Badge, message } from 'antd';
+import { useMemo, useState } from 'react';
+import { Layout, Spin, Row, Col, Card, Input, Badge, message, Button } from 'antd';
 import { useDoctorWorkbench } from '@/features/medical/hooks/useDoctorWorkbench';
 import dayjs from 'dayjs';
+import { FlaskConical } from 'lucide-react';
 
 // Blocks
 import { DoctorBlock1_PatientInfo } from '@/features/medical/components/DoctorBlock1_PatientInfo';
@@ -11,6 +12,12 @@ import { DoctorBlock4_Prescription } from '@/features/medical/components/DoctorB
 import { DoctorBlock5_Actions } from '@/features/medical/components/DoctorBlock5_Actions';
 import { SmartClinicalAssistant } from '@/features/medical/components/SmartClinicalAssistant';
 import { VitalInput } from '@/features/medical/components/VitalInput';
+import { SmartAdviceTags } from '@/features/medical/components/SmartAdviceTags';
+import { ParaclinicalResultsDrawer } from '@/features/medical/components/ParaclinicalResultsDrawer';
+
+// Hooks
+import { useRealtimeLabResults } from '@/features/medical/hooks/useRealtimeLabResults';
+import { supabase } from '@/shared/lib/supabaseClient';
 
 // Exam Forms
 import { ExamForm_Infant } from '@/features/medical/components/exam-forms/ExamForm_Infant';
@@ -30,8 +37,50 @@ const DoctorPage = () => {
         prescriptionItems, setPrescriptionItems,
         handleSave,
         handlePrint,
-        handleScheduleFollowUp
+        handleScheduleFollowUp,
+        medicalVisitId // Need this from hook if available, otherwise assume we have logic to get it or pass it
     } = useDoctorWorkbench();
+    
+    // Local state for Lab Results
+    const [openLabDrawer, setOpenLabDrawer] = useState(false);
+    const [labResults, setLabResults] = useState<any[]>([]);
+    const [imagingResults, setImagingResults] = useState('');
+
+    // Fetch Lab Results
+    const fetchLabResults = async () => {
+        if (!medicalVisitId) return;
+        
+        try {
+            const { data } = await supabase
+                .from('clinical_service_requests')
+                .select('*')
+                .eq('medical_visit_id', medicalVisitId)
+                .eq('status', 'completed');
+
+            if (data) {
+                // Map results for simple display (Mock logic for now as structure varies)
+                // Assuming result_json has standard structure or we parse it
+                const mappedTests = data.filter(d => d.category === 'lab').flatMap(d => {
+                     // Mock parsing logic - in real app parse d.results_json
+                     return d.results_json ? (d.results_json as any).tests : [];
+                });
+                
+                const imgRes = data.filter(d => d.category === 'imaging').map(d => d.imaging_result).join('\n\n');
+                
+                setLabResults(mappedTests);
+                setImagingResults(imgRes);
+                setOpenLabDrawer(true);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    // Realtime Listener
+    useRealtimeLabResults({
+        visitId: medicalVisitId || null, 
+        onResultReceived: fetchLabResults
+    });
 
     // 1. Calculate Age & Form Type
     const patientAge = useMemo(() => {
@@ -66,6 +115,24 @@ const DoctorPage = () => {
         }
     };
 
+    // [NEW LOGIC]: Xử lý khi bấm nút "Tái kê đơn"
+    const handleCopyPrescription = (oldItems: any[]) => {
+        // Map lại để xóa ID cũ (tạo ID mới khi lưu)
+        const newItems = oldItems.map(item => ({
+            product_id: item.product_id,
+            product_name: item.product_name,
+            product_unit_id: item.product_unit_id || 1, // Fallback nếu thiếu
+            unit_name: item.unit_name,
+            quantity: item.quantity,
+            usage_note: item.usage_note || '',
+            stock_quantity: 999 // Tạm thời bypass check tồn kho hoặc cần check lại API
+        }));
+        
+        // Gộp vào danh sách hiện tại (hoặc thay thế tùy ý, ở đây là Append)
+        setPrescriptionItems([...prescriptionItems, ...newItems]);
+        message.success(`Đã thêm ${newItems.length} thuốc vào đơn hiện tại.`);
+    };
+
     if (loading && !patientInfo) {
         return <div className="h-screen flex items-center justify-center"><Spin size="large" tip="Đang tải dữ liệu..." /></div>
     }
@@ -75,8 +142,26 @@ const DoctorPage = () => {
             <Content className="w-full p-4">
                 
                 {/* ROW 1: HEADER (Sticky) */}
-                <div className="sticky top-0 z-50 mb-4">
-                    <DoctorBlock1_PatientInfo patient={patientInfo} />
+                <div className="sticky top-0 z-50 mb-4 flex justify-between items-start gap-4">
+                    <div className="flex-1">
+                        <DoctorBlock1_PatientInfo 
+                            patient={patientInfo} 
+                            onCopyPrescription={handleCopyPrescription}
+                        />
+                    </div>
+                    {/* LAB RESULTS BUTTON */}
+                    <Button 
+                        type="primary" 
+                        danger 
+                        icon={<FlaskConical size={16} />}
+                        onClick={() => {
+                            fetchLabResults();
+                            setOpenLabDrawer(true);
+                        }}
+                        className="shadow-md animate-pulse"
+                    >
+                        Xem KQ Xét Nghiệm
+                    </Button>
                 </div>
                 
                 {/* 1.5 SMART ASSISTANT */}
@@ -225,31 +310,50 @@ const DoctorPage = () => {
                                     value={clinical.diagnosis}
                                     onChange={e => setClinical({...clinical, diagnosis: e.target.value})}
                                 />
-                                <TextArea 
-                                    placeholder="Lời dặn bác sĩ / Kết luận điều trị..."
-                                    value={clinical.doctor_notes}
-                                    onChange={e => setClinical({...clinical, doctor_notes: e.target.value})}
-                                    rows={4}
-                                />
+                                
+                                <div>
+                                    <TextArea 
+                                        placeholder="Lời dặn bác sĩ / Kết luận điều trị..."
+                                        value={clinical.doctor_notes}
+                                        onChange={e => setClinical({...clinical, doctor_notes: e.target.value})}
+                                        rows={4}
+                                    />
+                                    {/* NEW: SMART ADVICE TAGS */}
+                                    <SmartAdviceTags 
+                                        diagnosis={clinical.diagnosis} 
+                                        currentNotes={clinical.doctor_notes}
+                                        onAddNote={(newNote) => setClinical(prev => ({ ...prev, doctor_notes: newNote }))}
+                                    />
+                                </div>
                             </div>
                          </Card>
 
                          <DoctorBlock4_Prescription 
                             items={prescriptionItems}
                             setItems={setPrescriptionItems}
+                            patientAllergies={patientInfo?.allergies}
                          />
                     </Col>
                 </Row>
 
                 {/* ACTION BAR (Sticky Bottom) */}
                 <DoctorBlock5_Actions 
-                onSave={handleSave} 
-                onPrint={handlePrint}
-                onScheduleFollowUp={handleScheduleFollowUp}
-                loading={loading}
-            /></Content>
+                    onSave={handleSave} 
+                    onPrint={handlePrint}
+                    onScheduleFollowUp={handleScheduleFollowUp}
+                    loading={loading}
+                />
+
+                {/* REALTIME LAB DRAWER */}
+                <ParaclinicalResultsDrawer 
+                    open={openLabDrawer}
+                    onClose={() => setOpenLabDrawer(false)}
+                    patientName={patientInfo?.name || 'Bệnh nhân'}
+                    bloodTests={labResults}
+                    imagingResults={imagingResults}
+                />
+            </Content>
         </Layout>
     );
 };
-
 export default DoctorPage;

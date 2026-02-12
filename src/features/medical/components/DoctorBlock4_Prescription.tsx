@@ -2,7 +2,7 @@
 // src/features/medical/components/DoctorBlock4_Prescription.tsx
 import React, { useState } from 'react';
 import { Card, Button, Modal, List } from 'antd';
-import { CheckCircleOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { Pill, FileText } from 'lucide-react';
 import { DoctorPrescriptionSearch } from './DoctorPrescriptionSearch';
 import { DoctorPrescriptionTable } from './DoctorPrescriptionTable';
@@ -12,9 +12,10 @@ import { PosProductSearchResult } from '@/features/pos/types/pos.types';
 interface Props {
   items: ClinicalPrescriptionItem[];
   setItems: (items: ClinicalPrescriptionItem[]) => void;
+  patientAllergies?: string;
 }
 
-export const DoctorBlock4_Prescription: React.FC<Props> = ({ items, setItems }) => {
+export const DoctorBlock4_Prescription: React.FC<Props> = ({ items, setItems, patientAllergies }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // MOCK TEMPLATES
@@ -36,20 +37,18 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({ items, setItems }) 
   ];
 
   const applyTemplate = (tpl: any) => {
-       // Merge logic: Add new items, skip if exist (or merge qty?)
-       // Here we simply append non-existing items
        const newItems = [...items];
        tpl.items.forEach((tItem: any) => {
            const exist = newItems.find(i => i.product_id === tItem.product_id);
            if (!exist) {
-               newItems.push({ ...tItem, product_unit_id: 1 }); // Mock unit_id
+               newItems.push({ ...tItem, product_unit_id: 1 }); 
            }
        });
        setItems(newItems);
        setIsModalOpen(false);
   };
   
-  const handleSelectProduct = (product: PosProductSearchResult) => {
+  const addProductToTable = (product: PosProductSearchResult) => {
       // Check duplicate
       const exist = items.find(i => i.product_id === product.id);
       if (exist) {
@@ -60,7 +59,7 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({ items, setItems }) 
           const newItem: ClinicalPrescriptionItem = {
               product_id: product.id,
               product_name: product.name,
-              product_unit_id: 1, // Hack: POS search result need unit_id, assume 1 or fix RPC later
+              product_unit_id: 1, 
               unit_name: product.unit,
               quantity: 1,
               usage_note: '',
@@ -68,6 +67,41 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({ items, setItems }) 
           };
           setItems([...items, newItem]);
       }
+  };
+
+  const handleSelectProduct = (product: PosProductSearchResult) => {
+      // --- START: SAFETY CHECK ---
+      if (patientAllergies) {
+          const allergies = patientAllergies.toLowerCase();
+          const drugName = product.name.toLowerCase();
+          
+          // Logic check đơn giản (Thực tế cần check theo hoạt chất)
+          const isAllergic = 
+             (allergies.includes('penicillin') && (drugName.includes('amoxicillin') || drugName.includes('augmentin'))) ||
+             (allergies.includes('paracetamol') && drugName.includes('para'));
+
+          if (isAllergic) {
+              Modal.confirm({
+                  title: 'CẢNH BÁO DỊ ỨNG THUỐC',
+                  icon: <WarningOutlined className="text-red-600" />,
+                  content: (
+                    <div>
+                        <p>Bệnh nhân có tiền sử dị ứng: <span className="font-bold text-red-600">{patientAllergies}</span></p>
+                        <p>Thuốc bạn chọn: <span className="font-bold">{product.name}</span></p>
+                        <p>Bạn có chắc chắn muốn kê thuốc này không?</p>
+                    </div>
+                  ),
+                  okText: 'Vẫn kê (Tôi chịu trách nhiệm)',
+                  okType: 'danger',
+                  cancelText: 'Hủy bỏ',
+                  onOk: () => addProductToTable(product)
+              });
+              return;
+          }
+      }
+      // --- END: SAFETY CHECK ---
+
+      addProductToTable(product);
   };
 
   return (

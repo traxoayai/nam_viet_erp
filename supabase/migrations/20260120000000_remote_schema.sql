@@ -119,7 +119,8 @@ CREATE TYPE "public"."appointment_status" AS ENUM (
     'completed',
     'cancelled',
     'checked_in',
-    'waiting'
+    'waiting',
+    'examining'
 );
 
 
@@ -3546,29 +3547,27 @@ DECLARE
     v_visit_id UUID;
     v_doctor_id UUID;
 BEGIN
-    -- Lấy ID bác sĩ từ người đang đăng nhập (hoặc từ appointment nếu cần logic khác)
     v_doctor_id := auth.uid();
 
     INSERT INTO public.medical_visits (
         appointment_id, customer_id, doctor_id, created_by, status,
         
-        -- Chỉ số cơ bản
         pulse, temperature, sp02, respiratory_rate, bp_systolic, bp_diastolic,
         weight, height, bmi, head_circumference, birth_weight, birth_height,
         
-        -- Lâm sàng chung
         symptoms, examination_summary, diagnosis, icd_code, doctor_notes,
         
-        -- [NEW] Chuyên sâu Nhi & Dậy thì
         fontanelle, reflexes, jaundice, feeding_status,
         dental_status, motor_development, language_development,
         puberty_stage, scoliosis_status, visual_acuity_left, visual_acuity_right,
-        lifestyle_alcohol, lifestyle_smoking
+        lifestyle_alcohol, lifestyle_smoking,
+        
+        -- [CDSS UPGRADE] Hứng dữ liệu thông minh
+        red_flags, vac_screening
     )
     VALUES (
         p_appointment_id, p_customer_id, v_doctor_id, v_doctor_id, 'in_progress',
         
-        -- Parse JSON Phẳng
         (p_data->>'pulse')::INT, (p_data->>'temperature')::NUMERIC, (p_data->>'sp02')::INT, (p_data->>'respiratory_rate')::INT,
         (p_data->>'bp_systolic')::INT, (p_data->>'bp_diastolic')::INT,
         (p_data->>'weight')::NUMERIC, (p_data->>'height')::NUMERIC, (p_data->>'bmi')::NUMERIC,
@@ -3576,17 +3575,18 @@ BEGIN
         
         p_data->>'symptoms', p_data->>'examination_summary', p_data->>'diagnosis', p_data->>'icd_code', p_data->>'doctor_notes',
         
-        -- [NEW] Mapping phẳng 1-1
         p_data->>'fontanelle', p_data->>'reflexes', p_data->>'jaundice', p_data->>'feeding_status',
         p_data->>'dental_status', p_data->>'motor_development', p_data->>'language_development',
         p_data->>'puberty_stage', p_data->>'scoliosis_status', p_data->>'visual_acuity_left', p_data->>'visual_acuity_right',
-        (p_data->>'lifestyle_alcohol')::BOOLEAN, (p_data->>'lifestyle_smoking')::BOOLEAN
+        (p_data->>'lifestyle_alcohol')::BOOLEAN, (p_data->>'lifestyle_smoking')::BOOLEAN,
+        
+        -- [CDSS UPGRADE] Lưu dạng JSONB trực tiếp (dùng toán tử -> thay vì ->>)
+        COALESCE(p_data->'red_flags', '[]'::jsonb),
+        COALESCE(p_data->'vac_screening', '{}'::jsonb)
     )
     RETURNING id INTO v_visit_id;
 
-    -- Update trạng thái Appointment thành 'examining'
     UPDATE public.appointments SET status = 'examining' WHERE id = p_appointment_id;
-    -- Update trạng thái Queue
     UPDATE public.clinical_queues SET status = 'examining' WHERE appointment_id = p_appointment_id;
 
     RETURN v_visit_id;
@@ -11421,6 +11421,64 @@ $$;
 ALTER FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb", "p_doctor_id" "uuid" DEFAULT NULL::"uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    UPDATE public.medical_visits
+    SET
+        updated_by = auth.uid(),
+        updated_at = NOW(),
+        
+        doctor_id = COALESCE(p_doctor_id, doctor_id),
+        
+        pulse = COALESCE((p_data->>'pulse')::INT, pulse),
+        temperature = COALESCE((p_data->>'temperature')::NUMERIC, temperature),
+        sp02 = COALESCE((p_data->>'sp02')::INT, sp02),
+        respiratory_rate = COALESCE((p_data->>'respiratory_rate')::INT, respiratory_rate),
+        bp_systolic = COALESCE((p_data->>'bp_systolic')::INT, bp_systolic),
+        bp_diastolic = COALESCE((p_data->>'bp_diastolic')::INT, bp_diastolic),
+        weight = COALESCE((p_data->>'weight')::NUMERIC, weight),
+        height = COALESCE((p_data->>'height')::NUMERIC, height),
+        bmi = COALESCE((p_data->>'bmi')::NUMERIC, bmi),
+        head_circumference = COALESCE((p_data->>'head_circumference')::NUMERIC, head_circumference),
+        birth_weight = COALESCE((p_data->>'birth_weight')::NUMERIC, birth_weight),
+        birth_height = COALESCE((p_data->>'birth_height')::NUMERIC, birth_height),
+        
+        symptoms = COALESCE(p_data->>'symptoms', symptoms),
+        examination_summary = COALESCE(p_data->>'examination_summary', examination_summary),
+        diagnosis = COALESCE(p_data->>'diagnosis', diagnosis),
+        icd_code = COALESCE(p_data->>'icd_code', icd_code),
+        doctor_notes = COALESCE(p_data->>'doctor_notes', doctor_notes),
+        
+        fontanelle = COALESCE(p_data->>'fontanelle', fontanelle),
+        reflexes = COALESCE(p_data->>'reflexes', reflexes),
+        jaundice = COALESCE(p_data->>'jaundice', jaundice),
+        feeding_status = COALESCE(p_data->>'feeding_status', feeding_status),
+        dental_status = COALESCE(p_data->>'dental_status', dental_status),
+        motor_development = COALESCE(p_data->>'motor_development', motor_development),
+        language_development = COALESCE(p_data->>'language_development', language_development),
+        puberty_stage = COALESCE(p_data->>'puberty_stage', puberty_stage),
+        scoliosis_status = COALESCE(p_data->>'scoliosis_status', scoliosis_status),
+        visual_acuity_left = COALESCE(p_data->>'visual_acuity_left', visual_acuity_left),
+        visual_acuity_right = COALESCE(p_data->>'visual_acuity_right', visual_acuity_right),
+        lifestyle_alcohol = COALESCE((p_data->>'lifestyle_alcohol')::BOOLEAN, lifestyle_alcohol),
+        lifestyle_smoking = COALESCE((p_data->>'lifestyle_smoking')::BOOLEAN, lifestyle_smoking),
+        
+        -- [CDSS UPGRADE] Cập nhật mảng Cảnh báo & Sàng lọc tiêm chủng
+        red_flags = COALESCE(p_data->'red_flags', red_flags),
+        vac_screening = COALESCE(p_data->'vac_screening', vac_screening),
+        
+        status = COALESCE(p_data->>'status', status)
+    WHERE id = p_visit_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb", "p_doctor_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."update_outbound_package_count"("p_order_id" "uuid", "p_count" integer) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -12603,6 +12661,37 @@ ALTER TABLE "public"."clinical_queues" ALTER COLUMN "id" ADD GENERATED BY DEFAUL
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."clinical_service_requests" (
+    "id" bigint NOT NULL,
+    "medical_visit_id" "uuid",
+    "patient_id" bigint,
+    "doctor_id" "uuid",
+    "service_package_id" bigint,
+    "service_name_snapshot" "text",
+    "category" "text" DEFAULT 'lab'::"text",
+    "status" "text" DEFAULT 'pending'::"text",
+    "results_json" "jsonb" DEFAULT '{}'::"jsonb",
+    "imaging_result" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "created_by" "uuid"
+);
+
+
+ALTER TABLE "public"."clinical_service_requests" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."clinical_service_requests" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."clinical_service_requests_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."connect_comments" (
     "id" bigint NOT NULL,
     "post_id" bigint NOT NULL,
@@ -13450,7 +13539,9 @@ CREATE TABLE IF NOT EXISTS "public"."medical_visits" (
     "visual_acuity_left" "text",
     "visual_acuity_right" "text",
     "lifestyle_alcohol" boolean,
-    "lifestyle_smoking" boolean
+    "lifestyle_smoking" boolean,
+    "red_flags" "jsonb" DEFAULT '[]'::"jsonb",
+    "vac_screening" "jsonb" DEFAULT '{}'::"jsonb"
 );
 
 
@@ -14712,6 +14803,11 @@ ALTER TABLE ONLY "public"."clinical_queues"
 
 
 
+ALTER TABLE ONLY "public"."clinical_service_requests"
+    ADD CONSTRAINT "clinical_service_requests_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."connect_comments"
     ADD CONSTRAINT "connect_comments_pkey" PRIMARY KEY ("id");
 
@@ -15294,6 +15390,18 @@ CREATE INDEX "idx_clinical_queues_date" ON "public"."clinical_queues" USING "btr
 
 
 CREATE INDEX "idx_clinical_queues_status" ON "public"."clinical_queues" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_csr_patient" ON "public"."clinical_service_requests" USING "btree" ("patient_id");
+
+
+
+CREATE INDEX "idx_csr_status" ON "public"."clinical_service_requests" USING "btree" ("status") WHERE ("status" = 'pending'::"text");
+
+
+
+CREATE INDEX "idx_csr_visit" ON "public"."clinical_service_requests" USING "btree" ("medical_visit_id");
 
 
 
@@ -15895,6 +16003,31 @@ ALTER TABLE ONLY "public"."clinical_queues"
 
 
 
+ALTER TABLE ONLY "public"."clinical_service_requests"
+    ADD CONSTRAINT "clinical_service_requests_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."clinical_service_requests"
+    ADD CONSTRAINT "clinical_service_requests_doctor_id_fkey" FOREIGN KEY ("doctor_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."clinical_service_requests"
+    ADD CONSTRAINT "clinical_service_requests_medical_visit_id_fkey" FOREIGN KEY ("medical_visit_id") REFERENCES "public"."medical_visits"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."clinical_service_requests"
+    ADD CONSTRAINT "clinical_service_requests_patient_id_fkey" FOREIGN KEY ("patient_id") REFERENCES "public"."customers"("id");
+
+
+
+ALTER TABLE ONLY "public"."clinical_service_requests"
+    ADD CONSTRAINT "clinical_service_requests_service_package_id_fkey" FOREIGN KEY ("service_package_id") REFERENCES "public"."service_packages"("id");
+
+
+
 ALTER TABLE ONLY "public"."connect_comments"
     ADD CONSTRAINT "connect_comments_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."connect_posts"("id") ON DELETE CASCADE;
 
@@ -16161,7 +16294,7 @@ ALTER TABLE ONLY "public"."medical_visits"
 
 
 ALTER TABLE ONLY "public"."medical_visits"
-    ADD CONSTRAINT "medical_visits_doctor_id_fkey" FOREIGN KEY ("doctor_id") REFERENCES "auth"."users"("id");
+    ADD CONSTRAINT "medical_visits_doctor_id_fkey" FOREIGN KEY ("doctor_id") REFERENCES "public"."users"("id");
 
 
 
@@ -16620,6 +16753,10 @@ CREATE POLICY "Enable access for auth users" ON "public"."customer_segments" TO 
 
 
 
+CREATE POLICY "Enable access for authenticated users" ON "public"."clinical_service_requests" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Enable access for authenticated users" ON "public"."vendor_product_mappings" USING (("auth"."role"() = 'authenticated'::"text"));
 
 
@@ -16815,6 +16952,9 @@ ALTER TABLE "public"."clinical_prescriptions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."clinical_queues" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."clinical_service_requests" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."connect_comments" ENABLE ROW LEVEL SECURITY;
 
 
@@ -16971,6 +17111,10 @@ ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
 
 
 
+
+
+
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."clinical_service_requests";
 
 
 
@@ -18593,6 +18737,12 @@ GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_da
 
 
 
+GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb", "p_doctor_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb", "p_doctor_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb", "p_doctor_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."update_outbound_package_count"("p_order_id" "uuid", "p_count" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."update_outbound_package_count"("p_order_id" "uuid", "p_count" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_outbound_package_count"("p_order_id" "uuid", "p_count" integer) TO "service_role";
@@ -18856,6 +19006,18 @@ GRANT ALL ON TABLE "public"."clinical_queues" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."clinical_queues_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."clinical_queues_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."clinical_queues_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."clinical_service_requests" TO "anon";
+GRANT ALL ON TABLE "public"."clinical_service_requests" TO "authenticated";
+GRANT ALL ON TABLE "public"."clinical_service_requests" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."clinical_service_requests_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."clinical_service_requests_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."clinical_service_requests_id_seq" TO "service_role";
 
 
 

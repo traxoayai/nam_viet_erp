@@ -53,17 +53,49 @@ export const ExamForm_Infant: React.FC<Props> = ({ data, onChange, vitals, patie
   }, [vitals?.weight, data.birth_weight, patientDOB]);
 
   // 2. Logic Đánh giá (Interpreter)
-  const nutritionalStatus = useMemo(() => {
-      const current = chartData[chartData.length - 1];
-      if (!current || !current.weight) return null;
-      
-      // So sánh cân nặng thực tế với chuẩn
-      const diff = current.weight - current.who;
 
-      if (diff < -1.5) return { text: 'SUY DINH DƯỠNG / NHẸ CÂN', color: 'red', bg: 'bg-red-50' };
-      if (diff > 2.0) return { text: 'THỪA CÂN', color: 'orange', bg: 'bg-orange-50' };
-      return { text: 'PHÁT TRIỂN BÌNH THƯỜNG', color: 'green', bg: 'bg-green-50' };
-  }, [chartData]);
+const nutritionalStatus = useMemo(() => {
+    if (!chartData || chartData.length < 2) return null;
+    const current = chartData[chartData.length - 1]; 
+    if (!current.weight || !current.who) return null;
+
+    const diff = current.weight - current.who; 
+    const targetWeight = current.who; // Cân nặng lý tưởng (P50)
+
+    if (diff < -2.0) {
+        const needToGain = (targetWeight - current.weight).toFixed(1);
+        return { 
+            text: 'SUY DINH DƯỠNG NẶNG', 
+            color: 'red', 
+            bg: 'bg-red-50',
+            action: `Mục tiêu cấp bách: Cần tăng thêm ${needToGain} kg để bắt kịp đà tăng trưởng.`
+        };
+    }
+    if (diff > 2.0) {
+        return { 
+            text: 'BÉO PHÌ / THỪA CÂN', 
+            color: 'red', 
+            bg: 'bg-red-50',
+            action: `Khuyến nghị: Không ép giảm cân. Giữ nguyên ${current.weight}kg, tập trung phát triển chiều cao.`
+        };
+    }
+    if (diff < -1.0) {
+        const needToGain = (targetWeight - current.weight).toFixed(1);
+        return { 
+            text: 'NGUY CƠ SUY DINH DƯỠNG', 
+            color: 'orange', 
+            bg: 'bg-orange-50',
+            action: `Mục tiêu: Tăng thêm ${needToGain} kg để đạt mức lý tưởng.`
+        };
+    }
+    
+    return { 
+        text: 'PHÁT TRIỂN BÌNH THƯỜNG', 
+        color: 'green', 
+        bg: 'bg-green-50',
+        action: 'Tuyệt vời! Tiếp tục duy trì chế độ dinh dưỡng hiện tại.' 
+    };
+}, [chartData]);
 
   return (
     <div className="flex gap-4 p-2">
@@ -161,14 +193,15 @@ export const ExamForm_Infant: React.FC<Props> = ({ data, onChange, vitals, patie
                         </ResponsiveContainer>
                     </div>
 
-                    {/* KẾT LUẬN CỦA MÁY */}
+                    {/* NEW: ĐÁNH GIÁ & KHUYẾN NGHỊ */}
                     {nutritionalStatus && (
-                        <div className={`mt-2 p-3 text-center rounded border ${nutritionalStatus.bg}`}>
-                            <div className="text-xs text-gray-500 uppercase font-bold">Đánh giá sơ bộ</div>
-                            <div className={`text-lg font-black text-${nutritionalStatus.color}-600`}>
-                                {nutritionalStatus.text}
+                        <div className={`mt-2 p-3 text-center border rounded-md ${nutritionalStatus.bg} border-${nutritionalStatus.color}-200`}>
+                            <div className={`font-bold text-${nutritionalStatus.color}-700 text-sm mb-1`}>
+                               {nutritionalStatus.text.toUpperCase()}
                             </div>
-                            <div className="text-xs text-gray-400 italic mt-1">So với chuẩn WHO (P50)</div>
+                            <div className="text-xs text-gray-700 font-medium">
+                                {nutritionalStatus.action}
+                            </div>
                         </div>
                     )}
                 </>

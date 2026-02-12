@@ -8,6 +8,7 @@ import { ExamForm_Child } from './exam-forms/ExamForm_Child';
 import { ExamForm_Adolescent } from './exam-forms/ExamForm_Adolescent';
 import { ExamForm_Adult } from './exam-forms/ExamForm_Adult';
 import { VitalInput } from './VitalInput';
+import { SmartScreeningChecklist } from './SmartScreeningChecklist';
 
 interface Props {
   vitals: any;
@@ -31,7 +32,7 @@ export const DoctorBlock2_ClinicalExam: React.FC<Props> = ({ vitals, setVitals, 
       setVitals({ ...vitals, [key]: val });
   };
   
-  const handleClinicalChange = (key: string, val: string) => {
+  const handleClinicalChange = (key: string, val: any) => {
       setClinical({ ...clinical, [key]: val });
   };
 
@@ -104,8 +105,17 @@ export const DoctorBlock2_ClinicalExam: React.FC<Props> = ({ vitals, setVitals, 
                         placeholder="VD: Ho, sốt 3 ngày nay..." 
                         value={clinical.symptoms} 
                         onChange={e => handleClinicalChange('symptoms', e.target.value)}
+                        className="mb-2"
+                    />
+                    
+                    {/* NEW: SMART SCREENING CHECKLIST */}
+                    <SmartScreeningChecklist 
+                        age={age}
+                        clinical={clinical}
+                        onChange={handleClinicalChange}
                     />
                 </div>
+                
                 <div className="flex-1">
                     <label className="font-bold text-sm">Tóm tắt quá trình bệnh lý & Thực thể</label>
                     <Input.TextArea 
