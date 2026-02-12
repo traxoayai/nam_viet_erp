@@ -68,7 +68,8 @@ const nutritionalStatus = useMemo(() => {
             text: 'SUY DINH DƯỠNG NẶNG', 
             color: 'red', 
             bg: 'bg-red-50',
-            action: `Mục tiêu cấp bách: Cần tăng thêm ${needToGain} kg để bắt kịp đà tăng trưởng.`
+            action: `Mục tiêu cấp bách: Cần tăng thêm ${needToGain} kg để bắt kịp đà tăng trưởng.`,
+            alert: true
         };
     }
     if (diff > 2.0) {
@@ -76,7 +77,8 @@ const nutritionalStatus = useMemo(() => {
             text: 'BÉO PHÌ / THỪA CÂN', 
             color: 'red', 
             bg: 'bg-red-50',
-            action: `Khuyến nghị: Không ép giảm cân. Giữ nguyên ${current.weight}kg, tập trung phát triển chiều cao.`
+            action: `Khuyến nghị: Không ép giảm cân. Giữ nguyên ${current.weight}kg, tập trung phát triển chiều cao.`,
+            alert: true
         };
     }
     if (diff < -1.0) {
@@ -85,7 +87,8 @@ const nutritionalStatus = useMemo(() => {
             text: 'NGUY CƠ SUY DINH DƯỠNG', 
             color: 'orange', 
             bg: 'bg-orange-50',
-            action: `Mục tiêu: Tăng thêm ${needToGain} kg để đạt mức lý tưởng.`
+            action: `Mục tiêu: Tăng thêm ${needToGain} kg để đạt mức lý tưởng.`,
+            alert: true
         };
     }
     
@@ -93,7 +96,8 @@ const nutritionalStatus = useMemo(() => {
         text: 'PHÁT TRIỂN BÌNH THƯỜNG', 
         color: 'green', 
         bg: 'bg-green-50',
-        action: 'Tuyệt vời! Tiếp tục duy trì chế độ dinh dưỡng hiện tại.' 
+        action: 'Tuyệt vời! Tiếp tục duy trì chế độ dinh dưỡng hiện tại.',
+        alert: false 
     };
 }, [chartData]);
 
@@ -193,14 +197,22 @@ const nutritionalStatus = useMemo(() => {
                         </ResponsiveContainer>
                     </div>
 
-                    {/* NEW: ĐÁNH GIÁ & KHUYẾN NGHỊ */}
+                    {/* NEW: KẾT QUẢ ĐÁNH GIÁ CHI TIẾT */}
                     {nutritionalStatus && (
-                        <div className={`mt-2 p-3 text-center border rounded-md ${nutritionalStatus.bg} border-${nutritionalStatus.color}-200`}>
-                            <div className={`font-bold text-${nutritionalStatus.color}-700 text-sm mb-1`}>
-                               {nutritionalStatus.text.toUpperCase()}
+                        <div className={`mt-2 p-3 border rounded-lg ${nutritionalStatus.alert ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                            <div className="text-xs text-gray-500 uppercase font-bold text-center mb-1">Đánh giá sơ bộ</div>
+                            {/* 1. Kết luận (VD: SUY DINH DƯỠNG) */}
+                            <div className={`text-lg font-black text-center text-${nutritionalStatus.color}-600 leading-tight`}>
+                                {nutritionalStatus.text.toUpperCase()}
                             </div>
-                            <div className="text-xs text-gray-700 font-medium">
-                                {nutritionalStatus.action}
+
+                            {/* 2. [FIX] HÀNH ĐỘNG CỤ THỂ (Phần này đang thiếu) */}
+                            <div className="mt-2 bg-white p-2 rounded border border-dashed border-gray-300 text-sm font-medium text-gray-700">
+                                💡 {nutritionalStatus.action}
+                            </div>
+
+                            <div className="text-[10px] text-gray-400 italic mt-2 text-center">
+                                *So sánh với chuẩn tăng trưởng WHO (P50)
                             </div>
                         </div>
                     )}
