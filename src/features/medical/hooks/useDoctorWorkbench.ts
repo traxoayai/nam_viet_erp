@@ -145,57 +145,83 @@ export const useDoctorWorkbench = () => {
 
         setLoading(true);
         try {
-            // Chuẩn bị Payload phẳng
+            // 1. Chuẩn bị Payload phẳng
             const flatPayload = {
-                // Vitals
                 ...vitals,
-                // Clinical
                 ...clinical,
-                // Meta
                 status: status,
                 updated_at: new Date().toISOString()
             };
 
-            let resultData;
-            
-            if (visit?.id) {
-                // UPDATE RPC
-                const { data, error } = await supabase.rpc('update_medical_visit', {
-                    p_visit_id: visit.id,
+            let currentVisitId = visit?.id;
+            let saveError = null;
+
+            // 2. Logic Lưu thông minh (Smart Save)
+            if (currentVisitId) {
+                // CASE A: Đã có ID -> Chắc chắn là Update
+                const { error } = await supabase.rpc('update_medical_visit', {
+                    p_visit_id: currentVisitId,
                     p_doctor_id: user.id,
                     p_data: flatPayload
                 });
-                if (error) throw error;
-                resultData = data;
+                saveError = error;
             } else {
-                // CREATE RPC
+                // CASE B: Chưa có ID -> Thử Create
                 const { data, error } = await supabase.rpc('create_medical_visit', {
                     p_appointment_id: appointmentId,
                     p_customer_id: patientInfo?.id,
                     p_data: flatPayload
                 });
-                if (error) throw error;
-                resultData = data;
+                
+                if (error) {
+                    // [SELF-HEALING] Nếu lỗi là "Duplicate Key" (Code 23505)
+                    // Nghĩa là phiếu đã tồn tại -> Chuyển sang Update cứu vãn
+                    if (error.code === '23505') {
+                        console.warn("Phiếu đã tồn tại, chuyển sang chế độ Update...");
+                        
+                        // B1: Tìm ID của phiếu đang ẩn
+                        const { data: existingData } = await supabase
+                            .from('medical_visits')
+                            .select('id')
+                            .eq('appointment_id', appointmentId)
+                            .single();
+                        
+                        if (existingData) {
+                            currentVisitId = existingData.id;
+                            // B2: Gọi Update đè lên
+                            const { error: updateErr } = await supabase.rpc('update_medical_visit', {
+                                p_visit_id: currentVisitId,
+                                p_doctor_id: user.id,
+                                p_data: flatPayload
+                            });
+                            saveError = updateErr;
+                        } else {
+                            saveError = error; // Không tìm thấy ID thì bó tay, ném lỗi gốc
+                        }
+                    } else {
+                        saveError = error; // Lỗi khác thì ném ra
+                    }
+                } else {
+                    currentVisitId = data; // Create thành công
+                }
+            }
+            
+            if (saveError) throw saveError;
+
+            // 3. Cập nhật State ngay lập tức (Để lần bấm sau không bị lỗi nữa)
+            if (currentVisitId) {
+                setVisit(prev => ({ 
+                    ...prev, 
+                    id: currentVisitId, 
+                    ...flatPayload 
+                }));
             }
 
-            // Update local state id if created
-            if (resultData && !visit.id) {
-                 // Gỉa sử RPC trả về ID hoặc object chứa ID. 
-                 // Nếu RPC trả về void hoặc boolean, cần check lại. 
-                 // Nhưng theo spec, RPC create thường trả về ID hoặc Record.
-                 // Ta tạm set như vậy.
-                 setVisit(prev => ({ ...prev, id: resultData }));
-            }
-
-            message.success(status === 'finished' ? "Đã hoàn thành phiếu khám!" : "Đã lưu nháp!");
+            message.success(status === 'finished' ? "Đã hoàn thành phiếu khám!" : "Đã lưu nháp thành công!");
             
             if (status === 'finished') {
                 navigate('/medical/reception');
-            } else {
-                // Reload data to ensure sync?
-                fetchAppointmentData(appointmentId!);
             }
-
         } catch (err: any) {
             console.error("Save Error:", err);
             message.error("Lỗi lưu: " + (err.message || "Unknown error"));

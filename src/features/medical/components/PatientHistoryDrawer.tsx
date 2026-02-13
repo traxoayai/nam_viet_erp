@@ -1,3 +1,4 @@
+// src/features/medical/components/PatientHistoryDrawer.tsx
 import React from 'react';
 import { Drawer, Timeline, Card, Tag, Button, Empty, Tooltip } from 'antd';
 import { ClockCircleOutlined, MedicineBoxOutlined, CopyOutlined, UserOutlined } from '@ant-design/icons';

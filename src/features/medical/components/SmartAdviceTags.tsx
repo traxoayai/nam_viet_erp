@@ -1,3 +1,4 @@
+// src/features/medical/components/SmartAdviceTags.tsx
 import React, { useMemo } from 'react';
 import { Tag, Tooltip } from 'antd';
 import { PlusCircleOutlined, BulbOutlined } from '@ant-design/icons';

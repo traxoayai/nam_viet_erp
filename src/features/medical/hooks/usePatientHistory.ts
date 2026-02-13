@@ -1,3 +1,4 @@
+// src/features/medical/hooks/usePatientHistory.ts
 import { useState, useEffect } from 'react';
 import { supabase } from '@/shared/lib/supabaseClient';
 
