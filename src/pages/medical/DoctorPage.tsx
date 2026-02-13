@@ -278,11 +278,12 @@ const DoctorPage = () => {
                             />
                             
                             <div className={isReadOnly ? 'pointer-events-none opacity-60' : ''}>
-                                <SmartScreeningChecklist 
-                                    age={patientAge}
-                                    clinical={clinical}
-                                    onChange={handleClinicalChange}
-                                />
+                            <SmartScreeningChecklist 
+                                age={patientAge}
+                                clinical={clinical}
+                                onChange={handleClinicalChange}
+                                isVaccinationFlow={patientAge < 6}
+                            />
                             </div>
                         </Card>
                     </Col>

@@ -15,25 +15,28 @@ interface Props {
   setVitals: (v: any) => void;
   clinical: any;
   setClinical: (v: any) => void;
-  patient: any; // Cần thông tin tuổi
+  patient: any;
+  readOnly?: boolean;
+  isVaccinationFlow?: boolean;
 }
-export const DoctorBlock2_ClinicalExam: React.FC<Props> = ({ vitals, setVitals, clinical, setClinical, patient }) => {
+
+export const DoctorBlock2_ClinicalExam: React.FC<Props> = ({ vitals, setVitals, clinical, setClinical, patient, readOnly, isVaccinationFlow = false }) => {
   const age = patient?.dob ? dayjs().diff(dayjs(patient.dob), 'year') : 20; // Default Adult
   
+  const handleClinicalChange = (key: string, val: any) => {
+      setClinical({ ...clinical, [key]: val });
+  };
+
+  const handleVitalChange = (key: string, val: number | null) => {
+      setVitals({ ...vitals, [key]: val });
+  };
+
   // Logic render sub-form
   const renderSpecializedForm = () => {
       if (age < 2) return <ExamForm_Infant data={clinical} onChange={handleClinicalChange} />;
       if (age >= 2 && age < 6) return <ExamForm_Child data={clinical} onChange={handleClinicalChange} />;
       if (age >= 6 && age < 18) return <ExamForm_Adolescent data={clinical} onChange={handleClinicalChange} />;
       return <ExamForm_Adult data={clinical} onChange={handleClinicalChange} vitals={vitals} />;
-  };
-  
-  const handleVitalChange = (key: string, val: number | null) => {
-      setVitals({ ...vitals, [key]: val });
-  };
-  
-  const handleClinicalChange = (key: string, val: any) => {
-      setClinical({ ...clinical, [key]: val });
   };
 
   return (
@@ -42,55 +45,40 @@ export const DoctorBlock2_ClinicalExam: React.FC<Props> = ({ vitals, setVitals, 
         <Card title={<span className="flex items-center gap-2"><Activity size={16}/> Chỉ số sinh tồn</span>} size="small" className="md:col-span-1 shadow-sm">
             <div className="grid grid-cols-2 gap-x-2 gap-y-4">
                 <VitalInput 
-                    label="Mạch" 
-                    unit="l/p" 
-                    value={vitals.pulse} 
-                    onChange={v => handleVitalChange('pulse', v)} 
-                    history={[{date: '2023-01-01', value: 80}]} // Mock history
+                    label="Mạch" unit="l/p" 
+                    value={vitals.pulse} onChange={v => handleVitalChange('pulse', v)} 
+                    history={[{date: '2023-01-01', value: 80}]} 
                 />
                 <VitalInput 
-                    label="Nhiệt độ" 
-                    unit="°C" 
-                    value={vitals.temperature} 
-                    onChange={v => handleVitalChange('temperature', v)} 
-                    history={[{date: '2023-01-01', value: 37}]} 
-                    warningThreshold={{ min: 35, max: 37.5 }}
+                    label="Nhiệt độ" unit="°C" 
+                    value={vitals.temperature} onChange={v => handleVitalChange('temperature', v)} 
+                    history={[{date: '2023-01-01', value: 37}]} warningThreshold={{ min: 35, max: 37.5 }}
                 />
                 <div className="col-span-2 grid grid-cols-2 gap-2">
                     <VitalInput 
-                        label="Huyết áp (Sys)" 
-                        value={vitals.bp_systolic} 
+                        label="Huyết áp (Sys)" value={vitals.bp_systolic} 
                         onChange={v => handleVitalChange('bp_systolic', v)} 
-                        lowerBetter
-                        warningThreshold={{ max: 140 }}
+                        lowerBetter warningThreshold={{ max: 140 }}
                     />
                     <VitalInput 
-                        label="Huyết áp (Dia)" 
-                        value={vitals.bp_diastolic} 
+                        label="Huyết áp (Dia)" value={vitals.bp_diastolic} 
                         onChange={v => handleVitalChange('bp_diastolic', v)} 
-                        lowerBetter
-                        warningThreshold={{ max: 90 }}
+                        lowerBetter warningThreshold={{ max: 90 }}
                     />
                 </div>
                 <VitalInput 
-                    label="SpO2" 
-                    unit="%" 
-                    value={vitals.sp02} 
-                    onChange={v => handleVitalChange('sp02', v)} 
+                    label="SpO2" unit="%" 
+                    value={vitals.sp02} onChange={v => handleVitalChange('sp02', v)} 
                     warningThreshold={{ min: 95 }}
                 />
                 <VitalInput 
-                    label="Cân nặng" 
-                    unit="kg" 
-                    value={vitals.weight} 
-                    onChange={v => handleVitalChange('weight', v)} 
+                    label="Cân nặng" unit="kg" 
+                    value={vitals.weight} onChange={v => handleVitalChange('weight', v)} 
                     history={[{date: '2023-01-01', value: 50}]} 
                 />
                 <VitalInput 
-                    label="Chiều cao" 
-                    unit="cm" 
-                    value={vitals.height} 
-                    onChange={v => handleVitalChange('height', v)} 
+                    label="Chiều cao" unit="cm" 
+                    value={vitals.height} onChange={v => handleVitalChange('height', v)} 
                 />
             </div>
         </Card>
@@ -109,11 +97,15 @@ export const DoctorBlock2_ClinicalExam: React.FC<Props> = ({ vitals, setVitals, 
                     />
                     
                     {/* NEW: SMART SCREENING CHECKLIST */}
-                    <SmartScreeningChecklist 
-                        age={age}
-                        clinical={clinical}
-                        onChange={handleClinicalChange}
-                    />
+                    {/* [UPDATE]: Truyền isVaccinationFlow xuống Checklist */}
+                    <div className={readOnly ? 'pointer-events-none opacity-60' : ''}>
+                        <SmartScreeningChecklist 
+                            age={age}
+                            clinical={clinical}
+                            onChange={handleClinicalChange}
+                            isVaccinationFlow={isVaccinationFlow}
+                        />
+                    </div>
                 </div>
                 
                 <div className="flex-1">
