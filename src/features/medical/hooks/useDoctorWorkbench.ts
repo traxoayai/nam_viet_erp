@@ -1,16 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { message } from 'antd';
 import { MedicalVisitRow, ClinicalPrescriptionItem } from '../types/medical.types';
 import { supabase } from '@/shared/lib/supabaseClient';
 import { useAuthStore } from '@/features/auth/stores/useAuthStore';
-import dayjs from 'dayjs';
-import { receptionService } from '@/features/medical/api/receptionService';
 import { printMedicalVisit } from '@/shared/utils/printTemplates';
 
 export const useDoctorWorkbench = () => {
     const { id: appointmentId } = useParams<{ id: string }>();
-    const navigate = useNavigate();
     const { user } = useAuthStore();
     
     // --- STATE ---
@@ -173,7 +170,7 @@ export const useDoctorWorkbench = () => {
         printMedicalVisit(printData);
     };
 
-    const handleScheduleFollowUp = async (dateStr: string) => {
+    const handleScheduleFollowUp = async (_dateStr: string) => {
         // Logic cũ giữ nguyên
     };
 

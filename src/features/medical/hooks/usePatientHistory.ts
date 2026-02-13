@@ -69,7 +69,7 @@ export const usePatientHistory = (customerId: number | undefined) => {
         // 2. Xử lý dữ liệu cho Biểu đồ (Trend)
         // Lấy dữ liệu từ quá khứ đến hiện tại (reverse) và lọc bỏ giá trị null
         const processMetric = (key: string) => 
-            data?.map(v => ({ date: v.created_at, value: v[key] }))
+            data?.map((v: any) => ({ date: v.created_at, value: v[key] }))
                  .filter(item => item.value !== null && item.value > 0)
                  .reverse() || []; 
 

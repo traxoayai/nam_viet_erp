@@ -1,9 +1,9 @@
 // src/pages/medical/DoctorPage.tsx
 import { useMemo, useState } from 'react';
-import { Layout, Spin, Row, Col, Card, Input, Badge, message, Button, Modal, Popover, DatePicker } from 'antd';
+import { Layout, Spin, Row, Col, Card, Input, Badge, message, Button, Popover, DatePicker } from 'antd';
 import { useDoctorWorkbench } from '@/features/medical/hooks/useDoctorWorkbench';
 import dayjs from 'dayjs';
-import { FlaskConical, Globe, Activity, Stethoscope, BrainCircuit, Printer as PrinterIcon } from 'lucide-react';
+import { FlaskConical, Globe, Activity, Stethoscope, BrainCircuit } from 'lucide-react';
 import { CheckCircleOutlined, PrinterOutlined, CalendarOutlined } from '@ant-design/icons';
 
 // Blocks
@@ -16,7 +16,6 @@ import { VitalInput } from '@/features/medical/components/VitalInput';
 import { SmartAdviceTags } from '@/features/medical/components/SmartAdviceTags';
 import { ParaclinicalResultsDrawer } from '@/features/medical/components/ParaclinicalResultsDrawer';
 import { SmartScreeningChecklist } from '@/features/medical/components/SmartScreeningChecklist';
-import { PatientHistoryDrawer } from '@/features/medical/components/PatientHistoryDrawer'; 
 import { usePatientHistory } from '@/features/medical/hooks/usePatientHistory';
 
 // Hooks
@@ -36,7 +35,7 @@ const DoctorPage = () => {
     const { 
         loading, 
         patientInfo, 
-        visit, 
+        // visit, 
         vitals, setVitals, 
         clinical, setClinical,
         prescriptionItems, setPrescriptionItems,
@@ -123,7 +122,7 @@ const DoctorPage = () => {
         if (isReadOnly) return;
         message.info(`Đã thêm ${suggestion} vào ${type}`);
         if (type === 'diagnosis') {
-            setClinical(prev => ({ ...prev, diagnosis: suggestion }));
+            setClinical((prev: any) => ({ ...prev, diagnosis: suggestion }));
         }
     };
 
