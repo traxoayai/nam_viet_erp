@@ -1,11 +1,23 @@
-// src/features/medical/hooks/usePatientHistory.ts
 import { useState, useEffect } from 'react';
 import { supabase } from '@/shared/lib/supabaseClient';
 import { message } from 'antd';
 
 export const usePatientHistory = (customerId: number | undefined) => {
   const [history, setHistory] = useState<any[]>([]);
+  
+  // State chứa dữ liệu lịch sử sinh hiệu (để vẽ biểu đồ)
+  const [vitalsHistory, setVitalsHistory] = useState<{
+      pulse: any[]; temperature: any[]; sp02: any[];
+      bp_systolic: any[]; bp_diastolic: any[];
+      weight: any[]; height: any[];
+  }>({
+      pulse: [], temperature: [], sp02: [],
+      bp_systolic: [], bp_diastolic: [],
+      weight: [], height: []
+  });
+
   const [loading, setLoading] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (!customerId) return;
@@ -13,12 +25,15 @@ export const usePatientHistory = (customerId: number | undefined) => {
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        // [CORE UPDATE]: Deep Nested Query
+        // [FIX]: Query đã được đơn giản hóa phần join doctor
         const { data, error } = await supabase
           .from('medical_visits')
           .select(`
-            id, created_at, diagnosis, symptoms, examination_summary, doctor_notes,
-            doctor:users!medical_visits_doctor_id_fkey (full_name),
+            id, created_at, diagnosis, symptoms, examination_summary, doctor_notes, status,
+            pulse, temperature, sp02, bp_systolic, bp_diastolic, weight, height,
+            
+            doctor:users (full_name),
+            
             prescriptions:clinical_prescriptions (
                 id,
                 items:clinical_prescription_items (
@@ -29,14 +44,14 @@ export const usePatientHistory = (customerId: number | undefined) => {
             )
           `)
           .eq('customer_id', customerId)
-          .eq('status', 'finished') 
+          .eq('status', 'finished')
           .order('created_at', { ascending: false })
-          .limit(10);
+          .limit(20);
 
         if (error) throw error;
         
-        // [FLATTEN DATA]: Làm phẳng cấu trúc thuốc để UI dễ render
-        const formattedData = data?.map(visit => {
+        // 1. Xử lý dữ liệu cho Drawer (Danh sách khám)
+        const formattedHistory = data?.map(visit => {
             const flatMedicines = visit.prescriptions?.flatMap((p: any) => 
                 p.items.map((i: any) => ({
                     product_id: i.product?.id,
@@ -44,13 +59,30 @@ export const usePatientHistory = (customerId: number | undefined) => {
                     quantity: i.quantity,
                     unit_name: i.unit?.unit_name,
                     usage_note: i.usage_note,
-                    product_unit_id: 1 // Fallback or need select
+                    product_unit_id: 1 
                 }))
             ) || [];
             return { ...visit, flatMedicines };
         });
+        setHistory(formattedHistory || []);
 
-        setHistory(formattedData || []);
+        // 2. Xử lý dữ liệu cho Biểu đồ (Trend)
+        // Lấy dữ liệu từ quá khứ đến hiện tại (reverse) và lọc bỏ giá trị null
+        const processMetric = (key: string) => 
+            data?.map(v => ({ date: v.created_at, value: v[key] }))
+                 .filter(item => item.value !== null && item.value > 0)
+                 .reverse() || []; 
+
+        setVitalsHistory({
+            pulse: processMetric('pulse'),
+            temperature: processMetric('temperature'),
+            sp02: processMetric('sp02'),
+            bp_systolic: processMetric('bp_systolic'),
+            bp_diastolic: processMetric('bp_diastolic'),
+            weight: processMetric('weight'),
+            height: processMetric('height'),
+        });
+
       } catch (err) {
         console.error("Err fetch history:", err);
       } finally {
@@ -61,9 +93,8 @@ export const usePatientHistory = (customerId: number | undefined) => {
     fetchHistory();
   }, [customerId]);
 
-    // [NEW] Logic Copy đơn thuốc
+    // Logic Copy đơn thuốc
     const onCopyPrescription = (oldPrescription: any[], currentItems: any[], setItems: (items: any[]) => void) => {
-      // Map lại để xóa ID cũ
       const newItems = oldPrescription.map(item => ({
         product_id: item.product_id,
         product_name: item.product_name,
@@ -73,12 +104,9 @@ export const usePatientHistory = (customerId: number | undefined) => {
         usage_note: item.usage_note || '',
         stock_quantity: 999 
       }));
-      
       setItems([...currentItems, ...newItems]);
-      message.error(`Đã thêm ${newItems.length} thuốc vào đơn hiện tại.`);
+      message.success(`Đã thêm ${newItems.length} thuốc vào đơn hiện tại.`);
     };
 
-    const [drawerOpen, setDrawerOpen] = useState(false);
-
-    return { history, loading, onCopyPrescription, drawerOpen, setDrawerOpen };
+    return { history, vitalsHistory, loading, onCopyPrescription, drawerOpen, setDrawerOpen };
 };
