@@ -19,12 +19,14 @@ interface Props {
   unit?: string;
   lowerBetter?: boolean; // True nếu chỉ số càng thấp càng tốt (VD: Huyết áp), False nếu càng cao càng tốt (VD: Cân nặng trẻ em)
   warningThreshold?: { min?: number; max?: number }; // Cảnh báo nóng
+  disabled?: boolean;
 }
 
 export const VitalInput: React.FC<Props> = ({ 
-  label, value, onChange, history = [], unit, lowerBetter = false, warningThreshold 
+  label, value, onChange, history = [], unit, lowerBetter = false, warningThreshold, disabled
 }) => {
   
+  // ... (giữ nguyên logic cũ)
   // 1. Lấy giá trị gần nhất để so sánh
   const lastRecord = history.length > 0 ? history[history.length - 1] : null;
   const lastValue = lastRecord?.value;
@@ -107,6 +109,7 @@ export const VitalInput: React.FC<Props> = ({
                 value={value} 
                 onChange={onChange}
                 placeholder={lastValue ? `Trước: ${lastValue}` : "Nhập..."}
+                disabled={disabled}
              />
              {/* Icon biểu đồ nhỏ xíu bên trong input để gợi ý là có chart */}
              {history.length > 0 && (

@@ -1,6 +1,7 @@
 // src/features/medical/hooks/usePatientHistory.ts
 import { useState, useEffect } from 'react';
 import { supabase } from '@/shared/lib/supabaseClient';
+import { message } from 'antd';
 
 export const usePatientHistory = (customerId: number | undefined) => {
   const [history, setHistory] = useState<any[]>([]);
@@ -60,5 +61,24 @@ export const usePatientHistory = (customerId: number | undefined) => {
     fetchHistory();
   }, [customerId]);
 
-  return { history, loading };
+    // [NEW] Logic Copy đơn thuốc
+    const onCopyPrescription = (oldPrescription: any[], currentItems: any[], setItems: (items: any[]) => void) => {
+      // Map lại để xóa ID cũ
+      const newItems = oldPrescription.map(item => ({
+        product_id: item.product_id,
+        product_name: item.product_name,
+        product_unit_id: item.product_unit_id || 1,
+        unit_name: item.unit_name,
+        quantity: item.quantity,
+        usage_note: item.usage_note || '',
+        stock_quantity: 999 
+      }));
+      
+      setItems([...currentItems, ...newItems]);
+      message.error(`Đã thêm ${newItems.length} thuốc vào đơn hiện tại.`);
+    };
+
+    const [drawerOpen, setDrawerOpen] = useState(false);
+
+    return { history, loading, onCopyPrescription, drawerOpen, setDrawerOpen };
 };

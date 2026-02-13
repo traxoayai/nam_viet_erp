@@ -9,9 +9,10 @@ interface Props {
   vitals?: any;
   historyData?: any[];
   patientDOB?: string;
+  readOnly?: boolean;
 }
 
-export const ExamForm_Adolescent: React.FC<Props> = ({ data, onChange }) => {
+export const ExamForm_Adolescent: React.FC<Props> = ({ data, onChange, readOnly }) => {
   return (
     <Card 
         size="small" 
@@ -30,6 +31,7 @@ export const ExamForm_Adolescent: React.FC<Props> = ({ data, onChange }) => {
                         { value: 'onset', label: 'Bắt đầu dậy thì' },
                         { value: 'completed', label: 'Hoàn thiện' },
                     ]}
+                    disabled={readOnly}
                 />
              </Col>
              <Col span={12}>
@@ -43,6 +45,7 @@ export const ExamForm_Adolescent: React.FC<Props> = ({ data, onChange }) => {
                         { value: 'scoliosis', label: 'Cong vẹo' },
                         { value: 'kyphosis', label: 'Gù' },
                     ]}
+                    disabled={readOnly}
                 />
              </Col>
              <Col span={24}>
@@ -52,11 +55,13 @@ export const ExamForm_Adolescent: React.FC<Props> = ({ data, onChange }) => {
                         placeholder="MP (10/10)"
                         value={data.visual_acuity_right} 
                         onChange={e => onChange('visual_acuity_right', e.target.value)} 
+                        disabled={readOnly}
                     />
                      <Input 
                         placeholder="MT (10/10)"
                         value={data.visual_acuity_left} 
                         onChange={e => onChange('visual_acuity_left', e.target.value)} 
+                        disabled={readOnly}
                     />
                 </div>
              </Col>

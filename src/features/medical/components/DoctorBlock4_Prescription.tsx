@@ -13,9 +13,10 @@ interface Props {
   items: ClinicalPrescriptionItem[];
   setItems: (items: ClinicalPrescriptionItem[]) => void;
   patientAllergies?: string;
+  readOnly?: boolean;
 }
 
-export const DoctorBlock4_Prescription: React.FC<Props> = ({ items, setItems, patientAllergies }) => {
+export const DoctorBlock4_Prescription: React.FC<Props> = ({ items, setItems, patientAllergies, readOnly }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // MOCK TEMPLATES
@@ -113,10 +114,10 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({ items, setItems, pa
     >
         {/* Helper Toolbar */}
         <div className="flex gap-2 mb-3">
-             <div className="flex-1">
+             <div className="flex-1 pointer-events-none" style={readOnly ? { opacity: 0.6 } : { pointerEvents: 'auto' }}>
                  <DoctorPrescriptionSearch onSelectProduct={handleSelectProduct} />
              </div>
-             <Button icon={<FileText size={14}/>} onClick={() => setIsModalOpen(true)}>Đơn mẫu</Button>
+             <Button icon={<FileText size={14}/>} onClick={() => setIsModalOpen(true)} disabled={readOnly}>Đơn mẫu</Button>
         </div>
 
         {/* Table */}

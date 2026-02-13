@@ -9,9 +9,10 @@ interface Props {
   vitals?: any; // Để tính BMI
   historyData?: any[];
   patientDOB?: string;
+  readOnly?: boolean;
 }
 
-export const ExamForm_Adult: React.FC<Props> = ({ data, onChange, vitals }) => {
+export const ExamForm_Adult: React.FC<Props> = ({ data, onChange, vitals, readOnly }) => {
   // BMI Calc
   const bmi = vitals.weight && vitals.height 
     ? (vitals.weight / ((vitals.height / 100) ** 2)).toFixed(1)
@@ -42,6 +43,7 @@ export const ExamForm_Adult: React.FC<Props> = ({ data, onChange, vitals }) => {
                     <Switch 
                         checked={data.lifestyle_smoking}
                         onChange={v => onChange('lifestyle_smoking', v)}
+                        disabled={readOnly}
                     />
                 </div>
              </Col>
@@ -51,6 +53,7 @@ export const ExamForm_Adult: React.FC<Props> = ({ data, onChange, vitals }) => {
                     <Switch 
                         checked={data.lifestyle_alcohol}
                         onChange={v => onChange('lifestyle_alcohol', v)}
+                        disabled={readOnly}
                     />
                 </div>
              </Col>

@@ -4,13 +4,17 @@ import React from 'react';
 import { Card, Empty, Button } from 'antd';
 import { Plus as PlusOutlined, FlaskConical } from 'lucide-react';
 
-export const DoctorBlock3_ServiceOrder: React.FC = () => {
+interface Props {
+  readOnly?: boolean;
+}
+
+export const DoctorBlock3_ServiceOrder: React.FC<Props> = ({ readOnly }) => {
   return (
     <Card 
         size="small" 
         title={<span className="flex items-center gap-2"><FlaskConical size={16}/> Chỉ định Cận Lâm Sàng</span>}
         className="mb-4 shadow-sm"
-        extra={<Button type="primary" size="small" icon={<PlusOutlined size={14}/>}>Thêm chỉ định</Button>}
+        extra={<Button type="primary" size="small" icon={<PlusOutlined size={14}/>} disabled={readOnly}>Thêm chỉ định</Button>}
     >
         <Empty 
             image={Empty.PRESENTED_IMAGE_SIMPLE} 

@@ -10,9 +10,10 @@ interface Props {
   vitals?: any;
   historyData?: any[];
   patientDOB?: string;
+  readOnly?: boolean;
 }
 
-export const ExamForm_Child: React.FC<Props> = ({ data, onChange }) => {
+export const ExamForm_Child: React.FC<Props> = ({ data, onChange, readOnly }) => {
   return (
     <Card 
         size="small" 
@@ -26,6 +27,7 @@ export const ExamForm_Child: React.FC<Props> = ({ data, onChange }) => {
                     value={data.dental_status} 
                     onChange={e => onChange('dental_status', e.target.value)} 
                     placeholder="Sâu răng, sún răng, mọc răng..."
+                    disabled={readOnly}
                 />
              </Col>
              <Col span={12}>
@@ -39,6 +41,7 @@ export const ExamForm_Child: React.FC<Props> = ({ data, onChange }) => {
                         { value: 'delayed', label: 'Chậm phát triển' },
                         { value: 'hyperactive', label: 'Tăng động' },
                     ]}
+                    disabled={readOnly}
                 />
              </Col>
              <Col span={12}>
@@ -52,6 +55,7 @@ export const ExamForm_Child: React.FC<Props> = ({ data, onChange }) => {
                         { value: 'speech_delay', label: 'Chậm nói' },
                         { value: 'stuttering', label: 'Nói lắp' },
                     ]}
+                    disabled={readOnly}
                 />
              </Col>
         </Row>

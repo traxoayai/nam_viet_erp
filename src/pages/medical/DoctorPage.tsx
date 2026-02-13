@@ -1,9 +1,10 @@
 // src/pages/medical/DoctorPage.tsx
 import { useMemo, useState } from 'react';
-import { Layout, Spin, Row, Col, Card, Input, Badge, message, Button } from 'antd';
+import { Layout, Spin, Row, Col, Card, Input, Badge, message, Button, Modal, Popover, DatePicker } from 'antd';
 import { useDoctorWorkbench } from '@/features/medical/hooks/useDoctorWorkbench';
 import dayjs from 'dayjs';
-import { FlaskConical } from 'lucide-react';
+import { FlaskConical, Globe, Activity, Stethoscope, BrainCircuit, Printer as PrinterIcon } from 'lucide-react';
+import { CheckCircleOutlined, PrinterOutlined, CalendarOutlined } from '@ant-design/icons';
 
 // Blocks
 import { DoctorBlock1_PatientInfo } from '@/features/medical/components/DoctorBlock1_PatientInfo';
@@ -14,6 +15,9 @@ import { SmartClinicalAssistant } from '@/features/medical/components/SmartClini
 import { VitalInput } from '@/features/medical/components/VitalInput';
 import { SmartAdviceTags } from '@/features/medical/components/SmartAdviceTags';
 import { ParaclinicalResultsDrawer } from '@/features/medical/components/ParaclinicalResultsDrawer';
+import { SmartScreeningChecklist } from '@/features/medical/components/SmartScreeningChecklist';
+import { PatientHistoryDrawer } from '@/features/medical/components/PatientHistoryDrawer'; 
+import { usePatientHistory } from '@/features/medical/hooks/usePatientHistory';
 
 // Hooks
 import { useRealtimeLabResults } from '@/features/medical/hooks/useRealtimeLabResults';
@@ -32,15 +36,26 @@ const DoctorPage = () => {
     const { 
         loading, 
         patientInfo, 
+        visit, 
         vitals, setVitals, 
         clinical, setClinical,
         prescriptionItems, setPrescriptionItems,
         handleSave,
         handlePrint,
         handleScheduleFollowUp,
-        medicalVisitId // Need this from hook if available, otherwise assume we have logic to get it or pass it
+        medicalVisitId,
+        isReadOnly
     } = useDoctorWorkbench();
     
+    // History Hook for "Copy Prescription"
+    const { onCopyPrescription } = usePatientHistory(patientInfo?.id);
+
+    const handleCopyPrescription = (oldPrescription: any[]) => {
+        if (isReadOnly) return message.warning("Phiếu đã hoàn thành, không thể sửa!");
+        // Gọi logic copy từ hook usePatientHistory
+        onCopyPrescription(oldPrescription, prescriptionItems, setPrescriptionItems);
+    };
+
     // Local state for Lab Results
     const [openLabDrawer, setOpenLabDrawer] = useState(false);
     const [labResults, setLabResults] = useState<any[]>([]);
@@ -58,10 +73,7 @@ const DoctorPage = () => {
                 .eq('status', 'completed');
 
             if (data) {
-                // Map results for simple display (Mock logic for now as structure varies)
-                // Assuming result_json has standard structure or we parse it
                 const mappedTests = data.filter(d => d.category === 'lab').flatMap(d => {
-                     // Mock parsing logic - in real app parse d.results_json
                      return d.results_json ? (d.results_json as any).tests : [];
                 });
                 
@@ -106,31 +118,23 @@ const DoctorPage = () => {
         return (vitals.bp_systolic || 0) > 140 || (vitals.bp_diastolic || 0) > 90;
     }, [vitals.bp_systolic, vitals.bp_diastolic]);
     
-    // Handler cho Smart Assistant
+    // Handlers
     const handleSuggestionClick = (suggestion: string, type: 'test' | 'prescription' | 'diagnosis') => {
+        if (isReadOnly) return;
         message.info(`Đã thêm ${suggestion} vào ${type}`);
-        // Logic thực tế sẽ add vào list chỉ định hoặc đơn thuốc
         if (type === 'diagnosis') {
             setClinical(prev => ({ ...prev, diagnosis: suggestion }));
         }
     };
 
-    // [NEW LOGIC]: Xử lý khi bấm nút "Tái kê đơn"
-    const handleCopyPrescription = (oldItems: any[]) => {
-        // Map lại để xóa ID cũ (tạo ID mới khi lưu)
-        const newItems = oldItems.map(item => ({
-            product_id: item.product_id,
-            product_name: item.product_name,
-            product_unit_id: item.product_unit_id || 1, // Fallback nếu thiếu
-            unit_name: item.unit_name,
-            quantity: item.quantity,
-            usage_note: item.usage_note || '',
-            stock_quantity: 999 // Tạm thời bypass check tồn kho hoặc cần check lại API
-        }));
-        
-        // Gộp vào danh sách hiện tại (hoặc thay thế tùy ý, ở đây là Append)
-        setPrescriptionItems([...prescriptionItems, ...newItems]);
-        message.success(`Đã thêm ${newItems.length} thuốc vào đơn hiện tại.`);
+    const handleVitalChange = (key: string, val: number | null) => {
+        if (isReadOnly) return;
+        setVitals((prev: any) => ({ ...prev, [key]: val }));
+    };
+
+    const handleClinicalChange = (key: string, val: any) => {
+        if (isReadOnly) return;
+        setClinical((prev: any) => ({ ...prev, [key]: val }));
     };
 
     if (loading && !patientInfo) {
@@ -146,6 +150,7 @@ const DoctorPage = () => {
                     <div className="flex-1">
                         <DoctorBlock1_PatientInfo 
                             patient={patientInfo} 
+                            visitId={medicalVisitId} // Changed from visitId to passing logic? Check component prop.
                             onCopyPrescription={handleCopyPrescription}
                         />
                     </div>
@@ -173,27 +178,25 @@ const DoctorPage = () => {
                     onSuggestionClick={handleSuggestionClick}
                 />
 
-                {/* ROW 2: CLINICAL CONTEXT (3 Columns) */}
+                {/* ROW 2: CLINICAL CONTEXT */}
                 <Row gutter={16} className="mb-4">
                     {/* Col 1: Epidemiology (Readonly) */}
                     <Col span={6}>
-                        <Card size="small" title="Dịch tễ & Cơ địa" className="h-full border border-gray-200 shadow-sm bg-white rounded-lg">
+                        <Card size="small" title={<span className="flex items-center gap-2"><Globe size={16}/> Dịch tễ & Tiền sử</span>} className="h-full border border-gray-200 shadow-sm bg-white rounded-lg">
                             <div className="flex flex-col gap-2">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-500">Tiền sử:</span>
-                                    <span className="font-medium">{patientInfo?.medical_history || 'Không'}</span>
+                                <div className="text-xs text-gray-500 mb-1">Tiền sử bệnh:</div>
+                                <div className="font-medium text-sm mb-2">{patientInfo?.medical_history || 'Không'}</div>
+                                
+                                <div className="text-xs text-gray-500 mb-1">Dị ứng thuốc:</div>
+                                <div className="font-bold text-red-600 text-sm mb-2">{patientInfo?.allergies || 'Không'}</div>
+
+                                <div className="flex justify-between border-t pt-2 mt-2">
+                                    <span className="text-gray-500 text-xs">Hút thuốc:</span>
+                                    <span className="font-medium text-sm">{clinical.lifestyle_smoking ? 'Có' : 'Không'}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-gray-500">Dị ứng:</span>
-                                    <span className="font-medium text-red-500">{patientInfo?.allergies || 'Không'}</span>
-                                </div>
-                                <div className="flex justify-between mt-2 pt-2 border-t">
-                                    <span className="text-gray-500">Hút thuốc:</span>
-                                    <span className="font-medium">{clinical.lifestyle_smoking ? 'Có' : 'Không'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-500">Rượu bia:</span>
-                                    <span className="font-medium">{clinical.lifestyle_alcohol ? 'Có' : 'Không'}</span>
+                                    <span className="text-gray-500 text-xs">Rượu bia:</span>
+                                    <span className="font-medium text-sm">{clinical.lifestyle_alcohol ? 'Có' : 'Không'}</span>
                                 </div>
                             </div>
                         </Card>
@@ -205,7 +208,7 @@ const DoctorPage = () => {
                             size="small" 
                             title={
                                 <div className="flex justify-between items-center">
-                                    <span>Sinh hiệu</span>
+                                    <span className="flex items-center gap-2"><Activity size={16}/> Chỉ số sinh tồn</span>
                                     {bmi && <span className={Number(bmi) > 23 ? "text-red-500 font-bold" : "text-green-600"}>BMI: {bmi}</span>}
                                     {isHighBP && <Badge count="Huyết áp cao" color="red" />}
                                 </div>
@@ -214,56 +217,48 @@ const DoctorPage = () => {
                         >
                            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                                 <VitalInput 
-                                    label="Mạch" 
-                                    unit="l/p" 
-                                    value={vitals.pulse} 
-                                    onChange={v => setVitals({...vitals, pulse: v})} 
+                                    label="Mạch" unit="l/p" 
+                                    value={vitals.pulse} onChange={v => handleVitalChange('pulse', v)} 
                                     history={[{date: '2023-01-01', value: 80}]} 
+                                    disabled={isReadOnly}
                                 />
                                 <VitalInput 
-                                    label="Nhiệt độ" 
-                                    unit="°C" 
-                                    value={vitals.temperature} 
-                                    onChange={v => setVitals({...vitals, temperature: v})} 
-                                    history={[{date: '2023-01-01', value: 37}]} 
+                                    label="Nhiệt độ" unit="°C" 
+                                    value={vitals.temperature} onChange={v => handleVitalChange('temperature', v)} 
                                     warningThreshold={{ min: 35, max: 37.5 }}
+                                    disabled={isReadOnly}
                                 />
                                 <VitalInput 
-                                    label="SpO2" 
-                                    unit="%" 
-                                    value={vitals.sp02} 
-                                    onChange={v => setVitals({...vitals, sp02: v})} 
+                                    label="SpO2" unit="%" 
+                                    value={vitals.sp02} onChange={v => handleVitalChange('sp02', v)} 
                                     warningThreshold={{ min: 95 }}
+                                    disabled={isReadOnly}
                                 />
                                 <VitalInput 
-                                    label="Cân nặng" 
-                                    unit="kg" 
-                                    value={vitals.weight} 
-                                    onChange={v => setVitals({...vitals, weight: v})} 
+                                    label="Cân nặng" unit="kg" 
+                                    value={vitals.weight} onChange={v => handleVitalChange('weight', v)}
+                                    disabled={isReadOnly}
                                 />
                                 <VitalInput 
-                                    label="Chiều cao" 
-                                    unit="cm" 
-                                    value={vitals.height} 
-                                    onChange={v => setVitals({...vitals, height: v})} 
+                                    label="Chiều cao" unit="cm" 
+                                    value={vitals.height} onChange={v => handleVitalChange('height', v)}
+                                    disabled={isReadOnly}
                                 />
                                 <div className="flex gap-2">
                                     <div className="flex-1">
                                         <VitalInput 
-                                            label="HA (Sys)" 
-                                            value={vitals.bp_systolic} 
-                                            onChange={v => setVitals({...vitals, bp_systolic: v})} 
-                                            lowerBetter
-                                            warningThreshold={{ max: 130 }}
+                                            label="HA (Sys)" value={vitals.bp_systolic} 
+                                            onChange={v => handleVitalChange('bp_systolic', v)} 
+                                            lowerBetter warningThreshold={{ max: 130 }}
+                                            disabled={isReadOnly}
                                         />
                                     </div>
                                     <div className="flex-1">
                                         <VitalInput 
-                                            label="HA (Dia)" 
-                                            value={vitals.bp_diastolic} 
-                                            onChange={v => setVitals({...vitals, bp_diastolic: v})} 
-                                            lowerBetter
-                                            warningThreshold={{ max: 85 }}
+                                            label="HA (Dia)" value={vitals.bp_diastolic} 
+                                            onChange={v => handleVitalChange('bp_diastolic', v)} 
+                                            lowerBetter warningThreshold={{ max: 85 }}
+                                            disabled={isReadOnly}
                                         />
                                     </div>
                                 </div>
@@ -273,13 +268,22 @@ const DoctorPage = () => {
 
                     {/* Col 3: Symptoms */}
                     <Col span={8}>
-                        <Card size="small" title="Lý do khám / Triệu chứng" className="h-full border border-gray-200 shadow-sm bg-white rounded-lg">
+                        <Card size="small" title={<span className="flex items-center gap-2"><Stethoscope size={16}/> Triệu chứng cơ năng</span>} className="h-full border border-gray-200 shadow-sm bg-white rounded-lg">
                             <TextArea 
                                 value={clinical.symptoms} 
-                                onChange={e => setClinical({...clinical, symptoms: e.target.value})}
+                                onChange={e => handleClinicalChange('symptoms', e.target.value)}
                                 placeholder="Mô tả triệu chứng cơ năng..."
                                 autoSize={{ minRows: 3, maxRows: 5 }}
+                                disabled={isReadOnly}
                             />
+                            
+                            <div className={isReadOnly ? 'pointer-events-none opacity-60' : ''}>
+                                <SmartScreeningChecklist 
+                                    age={patientAge}
+                                    clinical={clinical}
+                                    onChange={handleClinicalChange}
+                                />
+                            </div>
                         </Card>
                     </Col>
                 </Row>
@@ -288,9 +292,10 @@ const DoctorPage = () => {
                 <div className="mb-4">
                     <ExamFormComponent 
                         data={clinical} 
-                        onChange={(key: string, val: any) => setClinical(prev => ({ ...prev, [key]: val }))}
+                        onChange={handleClinicalChange}
                         vitals={vitals}
                         patientDOB={patientInfo?.dob}
+                        readOnly={isReadOnly}
                     />
                 </div>
 
@@ -298,32 +303,42 @@ const DoctorPage = () => {
                 <Row gutter={16} className="mb-16">
                     {/* Part A: Service Order */}
                     <Col span={8} className="flex flex-col gap-4">
-                         <DoctorBlock3_ServiceOrder />
+                         <DoctorBlock3_ServiceOrder readOnly={isReadOnly} />
                     </Col>
 
                     {/* Part B: Prescription & Conclusion */}
                     <Col span={16} className="flex flex-col gap-4">
-                         <Card size="small" title="Chẩn đoán & Kết luận" className="border border-gray-200 shadow-sm bg-white rounded-lg">
+                         <Card title={<span className="flex items-center gap-2"><BrainCircuit size={16}/> Chẩn đoán & Lời dặn</span>} size="small" className="border border-gray-200 shadow-sm bg-white rounded-lg">
                             <div className="flex flex-col gap-4">
-                                <Input 
-                                    addonBefore="Chẩn đoán" 
-                                    value={clinical.diagnosis}
-                                    onChange={e => setClinical({...clinical, diagnosis: e.target.value})}
-                                />
+                                <div>
+                                    <div className="text-xs text-blue-600 font-bold mb-1">CHẨN ĐOÁN XÁC ĐỊNH</div>
+                                    <Input 
+                                        size="large"
+                                        className="font-bold text-blue-900" 
+                                        value={clinical.diagnosis}
+                                        onChange={e => handleClinicalChange('diagnosis', e.target.value)}
+                                        placeholder="Nhập chẩn đoán..."
+                                        disabled={isReadOnly}
+                                    />
+                                </div>
                                 
                                 <div>
+                                    <div className="text-xs text-gray-500 mb-1">LỜI DẶN CỦA BÁC SĨ</div>
                                     <TextArea 
                                         placeholder="Lời dặn bác sĩ / Kết luận điều trị..."
                                         value={clinical.doctor_notes}
-                                        onChange={e => setClinical({...clinical, doctor_notes: e.target.value})}
+                                        onChange={e => handleClinicalChange('doctor_notes', e.target.value)}
                                         rows={4}
+                                        disabled={isReadOnly}
                                     />
-                                    {/* NEW: SMART ADVICE TAGS */}
-                                    <SmartAdviceTags 
-                                        diagnosis={clinical.diagnosis} 
-                                        currentNotes={clinical.doctor_notes}
-                                        onAddNote={(newNote) => setClinical(prev => ({ ...prev, doctor_notes: newNote }))}
-                                    />
+                                    
+                                    {!isReadOnly && (
+                                        <SmartAdviceTags 
+                                            diagnosis={clinical.diagnosis} 
+                                            currentNotes={clinical.doctor_notes}
+                                            onAddNote={(newNote) => handleClinicalChange('doctor_notes', newNote)}
+                                        />
+                                    )}
                                 </div>
                             </div>
                          </Card>
@@ -332,18 +347,49 @@ const DoctorPage = () => {
                             items={prescriptionItems}
                             setItems={setPrescriptionItems}
                             patientAllergies={patientInfo?.allergies}
+                            readOnly={isReadOnly}
                          />
                     </Col>
                 </Row>
 
                 {/* ACTION BAR (Sticky Bottom) */}
-                <DoctorBlock5_Actions 
-                    onSave={handleSave} 
-                    onPrint={handlePrint}
-                    onScheduleFollowUp={handleScheduleFollowUp}
-                    loading={loading}
-                />
-
+                {!isReadOnly ? (
+                    <DoctorBlock5_Actions 
+                        onSave={handleSave} 
+                        onPrint={handlePrint}
+                        onScheduleFollowUp={handleScheduleFollowUp}
+                        loading={loading}
+                    />
+                ) : (
+                     <div className="bg-white p-4 border-t border-gray-200 mt-4 flex justify-between items-center sticky bottom-0 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+                        <div className="flex gap-2">
+                             <div className="text-green-600 font-bold flex items-center px-4 bg-green-50 rounded border border-green-200">
+                                 <CheckCircleOutlined className="mr-2"/> ĐÃ HOÀN THÀNH
+                             </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button 
+                                icon={<PrinterOutlined />} 
+                                onClick={handlePrint}
+                                className="border-blue-500 text-blue-600 hover:text-blue-700 hover:border-blue-600"
+                            >
+                                In Phiếu & Đơn Thuốc
+                            </Button>
+                            <Popover
+                                title="Chọn ngày tái khám"
+                                trigger="click"
+                                content={(
+                                    <div className="flex gap-2">
+                                        <DatePicker onChange={(d) => d && handleScheduleFollowUp(d.toISOString())} />
+                                    </div>
+                                )}
+                            >
+                                 <Button icon={<CalendarOutlined />}>Hẹn Tái Khám</Button>
+                            </Popover>
+                        </div>
+                    </div>
+                )}
+                
                 {/* REALTIME LAB DRAWER */}
                 <ParaclinicalResultsDrawer 
                     open={openLabDrawer}

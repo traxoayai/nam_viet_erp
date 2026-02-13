@@ -12,6 +12,7 @@ interface Props {
   historyData?: any[]; 
   vitals?: any; // Để lấy weight hiện tại
   patientDOB?: string; // Cần DOB để tính tháng tuổi
+  readOnly?: boolean;
 }
 
 // Dữ liệu chuẩn WHO (Cân nặng bé trai 0-24 tháng - Rút gọn P50 - Simplification)
@@ -21,7 +22,7 @@ const WHO_STD = [
     { m: 12, std: 9.6 }, { m: 18, std: 10.9 }, { m: 24, std: 12.2 } 
 ];
 
-export const ExamForm_Infant: React.FC<Props> = ({ data, onChange, vitals, patientDOB }) => {
+export const ExamForm_Infant: React.FC<Props> = ({ data, onChange, vitals, patientDOB, readOnly }) => {
   
   // 1. Tính toán Data Biểu đồ (Realtime)
   const chartData = useMemo(() => {
@@ -117,6 +118,7 @@ const nutritionalStatus = useMemo(() => {
                         placeholder="VD: 3.2"
                         value={data.birth_weight}
                         onChange={e => onChange('birth_weight', e.target.value)}
+                        disabled={readOnly}
                     />
                 </Col>
                 <Col span={12}>
@@ -133,6 +135,7 @@ const nutritionalStatus = useMemo(() => {
                             { value: 'closed_early', label: 'Đóng sớm' },
                             { value: 'closed_late', label: 'Đóng muộn' },
                         ]}
+                        disabled={readOnly}
                     />
                 </Col>
                 <Col span={12}>
@@ -141,6 +144,7 @@ const nutritionalStatus = useMemo(() => {
                         value={data.reflexes} 
                         onChange={e => onChange('reflexes', e.target.value)} 
                         placeholder="Moro, bú, nắm tay..."
+                        disabled={readOnly}
                     />
                 </Col>
                 <Col span={12}>
@@ -157,6 +161,7 @@ const nutritionalStatus = useMemo(() => {
                             { value: 'zone_4', label: 'Vùng 4 (Tay, chân)' },
                             { value: 'zone_5', label: 'Vùng 5 (Bàn tay, chân)' },
                         ]}
+                        disabled={readOnly}
                     />
                 </Col>
                 <Col span={24}>
@@ -165,6 +170,7 @@ const nutritionalStatus = useMemo(() => {
                         value={data.feeding_status} 
                         onChange={e => onChange('feeding_status', e.target.value)} 
                         placeholder="Bú mẹ/Sữa CT/Ăn dặm..."
+                        disabled={readOnly}
                     />
                 </Col>
             </Row>
