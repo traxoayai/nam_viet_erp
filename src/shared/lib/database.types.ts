@@ -4280,6 +4280,14 @@ export type Database = {
       allocate_inbound_costs: { Args: { p_receipt_id: number }; Returns: Json }
       approve_user: { Args: { p_user_id: string }; Returns: undefined }
       auto_create_purchase_orders_min_max: { Args: never; Returns: number }
+      bulk_pay_orders: {
+        Args: {
+          p_fund_account_id: number
+          p_note?: string
+          p_order_ids: string[]
+        }
+        Returns: Json
+      }
       bulk_update_product_barcodes: { Args: { p_data: Json }; Returns: Json }
       bulk_update_product_prices: { Args: { p_data: Json }; Returns: undefined }
       bulk_update_product_strategy: {

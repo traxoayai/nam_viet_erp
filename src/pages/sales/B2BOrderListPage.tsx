@@ -15,7 +15,7 @@ import {
   DeleteOutlined, // [NEW]
 } from "@ant-design/icons";
 import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders";
-import { Button, message, Modal, Select, Upload, Tag, Typography, Avatar, Space } from "antd";
+import { Button, message, Modal, Select, Upload, Tag, Typography, Avatar, Space, Input } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useMemo, useState, useEffect } from "react";
 import dayjs from "dayjs";
@@ -30,6 +30,7 @@ import { parseBankStatement } from "@/shared/utils/bankStatementParser";
 // --- MODULE HÓA ĐƠN & TÀI CHÍNH ---
 import { generateInvoiceExcel } from "@/shared/utils/invoiceExcelGenerator";
 import { salesService } from "@/features/sales/api/salesService";
+import { b2bService } from "@/features/sales/api/b2bService";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { VatActionButton } from '@/features/pos/components/VatActionButton';
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
@@ -60,10 +61,12 @@ const B2BOrderListPage = () => {
   const [fundAccounts, setFundAccounts] = useState<any[]>([]); 
   const [selectedFundId, setSelectedFundId] = useState<number | null>(null);
 
-  // [NEW] State cho Thanh toán Đơn lẻ (Use Finance Modal)
   const [financeModalOpen, setFinanceModalOpen] = useState(false);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
   const [initialPaymentMethod, setInitialPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash'); // [NEW]
+
+  const [note, setNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // State Users (Sales Staff)
   const [creators, setCreators] = useState<any[]>([]);
@@ -407,6 +410,21 @@ const B2BOrderListPage = () => {
   ], []);
 
   // --- 5. DATA PREP (STATS) ---
+  const selectedOrders = useMemo(() => {
+     return (tableProps.dataSource || []).filter((o: any) => selectedRowKeys.includes(o.id));
+  }, [tableProps.dataSource, selectedRowKeys]);
+
+  const hasPaidOrder = useMemo(() => {
+     return selectedOrders.some((o: any) => o.payment_status === 'paid');
+  }, [selectedOrders]);
+
+  const totalAmountToCollect = useMemo(() => {
+     return selectedOrders.reduce((sum: number, order: any) => {
+        const amount = order.final_amount - (order.paid_amount || 0);
+        return sum + (amount > 0 ? amount : 0);
+     }, 0);
+  }, [selectedOrders]);
+
   const statItems = [
     {
       title: "Doanh số (Đã chốt)",
@@ -441,6 +459,7 @@ const B2BOrderListPage = () => {
             key: "status",
             placeholder: "Trạng thái Đơn",
             options: [
+                { label: 'Đơn Nháp', value: 'DRAFT' },
                 { label: 'Hoàn thành', value: 'COMPLETED' },
                 { label: 'Đang giao', value: 'SHIPPING' },
                 { label: 'Đã xác nhận', value: 'CONFIRMED' },
@@ -502,6 +521,25 @@ const B2BOrderListPage = () => {
         ]}
       />
 
+      {selectedRowKeys.length > 0 && (
+        <div style={{ marginBottom: 16, padding: '12px 16px', background: '#fff', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+            <Space>
+                <Text strong>Đã chọn <span style={{ color: '#1890ff' }}>{selectedRowKeys.length}</span> đơn hàng</Text>
+                {hasPaidOrder && <Text type="danger" style={{ fontSize: 13 }}><WarningOutlined /> Có đơn hàng đã thanh toán trong danh sách</Text>}
+            </Space>
+            
+            <Button 
+                type="primary" 
+                style={hasPaidOrder ? {} : { backgroundColor: '#52c41a', borderColor: '#52c41a' }} 
+                icon={<DollarCircleOutlined />}
+                disabled={hasPaidOrder}
+                onClick={() => setIsPaymentModalOpen(true)}
+            >
+                Nộp tiền hàng loạt
+            </Button>
+        </div>
+      )}
+
       <SmartTable
         {...tableProps}
         columns={columns}
@@ -521,30 +559,59 @@ const B2BOrderListPage = () => {
       <Modal
           title={`Xác nhận thu tiền ${selectedRowKeys.length} đơn hàng`}
           open={isPaymentModalOpen}
+          confirmLoading={isSubmitting}
           onOk={async () => {
-              if (!selectedFundId) return message.error("Vui lòng chọn Quỹ nhận tiền!");
+              if (!selectedFundId) return message.error("Sếp vui lòng chọn Quỹ nhận tiền!");
               try {
-                  await salesService.confirmPayment(selectedRowKeys as (string|number)[], selectedFundId);
+                  setIsSubmitting(true);
+                  message.loading({ content: 'Đang xử lý thu tiền...', key: 'bulkPay' });
+                  // Gọi API của Nexus
+                  await b2bService.bulkPayOrders(selectedRowKeys as string[], selectedFundId, note);
+                  
+                  // Chờ table reload trước khi đóng modal
+                  await refresh(); 
+                  
+                  message.success({ content: 'Đã nộp tiền và chốt nợ thành công!', key: 'bulkPay' });
                   setIsPaymentModalOpen(false);
-                  refresh();
-                  setSelectedRowKeys([]);
-                  message.success("Đã tạo phiếu thu thành công!");
-              } catch(e: any) { message.error("Lỗi: " + e.message) }
+                  setSelectedRowKeys([]); // Clear selection
+                  setNote(''); // Clear ghi chú
+              } catch(e: any) { 
+                  message.error({ content: "Lỗi: " + e.message, key: 'bulkPay' });
+              } finally {
+                  setIsSubmitting(false);
+              }
           }}
           onCancel={() => setIsPaymentModalOpen(false)}
           okText="Xác nhận Thu tiền"
           cancelText="Hủy"
       >
           <div style={{ padding: '8px 0' }}>
-            <p>Tổng số đơn hàng: <b>{selectedRowKeys.length}</b></p>
-            <p>Hệ thống sẽ cập nhật trạng thái "Đã thanh toán" và tạo Phiếu Thu.</p>
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                <Text style={{ fontSize: 16 }}>Tổng tiền cần thu:</Text>
+                <div style={{ fontSize: 32, fontWeight: 'bold', color: '#52c41a', marginTop: 8 }}>
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmountToCollect)}
+                </div>
+            </div>
+
             <div style={{ marginTop: 16 }}>
-                <label style={{ fontWeight: 500 }}>Chọn Quỹ nhận tiền:</label>
+                <label style={{ fontWeight: 500 }}>Chọn Quỹ nhận tiền <span style={{color:'red'}}>*</span></label>
                 <Select 
                     style={{ width: '100%', marginTop: 8 }}
                     value={selectedFundId}
                     onChange={setSelectedFundId}
                     options={fundAccounts.map(f => ({ label: f.name, value: f.id }))}
+                    placeholder="Chọn quỹ"
+                />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+                <label style={{ fontWeight: 500 }}>Ghi chú:</label>
+                <Input.TextArea
+                    style={{ marginTop: 8 }}
+                    rows={3}
+                    placeholder="Nhập ghi chú thu tiền..."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
                 />
             </div>
           </div>

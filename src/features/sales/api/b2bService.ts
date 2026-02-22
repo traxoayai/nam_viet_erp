@@ -113,4 +113,18 @@ export const b2bService = {
     // Supabase RPC trả về data dạng JSON, cần ép kiểu
     return data as unknown as B2BOrderViewResponse;
   },
+
+  bulkPayOrders: async (orderIds: string[], fundAccountId: number, note?: string) => {
+    const { data, error } = await supabase.rpc("bulk_pay_orders", {
+      p_order_ids: orderIds,
+      p_fund_account_id: fundAccountId,
+      p_note: note || "Kế toán thu tiền hàng loạt"
+    });
+    
+    if (error) {
+        console.error("Lỗi gọi RPC bulk_pay_orders:", error);
+        throw error;
+    }
+    return data;
+  },
 };

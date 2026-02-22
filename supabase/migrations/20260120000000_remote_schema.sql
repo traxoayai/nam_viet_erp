@@ -748,6 +748,58 @@ $$;
 ALTER FUNCTION "public"."auto_create_purchase_orders_min_max"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."bulk_pay_orders"("p_order_ids" "uuid"[], "p_fund_account_id" bigint, "p_note" "text" DEFAULT 'Thanh toán hàng loạt'::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_order RECORD;
+    v_amount_to_pay NUMERIC;
+    v_batch_code TEXT; 
+    v_success_count INT := 0;
+BEGIN
+    -- 1. TẠO MÃ LÔ GỐC (Format: PT-260214-Bxxxx -> B là Batch)
+    v_batch_code := 'PT-' || to_char(NOW(), 'YYMMDD') || '-B' || LPAD(floor(random() * 10000)::text, 4, '0');
+
+    -- 2. Vòng lặp qua từng ID đơn hàng
+    FOR v_order IN 
+        SELECT id, code, final_amount, paid_amount, customer_id
+        FROM public.orders 
+        WHERE id = ANY(p_order_ids) 
+          AND payment_status != 'paid' 
+          AND status NOT IN ('DRAFT', 'CANCELLED', 'QUOTE', 'QUOTE_EXPIRED')
+    LOOP
+        v_amount_to_pay := v_order.final_amount - COALESCE(v_order.paid_amount, 0);
+        
+        IF v_amount_to_pay > 0 THEN
+            v_success_count := v_success_count + 1;
+            
+            -- Insert Phiếu thu lẻ với đuôi thứ tự (PT-260214-Bxxxx-1, PT-260214-Bxxxx-2)
+            INSERT INTO public.finance_transactions (
+                code, transaction_date, flow, business_type, amount, fund_account_id,
+                partner_type, partner_id, ref_type, ref_id, description, status, created_by
+            ) VALUES (
+                v_batch_code || '-' || v_success_count::text, 
+                NOW(), 'in', 'trade', v_amount_to_pay, p_fund_account_id,
+                'customer_b2b', v_order.customer_id::text, 'order', v_order.id::text, 
+                p_note || ' (Mã Đơn: ' || v_order.code || ')', 
+                'completed', auth.uid()
+            );
+        END IF;
+    END LOOP;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'batch_code', v_batch_code, 
+        'processed_count', v_success_count,
+        'message', 'Đã tạo phiếu thu lô ' || v_batch_code || ' cho ' || v_success_count || ' đơn hàng'
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."bulk_pay_orders"("p_order_ids" "uuid"[], "p_fund_account_id" bigint, "p_note" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."bulk_update_product_barcodes"("p_data" "jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -3546,48 +3598,77 @@ CREATE OR REPLACE FUNCTION "public"."create_medical_visit"("p_appointment_id" "u
 DECLARE
     v_visit_id UUID;
     v_doctor_id UUID;
+    v_visit_status TEXT;
+    v_sync_status TEXT;
 BEGIN
     v_doctor_id := auth.uid();
+    
+    -- Lấy trạng thái gửi lên từ FE (in_progress hoặc finished)
+    v_visit_status := COALESCE(p_data->>'status', 'in_progress');
 
+    -- Map sang trạng thái của Appointment/Queue
+    IF v_visit_status = 'finished' THEN
+        v_sync_status := 'completed';
+    ELSE
+        v_sync_status := 'examining';
+    END IF;
+
+    -- [LOGIC CŨ]: INSERT ... ON CONFLICT (Giữ nguyên)
     INSERT INTO public.medical_visits (
         appointment_id, customer_id, doctor_id, created_by, status,
-        
         pulse, temperature, sp02, respiratory_rate, bp_systolic, bp_diastolic,
         weight, height, bmi, head_circumference, birth_weight, birth_height,
-        
         symptoms, examination_summary, diagnosis, icd_code, doctor_notes,
-        
         fontanelle, reflexes, jaundice, feeding_status,
         dental_status, motor_development, language_development,
         puberty_stage, scoliosis_status, visual_acuity_left, visual_acuity_right,
         lifestyle_alcohol, lifestyle_smoking,
-        
-        -- [CDSS UPGRADE] Hứng dữ liệu thông minh
         red_flags, vac_screening
     )
     VALUES (
-        p_appointment_id, p_customer_id, v_doctor_id, v_doctor_id, 'in_progress',
-        
+        p_appointment_id, p_customer_id, v_doctor_id, v_doctor_id, v_visit_status,
         (p_data->>'pulse')::INT, (p_data->>'temperature')::NUMERIC, (p_data->>'sp02')::INT, (p_data->>'respiratory_rate')::INT,
         (p_data->>'bp_systolic')::INT, (p_data->>'bp_diastolic')::INT,
         (p_data->>'weight')::NUMERIC, (p_data->>'height')::NUMERIC, (p_data->>'bmi')::NUMERIC,
         (p_data->>'head_circumference')::NUMERIC, (p_data->>'birth_weight')::NUMERIC, (p_data->>'birth_height')::NUMERIC,
-        
         p_data->>'symptoms', p_data->>'examination_summary', p_data->>'diagnosis', p_data->>'icd_code', p_data->>'doctor_notes',
-        
         p_data->>'fontanelle', p_data->>'reflexes', p_data->>'jaundice', p_data->>'feeding_status',
         p_data->>'dental_status', p_data->>'motor_development', p_data->>'language_development',
         p_data->>'puberty_stage', p_data->>'scoliosis_status', p_data->>'visual_acuity_left', p_data->>'visual_acuity_right',
         (p_data->>'lifestyle_alcohol')::BOOLEAN, (p_data->>'lifestyle_smoking')::BOOLEAN,
-        
-        -- [CDSS UPGRADE] Lưu dạng JSONB trực tiếp (dùng toán tử -> thay vì ->>)
         COALESCE(p_data->'red_flags', '[]'::jsonb),
         COALESCE(p_data->'vac_screening', '{}'::jsonb)
     )
+    ON CONFLICT (appointment_id) 
+    DO UPDATE SET
+        updated_at = NOW(),
+        updated_by = v_doctor_id,
+        status = v_visit_status, -- Cập nhật trạng thái phiếu khám
+        -- (Các trường data khác giữ nguyên như bản trước - rút gọn cho dễ nhìn)
+        pulse = EXCLUDED.pulse, temperature = EXCLUDED.temperature, sp02 = EXCLUDED.sp02,
+        respiratory_rate = EXCLUDED.respiratory_rate, bp_systolic = EXCLUDED.bp_systolic, bp_diastolic = EXCLUDED.bp_diastolic,
+        weight = EXCLUDED.weight, height = EXCLUDED.height, bmi = EXCLUDED.bmi,
+        head_circumference = EXCLUDED.head_circumference, birth_weight = EXCLUDED.birth_weight, birth_height = EXCLUDED.birth_height,
+        symptoms = EXCLUDED.symptoms, examination_summary = EXCLUDED.examination_summary,
+        diagnosis = EXCLUDED.diagnosis, icd_code = EXCLUDED.icd_code, doctor_notes = EXCLUDED.doctor_notes,
+        fontanelle = EXCLUDED.fontanelle, reflexes = EXCLUDED.reflexes, jaundice = EXCLUDED.jaundice, feeding_status = EXCLUDED.feeding_status,
+        dental_status = EXCLUDED.dental_status, motor_development = EXCLUDED.motor_development, language_development = EXCLUDED.language_development,
+        puberty_stage = EXCLUDED.puberty_stage, scoliosis_status = EXCLUDED.scoliosis_status,
+        visual_acuity_left = EXCLUDED.visual_acuity_left, visual_acuity_right = EXCLUDED.visual_acuity_right,
+        lifestyle_alcohol = EXCLUDED.lifestyle_alcohol, lifestyle_smoking = EXCLUDED.lifestyle_smoking,
+        red_flags = EXCLUDED.red_flags, vac_screening = EXCLUDED.vac_screening
+        
     RETURNING id INTO v_visit_id;
 
-    UPDATE public.appointments SET status = 'examining' WHERE id = p_appointment_id;
-    UPDATE public.clinical_queues SET status = 'examining' WHERE appointment_id = p_appointment_id;
+    -- [REAL-TIME SYNC]: Đồng bộ trạng thái sang Lịch hẹn & Hàng đợi
+    -- Cast kiểu dữ liệu an toàn để tránh lỗi ENUM
+    UPDATE public.appointments 
+    SET status = v_sync_status::public.appointment_status 
+    WHERE id = p_appointment_id;
+    
+    UPDATE public.clinical_queues 
+    SET status = v_sync_status::public.queue_status 
+    WHERE appointment_id = p_appointment_id;
 
     RETURN v_visit_id;
 END;
@@ -4777,6 +4858,53 @@ $$;
 ALTER FUNCTION "public"."fn_sync_inventory_batch_to_total"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_sync_payment_to_order"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+    v_order_id UUID;
+    v_total_paid NUMERIC;
+    v_final_amount NUMERIC;
+    v_ref_id TEXT;
+BEGIN
+    -- Lấy ref_id từ bản ghi mới (hoặc cũ nếu đang bị xóa/sửa)
+    v_ref_id := COALESCE(NEW.ref_id, OLD.ref_id);
+
+    -- Bước 1: Tìm ID thực sự của Đơn hàng (Dò cả Code và UUID)
+    SELECT id, final_amount INTO v_order_id, v_final_amount
+    FROM public.orders 
+    WHERE id::text = v_ref_id OR code = v_ref_id
+    LIMIT 1;
+
+    -- Bước 2: Tiến hành tính lại TỔNG TIỀN ĐÃ TRẢ nếu tìm thấy đơn
+    IF v_order_id IS NOT NULL THEN
+        -- Tính tổng MỌI phiếu thu (in) đang có trạng thái (completed) của đơn này
+        SELECT COALESCE(SUM(amount), 0) INTO v_total_paid
+        FROM public.finance_transactions
+        WHERE flow = 'in' AND status = 'completed' AND ref_type = 'order'
+          AND (ref_id = v_order_id::text OR ref_id = (SELECT code FROM public.orders WHERE id = v_order_id));
+
+        -- Bước 3: Cập nhật ngược lại bảng Orders một cách chính xác tuyệt đối
+        UPDATE public.orders
+        SET 
+            paid_amount = v_total_paid,
+            payment_status = CASE 
+                WHEN v_total_paid >= v_final_amount THEN 'paid'
+                WHEN v_total_paid > 0 THEN 'partial'
+                ELSE 'unpaid'
+            END,
+            updated_at = NOW()
+        WHERE id = v_order_id;
+    END IF;
+    
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_sync_payment_to_order"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_trigger_update_customer_debt"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -5171,37 +5299,18 @@ DECLARE
     v_contacts jsonb;
     v_history jsonb;
 BEGIN
-    -- Lấy thông tin chính
-    SELECT to_jsonb(c.*) INTO v_customer
-    FROM public.customers_b2b c
-    WHERE c.id = p_id;
+    SELECT to_jsonb(c.*) INTO v_customer FROM public.customers_b2b c WHERE c.id = p_id;
+    SELECT jsonb_agg(to_jsonb(ct.*)) INTO v_contacts FROM public.customer_b2b_contacts ct WHERE ct.customer_b2b_id = p_id;
+    
+    SELECT COALESCE(jsonb_agg(
+        jsonb_build_object('key', sub.id, 'date', sub.created_at, 'code', sub.code, 'content', 'Đơn hàng ' || sub.code, 'total', sub.final_amount, 'status', sub.status)
+    ), '[]'::jsonb) INTO v_history
+    FROM (
+        SELECT id, created_at, code, final_amount, status FROM public.orders
+        WHERE customer_id = p_id ORDER BY created_at DESC LIMIT 5
+    ) sub;
 
-    -- Lấy contacts
-    SELECT jsonb_agg(to_jsonb(ct.*)) INTO v_contacts
-    FROM public.customer_b2b_contacts ct
-    WHERE ct.customer_b2b_id = p_id;
-
-    -- Lấy 5 đơn hàng gần nhất
-    SELECT jsonb_agg(
-        jsonb_build_object(
-            'key', o.id,
-            'date', o.created_at,
-            'code', o.code,
-            'content', 'Đơn hàng ' || o.code,
-            'total', o.final_amount,
-            'status', o.status
-        )
-    ) INTO v_history
-    FROM public.orders o
-    WHERE o.customer_id = p_id
-    ORDER BY o.created_at DESC
-    LIMIT 5;
-
-    RETURN jsonb_build_object(
-        'customer', v_customer,
-        'contacts', COALESCE(v_contacts, '[]'::jsonb),
-        'history', COALESCE(v_history, '[]'::jsonb)
-    );
+    RETURN jsonb_build_object('customer', v_customer, 'contacts', COALESCE(v_contacts, '[]'::jsonb), 'history', v_history);
 END;
 $$;
 
@@ -5303,32 +5412,40 @@ CREATE OR REPLACE FUNCTION "public"."get_customers_b2b_list"("search_query" "tex
     AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
-        c.id::TEXT as key,
-        c.id,
-        c.customer_code,
-        c.name,
-        c.phone,
-        COALESCE(u.full_name, 'Chưa phân công') as sales_staff_name,
-        c.status,
-        COALESCE(c.debt_limit, 0),
-        COALESCE(c.current_debt, 0), -- Lấy từ cột vật lý
-        COUNT(*) OVER()::bigint as total_count
-    FROM public.customers_b2b c
-    LEFT JOIN public.users u ON c.sales_staff_id = u.id
-    WHERE 
-        (search_query IS NULL OR search_query = '' OR 
-         c.name ILIKE ('%' || search_query || '%') OR 
-         c.phone ILIKE ('%' || search_query || '%') OR
-         c.customer_code ILIKE ('%' || search_query || '%'))
-        AND (sales_staff_filter IS NULL OR c.sales_staff_id = sales_staff_filter)
-        AND (status_filter IS NULL OR c.status = status_filter::public.account_status)
+    WITH debt_calc AS (
+        SELECT 
+            o.customer_id,
+            SUM(o.final_amount - COALESCE(o.paid_amount, 0)) as live_debt
+        FROM public.orders o
+        WHERE o.customer_id IS NOT NULL
+          AND o.status NOT IN ('DRAFT', 'CANCELLED', 'QUOTE', 'QUOTE_EXPIRED')
+          AND o.payment_status != 'paid'
+        GROUP BY o.customer_id
+    ),
+    filtered_data AS (
+        SELECT 
+            c.id::TEXT as key, c.id, c.customer_code, c.name, c.phone,
+            COALESCE(u.full_name, 'Chưa phân công') as sales_staff_name,
+            c.status, COALESCE(c.debt_limit, 0) as debt_limit,
+            COALESCE(d.live_debt, 0) as current_debt
+        FROM public.customers_b2b c
+        LEFT JOIN public.users u ON c.sales_staff_id = u.id
+        LEFT JOIN debt_calc d ON c.id = d.customer_id
+        WHERE 
+            (search_query IS NULL OR search_query = '' OR 
+             c.name ILIKE ('%' || search_query || '%') OR 
+             c.phone ILIKE ('%' || search_query || '%') OR
+             c.customer_code ILIKE ('%' || search_query || '%'))
+            AND (sales_staff_filter IS NULL OR c.sales_staff_id = sales_staff_filter)
+            AND (status_filter IS NULL OR c.status = status_filter::public.account_status)
+    )
+    SELECT fd.*, COUNT(*) OVER()::bigint as total_count
+    FROM filtered_data fd
     ORDER BY 
-        CASE WHEN sort_by_debt = 'asc' THEN c.current_debt END ASC,
-        CASE WHEN sort_by_debt = 'desc' THEN c.current_debt END DESC,
-        c.created_at DESC
-    LIMIT page_size
-    OFFSET (page_num - 1) * page_size;
+        CASE WHEN sort_by_debt = 'asc' THEN fd.current_debt END ASC NULLS LAST,
+        CASE WHEN sort_by_debt = 'desc' THEN fd.current_debt END DESC NULLS LAST,
+        fd.id DESC
+    LIMIT page_size OFFSET (page_num - 1) * page_size;
 END;
 $$;
 
@@ -11425,14 +11542,29 @@ CREATE OR REPLACE FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", 
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
+DECLARE
+    v_appt_id UUID;
+    v_visit_status TEXT;
+    v_sync_status TEXT;
 BEGIN
+    -- Lấy trạng thái mới
+    v_visit_status := COALESCE(p_data->>'status', 'in_progress');
+
+    -- Map trạng thái
+    IF v_visit_status = 'finished' THEN
+        v_sync_status := 'completed';
+    ELSE
+        v_sync_status := 'examining';
+    END IF;
+
+    -- Update phiếu khám và LẤY RA appointment_id để đồng bộ ngược
     UPDATE public.medical_visits
     SET
         updated_by = auth.uid(),
         updated_at = NOW(),
-        
         doctor_id = COALESCE(p_doctor_id, doctor_id),
         
+        -- Data fields
         pulse = COALESCE((p_data->>'pulse')::INT, pulse),
         temperature = COALESCE((p_data->>'temperature')::NUMERIC, temperature),
         sp02 = COALESCE((p_data->>'sp02')::INT, sp02),
@@ -11445,13 +11577,11 @@ BEGIN
         head_circumference = COALESCE((p_data->>'head_circumference')::NUMERIC, head_circumference),
         birth_weight = COALESCE((p_data->>'birth_weight')::NUMERIC, birth_weight),
         birth_height = COALESCE((p_data->>'birth_height')::NUMERIC, birth_height),
-        
         symptoms = COALESCE(p_data->>'symptoms', symptoms),
         examination_summary = COALESCE(p_data->>'examination_summary', examination_summary),
         diagnosis = COALESCE(p_data->>'diagnosis', diagnosis),
         icd_code = COALESCE(p_data->>'icd_code', icd_code),
         doctor_notes = COALESCE(p_data->>'doctor_notes', doctor_notes),
-        
         fontanelle = COALESCE(p_data->>'fontanelle', fontanelle),
         reflexes = COALESCE(p_data->>'reflexes', reflexes),
         jaundice = COALESCE(p_data->>'jaundice', jaundice),
@@ -11465,13 +11595,23 @@ BEGIN
         visual_acuity_right = COALESCE(p_data->>'visual_acuity_right', visual_acuity_right),
         lifestyle_alcohol = COALESCE((p_data->>'lifestyle_alcohol')::BOOLEAN, lifestyle_alcohol),
         lifestyle_smoking = COALESCE((p_data->>'lifestyle_smoking')::BOOLEAN, lifestyle_smoking),
-        
-        -- [CDSS UPGRADE] Cập nhật mảng Cảnh báo & Sàng lọc tiêm chủng
         red_flags = COALESCE(p_data->'red_flags', red_flags),
         vac_screening = COALESCE(p_data->'vac_screening', vac_screening),
         
-        status = COALESCE(p_data->>'status', status)
-    WHERE id = p_visit_id;
+        status = v_visit_status
+    WHERE id = p_visit_id
+    RETURNING appointment_id INTO v_appt_id; -- Lấy ID lịch hẹn để update bảng cha
+
+    -- [REAL-TIME SYNC]: Đồng bộ trạng thái về bảng cha
+    IF v_appt_id IS NOT NULL THEN
+        UPDATE public.appointments 
+        SET status = v_sync_status::public.appointment_status 
+        WHERE id = v_appt_id;
+
+        UPDATE public.clinical_queues 
+        SET status = v_sync_status::public.queue_status 
+        WHERE appointment_id = v_appt_id;
+    END IF;
 END;
 $$;
 
@@ -13155,6 +13295,7 @@ CREATE TABLE IF NOT EXISTS "public"."finance_transactions" (
     "ref_advance_id" bigint,
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "target_bank_info" "jsonb",
+    CONSTRAINT "check_ref_id_required" CHECK (((("ref_type" = 'order'::"text") AND ("ref_id" IS NOT NULL) AND ("ref_id" <> ''::"text")) OR ("ref_type" <> 'order'::"text") OR ("ref_type" IS NULL))),
     CONSTRAINT "finance_transactions_amount_check" CHECK (("amount" > (0)::numeric))
 );
 
@@ -15885,6 +16026,10 @@ CREATE OR REPLACE TRIGGER "trg_sync_batch_to_total" AFTER INSERT OR DELETE OR UP
 
 
 
+CREATE OR REPLACE TRIGGER "trg_sync_payment_to_order_after_complete" AFTER UPDATE OF "status" ON "public"."finance_transactions" FOR EACH ROW WHEN (((("new"."status" = 'completed'::"public"."transaction_status") AND ("old"."status" <> 'completed'::"public"."transaction_status")) OR (("old"."status" = 'completed'::"public"."transaction_status") AND ("new"."status" <> 'completed'::"public"."transaction_status")))) EXECUTE FUNCTION "public"."fn_sync_payment_to_order"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_update_customer_debt" AFTER INSERT OR DELETE OR UPDATE ON "public"."finance_transactions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_trigger_update_customer_debt"();
 
 
@@ -16693,6 +16838,22 @@ CREATE POLICY "Allow delete for Owner OR Admin" ON "public"."connect_posts" FOR 
 
 
 
+CREATE POLICY "Allow read all items" ON "public"."clinical_prescription_items" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "Allow read all prescriptions" ON "public"."clinical_prescriptions" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "Allow read all users" ON "public"."users" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "Allow read all visits" ON "public"."medical_visits" FOR SELECT TO "authenticated" USING (true);
+
+
+
 CREATE POLICY "Auth user insert comments" ON "public"."connect_comments" FOR INSERT WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
 
 
@@ -17359,6 +17520,12 @@ GRANT ALL ON FUNCTION "public"."auto_create_purchase_orders_min_max"() TO "servi
 
 
 
+GRANT ALL ON FUNCTION "public"."bulk_pay_orders"("p_order_ids" "uuid"[], "p_fund_account_id" bigint, "p_note" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."bulk_pay_orders"("p_order_ids" "uuid"[], "p_fund_account_id" bigint, "p_note" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."bulk_pay_orders"("p_order_ids" "uuid"[], "p_fund_account_id" bigint, "p_note" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."bulk_update_product_barcodes"("p_data" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."bulk_update_product_barcodes"("p_data" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."bulk_update_product_barcodes"("p_data" "jsonb") TO "service_role";
@@ -17782,6 +17949,12 @@ GRANT ALL ON FUNCTION "public"."export_products_list"("search_query" "text", "ca
 GRANT ALL ON FUNCTION "public"."fn_sync_inventory_batch_to_total"() TO "anon";
 GRANT ALL ON FUNCTION "public"."fn_sync_inventory_batch_to_total"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_sync_inventory_batch_to_total"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."fn_sync_payment_to_order"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_sync_payment_to_order"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_sync_payment_to_order"() TO "service_role";
 
 
 
