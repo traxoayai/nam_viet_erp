@@ -12,35 +12,42 @@ import "antd/dist/reset.css";
 import "./app/styles/globals.css";
 import "dayjs/locale/vi";
 
+// --- React Query ---
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 // --- MỚI: Import Context ---
 import { AuthProvider } from "@/app/contexts/AuthProvider";
 import { NotificationProvider } from "@/app/contexts/NotificationContext";
 import { PermissionGate } from "@/app/providers/PermissionGate";
 
+const queryClient = new QueryClient();
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      {/* Bọc AuthProvider ở đây để quản lý phiên đăng nhập toàn cục */}
-      <AuthProvider>
-        <ConfigProvider
-          locale={viVN}
-          theme={{
-            token: {
-              colorPrimary: "#00b96b",
-              borderRadius: 4,
-            },
-          }}
-        >
-          {/* Bọc NotificationProvider trong ConfigProvider để ăn theo Theme */}
-          <NotificationProvider>
-          <PermissionGate>
-            <AntApp>
-              <App />
-            </AntApp>
-          </PermissionGate>
-          </NotificationProvider>
-        </ConfigProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        {/* Bọc AuthProvider ở đây để quản lý phiên đăng nhập toàn cục */}
+        <AuthProvider>
+          <ConfigProvider
+            locale={viVN}
+            theme={{
+              token: {
+                colorPrimary: "#00b96b",
+                borderRadius: 4,
+              },
+            }}
+          >
+            {/* Bọc NotificationProvider trong ConfigProvider để ăn theo Theme */}
+            <NotificationProvider>
+            <PermissionGate>
+              <AntApp>
+                <App />
+              </AntApp>
+            </PermissionGate>
+            </NotificationProvider>
+          </ConfigProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   </React.StrictMode>
 );

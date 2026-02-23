@@ -503,3 +503,159 @@ export const printMedicalVisit = (data: any) => {
   win.document.close();
   win.print();
 };
+
+// 7. IN KẾT QUẢ CHẨN ĐOÁN HÌNH ẢNH (A4/A5)
+export const printImagingResult = (data: any) => {
+    // data: { patientInfo, serviceName, descriptionHtml, conclusionHtml, recommendation, doctorName, date }
+    const win = window.open('', '', 'height=700,width=900');
+    if (!win) return;
+
+    const content = `
+    <html>
+      <head>
+        <title>Kết quả ${data.serviceName}</title>
+        <style>
+          body { font-family: 'Times New Roman', serif; padding: 20px; font-size: 14px; line-height: 1.5; }
+          .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;}
+          .clinic-name { font-size: 18px; font-weight: bold; text-transform: uppercase; }
+          .title { text-align: center; font-size: 22px; font-weight: bold; margin: 20px 0; text-transform: uppercase;}
+          .patient-info { margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
+          .patient-info div { display: flex; }
+          .patient-info .label { font-weight: bold; width: 120px; }
+          .content-section { margin-bottom: 15px; }
+          .section-title { font-weight: bold; text-transform: uppercase; text-decoration: underline; margin-bottom: 5px; }
+          .conclusion { font-weight: bold; color: #b91c1c; font-size: 16px; }
+          .footer { margin-top: 40px; display: flex; justify-content: space-between; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+            <div class="clinic-name">PHÒNG KHÁM ĐA KHOA NAM VIỆT</div>
+            <div>Số 17, Đường Bắc Sơn, Xã Hữu Lũng, Lạng Sơn</div>
+        </div>
+
+        <div class="title">PHIẾU KẾT QUẢ ${data.serviceName}</div>
+        
+        <div class="patient-info">
+            <div><span class="label">Họ tên:</span> <span><b>${data.patientInfo?.name || '...'}</b></span></div>
+            <div><span class="label">Năm sinh:</span> <span>${data.patientInfo?.dob ? new Date(data.patientInfo.dob).getFullYear() : '...'} (${data.patientInfo?.gender === 'male' ? 'Nam' : 'Nữ'})</span></div>
+            <div style="grid-column: span 2;"><span class="label">Địa chỉ:</span> <span>${data.patientInfo?.address || '...'}</span></div>
+            <div style="grid-column: span 2;"><span class="label">Chỉ định:</span> <span>${data.serviceName}</span></div>
+        </div>
+
+        <div class="content-section">
+            <div class="section-title">MÔ TẢ TỔN THƯƠNG:</div>
+            <div>${data.descriptionHtml || ''}</div>
+        </div>
+
+        <div class="content-section">
+            <div class="section-title">KẾT LUẬN:</div>
+            <div class="conclusion">${data.conclusionHtml || ''}</div>
+        </div>
+
+        ${data.recommendation ? `
+        <div class="content-section">
+            <div class="section-title">ĐỀ NGHỊ:</div>
+            <div>${data.recommendation}</div>
+        </div>
+        ` : ''}
+
+        <div class="footer">
+            <div style="width: 30%"></div>
+            <div style="width: 40%">
+                <i>Ngày ${dayjs(data.date).format('DD')} tháng ${dayjs(data.date).format('MM')} năm ${dayjs(data.date).format('YYYY')}</i><br>
+                <b>BÁC SĨ / KTV THỰC HIỆN</b><br>
+                <br><br><br>
+                ${data.doctorName || 'Ký tên'}
+            </div>
+        </div>
+      </body>
+    </html>
+    `;
+    win.document.write(content);
+    win.document.close();
+    setTimeout(() => { win.print(); }, 500);
+};
+
+// 8. IN KẾT QUẢ XÉT NGHIỆM (A4)
+export const printLabResult = (data: any) => {
+    // data: { patientInfo, serviceName, results: [{ name, value, unit, ref, eval }], doctorName, date }
+    const win = window.open('', '', 'height=700,width=900');
+    if (!win) return;
+
+    const rows = data.results?.map((item: any, idx: number) => {
+        const isAbnormal = item.eval === 'High' || item.eval === 'Low' || item.eval === 'Positive';
+        return `
+        <tr style="${isAbnormal ? 'font-weight: bold;' : ''}">
+            <td style="text-align: center">${idx + 1}</td>
+            <td>${item.name}</td>
+            <td style="text-align: center; ${isAbnormal ? 'color: red;' : ''}">${item.value}</td>
+            <td style="text-align: center">${item.unit || ''}</td>
+            <td style="text-align: center">${item.ref || ''}</td>
+            <td style="text-align: center; ${isAbnormal ? 'color: red;' : ''}">${item.eval === 'High' ? 'Cao' : item.eval === 'Low' ? 'Thấp' : item.eval === 'Positive' ? 'Dương tính' : 'Bình thường'}</td>
+        </tr>
+    `}).join('');
+
+    const content = `
+    <html>
+      <head>
+        <title>Kết quả Xét nghiệm ${data.serviceName}</title>
+        <style>
+          body { font-family: 'Times New Roman', serif; padding: 20px; font-size: 14px; }
+          .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;}
+          .clinic-name { font-size: 18px; font-weight: bold; text-transform: uppercase; }
+          .title { text-align: center; font-size: 22px; font-weight: bold; margin: 20px 0; text-transform: uppercase;}
+          .patient-info { margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
+          .patient-info div { display: flex; }
+          .patient-info .label { font-weight: bold; width: 120px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+          th, td { border: 1px solid #333; padding: 8px; }
+          th { background-color: #f0f0f0; }
+          .footer { margin-top: 40px; display: flex; justify-content: space-between; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+            <div class="clinic-name">PHÒNG KHÁM ĐA KHOA NAM VIỆT</div>
+            <div>Số 17, Đường Bắc Sơn, Xã Hữu Lũng, Lạng Sơn</div>
+        </div>
+
+        <div class="title">PHIẾU KẾT QUẢ XÉT NGHIỆM</div>
+        
+        <div class="patient-info">
+            <div><span class="label">Họ tên:</span> <span><b>${data.patientInfo?.name || '...'}</b></span></div>
+            <div><span class="label">Năm sinh:</span> <span>${data.patientInfo?.dob ? new Date(data.patientInfo.dob).getFullYear() : '...'} (${data.patientInfo?.gender === 'male' ? 'Nam' : 'Nữ'})</span></div>
+            <div style="grid-column: span 2;"><span class="label">Địa chỉ:</span> <span>${data.patientInfo?.address || '...'}</span></div>
+            <div style="grid-column: span 2;"><span class="label">Loại xét nghiệm:</span> <span><b>${data.serviceName}</b></span></div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th width="5%">STT</th>
+                    <th width="35%">Tên Xét Nghiệm</th>
+                    <th width="15%">Kết Quả</th>
+                    <th width="15%">Đơn Vị</th>
+                    <th width="20%">Trị Số Bình Thường</th>
+                    <th width="10%">Đánh Giá</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+
+        <div class="footer">
+            <div style="width: 30%"></div>
+            <div style="width: 40%">
+                <i>Ngày ${dayjs(data.date).format('DD')} tháng ${dayjs(data.date).format('MM')} năm ${dayjs(data.date).format('YYYY')}</i><br>
+                <b>KTV XÉT NGHIỆM</b><br>
+                <br><br><br>
+                ${data.doctorName || 'Ký tên'}
+            </div>
+        </div>
+      </body>
+    </html>
+    `;
+    win.document.write(content);
+    win.document.close();
+    setTimeout(() => { win.print(); }, 500);
+};

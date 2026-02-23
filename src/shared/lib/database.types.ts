@@ -2046,6 +2046,77 @@ export type Database = {
           },
         ]
       }
+      lab_indicators_config: {
+        Row: {
+          absurd_max: number | null
+          absurd_min: number | null
+          age_max_days: number | null
+          age_min_days: number | null
+          created_at: string | null
+          display_order: number | null
+          gender_apply: string | null
+          id: number
+          indicator_code: string
+          indicator_name: string
+          max_normal: number | null
+          min_normal: number | null
+          qualitative_normal_value: string | null
+          service_package_id: number | null
+          status: string | null
+          unit: string | null
+          updated_at: string | null
+          value_type: string | null
+        }
+        Insert: {
+          absurd_max?: number | null
+          absurd_min?: number | null
+          age_max_days?: number | null
+          age_min_days?: number | null
+          created_at?: string | null
+          display_order?: number | null
+          gender_apply?: string | null
+          id?: number
+          indicator_code: string
+          indicator_name: string
+          max_normal?: number | null
+          min_normal?: number | null
+          qualitative_normal_value?: string | null
+          service_package_id?: number | null
+          status?: string | null
+          unit?: string | null
+          updated_at?: string | null
+          value_type?: string | null
+        }
+        Update: {
+          absurd_max?: number | null
+          absurd_min?: number | null
+          age_max_days?: number | null
+          age_min_days?: number | null
+          created_at?: string | null
+          display_order?: number | null
+          gender_apply?: string | null
+          id?: number
+          indicator_code?: string
+          indicator_name?: string
+          max_normal?: number | null
+          min_normal?: number | null
+          qualitative_normal_value?: string | null
+          service_package_id?: number | null
+          status?: string | null
+          unit?: string | null
+          updated_at?: string | null
+          value_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lab_indicators_config_service_package_id_fkey"
+            columns: ["service_package_id"]
+            isOneToOne: false
+            referencedRelation: "service_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       medical_visits: {
         Row: {
           appointment_id: string | null
@@ -2436,6 +2507,56 @@ export type Database = {
             columns: ["warehouse_id"]
             isOneToOne: false
             referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paraclinical_templates: {
+        Row: {
+          category: string
+          conclusion: string | null
+          created_at: string | null
+          created_by: string | null
+          description_html: string | null
+          id: number
+          name: string
+          recommendation: string | null
+          service_package_id: number | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          conclusion?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description_html?: string | null
+          id?: number
+          name: string
+          recommendation?: string | null
+          service_package_id?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          conclusion?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description_html?: string | null
+          id?: number
+          name?: string
+          recommendation?: string | null
+          service_package_id?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paraclinical_templates_service_package_id_fkey"
+            columns: ["service_package_id"]
+            isOneToOne: false
+            referencedRelation: "service_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -5770,6 +5891,10 @@ export type Database = {
           uom_wholesale: string
         }[]
       }
+      search_prescription_templates: {
+        Args: { p_keyword?: string }
+        Returns: Json
+      }
       search_product_batches: {
         Args: { p_product_id: number; p_warehouse_id: number }
         Returns: {
@@ -5883,6 +6008,15 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
       submit_cash_remittance: {
         Args: { p_order_ids: string[]; p_user_id: string }
+        Returns: Json
+      }
+      submit_paraclinical_result: {
+        Args: {
+          p_imaging_result?: string
+          p_request_id: number
+          p_results_json?: Json
+          p_status?: string
+        }
         Returns: Json
       }
       submit_transfer_shipping: {

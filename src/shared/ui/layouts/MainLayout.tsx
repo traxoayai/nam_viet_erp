@@ -48,7 +48,7 @@ import {
   LogOut, CircleChevronLeft, CircleChevronRight,
   Home, Store, Stethoscope, Briefcase, Gift, Package, Rocket,
   Handshake, Users, Megaphone, ClipboardList, CircleDollarSign,
-  PieChart, Settings, ChevronRight, ChevronLeft 
+  PieChart, Settings, ChevronRight, ChevronLeft, FlaskConical
 } from "lucide-react";
 import {
   Layout,
@@ -154,6 +154,13 @@ const finalMenuItems: MenuItem[] = [
       <Stethoscope size={18} />
     ),
   ]),
+
+  // 3.5 Cận Lâm Sàng
+  getItem(
+    <Link to="/medical/paraclinical">Cận Lâm Sàng</Link>,
+    "paraclinical",
+    <FlaskConical size={20} color="#4b5563" strokeWidth={1.5} />
+  ),
 
   // 4. Bán buôn
   getItem("Bán buôn (B2B)", "b2b", <Briefcase size={20} color="#4b5563" strokeWidth={1.5} />, [

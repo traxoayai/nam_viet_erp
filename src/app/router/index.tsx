@@ -17,6 +17,7 @@ import AssetManagementPage from "@/pages/finance/AssetManagementPage";
 import ReceptionPage from "@/pages/medical/ReceptionPage"; // [NEW]
 import DoctorPage from "@/pages/medical/DoctorPage";
 import DoctorQueuePage from "@/pages/medical/DoctorQueuePage";
+import ParaclinicalPage from "@/pages/medical/ParaclinicalPage"; // [NEW]
 
 
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
@@ -158,6 +159,10 @@ const routes: RouteObject[] = [
           {
             path: "medical/examination/:id", // Trang khám chi tiết
             element: <DoctorPage />,
+          },
+          {
+            path: "medical/paraclinical",
+            element: <ParaclinicalPage />,
           },
 
           // 4. Bán buôn (B2B)
