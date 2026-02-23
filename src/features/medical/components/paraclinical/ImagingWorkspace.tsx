@@ -55,30 +55,29 @@ export const ImagingWorkspace = ({ request, onComplete }: Props) => {
         let lastIndex = 0;
         let fieldIndex = 0;
 
-        // Xử lý bôi đỏ từ khóa
-        const processText = (txt: string) => {
+        // Xử lý bôi đỏ từ khóa & TRẢ VỀ HTML STRING
+        const processTextToHtmlString = (txt: string) => {
             if (!applyHighlight) return txt;
             const regexStr = RED_FLAGS.join('|');
             const highlightRegex = new RegExp(`(${regexStr})`, 'gi');
-            const segments = txt.split(highlightRegex);
-            return segments.map((seg, i) => {
-                if (seg.match(highlightRegex)) {
-                    return <span key={i} className="text-red-600 font-bold bg-red-50 px-1 rounded">{seg}</span>;
-                }
-                return seg;
-            });
+            return txt.replace(highlightRegex, '<span class="text-red-600 font-bold bg-red-50 px-1 rounded">$1</span>');
         };
 
         let match;
         while ((match = regex.exec(content)) !== null) {
+            // 1. Render phần text (chứa HTML) TRƯỚC biến {{}} bằng dangerouslySetInnerHTML
             if (match.index > lastIndex) {
-                parts.push(<span key={`text-${lastIndex}`}>{processText(content.substring(lastIndex, match.index))}</span>);
+                const htmlString = processTextToHtmlString(content.substring(lastIndex, match.index));
+                parts.push(
+                    <span key={`text-${lastIndex}`} dangerouslySetInnerHTML={{ __html: htmlString }} />
+                );
             }
 
             const token = match[1];
             const currentIdx = fieldIndex++;
             const formKey = `${fieldPrefix}_${currentIdx}`;
 
+            // 2. Render Biến (Input hoặc Select)
             if (token === 'input') {
                 parts.push(
                     <input
@@ -110,8 +109,12 @@ export const ImagingWorkspace = ({ request, onComplete }: Props) => {
             lastIndex = regex.lastIndex;
         }
 
+        // 3. Render đoạn text (chứa HTML) CUỐI CÙNG sau biến cuối
         if (lastIndex < content.length) {
-            parts.push(<span key={`text-end`}>{processText(content.substring(lastIndex))}</span>);
+            const htmlString = processTextToHtmlString(content.substring(lastIndex));
+            parts.push(
+                <span key={`text-end`} dangerouslySetInnerHTML={{ __html: htmlString }} />
+            );
         }
 
         return <div className="leading-loose text-base">{parts}</div>;
