@@ -1,3 +1,4 @@
+// src/features/medical/hooks/useDoctorWorkbench.ts
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { message } from 'antd';
@@ -32,6 +33,7 @@ export const useDoctorWorkbench = () => {
     const [prescriptionItems, setPrescriptionItems] = useState<ClinicalPrescriptionItem[]>([]);
     const [serviceOrders, setServiceOrders] = useState<any[]>([]);
     const [patientInfo, setPatientInfo] = useState<any>(null);
+    const [isPrescriptionSent, setIsPrescriptionSent] = useState(false);
 
     // --- LOADING ---
     useEffect(() => {
@@ -49,11 +51,21 @@ export const useDoctorWorkbench = () => {
             if (apptError) throw apptError;
             setPatientInfo(appt.patient);
 
+            // Fetch Medical Visit
             const { data: visitData } = await supabase
                 .from('medical_visits')
                 .select('*')
                 .eq('appointment_id', apptId)
                 .maybeSingle();
+
+            // Fetch Chỉ định Cận Lâm Sàng hiện có
+            if (visitData?.id) {
+                const { data: requests } = await supabase
+                    .from('clinical_service_requests')
+                    .select('*')
+                    .eq('medical_visit_id', visitData.id);
+                if (requests) setServiceOrders(requests);
+            }
             
             if (visitData) {
                 setVisit(visitData);
@@ -174,11 +186,60 @@ export const useDoctorWorkbench = () => {
         // Logic cũ giữ nguyên
     };
 
+    // --- API THU TIỀN VÀ KÊ ĐƠN ---
+    const handleCheckoutClinicalServices = async (selectedServicesJson: any[]) => {
+        if (!appointmentId || !patientInfo) return message.error("Chưa có thông tin khám bệnh/bệnh nhân");
+        if (!selectedServicesJson.length) return message.warning("Chưa chọn dịch vụ nào");
+        setLoading(true);
+        try {
+            const { error } = await supabase.rpc('checkout_clinical_services', {
+                p_appointment_id: appointmentId,
+                p_customer_id: patientInfo.id,
+                p_services: selectedServicesJson
+            });
+            if (error) throw error;
+            message.success("Đã tạo phiếu thu tiền thành công!");
+            
+            // Reload Cận lâm sàng
+            const { data: requests } = await supabase
+                .from('clinical_service_requests')
+                .select('*')
+                .eq('medical_visit_id', visit.id);
+            if (requests) setServiceOrders(requests);
+        } catch (err: any) {
+             message.error("Lỗi thu tiền: " + err.message);
+        } finally {
+             setLoading(false);
+        }
+    };
+
+    const handleSendToPharmacy = async (warehouseId: number) => {
+        if (!appointmentId || !patientInfo) return message.error("Chưa có thông tin khám");
+        if (!prescriptionItems.length) return message.warning("Đơn thuốc trống!");
+        setLoading(true);
+        try {
+            const { error } = await supabase.rpc('send_prescription_to_pos', {
+                p_appointment_id: appointmentId,
+                p_customer_id: patientInfo.id,
+                p_items: prescriptionItems,
+                p_pharmacy_warehouse_id: warehouseId
+            });
+            if (error) throw error;
+            message.success("Đã chuyển Đơn tới Quầy Thuốc thành công!");
+            setIsPrescriptionSent(true);
+        } catch(err: any) {
+            message.error("Lỗi gửi toa: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
     return {
         loading, patientInfo, visit, vitals, setVitals, clinical, setClinical,
         prescriptionItems, setPrescriptionItems, serviceOrders, setServiceOrders,
-        handleSave, handlePrint, handleScheduleFollowUp,
+        handleSave, handlePrint, handleScheduleFollowUp, handleCheckoutClinicalServices, handleSendToPharmacy,
         medicalVisitId: visit.id,
-        isReadOnly
+        isReadOnly,
+        isPrescriptionSent
     };
 };

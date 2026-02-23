@@ -38,12 +38,15 @@ const DoctorPage = () => {
         // visit, 
         vitals, setVitals, 
         clinical, setClinical,
-        prescriptionItems, setPrescriptionItems,
+        prescriptionItems, setPrescriptionItems, serviceOrders,
         handleSave,
         handlePrint,
         handleScheduleFollowUp,
+        handleCheckoutClinicalServices,
+        handleSendToPharmacy,
         medicalVisitId,
-        isReadOnly
+        isReadOnly,
+        isPrescriptionSent
     } = useDoctorWorkbench();
     
     // History Hook for "Copy Prescription"
@@ -303,7 +306,11 @@ const DoctorPage = () => {
                 <Row gutter={16} className="mb-16">
                     {/* Part A: Service Order */}
                     <Col span={8} className="flex flex-col gap-4">
-                         <DoctorBlock3_ServiceOrder readOnly={isReadOnly} />
+                         <DoctorBlock3_ServiceOrder 
+                             readOnly={isReadOnly} 
+                             serviceOrders={serviceOrders}
+                             onCheckout={handleCheckoutClinicalServices}
+                         />
                     </Col>
 
                     {/* Part B: Prescription & Conclusion */}
@@ -348,6 +355,9 @@ const DoctorPage = () => {
                             setItems={setPrescriptionItems}
                             patientAllergies={patientInfo?.allergies}
                             readOnly={isReadOnly}
+                            onSendPharmacy={handleSendToPharmacy}
+                            sending={loading}
+                            isPrescriptionSent={isPrescriptionSent}
                          />
                     </Col>
                 </Row>

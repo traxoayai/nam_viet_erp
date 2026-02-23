@@ -96,7 +96,7 @@ export const salesService = {
   async getOrders(params: {
     page: number;
     pageSize: number;
-    orderType?: 'B2B' | 'POS'; // Lọc loại đơn
+    orderType?: string; // Hỗ trợ lọc nhiều loại đơn (Vd: 'POS,CLINICAL')
     search?: string;
     status?: string;
     remittanceStatus?: string; // 'pending' để lọc đơn chưa nộp tiền

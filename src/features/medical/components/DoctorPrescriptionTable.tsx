@@ -10,9 +10,10 @@ const { Text } = Typography;
 interface Props {
   items: ClinicalPrescriptionItem[];
   setItems: (items: ClinicalPrescriptionItem[]) => void;
+  readOnly?: boolean;
 }
 
-export const DoctorPrescriptionTable: React.FC<Props> = ({ items, setItems }) => {
+export const DoctorPrescriptionTable: React.FC<Props> = ({ items, setItems, readOnly }) => {
   
   const updateItem = (productId: number, field: keyof ClinicalPrescriptionItem, value: any) => {
       setItems(items.map(i => i.product_id === productId ? { ...i, [field]: value } : i));
@@ -53,6 +54,7 @@ export const DoctorPrescriptionTable: React.FC<Props> = ({ items, setItems }) =>
           min={1}
           value={qty}
           size="small"
+          disabled={readOnly}
           onChange={(val) => updateItem(r.product_id, 'quantity', val)}
           precision={0} // Integer only
         />
@@ -65,6 +67,7 @@ export const DoctorPrescriptionTable: React.FC<Props> = ({ items, setItems }) =>
           <Select
             mode="tags"
             allowClear
+            disabled={readOnly}
             value={note ? [note] : []}
             style={{ width: "100%" }}
             size="small"
@@ -92,6 +95,7 @@ export const DoctorPrescriptionTable: React.FC<Props> = ({ items, setItems }) =>
             danger 
             icon={<DeleteOutlined />} 
             onClick={() => removeItem(r.product_id)} 
+            disabled={readOnly}
         />
       )
     }

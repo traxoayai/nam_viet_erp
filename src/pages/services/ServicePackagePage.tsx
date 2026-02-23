@@ -135,6 +135,7 @@ const ServicePackagePage: React.FC = () => {
           // Fix Lỗi 3: Chuyển đổi mảng ID kho (number/string) sang string cho Select mode multiple
           applicableBranches: (pkgData.applicable_branches || []).map(String),
           applicableChannels: pkgData.applicable_channels || "all",
+          clinicalCategory: pkgData.clinical_category || "none", // Map từ DB (snake_case) ra UI (camelCase)
           [itemsField]: items.map((i: any) => ({
             ...i,
             id: i.item_id,
@@ -154,6 +155,7 @@ const ServicePackagePage: React.FC = () => {
           validDates: [dayjs(), dayjs().add(1, "year")],
           applicableChannels: "all",
           applicableBranches: [],
+          clinicalCategory: "none",
           revenueAccountId: "5111",
           price: 0,
           totalCostPrice: 0,
@@ -185,6 +187,7 @@ const ServicePackagePage: React.FC = () => {
         applicableChannels: values.applicableChannels || "all",
         // Fix Lỗi 3: Đảm bảo gửi mảng ID kho lên server
         applicableBranches: values.applicableBranches || [],
+        clinicalCategory: values.clinicalCategory || "none",
         validityDays: values.validityDays || null,
       };
 
@@ -273,6 +276,19 @@ const ServicePackagePage: React.FC = () => {
               Gói Combo
             </Tag>
           ),
+      },
+      {
+        title: "Phân loại Y tế",
+        dataIndex: "clinical_category",
+        width: 130,
+        render: (cat: string) => {
+          if (cat === "lab") return <Tag color="blue">Xét nghiệm</Tag>;
+          if (cat === "imaging") return <Tag color="purple">CĐHA</Tag>;
+          if (cat === "procedure") return <Tag color="orange">Thủ thuật</Tag>;
+          if (cat === "examination") return <Tag color="green">Khám bệnh</Tag>;
+          if (cat === "vaccination") return <Tag color="magenta">Tiêm chủng</Tag>;
+          return <Text type="secondary">-</Text>;
+        }
       },
       {
         title: "Giá Bán",
@@ -679,14 +695,36 @@ const ServicePackagePage: React.FC = () => {
             title="Thông tin chung"
             style={{ ...styles.card, marginBottom: 24 }}
           >
-            <Form.Item name="type" label="Loại hình kinh doanh">
-              <Radio.Group buttonStyle="solid" disabled={!!editingPackage}>
-                <Radio.Button value="service">Dịch vụ (Khám/Lẻ)</Radio.Button>
-                <Radio.Button value="bundle">
-                  Gói Combo (Dùng nhiều lần)
-                </Radio.Button>
-              </Radio.Group>
-            </Form.Item>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="type" label="Loại hình kinh doanh">
+                  <Radio.Group buttonStyle="solid" disabled={!!editingPackage}>
+                    <Radio.Button value="service">Dịch vụ (Khám/Lẻ)</Radio.Button>
+                    <Radio.Button value="bundle">
+                      Gói Combo (Dùng nhiều lần)
+                    </Radio.Button>
+                  </Radio.Group>
+                </Form.Item>
+              </Col>
+              
+              <Col span={12}>
+                <Form.Item 
+                  name="clinicalCategory" 
+                  label="Phân loại Y tế (Cho Bác sĩ)" 
+                  initialValue="none"
+                  tooltip="Phân loại này giúp Bác sĩ tìm kiếm đúng nhóm dịch vụ khi khám bệnh."
+                >
+                  <Select>
+                    <Select.Option value="none">Không áp dụng (Bán lẻ)</Select.Option>
+                    <Select.Option value="examination">Khám bệnh</Select.Option>
+                    <Select.Option value="lab">Xét nghiệm</Select.Option>
+                    <Select.Option value="imaging">CĐHA (Siêu âm/XQ...)</Select.Option>
+                    <Select.Option value="procedure">Thủ thuật</Select.Option>
+                    <Select.Option value="vaccination">Tiêm chủng</Select.Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
 
             <Row gutter={16}>
               <Col span={12}>

@@ -1,6 +1,6 @@
 // src/pages/sales/B2COrderListPage.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { Tag, Button, Space, Typography, Modal, message, Avatar } from 'antd';
+import { Tag, Button, Space, Typography, Modal, message, Avatar, Spin, Table } from 'antd';
 import { 
     BankOutlined, CheckCircleOutlined, SyncOutlined, 
     ExclamationCircleOutlined, UserOutlined, AlertOutlined, ShopOutlined, PrinterOutlined 
@@ -15,20 +15,25 @@ import { FilterAction } from "@/shared/ui/listing/FilterAction";
 import { SmartTable } from "@/shared/ui/listing/SmartTable";
 import { StatHeader } from "@/shared/ui/listing/StatHeader";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { salesService } from '@/features/sales/api/salesService';
 
 const { Text } = Typography;
 
 const B2COrderListPage = () => {
   // Hooks
-  const { tableProps, filterProps, stats, currentFilters, refresh } = useSalesOrders({ orderType: 'POS' });
+  const { tableProps, filterProps, stats, currentFilters, refresh } = useSalesOrders({ orderType: 'POS,CLINICAL' });
   const { user } = useAuth();
   
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [pendingRevenue, setPendingRevenue] = useState<number>(0);
   const [creators, setCreators] = useState<any[]>([]);
 
-  // [NEW STATE]
   const [warehouses, setWarehouses] = useState<any[]>([]);
+
+  // [NEW STATE] Modal Chi tiết
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<any>(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
   // 1. Load Data bổ trợ (Doanh thu treo & List User & Warehouse)
   useEffect(() => {
@@ -129,13 +134,55 @@ const B2COrderListPage = () => {
     });
   };
 
+  const handleViewDetail = async (order: any) => {
+       setSelectedOrderDetail(order);
+       setDetailModalOpen(true);
+       setIsLoadingDetail(true);
+       try {
+           const detail = await salesService.getOrderDetail(order.id);
+           setSelectedOrderDetail(detail); // Ghi đè bằng data full items
+       } catch (err) {
+           message.error("Lỗi lấy chi tiết đơn");
+       } finally {
+           setIsLoadingDetail(false);
+       }
+  };
+
+  const handleQuickRemit = (order: any) => {
+      if (order.payment_method === 'transfer') {
+          return message.warning('Đơn này thanh toán chuyển khoản, không thể nộp quỹ tiền mặt.');
+      }
+      Modal.confirm({
+          title: 'Xác nhận thu tiền mặt cho đơn này?',
+          content: `Số tiền: ${order.final_amount?.toLocaleString() || 0} ₫`,
+          okText: 'Thu tiền',
+          cancelText: 'Huỷ',
+          onOk: async () => {
+               try {
+                  await posTransactionService.submitRemittance([String(order.id)]);
+                  message.success('Đã xác nhận thu tiền thành công!');
+                  setDetailModalOpen(false);
+                  refresh();
+               } catch (err: any) {
+                  message.error(err.message || 'Lỗi thu tiền');
+               }
+          }
+      });
+  };
+
   // 3. Columns Definition
   const columns = useMemo(() => [
     {
       title: 'Mã đơn',
       dataIndex: 'code',
-      width: 140,
-      render: (text: string) => <Text strong style={{ color: '#1890ff' }}>{text}</Text>,
+      width: 170,
+      render: (text: string, record: any) => (
+        <Space direction="vertical" size={0}>
+          <a onClick={() => handleViewDetail(record)} style={{ fontWeight: 600, color: '#1890ff', fontSize: 13 }}>{text}</a>
+          {record.order_type === 'POS' && <Tag color="blue" style={{ fontSize: 10 }}>[Thuốc]</Tag>}
+          {record.order_type === 'CLINICAL' && <Tag color="orange" style={{ fontSize: 10 }}>[Dịch vụ]</Tag>}
+        </Space>
+      ),
     },
     {
        title: 'Ngày tạo',
@@ -340,7 +387,7 @@ const B2COrderListPage = () => {
       <SmartTable
         {...tableProps}
         columns={columns}
-        emptyText="Chưa có đơn hàng POS nào"
+        emptyText="Chưa có đơn hàng nào"
         rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,
@@ -351,6 +398,68 @@ const B2COrderListPage = () => {
             }),
         }}
       />
+
+      {/* Modal Chi Tiết Đơn Hàng */}
+      <Modal
+          title={`Chi Tiết Đơn Hàng: ${selectedOrderDetail?.code || ''}`}
+          open={detailModalOpen}
+          onCancel={() => setDetailModalOpen(false)}
+          width={700}
+          footer={null}
+      >
+          {isLoadingDetail ? <div className="p-4 text-center"><Spin /></div> : (
+              selectedOrderDetail && (
+                  <div className="flex flex-col gap-4">
+                      {/* Bảng Danh Sách Thuốc / Dịch Vụ */}
+                      <Table 
+                          dataSource={selectedOrderDetail.items || []}
+                          rowKey="id"
+                          pagination={false}
+                          size="small"
+                          bordered
+                          columns={[
+                              { 
+                                  title: 'Sản phẩm / Dịch vụ', 
+                                  dataIndex: ['product', 'name'], 
+                                  key: 'name',
+                                  render: (txt, r: any) => txt || r.product_name || 'Không rõ'
+                              },
+                              { 
+                                  title: 'ĐVT', 
+                                  dataIndex: ['product', 'retail_unit'], 
+                                  width: 80, align: 'center',
+                                  render: (txt, r:any) => txt || r.unit_name || 'Liều'
+                              },
+                              { title: 'Số lượng', dataIndex: 'quantity', align: 'center', width: 90 },
+                              { title: 'Đơn giá', dataIndex: 'unit_price', align: 'right', render: v => v?.toLocaleString() },
+                              { title: 'Thành tiền', dataIndex: 'total_line', align: 'right', render: v => <Text strong>{v?.toLocaleString()} ₫</Text> }
+                          ]}
+                      />
+
+                      <div className="flex justify-between items-center mt-2 border-t pt-3">
+                          <Text type="secondary">Hình thức: <Tag color={selectedOrderDetail.payment_method === 'cash' ? 'orange' : 'blue'}>{selectedOrderDetail.payment_method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}</Tag></Text>
+                          <div className="text-right text-lg">
+                              Tổng tiền: <Text type="danger" strong>{(selectedOrderDetail.final_amount || selectedOrderDetail.total_amount || 0).toLocaleString()} ₫</Text>
+                          </div>
+                      </div>
+                      
+                      {/* Nút Thu Tiền Lớn Cho Dược Sĩ */}
+                      {(selectedOrderDetail.remittance_status === 'pending' || selectedOrderDetail.payment_status !== 'paid') && selectedOrderDetail.payment_method === 'cash' && (
+                           <Button 
+                               type="primary" 
+                               size="large"
+                               style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16', height: 48 }}
+                               block
+                               className="mt-2 text-lg font-bold shadow-md"
+                               onClick={() => handleQuickRemit(selectedOrderDetail)}
+                           >
+                                XÁC NHẬN THU TIỀN (TIỀN MẶT)
+                           </Button>
+                      )}
+                  </div>
+              )
+          )}
+      </Modal>
     </div>
   );
 };

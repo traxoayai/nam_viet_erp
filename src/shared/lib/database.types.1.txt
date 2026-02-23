@@ -568,7 +568,6 @@ export type Database = {
           imaging_result: string | null
           medical_visit_id: string | null
           patient_id: number | null
-          payment_order_id: string | null
           results_json: Json | null
           service_name_snapshot: string | null
           service_package_id: number | null
@@ -584,7 +583,6 @@ export type Database = {
           imaging_result?: string | null
           medical_visit_id?: string | null
           patient_id?: number | null
-          payment_order_id?: string | null
           results_json?: Json | null
           service_name_snapshot?: string | null
           service_package_id?: number | null
@@ -600,7 +598,6 @@ export type Database = {
           imaging_result?: string | null
           medical_visit_id?: string | null
           patient_id?: number | null
-          payment_order_id?: string | null
           results_json?: Json | null
           service_name_snapshot?: string | null
           service_package_id?: number | null
@@ -620,13 +617,6 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clinical_service_requests_payment_order_id_fkey"
-            columns: ["payment_order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
           {
@@ -3481,7 +3471,6 @@ export type Database = {
         Row: {
           applicable_branches: number[] | null
           applicable_channels: string
-          clinical_category: string | null
           created_at: string | null
           id: number
           name: string
@@ -3500,7 +3489,6 @@ export type Database = {
         Insert: {
           applicable_branches?: number[] | null
           applicable_channels?: string
-          clinical_category?: string | null
           created_at?: string | null
           id?: number
           name: string
@@ -3519,7 +3507,6 @@ export type Database = {
         Update: {
           applicable_branches?: number[] | null
           applicable_channels?: string
-          clinical_category?: string | null
           created_at?: string | null
           id?: number
           name?: string
@@ -4362,24 +4349,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      checkout_clinical_services:
-        | {
-            Args: {
-              p_appointment_id: string
-              p_customer_id: number
-              p_services: Json
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_customer_id: number
-              p_fund_account_id?: number
-              p_request_ids: number[]
-              p_visit_id: string
-            }
-            Returns: Json
-          }
       complete_inventory_check: {
         Args: { p_check_id: number; p_user_id: string }
         Returns: undefined
@@ -5366,7 +5335,6 @@ export type Database = {
           p_type_filter: string
         }
         Returns: {
-          clinical_category: string
           id: number
           key: string
           name: string
@@ -5869,15 +5837,6 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
-      }
-      send_prescription_to_pos: {
-        Args: {
-          p_appointment_id: string
-          p_customer_id: number
-          p_items: Json
-          p_pharmacy_warehouse_id: number
-        }
-        Returns: Json
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

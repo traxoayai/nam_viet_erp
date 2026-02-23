@@ -1,52 +1,79 @@
 
 // src/features/medical/components/DoctorBlock4_Prescription.tsx
-import React, { useState } from 'react';
-import { Card, Button, Modal, List } from 'antd';
+import React, { useState, useRef, useEffect } from 'react';
+import { Card, Button, Drawer, List, Space, Input, message, Modal } from 'antd';
 import { CheckCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { Pill, FileText } from 'lucide-react';
 import { DoctorPrescriptionSearch } from './DoctorPrescriptionSearch';
 import { DoctorPrescriptionTable } from './DoctorPrescriptionTable';
 import { ClinicalPrescriptionItem } from '../types/medical.types';
 import { PosProductSearchResult } from '@/features/pos/types/pos.types';
+import { supabase } from '@/shared/lib/supabaseClient';
 
 interface Props {
   items: ClinicalPrescriptionItem[];
   setItems: (items: ClinicalPrescriptionItem[]) => void;
   patientAllergies?: string;
   readOnly?: boolean;
+  onSendPharmacy?: (warehouseId: number) => void;
+  sending?: boolean;
+  isPrescriptionSent?: boolean;
 }
 
-export const DoctorBlock4_Prescription: React.FC<Props> = ({ items, setItems, patientAllergies, readOnly }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+export const DoctorBlock4_Prescription: React.FC<Props> = ({ 
+    items, setItems,
+    patientAllergies, readOnly, onSendPharmacy, sending, isPrescriptionSent
+}) => {
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [templateResults, setTemplateResults] = useState<any[]>([]);
+  const [searchingTemplates, setSearchingTemplates] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // MOCK TEMPLATES
-  const templates = [
-      {
-          id: 1, name: 'Viêm họng cấp (Người lớn)',
-          items: [
-              { product_id: 101, product_name: 'Amoxicillin 500mg', unit_name: 'Viên', quantity: 15, usage_note: 'Sáng 1 - Chiều 1 - Tối 1', stock_quantity: 100 },
-              { product_id: 102, product_name: 'Paracetamol 500mg', unit_name: 'Viên', quantity: 10, usage_note: 'Uống khi đau/sốt', stock_quantity: 50 },
-          ] 
-      },
-      {
-          id: 2, name: 'Rối loạn tiêu hóa',
-          items: [
-              { product_id: 201, product_name: 'Smecta', unit_name: 'Gói', quantity: 10, usage_note: 'Sáng 1 - Tối 1', stock_quantity: 20 },
-              { product_id: 202, product_name: 'Oresol', unit_name: 'Gói', quantity: 5, usage_note: 'Pha 1 gói với 200ml nước', stock_quantity: 200 },
-          ]
+  const searchTemplates = async (keyword: string) => {
+      setSearchingTemplates(true);
+      try {
+          const { data, error } = await supabase.rpc('search_prescription_templates', {
+              p_keyword: keyword || ''
+          });
+          if (error) throw error;
+          setTemplateResults(data || []);
+      } catch (err: any) {
+          message.error("Lỗi tìm kiếm đơn mẫu: " + err.message);
+      } finally {
+          setSearchingTemplates(false);
       }
-  ];
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const keyword = e.target.value;
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = setTimeout(() => {
+          searchTemplates(keyword);
+      }, 500);
+  };
+
+  useEffect(() => {
+      if (isDrawerOpen && templateResults.length === 0) {
+          searchTemplates(''); // Fetch on first open
+      }
+  }, [isDrawerOpen]);
+  // Đã trích phần MOCK TYPE ra dùng Props
 
   const applyTemplate = (tpl: any) => {
        const newItems = [...items];
        tpl.items.forEach((tItem: any) => {
            const exist = newItems.find(i => i.product_id === tItem.product_id);
            if (!exist) {
-               newItems.push({ ...tItem, product_unit_id: 1 }); 
+               newItems.push({ 
+                   ...tItem, 
+                   product_unit_id: 1, 
+                   unit_name: tItem.unit || 'Viên', // Lấy theo trả về từ RPC json
+                   usage_note: tItem.usage_instruction || ''
+               }); 
            }
        });
        setItems(newItems);
-       setIsModalOpen(false);
+       setIsDrawerOpen(false);
   };
   
   const addProductToTable = (product: PosProductSearchResult) => {
@@ -115,38 +142,75 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({ items, setItems, pa
         {/* Helper Toolbar */}
         <div className="flex gap-2 mb-3">
              <div className="flex-1 pointer-events-none" style={readOnly ? { opacity: 0.6 } : { pointerEvents: 'auto' }}>
-                 <DoctorPrescriptionSearch onSelectProduct={handleSelectProduct} />
+                 <DoctorPrescriptionSearch onSelectProduct={handleSelectProduct} warehouseId={1} />
              </div>
-             <Button icon={<FileText size={14}/>} onClick={() => setIsModalOpen(true)} disabled={readOnly}>Đơn mẫu</Button>
+             
+             <Space>
+                 <Button icon={<FileText size={14}/>} onClick={() => setIsDrawerOpen(true)} disabled={readOnly}>Đơn mẫu</Button>
+                 
+                 <Button 
+                    type={isPrescriptionSent ? "default" : "primary"}
+                    className={isPrescriptionSent ? "text-green-600 font-semibold border-green-500" : ""}
+                    icon={<CheckCircleOutlined />} 
+                    disabled={readOnly || isPrescriptionSent || items.length === 0} 
+                    loading={sending}
+                    onClick={() => onSendPharmacy && onSendPharmacy(1)} // Hardcode warehouseId = 1 (Nhà thuốc lẻ)
+                 >
+                    {isPrescriptionSent ? "Đã Chuyển Nhà Thuốc" : "Chuyển Quầy Thuốc"}
+                 </Button>
+             </Space>
         </div>
 
         {/* Table */}
         <div className="flex-1 overflow-auto border border-gray-100 rounded">
-            <DoctorPrescriptionTable items={items} setItems={setItems} />
+            <DoctorPrescriptionTable 
+                items={items} 
+                setItems={setItems} 
+                readOnly={readOnly || isPrescriptionSent} 
+            />
         </div>
 
-        {/* Modal Template */}
-        <Modal 
-            title="Chọn Đơn Thuốc Mẫu" 
-            open={isModalOpen} 
-            onCancel={() => setIsModalOpen(false)}
-            footer={null}
+        {/* Drawer Template */}
+        <Drawer 
+            title="Thư viện Đơn Thuốc Mẫu" 
+            open={isDrawerOpen} 
+            onClose={() => setIsDrawerOpen(false)}
+            width={450}
+            placement="right"
         >
-            <List
-                dataSource={templates}
-                renderItem={item => (
-                    <List.Item
-                        actions={[<Button type="link" onClick={() => applyTemplate(item)}>Áp dụng</Button>]}
-                    >
-                        <List.Item.Meta
-                            avatar={<CheckCircleOutlined className="text-green-500"/>}
-                            title={item.name}
-                            description={`${item.items.length} loại thuốc`}
-                        />
-                    </List.Item>
-                )}
-            />
-        </Modal>
+            <div className="flex flex-col h-full">
+                <Input.Search 
+                    placeholder="Tìm đơn mẫu (vd: Viêm họng)..." 
+                    onChange={handleSearchChange} 
+                    onSearch={searchTemplates}
+                    loading={searchingTemplates}
+                    allowClear
+                    className="mb-4"
+                />
+                <List
+                    className="flex-1 overflow-auto"
+                    dataSource={templateResults}
+                    loading={searchingTemplates}
+                    renderItem={item => (
+                        <List.Item
+                            actions={[<Button type="primary" size="small" onClick={() => applyTemplate(item)}>Áp dụng</Button>]}
+                            className="bg-gray-50 rounded mb-2 px-3 border border-gray-100"
+                        >
+                            <List.Item.Meta
+                                avatar={<CheckCircleOutlined className="text-green-500 mt-2"/>}
+                                title={<span className="font-bold text-blue-700">{item.name}</span>}
+                                description={
+                                    <div className="flex flex-col text-xs">
+                                        {item.diagnosis && <span><span className="font-semibold text-gray-500">Chẩn đoán:</span> {item.diagnosis}</span>}
+                                        <span><span className="font-semibold text-gray-500">Gồm:</span> {item.items?.length || 0} loại thuốc</span>
+                                    </div>
+                                }
+                            />
+                        </List.Item>
+                    )}
+                />
+            </div>
+        </Drawer>
     </Card>
   );
 };

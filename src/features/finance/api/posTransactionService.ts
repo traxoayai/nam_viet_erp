@@ -12,7 +12,7 @@ export const posTransactionService = {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) throw new Error("Bạn chưa đăng nhập");
 
-    // 2. Gọi RPC của Core
+    // 2. Gọi RPC để udate ngược lại danh sách (List) Đơn Hàng POS sang trạng thái "Đã nộp"
     const { data, error } = await supabase.rpc('submit_cash_remittance', {
       p_order_ids: orderIds, // Core yêu cầu UUID[] -> Frontend truyền string[]
       p_user_id: userData.user.id

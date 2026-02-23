@@ -22,6 +22,7 @@ export interface ServicePackageInput {
   validityDays?: number;
   applicableBranches: string[]; // Mảng ID kho
   applicableChannels: string;
+  clinicalCategory?: "none" | "examination" | "lab" | "imaging" | "procedure";
 }
 
 // 3. Filter (Input cho Fetch)
@@ -45,6 +46,7 @@ export interface ServicePackageRecord {
   status: "active" | "inactive";
   valid_from: string;
   valid_to: string;
+  clinical_category?: string;
 }
 
 // 5. Chi tiết gói (Output từ Server khi Sửa)

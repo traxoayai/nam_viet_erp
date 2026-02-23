@@ -4,7 +4,8 @@ import { salesService } from "@/features/sales/api/salesService";
 import { useListingLogic } from "@/shared/hooks/useListingLogic";
 
 interface UseSalesOrdersProps {
-  orderType?: 'B2B' | 'POS';
+  // Cho phép truyền 'POS', 'B2B', hoặc comma-separated strings như 'POS,CLINICAL'
+  orderType?: string;
 }
 
 export const useSalesOrders = ({ orderType }: UseSalesOrdersProps = {}) => {
