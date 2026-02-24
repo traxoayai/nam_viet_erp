@@ -2,11 +2,12 @@
 import {
   ArrowRight,
   Calendar,
-  CheckCircle,
+  //CheckCircle,
   Filter,
   Package,
   Printer,
-  Truck
+  Truck,
+  Eye,
 } from "lucide-react";
 import {
   Button,
@@ -22,6 +23,7 @@ import {
   Tag,
   Typography,
   Grid,
+  Tooltip,
 } from "antd";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -136,12 +138,18 @@ const WarehouseInboundPage = () => {
         let color = "default";
         let text = "Chờ nhập";
         
-        if (status === "partial") {
+        // Đảm bảo không bị lỗi nếu status bị null/undefined
+        const currentStatus = (status || "").toLowerCase();
+        
+        if (currentStatus === "partial") {
             color = "processing";
             text = "Đang nhập";
-        } else if (status === "completed") {
+        } else if (currentStatus === "completed" || currentStatus === "delivered") {
             color = "success";
             text = "Hoàn tất";
+        } else if (currentStatus === "cancelled") {
+            color = "error";
+            text = "Đã hủy";
         }
 
         return <Tag color={color}>{text.toUpperCase()}</Tag>;
@@ -149,19 +157,46 @@ const WarehouseInboundPage = () => {
     },
     {
       title: "Thao tác",
-      align: "right" as const,
+      align: "center" as const,
       width: 130,
-      render: (_: any, record: InboundTask) => (
-        <Button 
-           type="primary" 
-           size="small"
-           icon={record.status === 'completed' ? <CheckCircle size={14}/> : <ArrowRight size={14}/>}
-           ghost={record.status !== 'pending'}
-           onClick={() => navigate(`/inventory/receipt/${record.task_id}`)}
-        >
-            {record.status === 'completed' ? "Xem" : "Nhập kho"}
-        </Button>
-      ),
+      render: (_: any, record: InboundTask) => {
+        // Chuẩn hóa status để kiểm tra
+        const currentStatus = (record.status || "").toLowerCase();
+        const isDone = currentStatus === "completed" || currentStatus === "delivered";
+
+        if (isDone) {
+          // [APPLE STANDARD] Giao diện icon trong suốt, Tooltip mượt mà không giật
+          return (
+            <Tooltip 
+              title="Xem chi tiết" 
+              placement="topRight" 
+              mouseEnterDelay={0.15} // Chống giật khi lướt chuột nhanh
+              transitionName="zoom-big-fast" 
+            >
+              <Button 
+                type="text" 
+                size="small"
+                icon={<Eye size={18} color="#1890ff" />}
+                onClick={() => navigate(`/inventory/receipt/${record.task_id}`)}
+                style={{ borderRadius: 8 }}
+              />
+            </Tooltip>
+          );
+        }
+
+        // Với các đơn chưa hoàn tất (draft, pending, partial)
+        return (
+          <Button 
+             type="primary" 
+             size="small"
+             icon={<ArrowRight size={14}/>}
+             ghost={currentStatus !== 'pending' && currentStatus !== 'draft'}
+             onClick={() => navigate(`/inventory/receipt/${record.task_id}`)}
+          >
+              Nhập kho
+          </Button>
+        );
+      },
     },
   ];
 

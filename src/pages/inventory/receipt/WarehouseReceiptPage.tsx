@@ -148,6 +148,11 @@ const WarehouseReceiptPage = () => {
         }
   };
 
+  // [NEW] Xác định trạng thái "Đã hoàn tất" để khóa giao diện
+  const currentStatus = (detail?.po_info?.status || "").toLowerCase();
+  const deliveryStatus = ((detail?.po_info as any)?.delivery_status || "").toLowerCase();
+  const isDone = currentStatus === "completed" || currentStatus === "delivered" || deliveryStatus === "delivered";
+
   // --- COLUMNS ---
   const columns = [
     {
@@ -219,7 +224,7 @@ const WarehouseReceiptPage = () => {
               value={record.input_quantity}
               onChange={(val) => updateWorkingItem(record.product_id, { input_quantity: val || 0 })}
               style={{ width: "100%" }}
-              //disabled={record.quantity_remaining <= 0}
+              disabled={isDone} // [NEW] Khóa khi đã hoàn tất
               placeholder="0"
               status={((record.input_quantity || 0) > 0) ? "warning" : ""}
           />
@@ -236,7 +241,7 @@ const WarehouseReceiptPage = () => {
                     placeholder="Nhập số lô"
                     value={record.input_lot}
                     onChange={(e) => updateWorkingItem(record.product_id, { input_lot: e.target.value })}
-                    //disabled={(record.input_quantity || 0) === 0}
+                    disabled={isDone} // [NEW] Khóa khi đã hoàn tất
                  />
              )
         }
@@ -253,7 +258,7 @@ const WarehouseReceiptPage = () => {
                     format="DD/MM/YYYY"
                     value={record.input_expiry ? dayjs(record.input_expiry) : null}
                     onChange={(date) => updateWorkingItem(record.product_id, { input_expiry: date ? date.toISOString() : undefined })}
-                    //disabled={(record.input_quantity || 0) === 0}
+                    disabled={isDone} // [NEW] Khóa khi đã hoàn tất
                  />
              )
         }
@@ -335,7 +340,7 @@ const WarehouseReceiptPage = () => {
                         size="large"
                         onClick={handleSubmit}
                         loading={isSubmitting}
-                        disabled={detail.po_info.status === 'completed'}
+                        disabled={isDone} // [NEW] Sử dụng biến isDone
                     >
                         Hoàn tất Nhập Kho
                     </Button>

@@ -39,7 +39,7 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
             dataIndex: 'code',
             key: 'code',
             fixed: 'left' as 'left',
-            width: 140,
+            width: 120,
             render: (text: string) => <Link to={`/purchase-orders/${text}`} style={{ fontWeight: 600 }}>{text}</Link>,
         },
         {
@@ -128,7 +128,7 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
         {
             title: 'Thanh toán',
             key: 'payment',
-            width: 180,
+            width: 150,
             render: (_: unknown, r: PurchaseOrderMaster) => {
                 const total = Number(r.final_amount) || 0; // Ép kiểu an toàn
                 const paid = Number(r.total_paid) || 0;

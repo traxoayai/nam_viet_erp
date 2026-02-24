@@ -1,10 +1,7 @@
 // src/pages/purchasing/PurchaseOrderDetail.tsx
 import { Layout, Form, Row, Col, ConfigProvider, App } from "antd";
-import { useNavigate, useParams } from "react-router-dom"; // [FIX] Import hook navigation
+import { useNavigate, useParams } from "react-router-dom";
 import viVN from "antd/locale/vi_VN";
-//import React from "react";
-
-// FIX: Import POItem từ file Type mới
 
 import POGeneralInfo from "./components/POGeneralInfo";
 import POHeaderAction from "./components/POHeaderAction";
@@ -12,19 +9,19 @@ import POPaymentSummary from "./components/POPaymentSummary";
 import POProductTable from "./components/POProductTable";
 import { usePurchaseOrderLogic } from "./hooks/usePurchaseOrderLogic";
 
-import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
-import { CostAllocationModal } from "./components/CostAllocationModal"; // [NEW] V34
+import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal";
+import { CostAllocationModal } from "./components/CostAllocationModal";
 
 import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect";
 import { searchProductsForPurchase } from "@/features/product/api/productService";
-//import { POItem } from "@/types/purchaseOrderTypes";
+
 
 const { Content } = Layout;
 
 const PurchaseOrderDetailContent = () => {
   const logic = usePurchaseOrderLogic();
-  const navigate = useNavigate(); // [FIX] Init hook
-  const { id } = useParams(); // [FIX] Get ID
+  const navigate = useNavigate();
+  const { id } = useParams();
 
   return (
     <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
@@ -32,12 +29,11 @@ const PurchaseOrderDetailContent = () => {
         <POHeaderAction
           isEditMode={logic.isEditMode}
           poCode={logic.poCode}
-          poStatus={logic.poStatus} // Truyền status
+          poStatus={logic.poStatus}
           loading={logic.loading}
           onSave={() => logic.form.submit()}
           onSubmit={logic.confirmOrder}
           onRequestPayment={logic.requestPayment}
-          // [FIX] Override navigation to ensure correct path /purchase-orders/costing/:id
           onCalculateInbound={() => {
              navigate(`/purchase-orders/costing/${id}`);
           }}
@@ -58,8 +54,6 @@ const PurchaseOrderDetailContent = () => {
                 supplierInfo={logic.supplierInfo}
                 onSupplierChange={logic.handleSupplierChange}
                 onShippingFeeChange={logic.handleShippingFeeChange}
-                
-                // [NEW] Logistics Props
                 shippingPartners={logic.shippingPartners}
                 onPartnerChange={logic.handlePartnerChange}
                 form={logic.form}
