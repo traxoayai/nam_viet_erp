@@ -1,3 +1,4 @@
+// src/features/purchasing/components/PurchaseOrderTable.tsx
 import React from 'react';
 import { Table, Tag, Space, Button, Tooltip, Progress, Popconfirm } from 'antd';
 import { EyeOutlined, DeleteOutlined, CopyOutlined } from '@ant-design/icons';
@@ -40,6 +41,18 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
             fixed: 'left' as 'left',
             width: 140,
             render: (text: string) => <Link to={`/purchase-orders/${text}`} style={{ fontWeight: 600 }}>{text}</Link>,
+        },
+        {
+            title: 'Ngày Tạo/Mua',
+            dataIndex: 'created_at',
+            key: 'created_at',
+            width: 130,
+            render: (date: string) => (
+                <div style={{ fontSize: 13 }}>
+                    <div style={{ fontWeight: 500 }}>{dayjs(date).format('DD/MM/YYYY')}</div>
+                    <div style={{ color: '#888' }}>{dayjs(date).format('HH:mm')}</div>
+                </div>
+            )
         },
         {
             title: 'Nhà Cung Cấp',

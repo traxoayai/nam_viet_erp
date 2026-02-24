@@ -57,10 +57,21 @@ const WarehouseInboundPage = () => {
     {
       title: "Mã PO",
       dataIndex: "code",
-      width: 250,
+      width: 150,
       render: (text: string) => (
          <Text strong style={{ fontSize: 14 }}>{text}</Text>
       ),
+    },
+    {
+      title: "Ngày nhập kho",
+      dataIndex: "created_at",
+      width: 140,
+      render: (date: string) => date ? (
+         <div style={{ display: 'flex', flexDirection: 'column' }}>
+             <span style={{ fontWeight: 500, fontSize: 13 }}>{dayjs(date).format("DD/MM/YYYY")}</span>
+             <span style={{ fontSize: 12, color: "#888" }}>{dayjs(date).format("HH:mm")}</span>
+         </div>
+      ) : <span style={{ color: '#ccc' }}>—</span>,
     },
     {
       title: "Nhà cung cấp / Logistics",
