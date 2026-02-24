@@ -20,9 +20,9 @@ export interface POItem {
   unit_price: number;
   discount: number;
   is_bonus?: boolean; // [NEW] V20 Bonus Item support
-  
+
   // [NEW] Mảng đơn vị động trả về từ API
-  available_units?: ProductUnitOption[]; 
+  available_units?: ProductUnitOption[];
 
   // Các trường meta để tính toán
   _items_per_carton: number;
@@ -49,8 +49,8 @@ export interface PurchaseOrderDetail {
   carrier_phone: string | null;
   expected_delivery_time: string | null;
   expected_delivery_date?: string;
-  
-  payment_status?: 'unpaid' | 'partial' | 'paid';
+
+  payment_status?: "unpaid" | "partial" | "paid";
   total_paid?: number;
   delivery_progress?: number; // % Giao hàng
 }

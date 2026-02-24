@@ -1,5 +1,9 @@
 // src/pages/partners/policies/SupplierPolicyListPage.tsx
-import React, { useEffect, useState } from "react";
+import {
+  PlusOutlined,
+  EditOutlined,
+  FileTextOutlined,
+} from "@ant-design/icons";
 import {
   Table,
   Card,
@@ -10,20 +14,15 @@ import {
   Select,
   Row,
   Col,
-
 } from "antd";
-import {
-  PlusOutlined,
-  EditOutlined,
-  FileTextOutlined,
-} from "@ant-design/icons";
-import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
-import { supplierPolicyService } from "@/features/purchasing/api/supplierPolicyService";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import { useProductStore } from "@/features/product/stores/productStore";
+import { supplierPolicyService } from "@/features/purchasing/api/supplierPolicyService";
 
 const { Title, Text } = Typography;
-
 
 const SupplierPolicyListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -91,23 +90,23 @@ const SupplierPolicyListPage: React.FC = () => {
       key: "duration",
       render: (_: any, record: any) => (
         <Space direction="vertical" size={0}>
-            <Text>Từ: {dayjs(record.valid_from).format("DD/MM/YYYY")}</Text>
-            <Text>Đến: {dayjs(record.valid_to).format("DD/MM/YYYY")}</Text>
+          <Text>Từ: {dayjs(record.valid_from).format("DD/MM/YYYY")}</Text>
+          <Text>Đến: {dayjs(record.valid_to).format("DD/MM/YYYY")}</Text>
         </Space>
       ),
     },
     {
-        title: "Trạng thái",
-        key: "status",
-        render: (_: any, record: any) => {
-            const now = dayjs();
-            const start = dayjs(record.valid_from);
-            const end = dayjs(record.valid_to);
-            
-            if (now.isBefore(start)) return <Tag>Chưa bắt đầu</Tag>;
-            if (now.isAfter(end)) return <Tag color="red">Hết hạn</Tag>;
-            return <Tag color="green">Đang hiệu lực</Tag>;
-        }
+      title: "Trạng thái",
+      key: "status",
+      render: (_: any, record: any) => {
+        const now = dayjs();
+        const start = dayjs(record.valid_from);
+        const end = dayjs(record.valid_to);
+
+        if (now.isBefore(start)) return <Tag>Chưa bắt đầu</Tag>;
+        if (now.isAfter(end)) return <Tag color="red">Hết hạn</Tag>;
+        return <Tag color="green">Đang hiệu lực</Tag>;
+      },
     },
     {
       title: "Hành động",
@@ -127,7 +126,11 @@ const SupplierPolicyListPage: React.FC = () => {
   return (
     <div className="p-4">
       <Card>
-        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+        <Row
+          justify="space-between"
+          align="middle"
+          style={{ marginBottom: 16 }}
+        >
           <Col>
             <Title level={4}>
               <FileTextOutlined /> Quản lý Chính Sách & Hợp Đồng
@@ -162,15 +165,15 @@ const SupplierPolicyListPage: React.FC = () => {
             />
           </Col>
           <Col span={4}>
-             <Select
-                placeholder="Loại"
-                allowClear
-                style={{ width: '100%' }}
-                onChange={(val) => setFilters(prev => ({ ...prev, type: val }))}
-             >
-                 <Select.Option value="contract">Hợp đồng</Select.Option>
-                 <Select.Option value="promotion">Khuyến mãi</Select.Option>
-             </Select>
+            <Select
+              placeholder="Loại"
+              allowClear
+              style={{ width: "100%" }}
+              onChange={(val) => setFilters((prev) => ({ ...prev, type: val }))}
+            >
+              <Select.Option value="contract">Hợp đồng</Select.Option>
+              <Select.Option value="promotion">Khuyến mãi</Select.Option>
+            </Select>
           </Col>
         </Row>
 

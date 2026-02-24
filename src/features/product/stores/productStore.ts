@@ -1,14 +1,14 @@
 // src/features/product/stores/productStore.ts
 import { create } from "zustand";
 
-import { supabase } from "@/shared/lib/supabaseClient";
-import * as productService from "@/features/product/api/productService";
-import * as supplierService from "@/features/purchasing/api/supplierService";
 import * as warehouseService from "@/features/inventory/api/warehouseService";
+import * as productService from "@/features/product/api/productService";
 import {
   ProductStoreState,
   ProductFilters,
 } from "@/features/product/types/product.types";
+import * as supplierService from "@/features/purchasing/api/supplierService";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const useProductStore = create<ProductStoreState>((set, get) => ({
   // Dữ liệu
@@ -65,7 +65,11 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
 
       // Gọi song song 2 API: Kho và NCC
       const [warehousesResult, suppliersResult] = await Promise.all([
-        warehouseService.getWarehouses(defaultFilters, defaultPage, largePageSize),
+        warehouseService.getWarehouses(
+          defaultFilters,
+          defaultPage,
+          largePageSize
+        ),
         supplierService.getSuppliers(),
       ]);
 
@@ -149,7 +153,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
     try {
       // 1. Check Dependencies
       const dependencies = await productService.checkDependencies(ids);
-      
+
       if (dependencies && dependencies.length > 0) {
         set({ loading: false });
         return { success: false, dependencies };
@@ -158,7 +162,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
       // 2. Safe to Delete
       await productService.deleteProducts(ids);
       await get().fetchProducts();
-      
+
       set({ loading: false });
       return { success: true };
     } catch (error) {
@@ -168,13 +172,16 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
     }
   },
 
-  checkAndUpdateStatus: async (ids: React.Key[], status: "active" | "inactive") => {
+  checkAndUpdateStatus: async (
+    ids: React.Key[],
+    status: "active" | "inactive"
+  ) => {
     set({ loading: true });
     try {
       // Logic requirement: If status === 'active', update directly.
       // If status === 'inactive', check dependencies first.
-      
-      if (status === 'inactive') {
+
+      if (status === "inactive") {
         const dependencies = await productService.checkDependencies(ids);
         if (dependencies && dependencies.length > 0) {
           set({ loading: false });
@@ -185,7 +192,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
       // Safe to Update
       await productService.updateProductsStatus(ids, status);
       await get().fetchProducts();
-      
+
       set({ loading: false });
       return { success: true };
     } catch (error) {

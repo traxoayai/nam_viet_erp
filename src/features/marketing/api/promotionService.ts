@@ -76,9 +76,9 @@ export const promotionService = {
 
   // [NEW] Tạo hàng loạt (Dùng cho logic B2B/B2C)
   async createBatchPromotions(batchData: any[]) {
-      const { error } = await supabase.from("promotions").insert(batchData);
-      if (error) throw error;
-      return true;
+    const { error } = await supabase.from("promotions").insert(batchData);
+    if (error) throw error;
+    return true;
   },
 
   async deletePromotion(id: string) {

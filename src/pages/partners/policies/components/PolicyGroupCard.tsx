@@ -1,5 +1,13 @@
 // src/pages/partners/policies/components/PolicyGroupCard.tsx
-import React, { useRef, useState } from "react";
+import {
+  DeleteOutlined,
+  PlusOutlined,
+  GiftOutlined,
+  PercentageOutlined,
+  ShoppingCartOutlined,
+  DownloadOutlined,
+  FileExcelOutlined,
+} from "@ant-design/icons";
 import {
   Card,
   Form,
@@ -15,18 +23,12 @@ import {
   App,
   Tooltip,
 } from "antd";
-import {
-  DeleteOutlined,
-  PlusOutlined,
-  GiftOutlined,
-  PercentageOutlined,
-  ShoppingCartOutlined,
-  DownloadOutlined,
-  FileExcelOutlined,
-} from "@ant-design/icons";
+import React, { useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { supabase } from "@/shared/lib/supabaseClient";
+
 import { ExcelPreviewModal } from "./ExcelPreviewModal";
+
+import { supabase } from "@/shared/lib/supabaseClient";
 
 interface Props {
   field: any; // Form List Field
@@ -43,7 +45,7 @@ export const PolicyGroupCard: React.FC<Props> = ({
 }) => {
   const { message } = App.useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Excel Modal State
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<any[]>([]);
@@ -73,10 +75,12 @@ export const PolicyGroupCard: React.FC<Props> = ({
       }
 
       // Map keys (Header mapping)
-      const formattedData = data.map((row: any) => ({
-        name: row["Product Name"] || row["Tên sản phẩm"] || row["name"] || "",
-        sku: row["SKU"] || row["Mã SKU"] || row["sku"] || "",
-      })).filter((i: any) => i.name || i.sku);
+      const formattedData = data
+        .map((row: any) => ({
+          name: row["Product Name"] || row["Tên sản phẩm"] || row["name"] || "",
+          sku: row["SKU"] || row["Mã SKU"] || row["sku"] || "",
+        }))
+        .filter((i: any) => i.name || i.sku);
 
       if (formattedData.length === 0) {
         message.error("Không tìm thấy cột 'Product Name' hoặc 'SKU' hợp lệ.");
@@ -86,21 +90,29 @@ export const PolicyGroupCard: React.FC<Props> = ({
       message.loading({ content: "Đang xử lý match...", key: "import_excel" });
 
       // Call RPC
-      const { data: matchedResults, error } = await supabase.rpc('match_products_from_excel', {
-        p_data: formattedData
-      });
+      const { data: matchedResults, error } = await supabase.rpc(
+        "match_products_from_excel",
+        {
+          p_data: formattedData,
+        }
+      );
 
       if (error) throw error;
 
-      message.success({ content: "Đã đọc xong file! Vui lòng kiểm tra lại.", key: "import_excel" });
-      
+      message.success({
+        content: "Đã đọc xong file! Vui lòng kiểm tra lại.",
+        key: "import_excel",
+      });
+
       // Store data and OPEN MODAL
       setPreviewData(matchedResults || []);
       setPreviewOpen(true);
-
     } catch (error: any) {
       console.error(error);
-      message.error({ content: "Lỗi import: " + error.message, key: "import_excel" });
+      message.error({
+        content: "Lỗi import: " + error.message,
+        key: "import_excel",
+      });
     } finally {
       // Reset input
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -108,27 +120,27 @@ export const PolicyGroupCard: React.FC<Props> = ({
   };
 
   const handleConfirmImport = (items: any[]) => {
-      // Merge into Form
-      const groups = form.getFieldValue('groups');
-      const currentGroup = groups[field.name];
-      
-      const existingIds = new Set(currentGroup.product_ids || []);
-      const newItems = items.filter((p: any) => !existingIds.has(p.id));
-      
-      if (newItems.length > 0) {
-        groups[field.name].product_ids = [
-          ...(currentGroup.product_ids || []),
-          ...newItems.map((p: any) => p.id)
-        ];
-        groups[field.name]._product_display = [
-           ...(currentGroup._product_display || []),
-           ...newItems
-        ];
-        form.setFieldsValue({ groups });
-        message.success(`Đã thêm ${newItems.length} sản phẩm vào nhóm.`);
-      } else {
-        message.info("Các sản phẩm này đã có trong nhóm.");
-      }
+    // Merge into Form
+    const groups = form.getFieldValue("groups");
+    const currentGroup = groups[field.name];
+
+    const existingIds = new Set(currentGroup.product_ids || []);
+    const newItems = items.filter((p: any) => !existingIds.has(p.id));
+
+    if (newItems.length > 0) {
+      groups[field.name].product_ids = [
+        ...(currentGroup.product_ids || []),
+        ...newItems.map((p: any) => p.id),
+      ];
+      groups[field.name]._product_display = [
+        ...(currentGroup._product_display || []),
+        ...newItems,
+      ];
+      form.setFieldsValue({ groups });
+      message.success(`Đã thêm ${newItems.length} sản phẩm vào nhóm.`);
+    } else {
+      message.info("Các sản phẩm này đã có trong nhóm.");
+    }
   };
 
   const readExcel = (file: File): Promise<any[]> => {
@@ -229,7 +241,16 @@ export const PolicyGroupCard: React.FC<Props> = ({
 
           if (type === "rebate_revenue") {
             return (
-              <Row gutter={16} style={{ background: '#fff', padding: 10, borderRadius: 6, marginBottom: 12, border: '1px dashed #d9d9d9' }}>
+              <Row
+                gutter={16}
+                style={{
+                  background: "#fff",
+                  padding: 10,
+                  borderRadius: 6,
+                  marginBottom: 12,
+                  border: "1px dashed #d9d9d9",
+                }}
+              >
                 <Col span={12}>
                   <Form.Item
                     {...restField}
@@ -253,7 +274,12 @@ export const PolicyGroupCard: React.FC<Props> = ({
                     label="% Chiết khấu thưởng"
                     rules={[{ required: true }]}
                   >
-                    <InputNumber style={{ width: "100%" }} min={0} max={100} addonAfter="%" />
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      min={0}
+                      max={100}
+                      addonAfter="%"
+                    />
                   </Form.Item>
                 </Col>
               </Row>
@@ -262,7 +288,16 @@ export const PolicyGroupCard: React.FC<Props> = ({
 
           if (type === "buy_x_get_y") {
             return (
-               <Row gutter={16} style={{ background: '#fff', padding: 10, borderRadius: 6, marginBottom: 12, border: '1px dashed #d9d9d9' }}>
+              <Row
+                gutter={16}
+                style={{
+                  background: "#fff",
+                  padding: 10,
+                  borderRadius: 6,
+                  marginBottom: 12,
+                  border: "1px dashed #d9d9d9",
+                }}
+              >
                 <Col span={12}>
                   <Form.Item
                     {...restField}
@@ -280,42 +315,53 @@ export const PolicyGroupCard: React.FC<Props> = ({
                     label="Tặng số lượng (Y)"
                     rules={[{ required: true }]}
                   >
-                     <InputNumber style={{ width: "100%" }} min={1} />
+                    <InputNumber style={{ width: "100%" }} min={1} />
                   </Form.Item>
                 </Col>
               </Row>
             );
           }
-          
-          if (type === 'buy_amt_get_gift') {
-              return (
-                <Row gutter={16} style={{ background: '#fff', padding: 10, borderRadius: 6, marginBottom: 12, border: '1px dashed #d9d9d9' }}>
-                    <Col span={12}>
-                    <Form.Item
-                        {...restField}
-                        name={[field.name, "rules", "min_order_value"]}
-                        label="Giá trị đơn hàng tối thiểu"
-                        rules={[{ required: true }]}
-                    >
-                        <InputNumber
-                            style={{ width: "100%" }}
-                            formatter={(v) =>`${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                            addonAfter="đ"
-                        />
-                    </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                    <Form.Item
-                        {...restField}
-                        name={[field.name, "rules", "gift_name"]}
-                        label="Quà tặng kèm"
-                        rules={[{ required: true }]}
-                    >
-                        <Input placeholder="Nhập tên quà..." />
-                    </Form.Item>
-                    </Col>
-                </Row>
-              )
+
+          if (type === "buy_amt_get_gift") {
+            return (
+              <Row
+                gutter={16}
+                style={{
+                  background: "#fff",
+                  padding: 10,
+                  borderRadius: 6,
+                  marginBottom: 12,
+                  border: "1px dashed #d9d9d9",
+                }}
+              >
+                <Col span={12}>
+                  <Form.Item
+                    {...restField}
+                    name={[field.name, "rules", "min_order_value"]}
+                    label="Giá trị đơn hàng tối thiểu"
+                    rules={[{ required: true }]}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      formatter={(v) =>
+                        `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                      }
+                      addonAfter="đ"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    {...restField}
+                    name={[field.name, "rules", "gift_name"]}
+                    label="Quà tặng kèm"
+                    rules={[{ required: true }]}
+                  >
+                    <Input placeholder="Nhập tên quà..." />
+                  </Form.Item>
+                </Col>
+              </Row>
+            );
           }
 
           return null;
@@ -324,87 +370,126 @@ export const PolicyGroupCard: React.FC<Props> = ({
 
       {/* 3. PRODUCT SCOPE */}
       <div>
-        <div style={{ marginBottom: 8, fontWeight: 500 }}>Sản phẩm áp dụng:</div>
-        
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>
+          Sản phẩm áp dụng:
+        </div>
+
         {/* Hidden Field for ID Array */}
-        <Form.Item 
-            {...restField} 
-            name={[field.name, 'product_ids']} 
-            hidden
-            initialValue={[]}
+        <Form.Item
+          {...restField}
+          name={[field.name, "product_ids"]}
+          hidden
+          initialValue={[]}
         >
-            <Input />
+          <Input />
         </Form.Item>
 
         <Form.Item
-             shouldUpdate={(prev, curr) => prev.groups?.[field.name]?.product_ids !== curr.groups?.[field.name]?.product_ids}
-             noStyle
+          shouldUpdate={(prev, curr) =>
+            prev.groups?.[field.name]?.product_ids !==
+            curr.groups?.[field.name]?.product_ids
+          }
+          noStyle
         >
-             {() => {
-                 const displayItems = form.getFieldValue(['groups', field.name, '_product_display']) || [];
-                 return (
-                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                         {displayItems.map((p: any) => (
-                             <Tag 
-                                key={p.id} 
-                                closable 
-                                onClose={() => {
-                                    // Remove logic
-                                    const currentIds = form.getFieldValue(['groups', field.name, 'product_ids']);
-                                    const currentDisplay = form.getFieldValue(['groups', field.name, '_product_display']);
-                                    
-                                    const newIds = currentIds.filter((id: number) => id !== p.id);
-                                    const newDisplay = currentDisplay.filter((item: any) => item.id !== p.id);
-                                    
-                                    const groups = form.getFieldValue('groups');
-                                    groups[field.name].product_ids = newIds;
-                                    groups[field.name]._product_display = newDisplay;
-                                    form.setFieldsValue({ groups });
-                                }}
-                             >
-                                {p.name}
-                             </Tag>
-                         ))}
-                         
-                         <Space>
-                            <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => openProductModal(field.name)}>
-                                Chọn sản phẩm
-                            </Button>
-                            
-                            {/* EXCEL IMPORT */}
-                            <Tooltip title="Tải file mẫu để nhập liệu">
-                                <Button size="small" icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
-                                    Mẫu
-                                </Button>
-                            </Tooltip>
-                            
-                            <Button 
-                                size="small" 
-                                icon={<FileExcelOutlined />} 
-                                onClick={() => fileInputRef.current?.click()} 
-                                style={{ backgroundColor: '#52c41a', color: '#fff', borderColor: '#52c41a' }}
-                            >
-                                Nhập Excel
-                            </Button>
-                            <input
-                                type="file"
-                                accept=".xlsx, .xls"
-                                ref={fileInputRef}
-                                style={{ display: "none" }}
-                                onChange={handleExcelUpload}
-                            />
-                         </Space>
-                     </div>
-                 )
-             }}
+          {() => {
+            const displayItems =
+              form.getFieldValue(["groups", field.name, "_product_display"]) ||
+              [];
+            return (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                {displayItems.map((p: any) => (
+                  <Tag
+                    key={p.id}
+                    closable
+                    onClose={() => {
+                      // Remove logic
+                      const currentIds = form.getFieldValue([
+                        "groups",
+                        field.name,
+                        "product_ids",
+                      ]);
+                      const currentDisplay = form.getFieldValue([
+                        "groups",
+                        field.name,
+                        "_product_display",
+                      ]);
+
+                      const newIds = currentIds.filter(
+                        (id: number) => id !== p.id
+                      );
+                      const newDisplay = currentDisplay.filter(
+                        (item: any) => item.id !== p.id
+                      );
+
+                      const groups = form.getFieldValue("groups");
+                      groups[field.name].product_ids = newIds;
+                      groups[field.name]._product_display = newDisplay;
+                      form.setFieldsValue({ groups });
+                    }}
+                  >
+                    {p.name}
+                  </Tag>
+                ))}
+
+                <Space>
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={() => openProductModal(field.name)}
+                  >
+                    Chọn sản phẩm
+                  </Button>
+
+                  {/* EXCEL IMPORT */}
+                  <Tooltip title="Tải file mẫu để nhập liệu">
+                    <Button
+                      size="small"
+                      icon={<DownloadOutlined />}
+                      onClick={handleDownloadTemplate}
+                    >
+                      Mẫu
+                    </Button>
+                  </Tooltip>
+
+                  <Button
+                    size="small"
+                    icon={<FileExcelOutlined />}
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      backgroundColor: "#52c41a",
+                      color: "#fff",
+                      borderColor: "#52c41a",
+                    }}
+                  >
+                    Nhập Excel
+                  </Button>
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls"
+                    ref={fileInputRef}
+                    style={{ display: "none" }}
+                    onChange={handleExcelUpload}
+                  />
+                </Space>
+              </div>
+            );
+          }}
         </Form.Item>
       </div>
 
-      <ExcelPreviewModal 
-        open={previewOpen} 
-        data={previewData} 
-        onCancel={() => setPreviewOpen(false)} 
-        onConfirm={handleConfirmImport} 
+      <ExcelPreviewModal
+        open={previewOpen}
+        data={previewData}
+        onCancel={() => setPreviewOpen(false)}
+        onConfirm={handleConfirmImport}
       />
     </Card>
   );

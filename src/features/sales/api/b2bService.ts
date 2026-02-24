@@ -1,10 +1,11 @@
 // src/features/sales/api/b2bService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
 import {
   B2BOrderFilters,
   B2BOrderViewResponse,
   B2BOrderDetail,
 } from "../types/b2b.types";
+
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const b2bService = {
   getOrderDetail: async (id: string): Promise<B2BOrderDetail> => {
@@ -12,7 +13,8 @@ export const b2bService = {
     // SENKO V400 FIX: Corrected column names based on Schema
     const { data, error } = await supabase
       .from("orders")
-      .select(`
+      .select(
+        `
         *,
         customer:customer_id (
           id,
@@ -38,7 +40,8 @@ export const b2bService = {
         sales_invoices (
             id, status, invoice_number, created_at
         )
-      `)
+      `
+      )
       .eq("id", id)
       .single();
 
@@ -114,16 +117,20 @@ export const b2bService = {
     return data as unknown as B2BOrderViewResponse;
   },
 
-  bulkPayOrders: async (orderIds: string[], fundAccountId: number, note?: string) => {
+  bulkPayOrders: async (
+    orderIds: string[],
+    fundAccountId: number,
+    note?: string
+  ) => {
     const { data, error } = await supabase.rpc("bulk_pay_orders", {
       p_order_ids: orderIds,
       p_fund_account_id: fundAccountId,
-      p_note: note || "Kế toán thu tiền hàng loạt"
+      p_note: note || "Kế toán thu tiền hàng loạt",
     });
-    
+
     if (error) {
-        console.error("Lỗi gọi RPC bulk_pay_orders:", error);
-        throw error;
+      console.error("Lỗi gọi RPC bulk_pay_orders:", error);
+      throw error;
     }
     return data;
   },

@@ -181,12 +181,12 @@ export const TransactionDetailModal: React.FC<Props> = ({
   // Core trả về: account_number, account_name
   // Frontend cần: acc, holder
   const rawData = (data as any).metadata || data.target_bank_info || {};
-  
+
   const bankInfo = {
-      bin: rawData.bin,
-      // Map các trường có thể xảy ra để tránh lỗi
-      acc: rawData.acc || rawData.account_number || rawData.accountNum, 
-      holder: rawData.holder || rawData.account_name || rawData.accountName
+    bin: rawData.bin,
+    // Map các trường có thể xảy ra để tránh lỗi
+    acc: rawData.acc || rawData.account_number || rawData.accountNum,
+    holder: rawData.holder || rawData.account_name || rawData.accountName,
   };
 
   let qrUrl = null;
@@ -194,9 +194,11 @@ export const TransactionDetailModal: React.FC<Props> = ({
   // Kiểm tra đủ thông tin mới tạo QR
   if (bankInfo.bin && bankInfo.acc && data.flow === "out") {
     const { bin, acc, holder } = bankInfo;
-    
+
     // Encode nội dung
-    const addInfo = encodeURIComponent(data.description || `Thanh toan ${data.code}`);
+    const addInfo = encodeURIComponent(
+      data.description || `Thanh toan ${data.code}`
+    );
     const accountName = encodeURIComponent(holder || "");
 
     // Tạo link VietQR
@@ -268,7 +270,7 @@ export const TransactionDetailModal: React.FC<Props> = ({
       </Descriptions>
 
       {/* 2. [NEW] Khu vực hiển thị QR Code (Chỉ hiện khi có URL) */}
-      {qrUrl && (
+      {qrUrl ? (
         <>
           <Divider
             orientation="left"
@@ -323,7 +325,7 @@ export const TransactionDetailModal: React.FC<Props> = ({
             </div>
           </div>
         </>
-      )}
+      ) : null}
 
       <Divider orientation="left" style={{ fontSize: 14, color: "#1890ff" }}>
         <FileImageOutlined /> Chứng từ đính kèm

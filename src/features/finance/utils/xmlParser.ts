@@ -2,20 +2,20 @@
 
 export interface ParsedInvoiceItem {
   line_number: number;
-  name: string;       // THHDVu
-  unit: string;       // DVTinh
-  quantity: number;   // SLuong
+  name: string; // THHDVu
+  unit: string; // DVTinh
+  quantity: number; // SLuong
   unit_price: number; // DGia
-  total: number;      // ThTien
-  vat_rate: number;   // TSuat (ví dụ 8, 10, -1 nếu k chịu thuế)
-  discount: number;   // STCKhau
+  total: number; // ThTien
+  vat_rate: number; // TSuat (ví dụ 8, 10, -1 nếu k chịu thuế)
+  discount: number; // STCKhau
 }
 
 export interface ParsedInvoiceHeader {
   invoice_number: string; // SHDon
   invoice_symbol: string; // KHHDon
-  invoice_date: string;   // NLap (YYYY-MM-DD)
-  supplier_name: string;  // NBan > Ten
+  invoice_date: string; // NLap (YYYY-MM-DD)
+  supplier_name: string; // NBan > Ten
   supplier_tax_code: string; // NBan > MST
   supplier_address: string; // NBan > DChi
   total_amount_pre_tax: number;
@@ -23,7 +23,9 @@ export interface ParsedInvoiceHeader {
   total_amount_post_tax: number; // TgTTTBSo
 }
 
-export const parseInvoiceXML = (xmlContent: string): { header: ParsedInvoiceHeader; items: ParsedInvoiceItem[] } => {
+export const parseInvoiceXML = (
+  xmlContent: string
+): { header: ParsedInvoiceHeader; items: ParsedInvoiceItem[] } => {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
 
@@ -34,11 +36,15 @@ export const parseInvoiceXML = (xmlContent: string): { header: ParsedInvoiceHead
 
   // 1. Parse Header
   const dlHdon = xmlDoc.querySelector("DLHDon");
-  if (!dlHdon) throw new Error("File XML không đúng định dạng Hóa đơn điện tử (Thiếu thẻ DLHDon).");
+  if (!dlHdon)
+    throw new Error(
+      "File XML không đúng định dạng Hóa đơn điện tử (Thiếu thẻ DLHDon)."
+    );
 
   const ttChung = dlHdon.querySelector("TTChung");
   const ndHdon = dlHdon.querySelector("NDHDon");
-  if (!ttChung || !ndHdon) throw new Error("Thiếu thông tin chung hoặc nội dung hóa đơn.");
+  if (!ttChung || !ndHdon)
+    throw new Error("Thiếu thông tin chung hoặc nội dung hóa đơn.");
 
   const nBan = ndHdon.querySelector("NBan");
   const tToan = ndHdon.querySelector("TToan");
@@ -61,9 +67,10 @@ export const parseInvoiceXML = (xmlContent: string): { header: ParsedInvoiceHead
 
   hhdVuList.forEach((node) => {
     // Xử lý VAT: XML có thể ghi "8%" hoặc "10" hoặc "-1"
-    let vatStr = getText(node, "TSuat").replace("%", "");
+    const vatStr = getText(node, "TSuat").replace("%", "");
     let vatRate = 0;
-    if (vatStr.startsWith("KCT") || vatStr.startsWith("KKK")) vatRate = 0; // Không chịu thuế
+    if (vatStr.startsWith("KCT") || vatStr.startsWith("KKK"))
+      vatRate = 0; // Không chịu thuế
     else vatRate = Number(vatStr) || 0;
 
     items.push({

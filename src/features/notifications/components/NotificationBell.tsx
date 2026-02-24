@@ -1,11 +1,12 @@
 // src/features/notifications/components/NotificationBell.tsx
 import { BellOutlined } from "@ant-design/icons";
 import { Badge, Button, List, Popover, Typography, Empty, Avatar } from "antd";
-import { useEffect, useState } from "react";
-import { supabase } from "@/shared/lib/supabaseClient";
-import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { useEffect, useState } from "react";
+
+import { useAuthStore } from "@/features/auth/stores/useAuthStore";
+import { supabase } from "@/shared/lib/supabaseClient";
 import "dayjs/locale/vi";
 
 dayjs.extend(relativeTime);
@@ -25,7 +26,7 @@ export const NotificationBell = () => {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(10);
-    
+
     if (data) {
       setNotifications(data);
       setUnreadCount(data.filter((n) => !n.is_read).length);
@@ -53,7 +54,7 @@ export const NotificationBell = () => {
           const newNoti = payload.new;
           setNotifications((prev) => [newNoti, ...prev]);
           setUnreadCount((prev) => prev + 1);
-          
+
           // (Tùy chọn) Phát âm thanh hoặc hiện Toast
         }
       )
@@ -67,10 +68,12 @@ export const NotificationBell = () => {
   // 3. Đánh dấu đã đọc
   const handleRead = async (id: string) => {
     // Optimistic Update
-    setNotifications(prev => prev.map(n => n.id === id ? {...n, is_read: true} : n));
-    setUnreadCount(prev => Math.max(0, prev - 1));
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+    );
+    setUnreadCount((prev) => Math.max(0, prev - 1));
 
-    await supabase.rpc('mark_notification_read', { p_noti_id: id });
+    await supabase.rpc("mark_notification_read", { p_noti_id: id });
   };
 
   // UI Danh sách
@@ -80,28 +83,35 @@ export const NotificationBell = () => {
         dataSource={notifications}
         locale={{ emptyText: <Empty description="Không có thông báo mới" /> }}
         renderItem={(item) => (
-          <List.Item 
-            style={{ 
-                background: item.is_read ? 'white' : '#e6f7ff', 
-                cursor: 'pointer',
-                padding: '8px 12px'
+          <List.Item
+            style={{
+              background: item.is_read ? "white" : "#e6f7ff",
+              cursor: "pointer",
+              padding: "8px 12px",
             }}
             onClick={() => handleRead(item.id)}
           >
             <List.Item.Meta
               avatar={
-                 <Avatar 
-                    style={{ backgroundColor: item.type === 'warning' ? '#ff4d4f' : '#1890ff' }} 
-                    icon={<BellOutlined />} 
-                 />
+                <Avatar
+                  style={{
+                    backgroundColor:
+                      item.type === "warning" ? "#ff4d4f" : "#1890ff",
+                  }}
+                  icon={<BellOutlined />}
+                />
               }
-              title={<Typography.Text strong={!item.is_read}>{item.title}</Typography.Text>}
+              title={
+                <Typography.Text strong={!item.is_read}>
+                  {item.title}
+                </Typography.Text>
+              }
               description={
                 <div>
-                    <div>{item.message}</div>
-                    <div style={{fontSize: 11, color: '#999', marginTop: 4}}>
-                        {dayjs(item.created_at).fromNow()}
-                    </div>
+                  <div>{item.message}</div>
+                  <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>
+                    {dayjs(item.created_at).fromNow()}
+                  </div>
                 </div>
               }
             />
@@ -112,11 +122,11 @@ export const NotificationBell = () => {
   );
 
   return (
-    <Popover 
-        content={content} 
-        title="Thông báo" 
-        trigger="click" 
-        placement="bottomRight"
+    <Popover
+      content={content}
+      title="Thông báo"
+      trigger="click"
+      placement="bottomRight"
     >
       <Button type="text" shape="circle">
         <Badge count={unreadCount} overflowCount={99} size="small">

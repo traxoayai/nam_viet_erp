@@ -1,6 +1,6 @@
 // src/services/templateService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
 import { DocumentTemplate } from "@/features/settings/types/template";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // 1. Tải danh sách Mẫu
 export const fetchTemplates = async (): Promise<DocumentTemplate[]> => {

@@ -3,11 +3,11 @@ import dayjs from "dayjs";
 
 // Config tài khoản ngân hàng nhận tiền (Sau này đưa vào Setting)
 const BANK_ID = "OCB"; // Ví dụ: MB, VCB, TPB
-const BANK_ACCOUNT = "0385061892"; 
+const BANK_ACCOUNT = "0385061892";
 const ACCOUNT_NAME = "LÊ HỒNG NHUNG";
 
 const triggerPrint = (htmlContent: string) => {
-  const printWindow = window.open('', '', 'height=600,width=800');
+  const printWindow = window.open("", "", "height=600,width=800");
   if (!printWindow) return;
   printWindow.document.write(htmlContent);
   printWindow.document.close();
@@ -15,7 +15,7 @@ const triggerPrint = (htmlContent: string) => {
   setTimeout(() => {
     printWindow.print();
     printWindow.close();
-  }, 1000); 
+  }, 1000);
 };
 
 // 1. IN BILL K80 (CÓ QR CODE)
@@ -23,7 +23,9 @@ export const printPosBill = (order: any) => {
   // Tạo link VietQR động
   const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-compact.png?amount=${order.final_amount}&addInfo=POS ${order.code}`;
 
-  const itemsHtml = order.items.map((item: any, index: number) => `
+  const itemsHtml = order.items
+    .map(
+      (item: any, index: number) => `
      <div class="grid grid-cols-12 items-start mb-2">
         <div class="col-span-6 font-semibold">
            ${index + 1}. ${item.product_name}
@@ -32,7 +34,9 @@ export const printPosBill = (order: any) => {
         <div class="col-span-2 text-center">${item.quantity}</div>
         <div class="col-span-4 text-right">${(item.unit_price * item.quantity).toLocaleString()}</div>
      </div>
-  `).join('');
+  `
+    )
+    .join("");
 
   const html = `
     <!DOCTYPE html>
@@ -58,7 +62,7 @@ export const printPosBill = (order: any) => {
             <div class="dashed-line"></div>
             <div class="flex justify-between text-[10px]">
                 <div>Mã: <b>${order.code}</b></div>
-                <div>${new Date().toLocaleString('vi-VN')}</div>
+                <div>${new Date().toLocaleString("vi-VN")}</div>
             </div>
             <div class="dashed-line"></div>
             
@@ -95,26 +99,34 @@ export const printPosBill = (order: any) => {
 };
 
 // 2. IN HDSD (TEM DÁN)
-export const printInstruction = (drugName: string, instruction: string | string[]) => {
-  if (!instruction || (Array.isArray(instruction) && instruction.length === 0)) return;
+export const printInstruction = (
+  drugName: string,
+  instruction: string | string[]
+) => {
+  if (!instruction || (Array.isArray(instruction) && instruction.length === 0))
+    return;
 
   let rawText = "";
   if (Array.isArray(instruction)) {
-      rawText = instruction.join(" - "); 
-  } else if (typeof instruction === 'string') {
-      rawText = instruction;
+    rawText = instruction.join(" - ");
+  } else if (typeof instruction === "string") {
+    rawText = instruction;
   } else {
-      return; // Dữ liệu rác -> không in
+    return; // Dữ liệu rác -> không in
   }
 
   // Tách dòng dựa trên các ký tự phân cách
-  const parts = rawText.split(/[-–\n]/).filter(part => part.trim() !== '');
-  
-  const linesHtml = parts.map(p => `
+  const parts = rawText.split(/[-–\n]/).filter((part) => part.trim() !== "");
+
+  const linesHtml = parts
+    .map(
+      (p) => `
       <div class="instruction-line relative pl-4 mb-1 before:content-['•'] before:absolute before:left-0 before:font-bold">
           ${p.trim()}
       </div>
-  `).join('');
+  `
+    )
+    .join("");
 
   const html = `
     <!DOCTYPE html>
@@ -151,37 +163,43 @@ export const generateB2BOrderHTML = (order: any) => {
     address: "Số 17, Đường Bắc Sơn, Xã Hữu Lũng, Lạng Sơn",
     website: "www.DuocNamViet.com",
     phone: "0585.123.888",
-    taxCode: "4900886412"
+    taxCode: "4900886412",
   };
 
   // Logic hiển thị tiền (Ưu tiên biến total_payable_display truyền từ Hook)
   const oldDebt = Number(order.old_debt || 0);
   const currentTotal = Number(order.final_amount || 0);
-  const totalPayable = order.total_payable_display !== undefined 
-      ? Number(order.total_payable_display) 
-      : (currentTotal + oldDebt);
+  const totalPayable =
+    order.total_payable_display !== undefined
+      ? Number(order.total_payable_display)
+      : currentTotal + oldDebt;
 
   const qrAmount = totalPayable > 0 ? totalPayable : currentTotal;
-  const qrContent = `TT ${order.code}`; 
+  const qrContent = `TT ${order.code}`;
   const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-qr_only.png?amount=${qrAmount}&addInfo=${encodeURIComponent(qrContent)}&accountName=${encodeURIComponent(ACCOUNT_NAME)}`;
 
-  const rows = order.items?.map((item: any, index: number) => `
+  const rows =
+    order.items
+      ?.map(
+        (item: any, index: number) => `
     <tr>
       <td style="text-align: center;">${index + 1}</td>
       <td>
         <div style="font-weight: bold;">${item.product_name}</div>
         <div style="font-size: 10px; color: #444;">
-             ${item.batch_no ? `Lô: ${item.batch_no}` : ''} 
-             ${item.expiry_date ? `| HSD: ${dayjs(item.expiry_date).format('DD/MM/YY')}` : ''}
+             ${item.batch_no ? `Lô: ${item.batch_no}` : ""} 
+             ${item.expiry_date ? `| HSD: ${dayjs(item.expiry_date).format("DD/MM/YY")}` : ""}
         </div>
-        ${item.note ? `<div style="font-style: italic; font-size: 10px;">(${item.note})</div>` : ''}
+        ${item.note ? `<div style="font-style: italic; font-size: 10px;">(${item.note})</div>` : ""}
       </td>
       <td style="text-align: center;">${item.uom || item.unit}</td>
       <td style="text-align: center; font-weight: bold;">${item.quantity}</td>
       <td style="text-align: right;">${Number(item.unit_price).toLocaleString()}</td>
       <td style="text-align: right;">${Number(item.total_line).toLocaleString()}</td>
     </tr>
-  `).join('') || '';
+  `
+      )
+      .join("") || "";
 
   return `
     <html>
@@ -219,8 +237,8 @@ export const generateB2BOrderHTML = (order: any) => {
           </div>
           <div style="text-align: right;">
             <div>Số: <b>${order.code}</b></div>
-            <div>Ngày: ${dayjs(order.created_at).format('DD/MM/YYYY')}</div>
-            <div>In lúc: ${dayjs().format('HH:mm')}</div>
+            <div>Ngày: ${dayjs(order.created_at).format("DD/MM/YYYY")}</div>
+            <div>In lúc: ${dayjs().format("HH:mm")}</div>
           </div>
         </div>
 
@@ -231,15 +249,15 @@ export const generateB2BOrderHTML = (order: any) => {
             <td width="15%"><b>Khách hàng:</b></td>
             <td>${order.customer_name}</td>
             <td width="15%"><b>Điện thoại:</b></td>
-            <td>${order.customer_phone || '-'}</td>
+            <td>${order.customer_phone || "-"}</td>
           </tr>
           <tr>
             <td><b>Địa chỉ giao:</b></td>
-            <td colspan="3">${order.delivery_address || '-'}</td>
+            <td colspan="3">${order.delivery_address || "-"}</td>
           </tr>
           <tr>
             <td><b>Ghi chú:</b></td>
-            <td colspan="3">${order.note || '-'}</td>
+            <td colspan="3">${order.note || "-"}</td>
           </tr>
         </table>
 
@@ -275,12 +293,16 @@ export const generateB2BOrderHTML = (order: any) => {
 
                <div class="total-row"><span>Thanh toán đơn này:</span> <b>${currentTotal.toLocaleString()} ₫</b></div>
                
-               ${oldDebt !== 0 ? `
+               ${
+                 oldDebt !== 0
+                   ? `
                    <div class="total-row" style="color: #d4380d;">
-                       <span>${oldDebt > 0 ? 'Nợ cũ (Cộng dồn):' : ''}</span> 
+                       <span>${oldDebt > 0 ? "Nợ cũ (Cộng dồn):" : ""}</span> 
                        <span>${Math.abs(oldDebt).toLocaleString()} ₫</span>
                    </div>
-               ` : ''}
+               `
+                   : ""
+               }
 
                <div class="total-row final-row">
                    <span>TỔNG CỘNG PHẢI TRẢ:</span> 
@@ -308,9 +330,9 @@ export const generateB2BOrderHTML = (order: any) => {
 
 // 4. IN PHIẾU THU / CHI
 export const generatePaymentVoucherHTML = (trans: any) => {
-  const isReceipt = trans.flow === 'in';
-  const title = isReceipt ? 'PHIẾU THU TIỀN' : 'PHIẾU CHI TIỀN';
-  
+  const isReceipt = trans.flow === "in";
+  const title = isReceipt ? "PHIẾU THU TIỀN" : "PHIẾU CHI TIỀN";
+
   return `
     <html>
       <head>
@@ -336,7 +358,7 @@ export const generatePaymentVoucherHTML = (trans: any) => {
         <div style="text-align: center; margin-bottom: 20px;">Ngày ... tháng ... năm ...</div>
 
         <div class="row"><div class="label">Mã phiếu:</div><div class="value">${trans.code}</div></div>
-        <div class="row"><div class="label">${isReceipt ? 'Người nộp tiền' : 'Người nhận tiền'}:</div><div class="value">${trans.partner_name_cache || trans.partner_name || '...'}</div></div>
+        <div class="row"><div class="label">${isReceipt ? "Người nộp tiền" : "Người nhận tiền"}:</div><div class="value">${trans.partner_name_cache || trans.partner_name || "..."}</div></div>
         <div class="row"><div class="label">Địa chỉ:</div><div class="value">...</div></div>
         <div class="row"><div class="label">Lý do:</div><div class="value">${trans.description}</div></div>
         <div class="row"><div class="label">Số tiền:</div><div class="value" style="font-weight: bold; font-size: 16px;">${Number(trans.amount).toLocaleString()} VNĐ</div></div>
@@ -347,7 +369,7 @@ export const generatePaymentVoucherHTML = (trans: any) => {
             <div style="width: 25%"><b>Giám đốc</b><br/>(Ký, họ tên)</div>
             <div style="width: 25%"><b>Kế toán trưởng</b><br/>(Ký, họ tên)</div>
             <div style="width: 25%"><b>Người lập phiếu</b><br/>(Ký, họ tên)</div>
-            <div style="width: 25%"><b>${isReceipt ? 'Người nộp tiền' : 'Người nhận tiền'}</b><br/>(Ký, họ tên)</div>
+            <div style="width: 25%"><b>${isReceipt ? "Người nộp tiền" : "Người nhận tiền"}</b><br/>(Ký, họ tên)</div>
         </div>
       </body>
     </html>
@@ -381,20 +403,20 @@ export const printAppointmentSlip = (appt: any) => {
             
             <div class="title">PHIẾU HẸN KHÁM</div>
             
-            <div class="big-number">${dayjs(appt.appointment_time).format('HH:mm')}</div>
+            <div class="big-number">${dayjs(appt.appointment_time).format("HH:mm")}</div>
             
             <div class="info">
                 <div><b>Khách hàng:</b> ${appt.customer_name}</div>
-                <div><b>Năm sinh:</b> ${appt.customer_yob || '...'} (${appt.customer_gender === 'male' ? 'Nam' : 'Nữ'})</div>
+                <div><b>Năm sinh:</b> ${appt.customer_yob || "..."} (${appt.customer_gender === "male" ? "Nam" : "Nữ"})</div>
                 <div><b>SĐT:</b> ${appt.customer_phone}</div>
                 <div class="dashed"></div>
                 <div><b>Dịch vụ đăng ký:</b></div>
                 <ul style="padding-left: 15px; margin: 2px 0;">
-                    ${(appt.service_names_mapped || []).map((name: string) => `<li>${name}</li>`).join('')}
+                    ${(appt.service_names_mapped || []).map((name: string) => `<li>${name}</li>`).join("")}
                 </ul>
                 <div class="dashed"></div>
-                <div><b>Phòng khám:</b> ${appt.room_name || 'Lễ tân sắp xếp'}</div>
-                <div><b>Ngày hẹn:</b> ${dayjs(appt.appointment_time).format('DD/MM/YYYY')}</div>
+                <div><b>Phòng khám:</b> ${appt.room_name || "Lễ tân sắp xếp"}</div>
+                <div><b>Ngày hẹn:</b> ${dayjs(appt.appointment_time).format("DD/MM/YYYY")}</div>
             </div>
 
             <div class="footer">
@@ -405,36 +427,40 @@ export const printAppointmentSlip = (appt: any) => {
     </body>
     </html>
   `;
-  
+
   // Gọi hàm triggerPrint cũ
-  const printWindow = window.open('', '', 'height=600,width=800');
+  const printWindow = window.open("", "", "height=600,width=800");
   if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
   }
 };
 
 // 6. IN PHIẾU KHÁM BỆNH (A4)
 export const printMedicalVisit = (data: any) => {
   // data bao gồm: patientInfo, vitals, clinical, prescriptionItems, doctorName
-  const win = window.open('', '', 'height=700,width=900');
+  const win = window.open("", "", "height=700,width=900");
   if (!win) return;
 
-  const rows = data.prescriptionItems?.map((item: any, idx: number) => `
+  const rows = data.prescriptionItems
+    ?.map(
+      (item: any, idx: number) => `
     <tr>
         <td style="text-align: center">${idx + 1}</td>
         <td>
             <b>${item.product_name}</b><br>
-            <i style="font-size: 11px">${item.usage_note || ''}</i>
+            <i style="font-size: 11px">${item.usage_note || ""}</i>
         </td>
         <td style="text-align: center">${item.quantity} ${item.unit_name}</td>
     </tr>
-  `).join('');
+  `
+    )
+    .join("");
 
   const content = `
     <html>
@@ -454,17 +480,17 @@ export const printMedicalVisit = (data: any) => {
         <div class="title">PHIẾU KẾT QUẢ KHÁM BỆNH</div>
         
         <div class="section">
-          <div><span class="label">Họ tên:</span> ${data.patientInfo.full_name || data.patientInfo.name} (${data.patientInfo.gender === 'male' ? 'Nam' : 'Nữ'})</div>
+          <div><span class="label">Họ tên:</span> ${data.patientInfo.full_name || data.patientInfo.name} (${data.patientInfo.gender === "male" ? "Nam" : "Nữ"})</div>
           <div><span class="label">Năm sinh:</span> ${new Date(data.patientInfo.dob).getFullYear()} (${new Date().getFullYear() - new Date(data.patientInfo.dob).getFullYear()} tuổi)</div>
-          <div><span class="label">Địa chỉ:</span> ${data.patientInfo.address || '...'}</div>
+          <div><span class="label">Địa chỉ:</span> ${data.patientInfo.address || "..."}</div>
         </div>
 
         <div class="section">
           <b>1. KHÁM LÂM SÀNG:</b><br>
-          - Cân nặng: ${data.vitals?.weight || '_'} kg | Chiều cao: ${data.vitals?.height || '_'} cm<br>
-          - Huyết áp: ${data.vitals?.bp_systolic || '_'}/${data.vitals?.bp_diastolic || '_'} mmHg | Mạch: ${data.vitals?.pulse || '_'} l/p<br>
-          - Triệu chứng: ${data.clinical?.symptoms || ''}<br>
-          - Chẩn đoán: <b>${data.clinical?.diagnosis || ''}</b>
+          - Cân nặng: ${data.vitals?.weight || "_"} kg | Chiều cao: ${data.vitals?.height || "_"} cm<br>
+          - Huyết áp: ${data.vitals?.bp_systolic || "_"}/${data.vitals?.bp_diastolic || "_"} mmHg | Mạch: ${data.vitals?.pulse || "_"} l/p<br>
+          - Triệu chứng: ${data.clinical?.symptoms || ""}<br>
+          - Chẩn đoán: <b>${data.clinical?.diagnosis || ""}</b>
         </div>
 
         <div class="section">
@@ -483,8 +509,8 @@ export const printMedicalVisit = (data: any) => {
 
         <div class="section">
           <b>3. LỜI DẶN:</b><br>
-          ${data.clinical?.doctor_notes || 'Không có lời dặn đặc biệt.'}<br>
-          ${data.reExamDate ? `<b>Hẹn tái khám ngày: ${new Date(data.reExamDate).toLocaleDateString('vi-VN')}</b>` : ''}
+          ${data.clinical?.doctor_notes || "Không có lời dặn đặc biệt."}<br>
+          ${data.reExamDate ? `<b>Hẹn tái khám ngày: ${new Date(data.reExamDate).toLocaleDateString("vi-VN")}</b>` : ""}
         </div>
 
         <div class="footer">
@@ -492,7 +518,7 @@ export const printMedicalVisit = (data: any) => {
             <i>Ngày ${new Date().getDate()} tháng ${new Date().getMonth() + 1} năm ${new Date().getFullYear()}</i><br>
             <b>BÁC SĨ ĐIỀU TRỊ</b><br>
             <br><br><br>
-            ${data.doctorName || 'Ký tên'}
+            ${data.doctorName || "Ký tên"}
           </div>
         </div>
       </body>
@@ -506,11 +532,11 @@ export const printMedicalVisit = (data: any) => {
 
 // 7. IN KẾT QUẢ CHẨN ĐOÁN HÌNH ẢNH (A4/A5)
 export const printImagingResult = (data: any) => {
-    // data: { patientInfo, serviceName, descriptionHtml, conclusionHtml, recommendation, doctorName, date }
-    const win = window.open('', '', 'height=700,width=900');
-    if (!win) return;
+  // data: { patientInfo, serviceName, descriptionHtml, conclusionHtml, recommendation, doctorName, date }
+  const win = window.open("", "", "height=700,width=900");
+  if (!win) return;
 
-    const content = `
+  const content = `
     <html>
       <head>
         <title>Kết quả ${data.serviceName}</title>
@@ -537,66 +563,76 @@ export const printImagingResult = (data: any) => {
         <div class="title">PHIẾU KẾT QUẢ ${data.serviceName}</div>
         
         <div class="patient-info">
-            <div><span class="label">Họ tên:</span> <span><b>${data.patientInfo?.name || '...'}</b></span></div>
-            <div><span class="label">Năm sinh:</span> <span>${data.patientInfo?.dob ? new Date(data.patientInfo.dob).getFullYear() : '...'} (${data.patientInfo?.gender === 'male' ? 'Nam' : 'Nữ'})</span></div>
-            <div style="grid-column: span 2;"><span class="label">Địa chỉ:</span> <span>${data.patientInfo?.address || '...'}</span></div>
+            <div><span class="label">Họ tên:</span> <span><b>${data.patientInfo?.name || "..."}</b></span></div>
+            <div><span class="label">Năm sinh:</span> <span>${data.patientInfo?.dob ? new Date(data.patientInfo.dob).getFullYear() : "..."} (${data.patientInfo?.gender === "male" ? "Nam" : "Nữ"})</span></div>
+            <div style="grid-column: span 2;"><span class="label">Địa chỉ:</span> <span>${data.patientInfo?.address || "..."}</span></div>
             <div style="grid-column: span 2;"><span class="label">Chỉ định:</span> <span>${data.serviceName}</span></div>
         </div>
 
         <div class="content-section">
             <div class="section-title">MÔ TẢ TỔN THƯƠNG:</div>
-            <div>${data.descriptionHtml || ''}</div>
+            <div>${data.descriptionHtml || ""}</div>
         </div>
 
         <div class="content-section">
             <div class="section-title">KẾT LUẬN:</div>
-            <div class="conclusion">${data.conclusionHtml || ''}</div>
+            <div class="conclusion">${data.conclusionHtml || ""}</div>
         </div>
 
-        ${data.recommendation ? `
+        ${
+          data.recommendation
+            ? `
         <div class="content-section">
             <div class="section-title">ĐỀ NGHỊ:</div>
             <div>${data.recommendation}</div>
         </div>
-        ` : ''}
+        `
+            : ""
+        }
 
         <div class="footer">
             <div style="width: 30%"></div>
             <div style="width: 40%">
-                <i>Ngày ${dayjs(data.date).format('DD')} tháng ${dayjs(data.date).format('MM')} năm ${dayjs(data.date).format('YYYY')}</i><br>
+                <i>Ngày ${dayjs(data.date).format("DD")} tháng ${dayjs(data.date).format("MM")} năm ${dayjs(data.date).format("YYYY")}</i><br>
                 <b>BÁC SĨ / KTV THỰC HIỆN</b><br>
                 <br><br><br>
-                ${data.doctorName || 'Ký tên'}
+                ${data.doctorName || "Ký tên"}
             </div>
         </div>
       </body>
     </html>
     `;
-    win.document.write(content);
-    win.document.close();
-    setTimeout(() => { win.print(); }, 500);
+  win.document.write(content);
+  win.document.close();
+  setTimeout(() => {
+    win.print();
+  }, 500);
 };
 
 // 8. IN KẾT QUẢ XÉT NGHIỆM (A4)
 export const printLabResult = (data: any) => {
-    // data: { patientInfo, serviceName, results: [{ name, value, unit, ref, eval }], doctorName, date }
-    const win = window.open('', '', 'height=700,width=900');
-    if (!win) return;
+  // data: { patientInfo, serviceName, results: [{ name, value, unit, ref, eval }], doctorName, date }
+  const win = window.open("", "", "height=700,width=900");
+  if (!win) return;
 
-    const rows = data.results?.map((item: any, idx: number) => {
-        const isAbnormal = item.eval === 'High' || item.eval === 'Low' || item.eval === 'Positive';
-        return `
-        <tr style="${isAbnormal ? 'font-weight: bold;' : ''}">
+  const rows = data.results
+    ?.map((item: any, idx: number) => {
+      const isAbnormal =
+        item.eval === "High" || item.eval === "Low" || item.eval === "Positive";
+      return `
+        <tr style="${isAbnormal ? "font-weight: bold;" : ""}">
             <td style="text-align: center">${idx + 1}</td>
             <td>${item.name}</td>
-            <td style="text-align: center; ${isAbnormal ? 'color: red;' : ''}">${item.value}</td>
-            <td style="text-align: center">${item.unit || ''}</td>
-            <td style="text-align: center">${item.ref || ''}</td>
-            <td style="text-align: center; ${isAbnormal ? 'color: red;' : ''}">${item.eval === 'High' ? 'Cao' : item.eval === 'Low' ? 'Thấp' : item.eval === 'Positive' ? 'Dương tính' : 'Bình thường'}</td>
+            <td style="text-align: center; ${isAbnormal ? "color: red;" : ""}">${item.value}</td>
+            <td style="text-align: center">${item.unit || ""}</td>
+            <td style="text-align: center">${item.ref || ""}</td>
+            <td style="text-align: center; ${isAbnormal ? "color: red;" : ""}">${item.eval === "High" ? "Cao" : item.eval === "Low" ? "Thấp" : item.eval === "Positive" ? "Dương tính" : "Bình thường"}</td>
         </tr>
-    `}).join('');
+    `;
+    })
+    .join("");
 
-    const content = `
+  const content = `
     <html>
       <head>
         <title>Kết quả Xét nghiệm ${data.serviceName}</title>
@@ -623,9 +659,9 @@ export const printLabResult = (data: any) => {
         <div class="title">PHIẾU KẾT QUẢ XÉT NGHIỆM</div>
         
         <div class="patient-info">
-            <div><span class="label">Họ tên:</span> <span><b>${data.patientInfo?.name || '...'}</b></span></div>
-            <div><span class="label">Năm sinh:</span> <span>${data.patientInfo?.dob ? new Date(data.patientInfo.dob).getFullYear() : '...'} (${data.patientInfo?.gender === 'male' ? 'Nam' : 'Nữ'})</span></div>
-            <div style="grid-column: span 2;"><span class="label">Địa chỉ:</span> <span>${data.patientInfo?.address || '...'}</span></div>
+            <div><span class="label">Họ tên:</span> <span><b>${data.patientInfo?.name || "..."}</b></span></div>
+            <div><span class="label">Năm sinh:</span> <span>${data.patientInfo?.dob ? new Date(data.patientInfo.dob).getFullYear() : "..."} (${data.patientInfo?.gender === "male" ? "Nam" : "Nữ"})</span></div>
+            <div style="grid-column: span 2;"><span class="label">Địa chỉ:</span> <span>${data.patientInfo?.address || "..."}</span></div>
             <div style="grid-column: span 2;"><span class="label">Loại xét nghiệm:</span> <span><b>${data.serviceName}</b></span></div>
         </div>
 
@@ -646,16 +682,18 @@ export const printLabResult = (data: any) => {
         <div class="footer">
             <div style="width: 30%"></div>
             <div style="width: 40%">
-                <i>Ngày ${dayjs(data.date).format('DD')} tháng ${dayjs(data.date).format('MM')} năm ${dayjs(data.date).format('YYYY')}</i><br>
+                <i>Ngày ${dayjs(data.date).format("DD")} tháng ${dayjs(data.date).format("MM")} năm ${dayjs(data.date).format("YYYY")}</i><br>
                 <b>KTV XÉT NGHIỆM</b><br>
                 <br><br><br>
-                ${data.doctorName || 'Ký tên'}
+                ${data.doctorName || "Ký tên"}
             </div>
         </div>
       </body>
     </html>
     `;
-    win.document.write(content);
-    win.document.close();
-    setTimeout(() => { win.print(); }, 500);
+  win.document.write(content);
+  win.document.close();
+  setTimeout(() => {
+    win.print();
+  }, 500);
 };

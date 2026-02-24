@@ -1,23 +1,28 @@
 // src/shared/templates/transferTemplate.ts
-import dayjs from 'dayjs';
-import { TransferDetail } from '@/features/inventory/types/transfer';
+import dayjs from "dayjs";
+
+import { TransferDetail } from "@/features/inventory/types/transfer";
 
 export const generateTransferHTML = (data: TransferDetail): string => {
-    const itemsRows = data.items.map((item, index) => `
+  const itemsRows = data.items
+    .map(
+      (item, index) => `
         <tr>
             <td style="text-align: center;">${index + 1}</td>
             <td>
-                <div class="product-name">${item.product_name || '---'}</div>
-                <div class="sku">${item.sku || ''}</div>
+                <div class="product-name">${item.product_name || "---"}</div>
+                <div class="sku">${item.sku || ""}</div>
             </td>
-            <td style="text-align: center;">${item.uom || '---'}</td>
+            <td style="text-align: center;">${item.uom || "---"}</td>
             <td style="text-align: right;">${item.quantity_requested}</td>
             <td style="text-align: right; font-weight: bold;">${item.quantity_shipped ?? 0}</td>
             <td></td> 
         </tr>
-    `).join('');
+    `
+    )
+    .join("");
 
-    return `
+  return `
     <!DOCTYPE html>
     <html>
     <head>
@@ -51,7 +56,7 @@ export const generateTransferHTML = (data: TransferDetail): string => {
         <div class="header">
             <h1>Phiếu Chuyển Kho</h1>
             <div>Mã phiếu: <b>${data.code}</b></div>
-            <div>Ngày tạo: ${dayjs(data.created_at).format('DD/MM/YYYY HH:mm')}</div>
+            <div>Ngày tạo: ${dayjs(data.created_at).format("DD/MM/YYYY HH:mm")}</div>
         </div>
 
         <div class="meta">
@@ -60,7 +65,7 @@ export const generateTransferHTML = (data: TransferDetail): string => {
                     <span class="label">Kho xuất:</span> ${data.source_warehouse_name}
                 </div>
                 <div class="meta-row">
-                    <span class="label">Người lập:</span> ${data.creator_name || 'Admin'}
+                    <span class="label">Người lập:</span> ${data.creator_name || "Admin"}
                 </div>
             </div>
             <div class="meta-col">
@@ -68,7 +73,7 @@ export const generateTransferHTML = (data: TransferDetail): string => {
                     <span class="label">Kho nhập:</span> ${data.dest_warehouse_name}
                 </div>
                 <div class="meta-row">
-                    <span class="label">Ghi chú:</span> ${data.note || '---'}
+                    <span class="label">Ghi chú:</span> ${data.note || "---"}
                 </div>
             </div>
         </div>

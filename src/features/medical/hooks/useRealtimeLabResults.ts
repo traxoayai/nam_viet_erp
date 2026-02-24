@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
-import { supabase } from '@/shared/lib/supabaseClient';
-import { notification } from 'antd';
+import { notification } from "antd";
+import { useEffect } from "react";
+
+import { supabase } from "@/shared/lib/supabaseClient";
 
 interface Props {
   visitId: string | null;
@@ -14,23 +15,27 @@ export const useRealtimeLabResults = ({ visitId, onResultReceived }: Props) => {
     const channel = supabase
       .channel(`lab-results-${visitId}`)
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'clinical_service_requests', // <--- TÊN BẢNG MỚI CHUẨN
+          event: "UPDATE",
+          schema: "public",
+          table: "clinical_service_requests", // <--- TÊN BẢNG MỚI CHUẨN
           filter: `medical_visit_id=eq.${visitId}`,
         },
         (payload) => {
-          console.log('Realtime update received:', payload);
+          console.log("Realtime update received:", payload);
           // Check if status changed to completed
-          if (payload.new.status === 'completed' && payload.old.status !== 'completed') {
-             notification.success({
-                 message: 'Có kết quả xét nghiệm mới!',
-                 description: 'Kết quả cận lâm sàng đã được cập nhật. Vui lòng kiểm tra.',
-                 placement: 'bottomRight',
-             });
-             onResultReceived();
+          if (
+            payload.new.status === "completed" &&
+            payload.old.status !== "completed"
+          ) {
+            notification.success({
+              message: "Có kết quả xét nghiệm mới!",
+              description:
+                "Kết quả cận lâm sàng đã được cập nhật. Vui lòng kiểm tra.",
+              placement: "bottomRight",
+            });
+            onResultReceived();
           }
         }
       )

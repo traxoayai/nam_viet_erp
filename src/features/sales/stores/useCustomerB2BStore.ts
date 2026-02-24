@@ -20,20 +20,23 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
     totalCount: 0,
     page: 1,
     pageSize: 10,
-    filters: {}, 
+    filters: {},
     sortDebt: null, // [NEW]
 
     // --- HÀM TẢI DỮ LIỆU ---
 
-    fetchCustomers: async (newFilters: any, sortDebt?: 'asc' | 'desc' | null) => {
+    fetchCustomers: async (
+      newFilters: any,
+      sortDebt?: "asc" | "desc" | null
+    ) => {
       const filters = { ...get().filters, ...newFilters };
       const { page, pageSize } = get();
 
       // [NEW] Logic Sort
       let currentSort = get().sortDebt;
       if (sortDebt !== undefined) {
-         currentSort = sortDebt;
-         set({ sortDebt: currentSort });
+        currentSort = sortDebt;
+        set({ sortDebt: currentSort });
       }
 
       set({ loading: true, filters: filters });
@@ -45,7 +48,11 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
           currentSort // [NEW] Truyền xuống service
         );
         // Backend trả về total_count dạng string/bigint -> ép kiểu Number
-        set({ customers: data, totalCount: Number(totalCount), loading: false });
+        set({
+          customers: data,
+          totalCount: Number(totalCount),
+          loading: false,
+        });
       } catch (error: any) {
         console.error("Lỗi tải danh sách khách hàng B2B:", error);
         set({ loading: false });

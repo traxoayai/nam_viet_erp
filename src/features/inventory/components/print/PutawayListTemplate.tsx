@@ -5,7 +5,10 @@ interface PutawayListTemplateProps {
   poCode?: string;
 }
 
-export const PutawayListTemplate = ({ items, poCode }: PutawayListTemplateProps) => {
+export const PutawayListTemplate = ({
+  items,
+  poCode,
+}: PutawayListTemplateProps) => {
   return (
     <div className="print-putaway-source">
       {/* Styles for print only */}
@@ -29,7 +32,10 @@ export const PutawayListTemplate = ({ items, poCode }: PutawayListTemplateProps)
 
       <div style={{ textAlign: "center", marginBottom: 20 }}>
         <h2 style={{ margin: 0 }}>PHIẾU XẾP KỆ (PUTAWAY LIST)</h2>
-        <p>Mã Phiếu: <b>{poCode || "Unknown"}</b> - Ngày in: {new Date().toLocaleString('vi-VN')}</p>
+        <p>
+          Mã Phiếu: <b>{poCode || "Unknown"}</b> - Ngày in:{" "}
+          {new Date().toLocaleString("vi-VN")}
+        </p>
       </div>
 
       <table>
@@ -51,30 +57,49 @@ export const PutawayListTemplate = ({ items, poCode }: PutawayListTemplateProps)
               <td>{item.sku}</td>
               <td>{item.product_name}</td>
               <td className="text-center">{item.unit}</td>
-              <td className="text-center"><b>{item.input_quantity || item.quantity_remaining}</b></td>
+              <td className="text-center">
+                <b>{item.input_quantity || item.quantity_remaining}</b>
+              </td>
               <td></td> {/* Empty box for writing location */}
               <td>
-                  {item.stock_management_type === 'lot_date' ? (
-                      <div>
-                          Lô: {item.input_lot || ".........."}<br/>
-                          Hạn: {item.input_expiry ? new Date(item.input_expiry).toLocaleDateString() : ".........."}
-                      </div>
-                  ) : "-"}
+                {item.stock_management_type === "lot_date" ? (
+                  <div>
+                    Lô: {item.input_lot || ".........."}
+                    <br />
+                    Hạn:{" "}
+                    {item.input_expiry
+                      ? new Date(item.input_expiry).toLocaleDateString()
+                      : ".........."}
+                  </div>
+                ) : (
+                  "-"
+                )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", padding: "0 50px" }}>
-          <div style={{ textAlign: "center" }}>
-              <b>Người lập phiếu</b>
-              <br/><br/><br/>
-          </div>
-          <div style={{ textAlign: "center" }}>
-              <b>Nhân viên kho</b>
-              <br/><br/><br/>
-          </div>
+      <div
+        style={{
+          marginTop: 40,
+          display: "flex",
+          justifyContent: "space-between",
+          padding: "0 50px",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <b>Người lập phiếu</b>
+          <br />
+          <br />
+          <br />
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <b>Nhân viên kho</b>
+          <br />
+          <br />
+          <br />
+        </div>
       </div>
     </div>
   );

@@ -35,8 +35,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx"; // Nhớ cài: npm install xlsx
 
-import InvoiceUploadModal from "./InvoiceUploadModal";
 import { InvoiceXmlUpload } from "../../../features/finance/components/invoices/InvoiceXmlUpload";
+
+import InvoiceUploadModal from "./InvoiceUploadModal";
 
 import { invoiceService } from "@/features/finance/api/invoiceService";
 
@@ -107,7 +108,9 @@ const InvoiceListPage = () => {
       message.success("Đã xóa hóa đơn");
       fetchData();
     } catch (error) {
-      message.error("Xóa thất bại - Có thể không đủ số lượng để xóa - Vui lòng liên hệ ADMIN để biết thêm chi tiết");
+      message.error(
+        "Xóa thất bại - Có thể không đủ số lượng để xóa - Vui lòng liên hệ ADMIN để biết thêm chi tiết"
+      );
     }
   };
 
@@ -321,9 +324,9 @@ const InvoiceListPage = () => {
             fetchData();
           }}
         />
-        <InvoiceXmlUpload 
-            open={isXmlUploadOpen} 
-            onCancel={() => setIsXmlUploadOpen(false)} 
+        <InvoiceXmlUpload
+          open={isXmlUploadOpen}
+          onCancel={() => setIsXmlUploadOpen(false)}
         />
       </Content>
     </Layout>

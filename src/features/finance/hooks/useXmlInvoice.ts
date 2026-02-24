@@ -1,26 +1,32 @@
 // src/features/finance/hooks/useXmlInvoice.ts
-import { useState } from "react";
 import { App } from "antd";
-import { parseInvoiceXML, ParsedInvoiceItem } from "../utils/xmlParser";
+import { useState } from "react";
+
 import { invoiceService } from "../api/invoiceService";
-import { useProductStore } from "@/features/product/stores/productStore"; 
+import { parseInvoiceXML, ParsedInvoiceItem } from "../utils/xmlParser";
+
+import { useProductStore } from "@/features/product/stores/productStore";
 
 export interface MappedInvoiceItem extends ParsedInvoiceItem {
   internal_product_id: number | null;
   internal_unit: string | null;
   is_mapped: boolean;
-  match_type: 'exact' | 'prediction' | 'none';
+  match_type: "exact" | "prediction" | "none";
 }
 
 export const useXmlInvoice = () => {
   const { message, notification } = App.useApp();
   const [isProcessing, setIsProcessing] = useState(false);
-  const { products } = useProductStore(); 
+  const { products } = useProductStore();
 
   // --- THUẬT TOÁN MATCH V1 (Client Side) ---
   const findBestMatchProduct = (xmlName: string): number | null => {
     if (!products || products.length === 0) return null;
-    const normalize = (str: string) => str.toLowerCase().replace(/[^\w\s]/gi, '').split(/\s+/);
+    const normalize = (str: string) =>
+      str
+        .toLowerCase()
+        .replace(/[^\w\s]/gi, "")
+        .split(/\s+/);
     const xmlTokens = normalize(xmlName);
     let bestMatchId: number | null = null;
     let maxScore = 0;
@@ -28,7 +34,7 @@ export const useXmlInvoice = () => {
     for (const prod of products) {
       const prodNameTokens = normalize(prod.name);
       let matches = 0;
-      xmlTokens.forEach(token => {
+      xmlTokens.forEach((token) => {
         if (prodNameTokens.includes(token)) matches++;
       });
       if (prod.sku && xmlName.includes(prod.sku)) matches += 10;
@@ -78,38 +84,51 @@ export const useXmlInvoice = () => {
           const dbMatch = await invoiceService.getMappedProduct(
             header.supplier_tax_code,
             item.name,
-            item.unit || "" 
+            item.unit || ""
           );
 
           if (dbMatch) {
-            return { 
-                ...item, 
-                internal_product_id: dbMatch.productId, 
-                internal_unit: dbMatch.unit,
-                is_mapped: true, 
-                match_type: 'exact' 
+            return {
+              ...item,
+              internal_product_id: dbMatch.productId,
+              internal_unit: dbMatch.unit,
+              is_mapped: true,
+              match_type: "exact",
             };
           }
 
           // Tầng 2: AI Gợi ý
           const predictedId = findBestMatchProduct(item.name);
           if (predictedId) {
-             return { ...item, internal_product_id: predictedId, internal_unit: null, is_mapped: true, match_type: 'prediction' };
+            return {
+              ...item,
+              internal_product_id: predictedId,
+              internal_unit: null,
+              is_mapped: true,
+              match_type: "prediction",
+            };
           }
 
-          return { ...item, internal_product_id: null, internal_unit: null, is_mapped: false, match_type: 'none' };
+          return {
+            ...item,
+            internal_product_id: null,
+            internal_unit: null,
+            is_mapped: false,
+            match_type: "none",
+          };
         })
       );
 
-      message.success(`Đã upload & đọc xong! Khớp ${mappedItems.filter(i => i.is_mapped).length}/${mappedItems.length} SP.`);
+      message.success(
+        `Đã upload & đọc xong! Khớp ${mappedItems.filter((i) => i.is_mapped).length}/${mappedItems.length} SP.`
+      );
 
-      return { 
-          header, 
-          items: mappedItems, 
-          fileUrl, // <-- Trả về URL để form lưu vào DB
-          fileRaw: file 
+      return {
+        header,
+        items: mappedItems,
+        fileUrl, // <-- Trả về URL để form lưu vào DB
+        fileRaw: file,
       };
-
     } catch (error: any) {
       console.error(error);
       message.error("Lỗi xử lý XML: " + error.message);

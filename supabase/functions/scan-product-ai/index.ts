@@ -3,7 +3,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
@@ -21,14 +22,16 @@ serve(async (req) => {
       throw new Error("Thiếu nội dung file (fileContent base64).");
     }
 
-    console.log(`[Processing] Type: ${mimeType}, Base64 Length: ${fileContent.length}`);
+    console.log(
+      `[Processing] Type: ${mimeType}, Base64 Length: ${fileContent.length}`
+    );
 
     // 3. Config Gemini
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) throw new Error("Chưa cấu hình GEMINI_API_KEY");
 
     // Dùng Model 1.5 Flash hoặc 2.0 Flash (Hỗ trợ PDF/Image cực tốt và rẻ)
-    const MODEL_NAME = "gemini-2.5-flash"; 
+    const MODEL_NAME = "gemini-2.5-flash";
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
     // 5. Prompt (Đã được Sếp duyệt - Điểm 10)
@@ -91,18 +94,20 @@ serve(async (req) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            {
-              inline_data: {
-                mime_type: mimeType || "application/pdf",
-                data: fileContent // Base64 nguyên gốc từ Client
-              }
-            }
-          ]
-        }]
-      })
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: mimeType || "application/pdf",
+                  data: fileContent, // Base64 nguyên gốc từ Client
+                },
+              },
+            ],
+          },
+        ],
+      }),
     });
 
     if (!response.ok) {
@@ -112,30 +117,29 @@ serve(async (req) => {
     }
 
     const aiData = await response.json();
-    
+
     // 6. Parse Kết quả
     const rawText = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) throw new Error("AI không trả về kết quả.");
 
     // Clean Markdown
-    const cleanJson = rawText.replace(/```json|```/g, '').trim();
-    
+    const cleanJson = rawText.replace(/```json|```/g, "").trim();
+
     let jsonData;
     try {
-        jsonData = JSON.parse(cleanJson);
+      jsonData = JSON.parse(cleanJson);
     } catch (e) {
-        throw new Error("AI trả về định dạng không đúng JSON.");
+      throw new Error("AI trả về định dạng không đúng JSON.");
     }
 
     return new Response(JSON.stringify(jsonData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200
+      status: 200,
     });
-
   } catch (error: any) {
     console.error("[Function Error]:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500, 
+      status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

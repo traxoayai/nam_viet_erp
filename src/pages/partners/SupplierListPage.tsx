@@ -8,8 +8,6 @@ import {
   DeleteOutlined,
   EyeOutlined,
 } from "@ant-design/icons";
-import * as XLSX from 'xlsx'; // Import XLSX
-import { ExcelImportModal } from './components/ExcelImportModal'; // Import Modal
 import {
   Input,
   Table,
@@ -28,16 +26,19 @@ import {
 } from "antd";
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom"; // Import useNavigate
+import * as XLSX from "xlsx"; // Import XLSX
+
+import { ExcelImportModal } from "./components/ExcelImportModal"; // Import Modal
 
 import type { TableProps } from "antd";
-import { Access } from "@/shared/components/auth/Access"; // [NEW]
-import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
-import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
-import { useDebounce } from "@/shared/hooks/useDebounce";
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
+import { supplierService } from "@/features/purchasing/api/supplierService"; // [NEW] Import Service
 import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
 import { Supplier } from "@/features/purchasing/types/supplier";
-import { supplierService } from "@/features/purchasing/api/supplierService"; // [NEW] Import Service
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
+import { useDebounce } from "@/shared/hooks/useDebounce";
 
 const { Title, Text } = Typography;
 
@@ -66,8 +67,6 @@ const SupplierListPage: React.FC = () => {
 
   const [importModalOpen, setImportModalOpen] = useState(false);
 
-
-
   useEffect(() => {
     fetchSuppliers();
   }, [page, pageSize]);
@@ -87,39 +86,43 @@ const SupplierListPage: React.FC = () => {
 
   // 1. Hàm nhận dữ liệu từ Modal -> Gọi API
   const handleImportSubmit = async (data: any[]) => {
-      try {
-          // Gọi Service
-          await supplierService.importSuppliersBulk(data); 
-          antMessage.success(`Đã nhập thành công ${data.length} nhà cung cấp!`);
-          setImportModalOpen(false);
-          fetchSuppliers(); // Refresh lại danh sách
-      } catch (error: any) {
-          antMessage.error("Lỗi nhập dữ liệu: " + error.message);
-          throw error; // Throw to let Modal know it failed
-      }
+    try {
+      // Gọi Service
+      await supplierService.importSuppliersBulk(data);
+      antMessage.success(`Đã nhập thành công ${data.length} nhà cung cấp!`);
+      setImportModalOpen(false);
+      fetchSuppliers(); // Refresh lại danh sách
+    } catch (error: any) {
+      antMessage.error("Lỗi nhập dữ liệu: " + error.message);
+      throw error; // Throw to let Modal know it failed
+    }
   };
 
   // 2. Hàm Xuất Excel (Client-side cho nhanh)
   const handleExport = () => {
-      if (suppliers.length === 0) return antMessage.warning("Không có dữ liệu để xuất");
-      
-      // Format dữ liệu cho đẹp
-      const exportData = suppliers.map(s => ({
-          "Mã NCC": s.code || `SUP-${s.id}`,
-          "Tên NCC": s.name,
-          "Người liên hệ": s.contact_person,
-          "SĐT": s.phone,
-          "Công nợ": s.debt,
-          "Trạng thái": s.status === 'active' ? 'Đang hợp tác' : 'Ngừng hợp tác'
-      }));
+    if (suppliers.length === 0)
+      return antMessage.warning("Không có dữ liệu để xuất");
 
-      // Tạo file
-      const ws = XLSX.utils.json_to_sheet(exportData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "NhaCungCap");
-      
-      // Tải xuống
-      XLSX.writeFile(wb, `DanhSachNCC_${new Date().toISOString().split('T')[0]}.xlsx`);
+    // Format dữ liệu cho đẹp
+    const exportData = suppliers.map((s) => ({
+      "Mã NCC": s.code || `SUP-${s.id}`,
+      "Tên NCC": s.name,
+      "Người liên hệ": s.contact_person,
+      SĐT: s.phone,
+      "Công nợ": s.debt,
+      "Trạng thái": s.status === "active" ? "Đang hợp tác" : "Ngừng hợp tác",
+    }));
+
+    // Tạo file
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "NhaCungCap");
+
+    // Tải xuống
+    XLSX.writeFile(
+      wb,
+      `DanhSachNCC_${new Date().toISOString().split("T")[0]}.xlsx`
+    );
   };
 
   const columns: TableProps<Supplier>["columns"] = [
@@ -187,29 +190,29 @@ const SupplierListPage: React.FC = () => {
               onClick={() => navigate(`/partners/detail/${record.id}`)}
             />
           </Tooltip>
-          
+
           <Access permission={PERMISSIONS.PARTNER.SUPPLIER.EDIT}>
-              <Tooltip title="Sửa thông tin">
-                {/* SỬA: Chuyển hướng đến trang Chi tiết (chế độ sửa) */}
-                <Button
-                  type="text"
-                  icon={<EditOutlined />}
-                  onClick={() => navigate(`/partners/edit/${record.id}`)}
-                />
-              </Tooltip>
+            <Tooltip title="Sửa thông tin">
+              {/* SỬA: Chuyển hướng đến trang Chi tiết (chế độ sửa) */}
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => navigate(`/partners/edit/${record.id}`)}
+              />
+            </Tooltip>
           </Access>
 
           <Access permission={PERMISSIONS.PARTNER.SUPPLIER.DELETE}>
-              <Tooltip title="Xóa">
-                <Popconfirm
-                  title={`Bạn có chắc chắn muốn xóa NCC "${record.name}"?`}
-                  onConfirm={() => handleDelete(record)}
-                  okText="Đồng ý"
-                  cancelText="Hủy"
-                >
-                  <Button type="text" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
-              </Tooltip>
+            <Tooltip title="Xóa">
+              <Popconfirm
+                title={`Bạn có chắc chắn muốn xóa NCC "${record.name}"?`}
+                onConfirm={() => handleDelete(record)}
+                okText="Đồng ý"
+                cancelText="Hủy"
+              >
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Popconfirm>
+            </Tooltip>
           </Access>
         </Space>
       ),
@@ -237,22 +240,19 @@ const SupplierListPage: React.FC = () => {
               >
                 Nhập Excel
               </Button>
-              <Button
-                icon={<DownloadOutlined />}
-                onClick={handleExport}
-              >
+              <Button icon={<DownloadOutlined />} onClick={handleExport}>
                 Xuất Excel
               </Button>
               {/* SỬA: Chuyển hướng đến trang Thêm mới */}
               {/* SỬA: Chuyển hướng đến trang Thêm mới */}
               <Access permission={PERMISSIONS.PARTNER.SUPPLIER.CREATE}>
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => navigate("/partners/new")}
-                  >
-                    Thêm Nhà Cung Cấp
-                  </Button>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => navigate("/partners/new")}
+                >
+                  Thêm Nhà Cung Cấp
+                </Button>
               </Access>
             </Space>
           </Col>
@@ -302,10 +302,10 @@ const SupplierListPage: React.FC = () => {
         />
         {/* Modal Import */}
         <ExcelImportModal
-            open={importModalOpen}
-            onCancel={() => setImportModalOpen(false)}
-            onImport={handleImportSubmit}
-            templateType="supplier"
+          open={importModalOpen}
+          onCancel={() => setImportModalOpen(false)}
+          onImport={handleImportSubmit}
+          templateType="supplier"
         />
       </Card>
     </Spin>
@@ -313,9 +313,9 @@ const SupplierListPage: React.FC = () => {
 };
 
 const ProtectedSupplierListPage = () => (
-    <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
-        <SupplierListPage />
-    </PermissionGuard>
+  <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
+    <SupplierListPage />
+  </PermissionGuard>
 );
 
 export default ProtectedSupplierListPage;

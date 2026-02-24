@@ -3,15 +3,14 @@ import { message } from "antd";
 import * as XLSX from "xlsx";
 import { create } from "zustand";
 
-import { supabase } from "@/shared/lib/supabaseClient";
+import { financeService } from "@/features/finance/api/financeService"; // [NEW]
 import {
   TransactionRecord,
   CreateTransactionParams,
   TransactionFilter,
 } from "@/features/finance/types/finance";
 import { FundAccountRecord } from "@/features/finance/types/fundAccount";
-
-import { financeService } from "@/features/finance/api/financeService"; // [NEW]
+import { supabase } from "@/shared/lib/supabaseClient";
 
 interface FinanceState {
   transactions: TransactionRecord[];
@@ -55,7 +54,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       const { data, totalCount } = await financeService.getTransactions({
         page,
         pageSize,
-        ...filters
+        ...filters,
       });
 
       set({ transactions: data || [], totalCount: totalCount, loading: false });

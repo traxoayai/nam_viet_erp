@@ -1,20 +1,33 @@
 // src/features/inventory/components/print/PickingListTemplate.tsx
-import { OutboundOrderInfo, OutboundPickItem } from "@/features/inventory/types/outbound";
+import {
+  OutboundOrderInfo,
+  OutboundPickItem,
+} from "@/features/inventory/types/outbound";
 
 interface PickingListTemplateProps {
   orderInfo: OutboundOrderInfo | null;
   items: OutboundPickItem[];
 }
 
-export const PickingListTemplate = ({ orderInfo, items }: PickingListTemplateProps) => {
+export const PickingListTemplate = ({
+  orderInfo,
+  items,
+}: PickingListTemplateProps) => {
   if (!orderInfo) return null;
 
-  const sortedItems = [...items].sort((a, b) => 
-     (a.shelf_location || "").localeCompare(b.shelf_location || "")
+  const sortedItems = [...items].sort((a, b) =>
+    (a.shelf_location || "").localeCompare(b.shelf_location || "")
   );
 
   return (
-    <div className="print-source" style={{ fontFamily: 'Arial, sans-serif', color: '#000', lineHeight: 1.4 }}>
+    <div
+      className="print-source"
+      style={{
+        fontFamily: "Arial, sans-serif",
+        color: "#000",
+        lineHeight: 1.4,
+      }}
+    >
       {/* CSS in ấn giữ nguyên */}
       <style>{`
         .print-source { display: none; }
@@ -35,20 +48,35 @@ export const PickingListTemplate = ({ orderInfo, items }: PickingListTemplatePro
       `}</style>
 
       <div style={{ textAlign: "center", marginBottom: 20 }}>
-        <h2 style={{ margin: 0, textTransform: "uppercase" }}>PHIẾU NHẶT HÀNG</h2>
+        <h2 style={{ margin: 0, textTransform: "uppercase" }}>
+          PHIẾU NHẶT HÀNG
+        </h2>
         <div style={{ fontStyle: "italic", fontSize: 12 }}>(Picking List)</div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 15, fontSize: 13 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 15,
+          fontSize: 13,
+        }}
+      >
         <div>
-           <div>Mã đơn: <b>{orderInfo.code}</b></div>
-           <div>Khách hàng: <b>{orderInfo.customer_name}</b></div>
-           <div>Ngày tạo: {new Date().toLocaleDateString("vi-VN")}</div>
+          <div>
+            Mã đơn: <b>{orderInfo.code}</b>
+          </div>
+          <div>
+            Khách hàng: <b>{orderInfo.customer_name}</b>
+          </div>
+          <div>Ngày tạo: {new Date().toLocaleDateString("vi-VN")}</div>
         </div>
         <div style={{ textAlign: "right" }}>
-           <div>Vận chuyển: <b>{orderInfo.shipping_partner}</b></div>
-           <div>SĐT: {orderInfo.shipping_phone || "-"}</div>
-           <div>Giờ Cut-off: {orderInfo.cutoff_time}</div>
+          <div>
+            Vận chuyển: <b>{orderInfo.shipping_partner}</b>
+          </div>
+          <div>SĐT: {orderInfo.shipping_phone || "-"}</div>
+          <div>Giờ Cut-off: {orderInfo.cutoff_time}</div>
         </div>
       </div>
 
@@ -72,23 +100,38 @@ export const PickingListTemplate = ({ orderInfo, items }: PickingListTemplatePro
               <td>{item.sku}</td>
               <td>{item.product_name}</td>
               <td className="text-center">{item.unit}</td>
-              <td className="text-center"><b>{item.quantity_ordered}</b></td>
+              <td className="text-center">
+                <b>{item.quantity_ordered}</b>
+              </td>
               <td></td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", textAlign: "center" }}>
+      <div
+        style={{
+          marginTop: 40,
+          display: "flex",
+          justifyContent: "space-between",
+          textAlign: "center",
+        }}
+      >
         <div style={{ width: "40%" }}>
-            <b>Người lập phiếu</b>
-            <br /><br /><br /><br />
-            <span>.......................................</span>
+          <b>Người lập phiếu</b>
+          <br />
+          <br />
+          <br />
+          <br />
+          <span>.......................................</span>
         </div>
         <div style={{ width: "40%" }}>
-            <b>Nhân viên nhặt hàng</b>
-            <br /><br /><br /><br />
-            <span>.......................................</span>
+          <b>Nhân viên nhặt hàng</b>
+          <br />
+          <br />
+          <br />
+          <br />
+          <span>.......................................</span>
         </div>
       </div>
     </div>

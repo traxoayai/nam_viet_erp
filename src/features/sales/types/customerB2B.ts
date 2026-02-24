@@ -102,9 +102,12 @@ export interface CustomerB2BStoreState {
   page: number;
   pageSize: number;
   filters: any; // Hàm
-  sortDebt: 'asc' | 'desc' | null; // [NEW]
+  sortDebt: "asc" | "desc" | null; // [NEW]
 
-  fetchCustomers: (filters: any, sortDebt?: 'asc' | 'desc' | null) => Promise<void>;
+  fetchCustomers: (
+    filters: any,
+    sortDebt?: "asc" | "desc" | null
+  ) => Promise<void>;
   getCustomerDetails: (id: number) => Promise<void>;
   createCustomer: (data: any, contacts: any[]) => Promise<number | null>;
   updateCustomer: (id: number, data: any, contacts: any[]) => Promise<boolean>;

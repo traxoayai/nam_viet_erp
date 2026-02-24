@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
 import { Button, Tooltip, message } from "antd";
 import { Mic, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 
 interface VoiceCommanderProps {
   onCommand: (text: string) => void;
@@ -23,7 +23,8 @@ export const VoiceCommander = ({
 
   useEffect(() => {
     // 1. Init Web Speech API (Chỉ chạy trên Chrome/Edge/Safari mới)
-    const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
+    const { webkitSpeechRecognition, SpeechRecognition } =
+      window as unknown as IWindow;
     const SpeechApi = SpeechRecognition || webkitSpeechRecognition;
 
     if (!SpeechApi) {
@@ -81,8 +82,8 @@ export const VoiceCommander = ({
         disabled={disabled}
         size="large"
         style={{
-           boxShadow: isListening ? "0 0 10px red" : "none",
-           transition: "all 0.3s"
+          boxShadow: isListening ? "0 0 10px red" : "none",
+          transition: "all 0.3s",
         }}
       />
     </Tooltip>

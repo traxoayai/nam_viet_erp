@@ -10,11 +10,12 @@ import {
   message,
   Alert,
 } from "antd";
-import { useState, useEffect } from "react"; 
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { supabase } from "@/shared/lib/supabaseClient"; 
 
+import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate";
 import { salesService } from "@/features/sales/api/salesService";
+import { ActionButtons } from "@/features/sales/components/Footer/ActionButtons";
 import { PaymentSummary } from "@/features/sales/components/Footer/PaymentSummary";
 import { VoucherSelector } from "@/features/sales/components/Footer/VoucherSelector";
 import { CustomerInfoCard } from "@/features/sales/components/Header/CustomerInfoCard";
@@ -22,13 +23,12 @@ import { CustomerSelector } from "@/features/sales/components/Header/CustomerSel
 import { ShippingForm } from "@/features/sales/components/Header/ShippingForm";
 import { SalesOrderTable } from "@/features/sales/components/ProductGrid/SalesOrderTable";
 import { useCreateOrderB2B } from "@/features/sales/hooks/useCreateOrderB2B";
-import { ActionButtons } from "@/features/sales/components/Footer/ActionButtons";
-import { generateB2BOrderHTML } from "@/shared/utils/printTemplates"; 
-import { printHTML } from "@/shared/utils/printUtils"; 
+import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint";
+import { supabase } from "@/shared/lib/supabaseClient";
+import { generateB2BOrderHTML } from "@/shared/utils/printTemplates";
+import { printHTML } from "@/shared/utils/printUtils";
 
 // [NEW] Picking List Print
-import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint";
-import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate";
 
 const { Content } = Layout;
 const { Title } = Typography;
@@ -36,12 +36,13 @@ const { TextArea } = Input;
 
 const CreateB2BOrderPage = () => {
   const navigate = useNavigate();
-  const { id } = useParams(); 
-  const isEditMode = !!id;    
+  const { id } = useParams();
+  const isEditMode = !!id;
   const [loading, setLoading] = useState(false);
 
   // [NEW] Hook Picking Print
-  const { printByData: printPicking, printData: pickingData } = usePickingListPrint();
+  const { printByData: printPicking, printData: pickingData } =
+    usePickingListPrint();
 
   const {
     customer,
@@ -71,15 +72,16 @@ const CreateB2BOrderPage = () => {
   // Load Edit Data
   useEffect(() => {
     const fetchOrderForEdit = async () => {
-        if (!id) return; 
+      if (!id) return;
 
-        try {
-            setLoading(true);
+      try {
+        setLoading(true);
 
-            // 1. QUERY AN TOÀN (Bỏ !inner, dùng maybeSingle)
-            const { data: orderData, error } = await supabase
-                .from('orders')
-                .select(`
+        // 1. QUERY AN TOÀN (Bỏ !inner, dùng maybeSingle)
+        const { data: orderData, error } = await supabase
+          .from("orders")
+          .select(
+            `
                     *,
                     customer:customers(*), 
                     items:order_items(
@@ -91,73 +93,82 @@ const CreateB2BOrderPage = () => {
                             active_ingredient
                         )
                     )
-                `)
-                .eq('id', id)
-                .maybeSingle(); 
+                `
+          )
+          .eq("id", id)
+          .maybeSingle();
 
-            if (error) throw error;
-            
-            if (!orderData) {
-                message.error("Không tìm thấy đơn hàng (hoặc bạn không có quyền xem).");
-                navigate("/b2b/orders");
-                return;
-            }
+        if (error) throw error;
 
-            // 2. HYDRATION KHÁCH HÀNG
-            if (orderData.customer) {
-                const mappedCustomer = {
-                    ...orderData.customer,
-                    shipping_address: orderData.delivery_address || orderData.customer.address || "", 
-                    current_debt: orderData.customer.current_debt || 0
-                };
-                setCustomer(mappedCustomer);
-            } else {
-                message.warning("Đơn hàng này không tìm thấy thông tin khách hàng gốc.");
-            }
-            
-            // 3. HYDRATION SẢN PHẨM
-            const safeItems = orderData.items || [];
-            const mappedItems = safeItems.map((item: any) => {
-                const productInfo = item.product || {};
-                
-                return {
-                    id: item.product_id,
-                    key: `${item.product_id}_${Date.now()}_${Math.random()}`,
-                    
-                    name: productInfo.name || item.product_name || "Sản phẩm (Mất info)", 
-                    sku: productInfo.sku || item.sku || "---",
-                    image_url: productInfo.image_url || null,
-                    
-                    price_wholesale: item.unit_price,
-                    quantity: item.quantity,
-                    wholesale_unit: item.uom || "Cái", 
-                    
-                    discount: item.discount || 0,
-                    stock_quantity: 9999, 
-                    total: (item.quantity * item.unit_price) - (item.discount || 0),
-                    
-                    active_ingredient: productInfo.active_ingredient
-                };
-            });
-            
-            if(mappedItems.length > 0) {
-                 setItems(mappedItems);
-            }
-
-            // 4. HYDRATION TÀI CHÍNH
-            if (orderData.discount_amount > 0) setManualDiscount(orderData.discount_amount);
-            setShippingFee(orderData.shipping_fee || 0);
-            setNote(orderData.note || "");
-            
-            if (orderData.delivery_method) setDeliveryMethod(orderData.delivery_method);
-            if (orderData.shipping_partner_id) selectShippingPartner(orderData.shipping_partner_id);
-            
-        } catch (err: any) {
-            console.error("Hydration Error:", err);
-            message.error("Lỗi tải đơn hàng: " + err.message);
-        } finally {
-            setLoading(false);
+        if (!orderData) {
+          message.error(
+            "Không tìm thấy đơn hàng (hoặc bạn không có quyền xem)."
+          );
+          navigate("/b2b/orders");
+          return;
         }
+
+        // 2. HYDRATION KHÁCH HÀNG
+        if (orderData.customer) {
+          const mappedCustomer = {
+            ...orderData.customer,
+            shipping_address:
+              orderData.delivery_address || orderData.customer.address || "",
+            current_debt: orderData.customer.current_debt || 0,
+          };
+          setCustomer(mappedCustomer);
+        } else {
+          message.warning(
+            "Đơn hàng này không tìm thấy thông tin khách hàng gốc."
+          );
+        }
+
+        // 3. HYDRATION SẢN PHẨM
+        const safeItems = orderData.items || [];
+        const mappedItems = safeItems.map((item: any) => {
+          const productInfo = item.product || {};
+
+          return {
+            id: item.product_id,
+            key: `${item.product_id}_${Date.now()}_${Math.random()}`,
+
+            name:
+              productInfo.name || item.product_name || "Sản phẩm (Mất info)",
+            sku: productInfo.sku || item.sku || "---",
+            image_url: productInfo.image_url || null,
+
+            price_wholesale: item.unit_price,
+            quantity: item.quantity,
+            wholesale_unit: item.uom || "Cái",
+
+            discount: item.discount || 0,
+            stock_quantity: 9999,
+            total: item.quantity * item.unit_price - (item.discount || 0),
+
+            active_ingredient: productInfo.active_ingredient,
+          };
+        });
+
+        if (mappedItems.length > 0) {
+          setItems(mappedItems);
+        }
+
+        // 4. HYDRATION TÀI CHÍNH
+        if (orderData.discount_amount > 0)
+          setManualDiscount(orderData.discount_amount);
+        setShippingFee(orderData.shipping_fee || 0);
+        setNote(orderData.note || "");
+
+        if (orderData.delivery_method)
+          setDeliveryMethod(orderData.delivery_method);
+        if (orderData.shipping_partner_id)
+          selectShippingPartner(orderData.shipping_partner_id);
+      } catch (err: any) {
+        console.error("Hydration Error:", err);
+        message.error("Lỗi tải đơn hàng: " + err.message);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchOrderForEdit();
@@ -168,81 +179,83 @@ const CreateB2BOrderPage = () => {
     if (!validateOrder()) return;
 
     // [NEW] 2. VALIDATE TỒN KHO (FE GUARD)
-    // Chỉ kiểm tra khi tạo đơn CONFIRMED (Trừ kho thật). 
+    // Chỉ kiểm tra khi tạo đơn CONFIRMED (Trừ kho thật).
     // Nếu là DRAFT hoặc QUOTE (Báo giá) thì cho phép nhập thoải mái.
-    if (status === 'CONFIRMED') {
-        const outOfStockItems = items.filter(item => {
-            // Lưu ý: item.stock_quantity cần được lấy từ dữ liệu sản phẩm lúc add vào
-            // Nếu không có dữ liệu tồn (ví dụ undefined), mặc định cho qua (hoặc chặn tùy Sếp)
-            const currentStock = item.stock_quantity || 0;
-            return item.quantity > currentStock;
-        });
+    if (status === "CONFIRMED") {
+      const outOfStockItems = items.filter((item) => {
+        // Lưu ý: item.stock_quantity cần được lấy từ dữ liệu sản phẩm lúc add vào
+        // Nếu không có dữ liệu tồn (ví dụ undefined), mặc định cho qua (hoặc chặn tùy Sếp)
+        const currentStock = item.stock_quantity || 0;
+        return item.quantity > currentStock;
+      });
 
-        if (outOfStockItems.length > 0) {
-            const errorMsg = outOfStockItems.map(i => `${i.name} (Tồn: ${i.stock_quantity || 0})`).join(', ');
-            message.error({
-                content: `Không đủ tồn kho để tạo đơn! Vui lòng kiểm tra lại: ${errorMsg}`,
-                duration: 5
-            });
-            return; // CHẶN ĐỨNG TẠI ĐÂY
-        }
+      if (outOfStockItems.length > 0) {
+        const errorMsg = outOfStockItems
+          .map((i) => `${i.name} (Tồn: ${i.stock_quantity || 0})`)
+          .join(", ");
+        message.error({
+          content: `Không đủ tồn kho để tạo đơn! Vui lòng kiểm tra lại: ${errorMsg}`,
+          duration: 5,
+        });
+        return; // CHẶN ĐỨNG TẠI ĐÂY
+      }
     }
 
     setLoading(true);
     try {
       if (isEditMode && id) {
-          await salesService.updateOrder({
-              p_order_id: id,
-              p_customer_id: customer!.id,
-              p_delivery_address: customer!.shipping_address || "",
-              p_delivery_time: estimatedDeliveryText,
-              p_note: note,
-              p_discount_amount: financials.discountAmount,
-              p_shipping_fee: shippingFee,
-              p_status: status,
-              p_items: items.map(i => ({
-                  product_id: i.id,
-                  quantity: i.quantity,
-                  uom: i.wholesale_unit, 
-                  unit_price: i.price_wholesale,
-                  discount: i.discount || 0,
-                  is_gift: false,
-                  note: "" 
-              }))
-          });
-          message.success("Cập nhật đơn hàng thành công!");
-          navigate("/b2b/orders");
+        await salesService.updateOrder({
+          p_order_id: id,
+          p_customer_id: customer!.id,
+          p_delivery_address: customer!.shipping_address || "",
+          p_delivery_time: estimatedDeliveryText,
+          p_note: note,
+          p_discount_amount: financials.discountAmount,
+          p_shipping_fee: shippingFee,
+          p_status: status,
+          p_items: items.map((i) => ({
+            product_id: i.id,
+            quantity: i.quantity,
+            uom: i.wholesale_unit,
+            unit_price: i.price_wholesale,
+            discount: i.discount || 0,
+            is_gift: false,
+            note: "",
+          })),
+        });
+        message.success("Cập nhật đơn hàng thành công!");
+        navigate("/b2b/orders");
       } else {
-          await salesService.createOrder({
-            p_customer_id: customer!.id,
-            p_delivery_address: customer!.shipping_address,
-            p_delivery_time: estimatedDeliveryText,
-            p_note: note,
-            p_discount_amount: financials.discountAmount,
-            p_shipping_fee: shippingFee,
-            p_status: status,
-            p_delivery_method: deliveryMethod,
-            p_shipping_partner_id:
-              deliveryMethod === "internal" ? null : shippingPartnerId,
-            p_warehouse_id: 1, 
-            p_order_type: 'B2B',
-            p_items: items.map((i) => ({
-              product_id: i.id,
-              quantity: i.quantity,
-              uom: i.wholesale_unit,
-              unit_price: i.price_wholesale,
-              discount: i.discount,
-              is_gift: false,
-            })),
-          });
+        await salesService.createOrder({
+          p_customer_id: customer!.id,
+          p_delivery_address: customer!.shipping_address,
+          p_delivery_time: estimatedDeliveryText,
+          p_note: note,
+          p_discount_amount: financials.discountAmount,
+          p_shipping_fee: shippingFee,
+          p_status: status,
+          p_delivery_method: deliveryMethod,
+          p_shipping_partner_id:
+            deliveryMethod === "internal" ? null : shippingPartnerId,
+          p_warehouse_id: 1,
+          p_order_type: "B2B",
+          p_items: items.map((i) => ({
+            product_id: i.id,
+            quantity: i.quantity,
+            uom: i.wholesale_unit,
+            unit_price: i.price_wholesale,
+            discount: i.discount,
+            is_gift: false,
+          })),
+        });
 
-          message.success(
-            status === "QUOTE"
-              ? "Đã tạo báo giá thành công"
-              : "Tạo đơn hàng thành công"
-          );
-          reset();
-          navigate("/b2b/orders");
+        message.success(
+          status === "QUOTE"
+            ? "Đã tạo báo giá thành công"
+            : "Tạo đơn hàng thành công"
+        );
+        reset();
+        navigate("/b2b/orders");
       }
     } catch (e: any) {
       message.error(e.message || "Lỗi tạo đơn");
@@ -257,24 +270,24 @@ const CreateB2BOrderPage = () => {
     if (items.length === 0) return message.warning("Chưa có sản phẩm");
 
     const mockOrder = {
-        code: isEditMode ? "Đang cập nhật..." : "BÁO GIÁ", // Có thể lấy mã thật nếu có
-        created_at: new Date().toISOString(),
-        customer_name: customer.name,
-        customer_phone: customer.phone,
-        delivery_address: customer.shipping_address,
-        note: note,
-        items: items.map(i => ({
-            product_name: i.name,
-            uom: i.wholesale_unit,
-            quantity: i.quantity,
-            unit_price: i.price_wholesale,
-            total_line: (i.quantity * i.price_wholesale) - (i.discount || 0)
-        })),
-        total_amount: financials.subTotal,
-        discount_amount: financials.discountAmount,
-        shipping_fee: shippingFee,
-        final_amount: financials.finalTotal,
-        old_debt: financials.oldDebt 
+      code: isEditMode ? "Đang cập nhật..." : "BÁO GIÁ", // Có thể lấy mã thật nếu có
+      created_at: new Date().toISOString(),
+      customer_name: customer.name,
+      customer_phone: customer.phone,
+      delivery_address: customer.shipping_address,
+      note: note,
+      items: items.map((i) => ({
+        product_name: i.name,
+        uom: i.wholesale_unit,
+        quantity: i.quantity,
+        unit_price: i.price_wholesale,
+        total_line: i.quantity * i.price_wholesale - (i.discount || 0),
+      })),
+      total_amount: financials.subTotal,
+      discount_amount: financials.discountAmount,
+      shipping_fee: shippingFee,
+      final_amount: financials.finalTotal,
+      old_debt: financials.oldDebt,
     };
 
     const html = generateB2BOrderHTML(mockOrder);
@@ -287,28 +300,28 @@ const CreateB2BOrderPage = () => {
     if (items.length === 0) return message.warning("Chưa có sản phẩm");
 
     const orderInfo = {
-        id: id || "temp-id", // [NEW]
-        code: isEditMode ? "---" : "Tạm tính", 
-        customer_name: customer.name,
-        shipping_partner: "---", 
-        shipping_phone: customer.phone,
-        delivery_address: customer.shipping_address || "", // [NEW]
-        note: note || "", // [NEW]
-        status: "DRAFT", // [NEW]
-        cutoff_time: "---",
-        package_count: 0
+      id: id || "temp-id", // [NEW]
+      code: isEditMode ? "---" : "Tạm tính",
+      customer_name: customer.name,
+      shipping_partner: "---",
+      shipping_phone: customer.phone,
+      delivery_address: customer.shipping_address || "", // [NEW]
+      note: note || "", // [NEW]
+      status: "DRAFT", // [NEW]
+      cutoff_time: "---",
+      package_count: 0,
     };
 
-    const pickItems = items.map(i => ({
-        product_id: i.id,
-        sku: i.sku,
-        product_name: i.name,
-        unit: i.wholesale_unit,
-        quantity_ordered: i.quantity,
-        shelf_location: "",
-        barcode: "", // [NEW]
-        quantity_picked: 0, // [NEW]
-        image_url: i.image_url || "" // [NEW]
+    const pickItems = items.map((i) => ({
+      product_id: i.id,
+      sku: i.sku,
+      product_name: i.name,
+      unit: i.wholesale_unit,
+      quantity_ordered: i.quantity,
+      shelf_location: "",
+      barcode: "", // [NEW]
+      quantity_picked: 0, // [NEW]
+      image_url: i.image_url || "", // [NEW]
     }));
 
     printPicking(orderInfo, pickItems);
@@ -326,9 +339,9 @@ const CreateB2BOrderPage = () => {
           top: 0,
           zIndex: 100,
           boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          display: "flex",             // [NEW] Flex layout
+          display: "flex", // [NEW] Flex layout
           justifyContent: "space-between", // [NEW] Đẩy 2 bên
-          alignItems: "center"
+          alignItems: "center",
         }}
       >
         <div style={{ display: "flex", alignItems: "center" }}>
@@ -337,20 +350,22 @@ const CreateB2BOrderPage = () => {
             onClick={() => navigate(-1)}
           />
           <Title level={4} style={{ margin: 0 }}>
-            {isEditMode ? "Cập nhật Đơn Bán Buôn (B2B)" : "Tạo Đơn Bán Buôn (B2B)"}
+            {isEditMode
+              ? "Cập nhật Đơn Bán Buôn (B2B)"
+              : "Tạo Đơn Bán Buôn (B2B)"}
           </Title>
         </div>
 
         {/* [NEW] ĐƯA NÚT BẤM LÊN ĐÂY */}
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-             <ActionButtons
-                loading={loading}
-                // isOverLimit={financials.isOverLimit} // Bỏ prop này ở đây
-                onSubmit={handleSubmit}
-                onPrint={handlePrintPreview}
-                onPrintPicking={handlePrintPickingPreview}
-                style={{ marginTop: 0 }} // Reset margin
-              />
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <ActionButtons
+            loading={loading}
+            // isOverLimit={financials.isOverLimit} // Bỏ prop này ở đây
+            onSubmit={handleSubmit}
+            onPrint={handlePrintPreview}
+            onPrintPicking={handlePrintPickingPreview}
+            style={{ marginTop: 0 }} // Reset margin
+          />
         </div>
       </div>
 
@@ -411,16 +426,15 @@ const CreateB2BOrderPage = () => {
 
           <Col span={8}>
             <div style={{ position: "sticky", top: 80 }}>
-              
               {/* [NEW] HIỂN THỊ ALERT Ở ĐÂY (Thay vì trong nút bấm) */}
-              {financials.isOverLimit && (
+              {financials.isOverLimit ? (
                 <Alert
                   message="Cảnh báo: Vượt quá hạn mức tín dụng!"
                   type="error"
                   showIcon
                   style={{ marginBottom: 16 }}
                 />
-              )}
+              ) : null}
 
               <Card
                 title="Thanh toán"
@@ -449,16 +463,16 @@ const CreateB2BOrderPage = () => {
           </Col>
         </Row>
       </Content>
-      
+
       {/* [NEW] HIDDEN PRINT TEMPLATE */}
-      {pickingData && (
-        <div style={{ display: 'none' }}>
-            <PickingListTemplate 
-                orderInfo={pickingData.orderInfo} 
-                items={pickingData.items} 
-            />
+      {pickingData ? (
+        <div style={{ display: "none" }}>
+          <PickingListTemplate
+            orderInfo={pickingData.orderInfo}
+            items={pickingData.items}
+          />
         </div>
-      )}
+      ) : null}
     </Layout>
   );
 };

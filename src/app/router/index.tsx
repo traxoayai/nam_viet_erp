@@ -2,9 +2,12 @@
 import { Navigate, type RouteObject, Outlet } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
-import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
-import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
+import ConnectPage from "@/features/connect/pages/ConnectPage"; // [NEW]
+import InventoryCheckDetail from "@/features/inventory/pages/InventoryCheckDetail";
+import InventoryCheckList from "@/features/inventory/pages/InventoryCheckList";
+import OpeningStockImport from "@/features/inventory/pages/OpeningStockImport";
 import LoginPage from "@/pages/auth/LoginPage";
 import PendingApprovalPage from "@/pages/auth/PendingApprovalPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
@@ -13,18 +16,18 @@ import UpdateProfilePage from "@/pages/auth/UpdateProfilePage";
 import CustomerB2BPage from "@/pages/crm/CustomerB2BPage";
 import CustomerB2COrgForm from "@/pages/crm/CustomerB2COrgForm";
 import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
+import CustomerSegmentsPage from "@/pages/crm/CustomerSegmentsPage";
+import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
 import AssetManagementPage from "@/pages/finance/AssetManagementPage";
-import ReceptionPage from "@/pages/medical/ReceptionPage"; // [NEW]
 import DoctorPage from "@/pages/medical/DoctorPage";
+import ReceptionPage from "@/pages/medical/ReceptionPage"; // [NEW]
 import DoctorQueuePage from "@/pages/medical/DoctorQueuePage";
 import ParaclinicalPage from "@/pages/medical/ParaclinicalPage"; // [NEW]
-
-
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 import FinanceTransactionPage from "@/pages/finance/FinanceTransactionPage";
 import InvoiceListPage from "@/pages/finance/invoices/InvoiceListPage";
 import InvoiceVerifyPage from "@/pages/finance/invoices/InvoiceVerifyPage";
-import ReconciliationPage from "@/pages/finance/ReconciliationPage";	
+import ReconciliationPage from "@/pages/finance/ReconciliationPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
 import WarehouseInboundPage from "@/pages/inventory/receipt/WarehouseInboundPage";
@@ -34,14 +37,15 @@ import WarehouseOutboundDetailPage from "@/pages/inventory/outbound/WarehouseOut
 import DiscountCodeManagement from "@/pages/marketing/DiscountCodeManagement";
 import LoyaltyPolicyPage from "@/pages/marketing/LoyaltyPolicyPage";
 import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
+import SupplierPolicyListPage from "@/pages/partners/policies/SupplierPolicyListPage"; // [NEW]
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
-import SupplierPolicyListPage from "@/pages/partners/policies/SupplierPolicyListPage"; // [NEW]
 import SupplierPolicyFormPage from "@/pages/partners/policies/SupplierPolicyFormPage"; // [NEW]
+import PurchaseCostingPage from "@/pages/purchasing/PurchaseCostingPage"; // [NEW]
 import PurchaseOrderDetail from "@/pages/purchasing/PurchaseOrderDetail";
 import PurchaseOrderMasterPage from "@/pages/purchasing/PurchaseOrderMasterPage";
-import PurchaseCostingPage from "@/pages/purchasing/PurchaseCostingPage"; // [NEW]
 import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
+import QuickLocationUpdate from "@/pages/quick/QuickLocationUpdate";
 import VaccinationTemplatePage from "@/pages/quick/VaccinationTemplatePage";
 import B2BOrderListPage from "@/pages/sales/B2BOrderListPage";
 import B2BOrderDetailPage from "@/pages/sales/B2BOrderDetailPage";
@@ -61,20 +65,14 @@ import OnboardingLayout from "@/shared/ui/layouts/OnboardingLayout";
 import TransferListPage from "@/pages/inventory/transfer/TransferListPage";
 import TransferDetailPage from "@/pages/inventory/transfer/TransferDetailPage";
 import TransferCreatePage from "@/pages/inventory/transfer/TransferCreatePage"; // [NEW]
-import CustomerSegmentsPage from "@/pages/crm/CustomerSegmentsPage";
-import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
 import PosPage from "@/pages/pos/PosPage";
 import B2COrderListPage from "@/pages/sales/B2COrderListPage";
-import QuickLocationUpdate from "@/pages/quick/QuickLocationUpdate";
-import InventoryCheckList from '@/features/inventory/pages/InventoryCheckList';
-import InventoryCheckDetail from '@/features/inventory/pages/InventoryCheckDetail';
-import OpeningStockImport from "@/features/inventory/pages/OpeningStockImport";
 import ProductMasterDataPage from "@/pages/settings/data/ProductMasterDataPage"; // [NEW]
 import QuickUnitPage from "@/pages/quick/QuickUnitPage";
 import QuickMinMaxPage from "@/pages/quick/QuickMinMaxPage";
 import QuickPricePage from "@/pages/quick/QuickPricePage";
 import QuickBarcodePage from "@/pages/quick/QuickBarcodePage";
-import ConnectPage from "@/features/connect/pages/ConnectPage"; // [NEW]
+import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
 
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
@@ -103,8 +101,8 @@ const routes: RouteObject[] = [
 
           // 2. Kênh Cửa Hàng
           {
-             path: "connect",
-             element: <ConnectPage />,
+            path: "connect",
+            element: <ConnectPage />,
           },
           {
             path: "store/dashboard",
@@ -176,8 +174,8 @@ const routes: RouteObject[] = [
           },
           // [NEW] Route Sửa đơn hàng
           {
-            path: "b2b/orders/edit/:id", 
-            element: <CreateB2BOrderPage />, 
+            path: "b2b/orders/edit/:id",
+            element: <CreateB2BOrderPage />,
           },
           {
             path: "b2b/orders",
@@ -242,9 +240,7 @@ const routes: RouteObject[] = [
             path: "inventory/transfer/new",
             element: <TransferCreatePage />,
           },
-          { path:"/inventory/transfers/:id",
-            element: <TransferDetailPage />
-           },
+          { path: "/inventory/transfers/:id", element: <TransferDetailPage /> },
 
           {
             path: "inventory/stocktake",
@@ -283,8 +279,6 @@ const routes: RouteObject[] = [
               },
             ],
           },
-
-
 
           // 7. Thao tác Nhanh
           {
@@ -330,26 +324,26 @@ const routes: RouteObject[] = [
           {
             path: "quick/promo-code",
             element: (
-                <PermissionGuard permission={PERMISSIONS.QUICK.VOUCHER}>
-                    <PagePlaceholder title="Tạo nhanh Mã Giảm Giá" />
-                </PermissionGuard>
-            )
+              <PermissionGuard permission={PERMISSIONS.QUICK.VOUCHER}>
+                <PagePlaceholder title="Tạo nhanh Mã Giảm Giá" />
+              </PermissionGuard>
+            ),
           },
           {
             path: "quick/prescription-template",
             element: (
-                <PermissionGuard permission={PERMISSIONS.QUICK.PRESCRIPTION}>
-                    <PrescriptionTemplatePage />
-                </PermissionGuard>
-            )
+              <PermissionGuard permission={PERMISSIONS.QUICK.PRESCRIPTION}>
+                <PrescriptionTemplatePage />
+              </PermissionGuard>
+            ),
           },
           {
             path: "quick/vaccination-template",
             element: (
-                <PermissionGuard permission={PERMISSIONS.QUICK.VACCINATION}>
-                   <VaccinationTemplatePage />
-                </PermissionGuard>
-            )
+              <PermissionGuard permission={PERMISSIONS.QUICK.VACCINATION}>
+                <VaccinationTemplatePage />
+              </PermissionGuard>
+            ),
           },
 
           // 8. Đối tác
@@ -357,45 +351,45 @@ const routes: RouteObject[] = [
             path: "partners",
             element: <Navigate to="/partners/suppliers" replace />,
           },
-          { 
-              path: "partners/suppliers", 
-              element: (
-                  <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
-                      <SupplierListPage /> 
-                  </PermissionGuard>
-              )
+          {
+            path: "partners/suppliers",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
+                <SupplierListPage />
+              </PermissionGuard>
+            ),
           },
-          { 
-              path: "partners/new", 
-              element: (
-                  <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.CREATE}>
-                      <SupplierDetailPage />
-                  </PermissionGuard>
-              ) 
+          {
+            path: "partners/new",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.CREATE}>
+                <SupplierDetailPage />
+              </PermissionGuard>
+            ),
           },
-          { 
-              path: "partners/edit/:id", 
-              element: (
-                  <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.EDIT}>
-                      <SupplierDetailPage /> 
-                  </PermissionGuard>
-              )
+          {
+            path: "partners/edit/:id",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.EDIT}>
+                <SupplierDetailPage />
+              </PermissionGuard>
+            ),
           },
-          { 
-              path: "partners/detail/:id", 
-              element: (
-                  <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
-                      <SupplierDetailPage /> 
-                  </PermissionGuard>
-              )
+          {
+            path: "partners/detail/:id",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
+                <SupplierDetailPage />
+              </PermissionGuard>
+            ),
           },
           {
             path: "partners/shipping",
             element: (
-                  <PermissionGuard permission={PERMISSIONS.PARTNER.SHIPPING.VIEW}>
-                      <ShippingPartnerPage />
-                  </PermissionGuard>
-              ),
+              <PermissionGuard permission={PERMISSIONS.PARTNER.SHIPPING.VIEW}>
+                <ShippingPartnerPage />
+              </PermissionGuard>
+            ),
           },
           {
             path: "partners/policies",
@@ -415,34 +409,34 @@ const routes: RouteObject[] = [
           {
             path: "crm/retail",
             element: (
-                <PermissionGuard permission={PERMISSIONS.CRM.B2C.VIEW}>
-                    <CustomerB2CPage />
-                </PermissionGuard>
+              <PermissionGuard permission={PERMISSIONS.CRM.B2C.VIEW}>
+                <CustomerB2CPage />
+              </PermissionGuard>
             ),
           },
           {
             path: "crm/organization/new",
             element: (
-                <PermissionGuard permission={PERMISSIONS.CRM.B2C.CREATE}>
-                    <CustomerB2COrgForm />
-                </PermissionGuard>
+              <PermissionGuard permission={PERMISSIONS.CRM.B2C.CREATE}>
+                <CustomerB2COrgForm />
+              </PermissionGuard>
             ),
           },
           {
             path: "crm/organization/edit/:id",
             element: (
-                <PermissionGuard permission={PERMISSIONS.CRM.B2C.EDIT}>
-                    <CustomerB2COrgForm />
-                </PermissionGuard>
+              <PermissionGuard permission={PERMISSIONS.CRM.B2C.EDIT}>
+                <CustomerB2COrgForm />
+              </PermissionGuard>
             ),
           },
-          { 
-              path: "crm/b2b", 
-              element: (
-                  <PermissionGuard permission={PERMISSIONS.CRM.B2B.VIEW}>
-                      <CustomerB2BPage />
-                  </PermissionGuard>
-              ) 
+          {
+            path: "crm/b2b",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.CRM.B2B.VIEW}>
+                <CustomerB2BPage />
+              </PermissionGuard>
+            ),
           },
 
           // 10. Quản lý Marketing
@@ -462,12 +456,12 @@ const routes: RouteObject[] = [
             path: "marketing/tools/segmentation",
             element: <CustomerSegmentsPage />,
           },
-          
+
           {
-            path: "marketing/tools/distribution", 
+            path: "marketing/tools/distribution",
             element: <VoucherDistributionPage />,
           },
-          
+
           {
             path: "marketing/tools/library",
             element: <PagePlaceholder title="Thư viện Nội dung" />,
@@ -664,12 +658,12 @@ const routes: RouteObject[] = [
                 path: "settings/audit-log",
                 element: <PagePlaceholder title="Nhật ký Hệ thống" />,
               },
-               // [NEW] Quản lý Master Data (Import/Export Excel)
+              // [NEW] Quản lý Master Data (Import/Export Excel)
               {
-                path: "settings/data/master", 
+                path: "settings/data/master",
                 element: <ProductMasterDataPage />,
               },
-            ]
+            ],
           },
           {
             path: "products",

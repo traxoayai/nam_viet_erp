@@ -1,5 +1,11 @@
-// src/features/medical/types/medical.types.ts 
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+// src/features/medical/types/medical.types.ts
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export interface MedicalVisitRow {
   id: string;
@@ -39,7 +45,7 @@ export interface MedicalVisitRow {
   scoliosis_status: string | null;
   visual_acuity_left: string | null;
   visual_acuity_right: string | null;
-  
+
   // 4. LỐI SỐNG (ADULT)
   lifestyle_alcohol: boolean | null;
   lifestyle_smoking: boolean | null;
@@ -51,7 +57,7 @@ export interface MedicalVisitRow {
   icd_code: string | null;
   doctor_notes: string | null;
 
-  status: 'in_progress' | 'finished';
+  status: "in_progress" | "finished";
   created_at: string;
 }
 

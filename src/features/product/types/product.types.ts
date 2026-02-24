@@ -54,7 +54,7 @@ export interface Product {
   retail_margin_value?: number;
   retail_margin_type?: "percent" | "amount";
   inventory_settings?: any;
-  
+
   // Multi-unit V2
   units?: ProductUnit[];
 }
@@ -101,8 +101,13 @@ export interface ProductStoreState {
     status: "active" | "inactive"
   ) => Promise<void>;
   deleteProducts: (ids: React.Key[]) => Promise<void>;
-  checkAndDeleteProducts: (ids: React.Key[]) => Promise<{ success: boolean; dependencies?: any[] }>;
-  checkAndUpdateStatus: (ids: React.Key[], status: "active" | "inactive") => Promise<{ success: boolean; dependencies?: any[] }>; // [NEW]
+  checkAndDeleteProducts: (
+    ids: React.Key[]
+  ) => Promise<{ success: boolean; dependencies?: any[] }>;
+  checkAndUpdateStatus: (
+    ids: React.Key[],
+    status: "active" | "inactive"
+  ) => Promise<{ success: boolean; dependencies?: any[] }>; // [NEW]
   exportToExcel: () => Promise<any[]>;
 
   // Hàm tải danh mục

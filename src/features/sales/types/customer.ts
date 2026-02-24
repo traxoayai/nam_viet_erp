@@ -48,8 +48,8 @@ export interface CustomerB2C {
   contact_person_phone: string | null;
   loyalty_points: number;
   status: CustomerStatus;
-  age_formatted?: string;    // Backend trả về: "39 tuổi 2 tháng"
-  updated_by?: string;       // ID người sửa
+  age_formatted?: string; // Backend trả về: "39 tuổi 2 tháng"
+  updated_by?: string; // ID người sửa
   updated_at?: string;
 }
 
@@ -96,8 +96,8 @@ export interface CustomerFormData {
   contact_person_phone: string | null;
   loyalty_points: number;
   status: CustomerStatus;
-  age_formatted?: string;    // Backend trả về: "39 tuổi 2 tháng"
-  updated_by?: string;       // ID người sửa
+  age_formatted?: string; // Backend trả về: "39 tuổi 2 tháng"
+  updated_by?: string; // ID người sửa
   updated_at?: string;
 }
 
@@ -114,9 +114,12 @@ export interface CustomerB2CStoreState {
   filters: any;
   page: number; // <-- Phân trang
   pageSize: number; // <-- Số nội dung hiển thị / trang
-  sortDebt: 'asc' | 'desc' | null; // [NEW]
+  sortDebt: "asc" | "desc" | null; // [NEW]
 
-  fetchCustomers: (filters: any, sortDebt?: 'asc' | 'desc' | null) => Promise<void>;
+  fetchCustomers: (
+    filters: any,
+    sortDebt?: "asc" | "desc" | null
+  ) => Promise<void>;
   getCustomerDetails: (id: number) => Promise<void>;
   createCustomer: (data: any, guardians: any) => Promise<number | null>;
   updateCustomer: (id: number, data: any, guardians: any) => Promise<boolean>;

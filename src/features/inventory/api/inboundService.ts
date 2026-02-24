@@ -1,10 +1,18 @@
 // src/features/inventory/api/inboundService.ts
+import {
+  InboundTask,
+  InboundFilter,
+  InboundDetailResponse,
+  ProcessInboundPayload,
+} from "../types/inbound";
+
 import { supabase } from "@/shared/lib/supabaseClient";
-import { InboundTask, InboundFilter, InboundDetailResponse, ProcessInboundPayload } from "../types/inbound";
 
 export const inboundService = {
   // 1. Get List
-  async getInboundTasks(filter: InboundFilter): Promise<{ data: InboundTask[]; total: number }> {
+  async getInboundTasks(
+    filter: InboundFilter
+  ): Promise<{ data: InboundTask[]; total: number }> {
     const { data, error } = await supabase.rpc("get_warehouse_inbound_tasks", {
       p_page: filter.page,
       p_page_size: filter.pageSize,
@@ -12,7 +20,7 @@ export const inboundService = {
       p_status: filter.status === "all" ? null : filter.status,
       p_date_from: filter.date_from || null,
       p_date_to: filter.date_to || null,
-      p_warehouse_id: 1 // Default warehouse for now, can be parameterized later
+      p_warehouse_id: 1, // Default warehouse for now, can be parameterized later
     });
 
     if (error) {
@@ -31,8 +39,8 @@ export const inboundService = {
       p_po_id: poId,
     });
     if (error) throw error;
-    
-    // Ensure structure matches if RPC returns slightly different content, 
+
+    // Ensure structure matches if RPC returns slightly different content,
     // but assuming RPC matches the interface for now.
     return data as InboundDetailResponse;
   },
@@ -40,9 +48,9 @@ export const inboundService = {
   // 3. Submit Receipt
   async submitReceipt(payload: ProcessInboundPayload): Promise<void> {
     const { error } = await supabase.rpc("process_inbound_receipt", {
-        p_po_id: payload.p_po_id,
-        p_warehouse_id: payload.p_warehouse_id,
-        p_items: payload.p_items
+      p_po_id: payload.p_po_id,
+      p_warehouse_id: payload.p_warehouse_id,
+      p_items: payload.p_items,
     });
     if (error) throw error;
   },
@@ -50,8 +58,8 @@ export const inboundService = {
   // 4. Allocate Costs (Landed Cost)
   async allocateCosts(receiptId: number): Promise<void> {
     const { error } = await supabase.rpc("allocate_inbound_costs", {
-      p_receipt_id: receiptId
+      p_receipt_id: receiptId,
     });
     if (error) throw error;
-  }
+  },
 };

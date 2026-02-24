@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
+
 import { b2bService } from "@/features/sales/api/b2bService";
-import { useListingLogic } from "@/shared/hooks/useListingLogic";
 import { B2BOrderItem, B2BOrderStats } from "@/features/sales/types/b2b.types";
+import { useListingLogic } from "@/shared/hooks/useListingLogic";
 
 export const useB2BOrders = () => {
   const [stats, setStats] = useState<B2BOrderStats>({

@@ -19,23 +19,23 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
     editingCustomer: null,
     editingCustomerType: "CaNhan",
     totalCount: 0,
-    filters: {}, 
-    page: 1, 
-    pageSize: 10, 
+    filters: {},
+    page: 1,
+    pageSize: 10,
     sortDebt: null, // [NEW]
 
     // --- HÀM TẢI DỮ LIỆU ---
 
-    fetchCustomers: async (filters: any, sortDebt?: 'asc' | 'desc' | null) => {
+    fetchCustomers: async (filters: any, sortDebt?: "asc" | "desc" | null) => {
       // SỬA LỖI 1: Merge filters
       const finalFilters = { ...get().filters, ...filters };
       const { page, pageSize } = get();
-      
+
       // [NEW] Cập nhật sort state nếu có thay đổi
       let currentSort = get().sortDebt;
       if (sortDebt !== undefined) {
-         currentSort = sortDebt;
-         set({ sortDebt: currentSort });
+        currentSort = sortDebt;
+        set({ sortDebt: currentSort });
       }
 
       set({ loading: true, filters: finalFilters });

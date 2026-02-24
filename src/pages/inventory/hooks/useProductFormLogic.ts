@@ -1,19 +1,21 @@
 // src/pages/inventory/hooks/useProductFormLogic.ts
-import { useState, useEffect, useCallback } from "react";
 import { Form, App as AntApp } from "antd";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
 import type { UploadFile, UploadProps } from "antd/es/upload/interface";
-import { useProductStore } from "@/features/product/stores/productStore";
+
 import {
   addProduct,
   updateProduct,
   uploadProductImage,
 } from "@/features/product/api/productService";
+import { useProductStore } from "@/features/product/stores/productStore";
 
 export const useProductFormLogic = () => {
   const [form] = Form.useForm();
   // WATCH UNITS for Reactive Anchor Label
-  const watchedUnits = Form.useWatch('units', form);
+  const watchedUnits = Form.useWatch("units", form);
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditing = !!id;
@@ -37,7 +39,7 @@ export const useProductFormLogic = () => {
   // --- ANCHOR UNIT LOGIC ---
   const findAnchorUnit = useCallback((units: any[]) => {
     if (!units || units.length === 0) return { conversion_rate: 1 };
-    
+
     // Priority 1: Wholesale
     const wholesale = units.find((u) => u.unit_type === "wholesale");
     if (wholesale) return wholesale;
@@ -48,7 +50,9 @@ export const useProductFormLogic = () => {
 
     // Priority 3: Largest Rate
     // Clone to sort safely
-    const sorted = [...units].sort((a, b) => (b.conversion_rate || 1) - (a.conversion_rate || 1));
+    const sorted = [...units].sort(
+      (a, b) => (b.conversion_rate || 1) - (a.conversion_rate || 1)
+    );
     return sorted[0];
   }, []);
 
@@ -58,7 +62,8 @@ export const useProductFormLogic = () => {
     const inputCost = parseFloat(allValues.actualCost) || 0; // This is WHOLESALE COST (Input)
     const units = allValues.units || [];
 
-    const wholesaleMarginValue = parseFloat(allValues.wholesaleMarginValue) || 0;
+    const wholesaleMarginValue =
+      parseFloat(allValues.wholesaleMarginValue) || 0;
     const wholesaleMarginType = allValues.wholesaleMarginType || "amount";
 
     const retailMarginValue = parseFloat(allValues.retailMarginValue) || 0;
@@ -101,7 +106,7 @@ export const useProductFormLogic = () => {
 
       // Final Price = (BaseCost + ProfitBase) * UnitRate
       const finalPrice = (baseCost + selectedProfitBase) * uRate;
-      
+
       return {
         ...u,
         price: Math.round(finalPrice), // Round to integer (Unit Price < 100 is possible)
@@ -136,63 +141,76 @@ export const useProductFormLogic = () => {
       // [CRITICAL FIX]: Hỗ trợ cả 2 định dạng API (REST vs RPC)
       // REST API trả về: actual_cost, retail_margin_value...
       // RPC trả về: actualCost, retailMarginValue...
-      
+
       const rawCost = currentProduct.actualCost ?? currentProduct.actual_cost;
       const dbBaseCost = Number(rawCost) || 0;
-      
+
       const units = currentProduct.units || [];
       const anchor = findAnchorUnit(units);
       const anchorRate = Number(anchor.conversion_rate) || 1;
-      
+
       // Quy đổi
       const displayCost = dbBaseCost * anchorRate;
       initData.actualCost = Math.round(displayCost);
 
       // Map Margin (Hỗ trợ cả 2 case)
-      initData.retailMarginValue = currentProduct.retailMarginValue ?? currentProduct.retail_margin_value;
-      initData.retailMarginType = currentProduct.retailMarginType ?? currentProduct.retail_margin_type;
-      initData.wholesaleMarginValue = currentProduct.wholesaleMarginValue ?? currentProduct.wholesale_margin_value;
-      initData.wholesaleMarginType = currentProduct.wholesaleMarginType ?? currentProduct.wholesale_margin_type;
+      initData.retailMarginValue =
+        currentProduct.retailMarginValue ?? currentProduct.retail_margin_value;
+      initData.retailMarginType =
+        currentProduct.retailMarginType ?? currentProduct.retail_margin_type;
+      initData.wholesaleMarginValue =
+        currentProduct.wholesaleMarginValue ??
+        currentProduct.wholesale_margin_value;
+      initData.wholesaleMarginType =
+        currentProduct.wholesaleMarginType ??
+        currentProduct.wholesale_margin_type;
 
       // 4. Xử lý Inventory
       if (currentProduct.inventorySettings) {
         const newSettings: any = {};
-        Object.keys(currentProduct.inventorySettings).forEach(whKey => {
-           const setting = currentProduct.inventorySettings[whKey]; // whKey là 'b2b', 'pkdh'...
-           if (setting) {
-               newSettings[whKey] = {
-                   min: setting.min ? Math.floor(Number(setting.min) / anchorRate) : 0,
-                   max: setting.max ? Math.floor(Number(setting.max) / anchorRate) : 0
-               };
-           }
+        Object.keys(currentProduct.inventorySettings).forEach((whKey) => {
+          const setting = currentProduct.inventorySettings[whKey]; // whKey là 'b2b', 'pkdh'...
+          if (setting) {
+            newSettings[whKey] = {
+              min: setting.min
+                ? Math.floor(Number(setting.min) / anchorRate)
+                : 0,
+              max: setting.max
+                ? Math.floor(Number(setting.max) / anchorRate)
+                : 0,
+            };
+          }
         });
         initData.inventorySettings = newSettings;
-      } else if (currentProduct.inventory) { 
-         // [Fallback] Nếu REST API trả về mảng 'inventory' thay vì object 'inventorySettings'
-         // Dev cần check xem productStore map inventory như thế nào.
-         // Tạm thời giữ nguyên logic cũ của Sếp.
+      } else if (currentProduct.inventory) {
+        // [Fallback] Nếu REST API trả về mảng 'inventory' thay vì object 'inventorySettings'
+        // Dev cần check xem productStore map inventory như thế nào.
+        // Tạm thời giữ nguyên logic cũ của Sếp.
       }
 
       // 5. Reset & Set Form
-      form.resetFields(); 
+      form.resetFields();
       form.setFieldsValue(initData);
 
       // 6. Update Local UI State
       // Distributor ID
-      const distId = currentProduct.distributor ?? currentProduct.distributor_id;
-      if (distId) { 
-        form.setFieldValue('distributor', distId);
+      const distId =
+        currentProduct.distributor ?? currentProduct.distributor_id;
+      if (distId) {
+        form.setFieldValue("distributor", distId);
         const supplier = suppliers.find((s) => s.id === distId);
         if (supplier) setSelectedSupplierName(supplier.name);
       }
-      
+
       // Image URL
       const img = currentProduct.imageUrl ?? currentProduct.image_url;
       if (img) {
         setImageUrl(img);
-        setFileList([{ uid: "-1", name: "image.png", status: "done", url: img }]);
+        setFileList([
+          { uid: "-1", name: "image.png", status: "done", url: img },
+        ]);
       }
-      
+
       // Tags
       const tags = currentProduct.tags ?? currentProduct.active_ingredient;
       if (tags && !form.getFieldValue("tags")) {
@@ -203,14 +221,16 @@ export const useProductFormLogic = () => {
 
   // --- HANDLERS ---
   const handleModifyCostOrMargin = () => {
-      recalcPrices();
+    recalcPrices();
   };
 
   const handleUpload: UploadProps["customRequest"] = async ({ onSuccess }) => {
     if (onSuccess) onSuccess("ok");
   };
 
-  const onUploadChange: UploadProps["onChange"] = ({ fileList: newFileList }) => {
+  const onUploadChange: UploadProps["onChange"] = ({
+    fileList: newFileList,
+  }) => {
     setFileList(newFileList);
     if (newFileList.length === 0) setImageUrl("");
   };
@@ -246,8 +266,8 @@ export const useProductFormLogic = () => {
 
       // [FIX] Map units to set price = 0 (Signal for Backend Auto-Pricing)
       const fixedUnits = units.map((u: any) => ({
-          ...u,
-          price: 0, // Backend will recalculate based on Margin
+        ...u,
+        price: 0, // Backend will recalculate based on Margin
       }));
 
       const finalValues = {
@@ -274,16 +294,16 @@ export const useProductFormLogic = () => {
       } else {
         const res: any = await addProduct(finalValues, inventoryPayload);
         if (res?.product_id) {
-             savedId = Number(res.product_id);
-             // Optional: Update URL to edit mode without reload if needed, 
-             // but for now just fetching details is enough to update form
+          savedId = Number(res.product_id);
+          // Optional: Update URL to edit mode without reload if needed,
+          // but for now just fetching details is enough to update form
         }
         antMessage.success(`Tạo sản phẩm thành công!`);
       }
 
       // [FIX] Reload data to update UI with Backend-calculated prices
       if (savedId) {
-          await getProductDetails(savedId);
+        await getProductDetails(savedId);
       }
 
       // navigate("/inventory"); // [DISABLE] Stay on page to see updated prices

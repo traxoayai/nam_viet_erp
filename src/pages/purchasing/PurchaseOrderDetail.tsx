@@ -1,20 +1,18 @@
 // src/pages/purchasing/PurchaseOrderDetail.tsx
 import { Layout, Form, Row, Col, ConfigProvider, App } from "antd";
-import { useNavigate, useParams } from "react-router-dom";
 import viVN from "antd/locale/vi_VN";
+import { useNavigate, useParams } from "react-router-dom";
 
+import { CostAllocationModal } from "./components/CostAllocationModal";
 import POGeneralInfo from "./components/POGeneralInfo";
 import POHeaderAction from "./components/POHeaderAction";
 import POPaymentSummary from "./components/POPaymentSummary";
 import POProductTable from "./components/POProductTable";
 import { usePurchaseOrderLogic } from "./hooks/usePurchaseOrderLogic";
 
-import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal";
-import { CostAllocationModal } from "./components/CostAllocationModal";
-
-import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect";
 import { searchProductsForPurchase } from "@/features/product/api/productService";
-
+import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal";
+import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect";
 
 const { Content } = Layout;
 
@@ -35,7 +33,7 @@ const PurchaseOrderDetailContent = () => {
           onSubmit={logic.confirmOrder}
           onRequestPayment={logic.requestPayment}
           onCalculateInbound={() => {
-             navigate(`/purchase-orders/costing/${id}`);
+            navigate(`/purchase-orders/costing/${id}`);
           }}
         />
 
@@ -97,28 +95,26 @@ const PurchaseOrderDetailContent = () => {
             </Col>
 
             <Col xs={24} lg={7}>
-              <POPaymentSummary
-                financials={logic.financials}
-              />
+              <POPaymentSummary financials={logic.financials} />
             </Col>
           </Row>
         </Content>
 
         {/* [NEW] Payment Modal */}
-        <FinanceFormModal 
-            open={logic.paymentModalOpen}
-            onCancel={() => logic.setPaymentModalOpen(false)}
-            initialFlow="out"
-            initialValues={logic.paymentInitialValues}
+        <FinanceFormModal
+          open={logic.paymentModalOpen}
+          onCancel={() => logic.setPaymentModalOpen(false)}
+          initialFlow="out"
+          initialValues={logic.paymentInitialValues}
         />
 
         {/* [NEW] Cost Allocation Modal */}
         <CostAllocationModal
-            open={logic.costModalOpen}
-            onCancel={() => logic.setCostModalOpen(false)}
-            items={logic.itemsList}
-            onConfirm={logic.handleConfirmFinancials}
-            loading={logic.loading}
+          open={logic.costModalOpen}
+          onCancel={() => logic.setCostModalOpen(false)}
+          items={logic.itemsList}
+          onConfirm={logic.handleConfirmFinancials}
+          loading={logic.loading}
         />
       </Form>
     </Layout>

@@ -1,9 +1,9 @@
 // src/services/customerService.ts
 import * as XLSX from "xlsx";
 
-import { supabase } from "@/shared/lib/supabaseClient";
-import { uploadFile } from "@/shared/api/storageService";
 import { CustomerListRecord } from "@/features/sales/types/customer";
+import { uploadFile } from "@/shared/api/storageService";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // --- BUCKET LƯU TRỮ CHO KHÁCH HÀNG ---
 const AVATAR_BUCKET = "customer_avatars";
@@ -16,17 +16,17 @@ const CCCD_BUCKET = "customer_identity";
  */
 export const fetchCustomers = async (
   filters: any,
-  page: number, 
+  page: number,
   pageSize: number,
-  sortByDebt: 'asc' | 'desc' | null = null // [NEW] Thêm tham số
+  sortByDebt: "asc" | "desc" | null = null // [NEW] Thêm tham số
 ): Promise<{ data: CustomerListRecord[]; totalCount: number }> => {
   const { data, error } = await supabase.rpc("get_customers_b2c_list", {
     search_query: filters.search_query || null,
     type_filter: filters.type_filter || null,
-    status_filter: filters.status_filter || null, 
+    status_filter: filters.status_filter || null,
     page_num: page,
     page_size: pageSize,
-    sort_by_debt: sortByDebt // [NEW] Truyền xuống RPC
+    sort_by_debt: sortByDebt, // [NEW] Truyền xuống RPC
   });
 
   if (error) throw error;
@@ -102,22 +102,29 @@ export const reactivateCustomer = async (id: number): Promise<boolean> => {
 // Định nghĩa MAPPER: Key là Tiếng Việt (trong Excel), Value là Key chuẩn DB
 // 1. MAPPER: CHỈ ĐỊNH CÁC CỘT QUAN TRỌNG
 const B2C_COLUMN_MAP: Record<string, string> = {
-    // --- 4 CỘT BẮT BUỘC (MANDATORY) ---
-    'Loại khách': 'type', 'Loại KH': 'type',
-    'Mã Khách hàng': 'customer_code', 'Mã KH': 'customer_code',
-    'Họ và Tên': 'name', 'Tên': 'name',
-    'Số điện thoại': 'phone', 'SĐT': 'phone', 'SDT': 'phone',
+  // --- 4 CỘT BẮT BUỘC (MANDATORY) ---
+  "Loại khách": "type",
+  "Loại KH": "type",
+  "Mã Khách hàng": "customer_code",
+  "Mã KH": "customer_code",
+  "Họ và Tên": "name",
+  Tên: "name",
+  "Số điện thoại": "phone",
+  SĐT: "phone",
+  SDT: "phone",
 
-    // --- CÁC CỘT TÙY CHỌN (OPTIONAL) ---
-    'Điểm tích lũy': 'loyalty_points',
-    'Địa chỉ': 'address', 
-    'Email': 'email',
-    'Ngày sinh': 'dob', 
-    'Giới tính': 'gender',
-    'Mã số thuế': 'tax_code', 'MST': 'tax_code',
-    'Người liên hệ': 'contact_person_name',
-    'SĐT Người LH': 'contact_person_phone',
-    'Nợ hiện tại': 'initial_debt', 'Nợ cũ': 'initial_debt'
+  // --- CÁC CỘT TÙY CHỌN (OPTIONAL) ---
+  "Điểm tích lũy": "loyalty_points",
+  "Địa chỉ": "address",
+  Email: "email",
+  "Ngày sinh": "dob",
+  "Giới tính": "gender",
+  "Mã số thuế": "tax_code",
+  MST: "tax_code",
+  "Người liên hệ": "contact_person_name",
+  "SĐT Người LH": "contact_person_phone",
+  "Nợ hiện tại": "initial_debt",
+  "Nợ cũ": "initial_debt",
 };
 
 export const importCustomers = async (file: File): Promise<number> => {
@@ -127,98 +134,108 @@ export const importCustomers = async (file: File): Promise<number> => {
       const workbook = XLSX.read(data);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      
+
       // Đọc file Excel (Ô trống -> null)
-      const rawData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+      const rawData: any[] = XLSX.utils.sheet_to_json(worksheet, {
+        defval: null,
+      });
 
       if (rawData.length === 0) {
-         reject(new Error("File Excel rỗng."));
-         return;
+        reject(new Error("File Excel rỗng."));
+        return;
       }
 
       const cleanedArray = rawData.map((row) => {
-         // A. KHỞI TẠO OBJECT CHUẨN VỚI GIÁ TRỊ NULL (Reset toàn bộ)
-         // Đảm bảo dù Excel thiếu cột thì DB vẫn nhận được null
-         const newRow: any = {
-             type: null,
-             customer_code: null,
-             name: null,
-             phone: null,
-             email: null,
-             address: null,
-             dob: null,
-             gender: null,
-             loyalty_points: 0, // Số thì default 0
-             initial_debt: 0,   // Số thì default 0
-             tax_code: null,
-             contact_person_name: null,
-             contact_person_phone: null
-         };
-         
-         // B. MAPPING DỮ LIỆU TỪ EXCEL VÀO
-         Object.keys(row).forEach((excelHeader) => {
-            const cleanHeader = excelHeader.trim();
-            const dbKey = B2C_COLUMN_MAP[cleanHeader];
-            
-            // Chỉ xử lý nếu cột đó nằm trong danh sách Mapper
-            if (dbKey) {
-                let value = row[excelHeader];
+        // A. KHỞI TẠO OBJECT CHUẨN VỚI GIÁ TRỊ NULL (Reset toàn bộ)
+        // Đảm bảo dù Excel thiếu cột thì DB vẫn nhận được null
+        const newRow: any = {
+          type: null,
+          customer_code: null,
+          name: null,
+          phone: null,
+          email: null,
+          address: null,
+          dob: null,
+          gender: null,
+          loyalty_points: 0, // Số thì default 0
+          initial_debt: 0, // Số thì default 0
+          tax_code: null,
+          contact_person_name: null,
+          contact_person_phone: null,
+        };
 
-                // 1. Xử lý Số liệu (Xóa dấu phẩy)
-                if (['initial_debt', 'loyalty_points'].includes(dbKey)) {
-                    if (typeof value === 'string') {
-                        const cleanNumber = value.replace(/\D/g, '');
-                        // Nếu chuỗi rỗng sau khi clean -> coi là 0
-                        value = cleanNumber ? Number(cleanNumber) : 0;
-                    } else if (typeof value === 'number') {
-                        value = value;
-                    } else {
-                        value = 0; // null/undefined -> 0
-                    }
-                    
-                    // Ép gán luôn (không cần check null ở dưới nữa)
-                    newRow[dbKey] = value;
-                    return; // Continue to next key
-                }
+        // B. MAPPING DỮ LIỆU TỪ EXCEL VÀO
+        Object.keys(row).forEach((excelHeader) => {
+          const cleanHeader = excelHeader.trim();
+          const dbKey = B2C_COLUMN_MAP[cleanHeader];
 
-                // 2. Xử lý Giới tính (Map sang ENUM chuẩn)
-                if (dbKey === 'gender' && value) {
-                    const g = String(value).toLowerCase().trim();
-                    if (['nam', 'male', 'trai', 'ông'].includes(g)) value = 'male';
-                    else if (['nữ', 'nu', 'female', 'gái', 'bà'].includes(g)) value = 'female';
-                    else value = null; // Không khớp thì null
-                }
+          // Chỉ xử lý nếu cột đó nằm trong danh sách Mapper
+          if (dbKey) {
+            let value = row[excelHeader];
 
-                // 3. Xử lý Ngày sinh (Rỗng/Khoảng trắng -> NULL)
-                if (dbKey === 'dob') {
-                    if (!value || String(value).trim() === '') value = null;
-                }
+            // 1. Xử lý Số liệu (Xóa dấu phẩy)
+            if (["initial_debt", "loyalty_points"].includes(dbKey)) {
+              if (typeof value === "string") {
+                const cleanNumber = value.replace(/\D/g, "");
+                // Nếu chuỗi rỗng sau khi clean -> coi là 0
+                value = cleanNumber ? Number(cleanNumber) : 0;
+              } else if (typeof value === "number") {
+                value = value;
+              } else {
+                value = 0; // null/undefined -> 0
+              }
 
-                // Gán giá trị (Nếu khác null/undefined mới gán đè)
-                if (value !== null && value !== undefined) {
-                    newRow[dbKey] = value;
-                }
+              // Ép gán luôn (không cần check null ở dưới nữa)
+              newRow[dbKey] = value;
+              return; // Continue to next key
             }
-         });
 
-         // C. KIỂM TRA BẮT BUỘC (FALLBACK)
-         // Nếu file thiếu cột "Loại khách", mặc định là CaNhan cho an toàn
-         if (!newRow.type) newRow.type = 'CaNhan'; 
+            // 2. Xử lý Giới tính (Map sang ENUM chuẩn)
+            if (dbKey === "gender" && value) {
+              const g = String(value).toLowerCase().trim();
+              if (["nam", "male", "trai", "ông"].includes(g)) value = "male";
+              else if (["nữ", "nu", "female", "gái", "bà"].includes(g))
+                value = "female";
+              else value = null; // Không khớp thì null
+            }
 
-         // Nếu thiếu Mã KH, để null (DB sẽ tự sinh mã KH-xxxxx)
-         if (!newRow.customer_code || String(newRow.customer_code).trim() === '') {
-             newRow.customer_code = null; 
-         }
+            // 3. Xử lý Ngày sinh (Rỗng/Khoảng trắng -> NULL)
+            if (dbKey === "dob") {
+              if (!value || String(value).trim() === "") value = null;
+            }
 
-         return newRow;
+            // Gán giá trị (Nếu khác null/undefined mới gán đè)
+            if (value !== null && value !== undefined) {
+              newRow[dbKey] = value;
+            }
+          }
+        });
+
+        // C. KIỂM TRA BẮT BUỘC (FALLBACK)
+        // Nếu file thiếu cột "Loại khách", mặc định là CaNhan cho an toàn
+        if (!newRow.type) newRow.type = "CaNhan";
+
+        // Nếu thiếu Mã KH, để null (DB sẽ tự sinh mã KH-xxxxx)
+        if (
+          !newRow.customer_code ||
+          String(newRow.customer_code).trim() === ""
+        ) {
+          newRow.customer_code = null;
+        }
+
+        return newRow;
       });
 
       // Lọc bỏ các dòng rác (không có Tên và SĐT)
-      const validArray = cleanedArray.filter(item => item.name && item.phone);
+      const validArray = cleanedArray.filter((item) => item.name && item.phone);
 
       if (validArray.length === 0) {
-          reject(new Error("Không tìm thấy dữ liệu hợp lệ. Vui lòng kiểm tra cột 'Họ và Tên' và 'Số điện thoại'."));
-          return;
+        reject(
+          new Error(
+            "Không tìm thấy dữ liệu hợp lệ. Vui lòng kiểm tra cột 'Họ và Tên' và 'Số điện thoại'."
+          )
+        );
+        return;
       }
 
       // // --- [CHÈN LOG VÀO ĐÂY] ---
@@ -230,9 +247,12 @@ export const importCustomers = async (file: File): Promise<number> => {
 
       console.log("Data Sent to DB:", validArray);
 
-      const { error: rpcError } = await supabase.rpc("bulk_upsert_customers_b2c", {
-        p_customers_array: validArray,
-      });
+      const { error: rpcError } = await supabase.rpc(
+        "bulk_upsert_customers_b2c",
+        {
+          p_customers_array: validArray,
+        }
+      );
 
       if (rpcError) throw rpcError;
       resolve(validArray.length);

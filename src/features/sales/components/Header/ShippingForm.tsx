@@ -4,8 +4,8 @@ import { Select, Input, Row, Col, Typography } from "antd";
 import { useEffect } from "react";
 
 // QUAN TRỌNG: AURA sử dụng tài nguyên do NEXUS cung cấp
-import { DELIVERY_METHODS } from "@/shared/constants/b2b";
 import { useShippingPartnerStore } from "@/features/partners/stores/useShippingPartnerStore";
+import { DELIVERY_METHODS } from "@/shared/constants/b2b";
 
 const { Text } = Typography;
 

@@ -6,7 +6,7 @@ export const getSuppliers = async () => {
   // Lấy danh sách NCC đang hoạt động để hiển thị Dropdown
   const { data, error } = await supabase
     .from("suppliers")
-    .select("id, name, tax_code, phone, address") 
+    .select("id, name, tax_code, phone, address")
     .eq("status", "active")
     .order("name", { ascending: true });
 
@@ -19,16 +19,20 @@ export const getSuppliers = async () => {
 
 export const supplierService = {
   getQuickInfo: async (id: number) => {
-    const { data, error } = await supabase.rpc('get_supplier_quick_info', { p_supplier_id: id });
+    const { data, error } = await supabase.rpc("get_supplier_quick_info", {
+      p_supplier_id: id,
+    });
     if (error) throw error;
-    return data; 
+    return data;
   },
 
   // [NEW] Import Excel (V33.2)
   importSuppliersBulk: async (suppliers: any[]) => {
     // Backend V33.2 expects 'p_suppliers'
-    const { data, error } = await supabase.rpc('import_suppliers_bulk', { p_suppliers: suppliers });
+    const { data, error } = await supabase.rpc("import_suppliers_bulk", {
+      p_suppliers: suppliers,
+    });
     if (error) throw error;
     return data;
-  }
+  },
 };

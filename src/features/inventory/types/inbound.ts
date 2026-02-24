@@ -7,9 +7,9 @@ export interface InboundTask {
   expected_delivery_date: string; // Or expected_delivery_time
   item_count: number;
   progress_percent: number; // 0 - 100
-  status: 'pending' | 'partial' | 'completed';
+  status: "pending" | "partial" | "completed";
   total_count: number;
-  
+
   // Logistics Fields (New)
   total_packages?: number;
   carrier_name?: string;
@@ -24,15 +24,15 @@ export interface InboundDetailItem {
   barcode?: string; // [NEW] Supported barcode
   image_url: string;
   unit: string;
-  stock_management_type: 'lot_date' | 'serial' | 'simple';
+  stock_management_type: "lot_date" | "serial" | "simple";
   quantity_ordered: number;
   quantity_received_prev: number;
   quantity_remaining: number;
-  
+
   // Client-side inputs for receiving
   input_quantity?: number;
   input_lot?: string;
-  input_expiry?: string; 
+  input_expiry?: string;
   // Landed Cost Fields
   allocated_cost?: number; // Phí phân bổ
   final_unit_cost?: number; // Giá vốn thực tế sau phân bổ
@@ -45,7 +45,7 @@ export interface InboundDetailResponse {
     supplier_name: string;
     note: string;
     status: string;
-    
+
     // Logistics Fields
     total_packages?: number;
     carrier_name?: string;

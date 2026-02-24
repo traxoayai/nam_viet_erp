@@ -43,12 +43,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { v4 as uuidv4 } from "uuid";
 
 import type { TableProps } from "antd";
-import { Access } from "@/shared/components/auth/Access"; // [NEW]
-import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
-import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
-// IMPORT "BỘ NÃO" VÀ "KHUÔN MẪU"
-import { useDebounce } from "@/shared/hooks/useDebounce";
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 import { useShippingPartnerStore } from "@/features/partners/stores/useShippingPartnerStore";
 import {
   ShippingPartnerListRecord,
@@ -57,6 +53,11 @@ import {
   ShippingPartnerStatus,
   ShippingPartnerType,
 } from "@/features/partners/types/shippingPartner";
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
+
+// IMPORT "BỘ NÃO" VÀ "KHUÔN MẪU"
+import { useDebounce } from "@/shared/hooks/useDebounce";
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -310,37 +311,37 @@ const ShippingPartnerPage: React.FC = () => {
       render: (_: any, record: ShippingPartnerListRecord) => (
         <Space size="small">
           <Access permission={PERMISSIONS.PARTNER.SHIPPING.EDIT}>
-              <Tooltip title="Sửa">
-                <Button
-                  type="text"
-                  icon={<EditOutlined />}
-                  onClick={() => showModal(record)}
-                />
-              </Tooltip>
+            <Tooltip title="Sửa">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => showModal(record)}
+              />
+            </Tooltip>
           </Access>
           {record.status === "active" ? (
-             <Access permission={PERMISSIONS.PARTNER.SHIPPING.DELETE}>
-                <Tooltip title="Ngừng Hợp tác">
+            <Access permission={PERMISSIONS.PARTNER.SHIPPING.DELETE}>
+              <Tooltip title="Ngừng Hợp tác">
                 <Popconfirm
-                    title={`Ngừng hợp tác với "${record.name}"?`}
-                    onConfirm={() => handleDelete(record)}
-                    okText="Đồng ý"
-                    cancelText="Hủy"
+                  title={`Ngừng hợp tác với "${record.name}"?`}
+                  onConfirm={() => handleDelete(record)}
+                  okText="Đồng ý"
+                  cancelText="Hủy"
                 >
-                    <Button type="text" danger icon={<DeleteOutlined />} />
+                  <Button type="text" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
-                </Tooltip>
+              </Tooltip>
             </Access>
           ) : (
             <Access permission={PERMISSIONS.PARTNER.SHIPPING.EDIT}>
-                <Tooltip title="Hợp tác trở lại">
+              <Tooltip title="Hợp tác trở lại">
                 <Button
-                    type="text"
-                    style={{ color: "green" }}
-                    icon={<SafetyOutlined />}
-                    onClick={() => handleReactivate(record)}
+                  type="text"
+                  style={{ color: "green" }}
+                  icon={<SafetyOutlined />}
+                  onClick={() => handleReactivate(record)}
                 />
-                </Tooltip>
+              </Tooltip>
             </Access>
           )}
         </Space>
@@ -378,13 +379,13 @@ const ShippingPartnerPage: React.FC = () => {
                 </Col>
                 <Col>
                   <Access permission={PERMISSIONS.PARTNER.SHIPPING.CREATE}>
-                      <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={() => showModal()}
-                      >
-                        Thêm Đối tác
-                      </Button>
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => showModal()}
+                    >
+                      Thêm Đối tác
+                    </Button>
                   </Access>
                 </Col>
               </Row>
@@ -614,12 +615,10 @@ const ShippingPartnerPage: React.FC = () => {
   );
 };
 
-
-
 const ProtectedShippingPartnerPage = () => (
-    <PermissionGuard permission={PERMISSIONS.PARTNER.SHIPPING.VIEW}>
-        <ShippingPartnerPage />
-    </PermissionGuard>
+  <PermissionGuard permission={PERMISSIONS.PARTNER.SHIPPING.VIEW}>
+    <ShippingPartnerPage />
+  </PermissionGuard>
 );
 
 export default ProtectedShippingPartnerPage;

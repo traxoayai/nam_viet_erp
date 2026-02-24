@@ -1,7 +1,8 @@
 // src/features/connect/hooks/useConnectStore.ts
-import { create } from 'zustand';
-import { connectService } from '../api/connectService';
-import { ConnectPost, PostCategory } from '../types/connect.types';
+import { create } from "zustand";
+
+import { connectService } from "../api/connectService";
+import { ConnectPost, PostCategory } from "../types/connect.types";
 
 interface ConnectState {
   posts: ConnectPost[];
@@ -10,7 +11,7 @@ interface ConnectState {
   activeTab: PostCategory;
   editingPost: ConnectPost | null; // [NEW] - Fixed missing type
   // [NEW] Interactive State
-  comments: any[]; 
+  comments: any[];
   commentsLoading: boolean;
 
   // Actions
@@ -22,7 +23,7 @@ interface ConnectState {
   deletePost: (id: number) => Promise<void>;
   toggleLockPost: (post: ConnectPost) => Promise<void>;
   setEditingPost: (post: ConnectPost | null) => void;
-  
+
   // Interactive Actions
   toggleLikeAction: (post: ConnectPost) => Promise<void>;
   loadComments: (postId: number) => Promise<void>;
@@ -33,7 +34,7 @@ export const useConnectStore = create<ConnectState>((set, get) => ({
   posts: [],
   loading: false,
   selectedPost: null,
-  activeTab: 'news',
+  activeTab: "news",
   editingPost: null, // [NEW] Actions implementation
 
   // [NEW] Interactive State Init
@@ -54,21 +55,26 @@ export const useConnectStore = create<ConnectState>((set, get) => ({
 
   setSelectedPost: (post) => set({ selectedPost: post }),
   setActiveTab: (tab) => {
-      // Khi set Tab thì gọi luôn fetch
-      get().fetchPosts(tab);
+    // Khi set Tab thì gọi luôn fetch
+    get().fetchPosts(tab);
   },
 
   confirmReadPost: async (postId) => {
-      try {
-          await connectService.confirmRead(postId);
-          // Cập nhật local state để ẩn nút confirm ngay lập tức
-          set((state) => ({
-              posts: state.posts.map(p => p.id === postId ? {...p, is_read: true} : p),
-              selectedPost: state.selectedPost?.id === postId ? {...state.selectedPost, is_read: true} : state.selectedPost
-          }));
-      } catch (err) {
-          console.error(err);
-      }
+    try {
+      await connectService.confirmRead(postId);
+      // Cập nhật local state để ẩn nút confirm ngay lập tức
+      set((state) => ({
+        posts: state.posts.map((p) =>
+          p.id === postId ? { ...p, is_read: true } : p
+        ),
+        selectedPost:
+          state.selectedPost?.id === postId
+            ? { ...state.selectedPost, is_read: true }
+            : state.selectedPost,
+      }));
+    } catch (err) {
+      console.error(err);
+    }
   },
 
   deletePost: async (id) => {
@@ -76,7 +82,7 @@ export const useConnectStore = create<ConnectState>((set, get) => ({
       await connectService.deletePost(id);
       set((state) => ({
         posts: state.posts.filter((p) => p.id !== id),
-        selectedPost: state.selectedPost?.id === id ? null : state.selectedPost
+        selectedPost: state.selectedPost?.id === id ? null : state.selectedPost,
       }));
     } catch (error) {
       console.error(error);
@@ -87,11 +93,14 @@ export const useConnectStore = create<ConnectState>((set, get) => ({
     try {
       await connectService.toggleLock(post.id, post.is_locked);
       // Helper update logic
-      const updateLock = (p: ConnectPost) => p.id === post.id ? { ...p, is_locked: !p.is_locked } : p;
-      
+      const updateLock = (p: ConnectPost) =>
+        p.id === post.id ? { ...p, is_locked: !p.is_locked } : p;
+
       set((state) => ({
         posts: state.posts.map(updateLock),
-        selectedPost: state.selectedPost ? updateLock(state.selectedPost) : null
+        selectedPost: state.selectedPost
+          ? updateLock(state.selectedPost)
+          : null,
       }));
     } catch (error) {
       console.error(error);
@@ -109,14 +118,16 @@ export const useConnectStore = create<ConnectState>((set, get) => ({
     const newCount = isLiked ? post.likes_count - 1 : post.likes_count + 1;
 
     // Helper update list
-    const updateLocalPost = (p: ConnectPost) => 
-      p.id === post.id 
-        ? { ...p, user_has_liked: newStatus, likes_count: newCount } 
+    const updateLocalPost = (p: ConnectPost) =>
+      p.id === post.id
+        ? { ...p, user_has_liked: newStatus, likes_count: newCount }
         : p;
 
     set((state) => ({
       posts: state.posts.map(updateLocalPost),
-      selectedPost: state.selectedPost ? updateLocalPost(state.selectedPost) : null
+      selectedPost: state.selectedPost
+        ? updateLocalPost(state.selectedPost)
+        : null,
     }));
 
     // 2. Gọi Server (Nếu lỗi thì revert - xử lý sau, tạm thời tin tưởng server)
@@ -145,14 +156,21 @@ export const useConnectStore = create<ConnectState>((set, get) => ({
       await connectService.sendComment(postId, content);
       // Reload comment và update count ở post list
       await get().loadComments(postId);
-      
+
       // Update comment count ở list ngoài
       set((state) => ({
-        posts: state.posts.map(p => p.id === postId ? {...p, comments_count: p.comments_count + 1} : p),
-        selectedPost: state.selectedPost ? {...state.selectedPost, comments_count: state.selectedPost.comments_count + 1} : null
+        posts: state.posts.map((p) =>
+          p.id === postId ? { ...p, comments_count: p.comments_count + 1 } : p
+        ),
+        selectedPost: state.selectedPost
+          ? {
+              ...state.selectedPost,
+              comments_count: state.selectedPost.comments_count + 1,
+            }
+          : null,
       }));
     } catch (err) {
-       throw err; // Ném lỗi ra để UI hiển thị message
+      throw err; // Ném lỗi ra để UI hiển thị message
     }
-  }
+  },
 }));

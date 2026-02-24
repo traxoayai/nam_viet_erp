@@ -55,9 +55,9 @@ import type { TableProps, TabsProps } from "antd";
 // import { supabase } from "@/lib/supabaseClient";
 import { useRoleStore } from "@/features/auth/stores/useRoleStore";
 import { useUserStore } from "@/features/auth/stores/useUserStore";
-import { useWarehouseStore } from "@/features/inventory/stores/warehouseStore";
 import { Role } from "@/features/auth/types/role";
 import { UserRoleInfo, UserAssignment } from "@/features/auth/types/user";
+import { useWarehouseStore } from "@/features/inventory/stores/warehouseStore";
 
 const { Text } = Typography;
 

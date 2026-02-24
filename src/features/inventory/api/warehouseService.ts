@@ -1,6 +1,6 @@
 // src/services/warehouseService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
 import { WarehouseFilters } from "@/features/inventory/types/warehouse";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // 1. CỖ MÁY API: ĐỌC DANH SÁCH (Đã nâng cấp)
 export const getWarehouses = async (

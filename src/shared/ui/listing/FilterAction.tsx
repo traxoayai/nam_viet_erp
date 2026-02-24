@@ -89,7 +89,7 @@ const FilterActionBase = ({
 
         <Col>
           <Space>
-            {actions.map((act, idx) => (
+            {actions.map((act, idx) =>
               act.render ? (
                 <React.Fragment key={idx}>{act.render}</React.Fragment>
               ) : (
@@ -105,7 +105,7 @@ const FilterActionBase = ({
                   {act.label}
                 </Button>
               )
-            ))}
+            )}
           </Space>
         </Col>
       </Row>

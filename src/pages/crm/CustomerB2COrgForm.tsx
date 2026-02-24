@@ -37,7 +37,10 @@ import type { TableProps } from "antd";
 // IMPORT "BỘ NÃO" VÀ "KHUÔN MẪU"
 import { uploadAvatar } from "@/features/sales/api/customerService";
 import { useCustomerB2CStore } from "@/features/sales/stores/useCustomerB2CStore";
-import { CustomerHistory, CustomerFormData } from "@/features/sales/types/customer";
+import {
+  CustomerHistory,
+  CustomerFormData,
+} from "@/features/sales/types/customer";
 
 const { Content } = Layout;
 const { Title } = Typography;

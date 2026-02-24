@@ -1,32 +1,68 @@
 // src/features/booking/constants/symptoms.ts
 
 export const SYMPTOM_SUGGESTIONS: Record<string, string[]> = {
-    head: [
-        "Đau đầu", "Chóng mặt", "Sốt cao", "Buồn nôn", "Mất ngủ", 
-        "Suy giảm trí nhớ", "Đau nửa đầu", "Ù tai"
-    ],
-    chest: [
-        "Đau thắt ngực", "Khó thở", "Ho khan", "Ho có đờm", 
-        "Hồi hộp đánh trống ngực", "Tức ngực"
-    ],
-    abdomen: [
-        "Đau bụng", "Đầy hơi", "Tiêu chảy", "Táo bón", "Ợ chua", "Chán ăn", 
-        "Đau dạ dày", "RL tiêu hóa"
-    ],
-    pelvis: [
-        "Đau lưng dưới", "Tiểu buốt", "Tiểu rắt", "Đau vùng chậu", 
-        "Rối loạn kinh nguyệt (Nữ)", "Đau tinh hoàn (Nam)"
-    ],
-    left_arm: [
-        "Đau khớp vai", "Tê bì tay", "Yếu tay", "Đau khuỷu tay", "Sưng khớp"
-    ],
-    right_arm: [
-        "Đau khớp vai", "Tê bì tay", "Yếu tay", "Đau khuỷu tay", "Sưng khớp"
-    ],
-    left_leg: [
-        "Đau khớp gối", "Tê chân", "Chuột rút", "Sưng mắt cá", "Giãn tĩnh mạch"
-    ],
-    right_leg: [
-        "Đau khớp gối", "Tê chân", "Chuột rút", "Sưng mắt cá", "Giãn tĩnh mạch"
-    ]
+  head: [
+    "Đau đầu",
+    "Chóng mặt",
+    "Sốt cao",
+    "Buồn nôn",
+    "Mất ngủ",
+    "Suy giảm trí nhớ",
+    "Đau nửa đầu",
+    "Ù tai",
+  ],
+  chest: [
+    "Đau thắt ngực",
+    "Khó thở",
+    "Ho khan",
+    "Ho có đờm",
+    "Hồi hộp đánh trống ngực",
+    "Tức ngực",
+  ],
+  abdomen: [
+    "Đau bụng",
+    "Đầy hơi",
+    "Tiêu chảy",
+    "Táo bón",
+    "Ợ chua",
+    "Chán ăn",
+    "Đau dạ dày",
+    "RL tiêu hóa",
+  ],
+  pelvis: [
+    "Đau lưng dưới",
+    "Tiểu buốt",
+    "Tiểu rắt",
+    "Đau vùng chậu",
+    "Rối loạn kinh nguyệt (Nữ)",
+    "Đau tinh hoàn (Nam)",
+  ],
+  left_arm: [
+    "Đau khớp vai",
+    "Tê bì tay",
+    "Yếu tay",
+    "Đau khuỷu tay",
+    "Sưng khớp",
+  ],
+  right_arm: [
+    "Đau khớp vai",
+    "Tê bì tay",
+    "Yếu tay",
+    "Đau khuỷu tay",
+    "Sưng khớp",
+  ],
+  left_leg: [
+    "Đau khớp gối",
+    "Tê chân",
+    "Chuột rút",
+    "Sưng mắt cá",
+    "Giãn tĩnh mạch",
+  ],
+  right_leg: [
+    "Đau khớp gối",
+    "Tê chân",
+    "Chuột rút",
+    "Sưng mắt cá",
+    "Giãn tĩnh mạch",
+  ],
 };

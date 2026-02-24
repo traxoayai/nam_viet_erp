@@ -3,13 +3,13 @@
 export interface OutboundTask {
   task_id: string; // UUID
   code: string;
-  task_type: 'Bán hàng' | 'Chuyển kho';
+  task_type: "Bán hàng" | "Chuyển kho";
   customer_name: string;
   created_at: string;
   delivery_deadline: string;
-  priority: 'High' | 'Normal';
+  priority: "High" | "Normal";
   status: string; // CONFIRMED, SHIPPING, DELIVERED, CANCELLED
-  
+
   // Shipping Info
   shipping_partner_name: string;
   shipping_contact_name: string;
@@ -19,8 +19,8 @@ export interface OutboundTask {
   // Progress & Pagination
   progress_picked: number;
   progress_total: number;
-  status_label: string; 
-  total_count: number; 
+  status_label: string;
+  total_count: number;
 }
 
 export interface OutboundStats {
@@ -33,8 +33,8 @@ export interface OutboundFilter {
   page: number;
   pageSize: number;
   search?: string;
-  status?: string;       // CONFIRMED, SHIPPING...
-  type?: string;         // 'Bán hàng' | 'Chuyển kho'
+  status?: string; // CONFIRMED, SHIPPING...
+  type?: string; // 'Bán hàng' | 'Chuyển kho'
   shipping_partner_id?: number;
   date_from?: string;
   date_to?: string;

@@ -2,8 +2,8 @@
 import { v4 as uuidv4 } from "uuid";
 import * as XLSX from "xlsx";
 
-import { supabase } from "@/shared/lib/supabaseClient";
 import { ProductFilters } from "@/features/product/types/product.types";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 interface FetchParams {
   filters: ProductFilters;
@@ -28,9 +28,9 @@ export const getProducts = async ({ filters, page, pageSize }: FetchParams) => {
   }
 
   // search_products_v2 trả về { data: [...], total_count: number }
-  return { 
-    data: data?.data || [], 
-    totalCount: data?.total_count || 0 
+  return {
+    data: data?.data || [],
+    totalCount: data?.total_count || 0,
   };
 };
 
@@ -68,15 +68,16 @@ export const getProductDetails = async (id: number) => {
           shelf_location: inv.shelf_location,
           location_cabinet: inv.location_cabinet,
           location_row: inv.location_row,
-          location_slot: inv.location_slot
+          location_slot: inv.location_slot,
         };
       }
     });
   }
 
   // [FIX] Lấy dữ liệu Marketing (Tìm bản ghi channel='website')
-  const marketingData = (data.product_contents && data.product_contents.length > 0)
-      ? data.product_contents.find((c: any) => c.channel === 'website') || {}
+  const marketingData =
+    data.product_contents && data.product_contents.length > 0
+      ? data.product_contents.find((c: any) => c.channel === "website") || {}
       : {};
 
   // D. MAP DỮ LIỆU DB (Snake_case) -> FORM (CamelCase)
@@ -106,10 +107,14 @@ export const getProductDetails = async (id: number) => {
     registrationNumber: data.registration_number,
     packingSpec: data.packing_spec,
     tags: data.active_ingredient,
-    
+
     // [FIX] Map Usage Instructions (Đảm bảo luôn có object để Form bind dữ liệu)
     usageInstructions: data.usage_instructions || {
-        "0_2": "", "2_6": "", "6_12": "", "18_plus": "", "contraindication": ""
+      "0_2": "",
+      "2_6": "",
+      "6_12": "",
+      "18_plus": "",
+      contraindication: "",
     },
 
     // Logistics
@@ -120,18 +125,18 @@ export const getProductDetails = async (id: number) => {
 
     // Tồn kho
     inventorySettings: inventorySettings,
-    
+
     // Units
     units: data.product_units || [],
-    
+
     // [FIX] Map Marketing Content vào object content
     content: {
-        description_html: marketingData.description_html || "",
-        short_description: marketingData.short_description || "",
-        seo_title: marketingData.seo_title || "",
-        seo_description: marketingData.seo_description || "",
-        seo_keywords: marketingData.seo_keywords || []
-    }
+      description_html: marketingData.description_html || "",
+      short_description: marketingData.short_description || "",
+      seo_title: marketingData.seo_title || "",
+      seo_description: marketingData.seo_description || "",
+      seo_keywords: marketingData.seo_keywords || [],
+    },
   };
 };
 
@@ -141,7 +146,7 @@ export const upsertProduct = async (formValues: any) => {
 
   // 1. CHUẨN BỊ PAYLOAD PRODUCT (Tham số 1)
   const productJson = {
-    id: formValues.id, 
+    id: formValues.id,
     sku: formValues.sku,
     name: formValues.productName,
     barcode: formValues.barcode,
@@ -149,19 +154,19 @@ export const upsertProduct = async (formValues: any) => {
     manufacturer_name: formValues.manufacturer,
     category_name: formValues.category,
     packing_spec: formValues.packingSpec,
-    active_ingredient: formValues.tags, 
-    status: formValues.status || 'active',
+    active_ingredient: formValues.tags,
+    status: formValues.status || "active",
     image_url: formValues.imageUrl,
-    
+
     // [FIX] Thêm distributor_id (Quan trọng)
     distributor_id: formValues.distributor || null,
-    
+
     // Financials (V7 - Auto Pricing)
     actual_cost: formValues.actualCost || 0,
-    wholesale_margin_value: formValues.wholesaleMarginValue || 0, 
-    wholesale_margin_type: formValues.wholesaleMarginType || 'amount',
-    retail_margin_value: formValues.retailMarginValue || 0,       
-    retail_margin_type: formValues.retailMarginType || 'amount',
+    wholesale_margin_value: formValues.wholesaleMarginValue || 0,
+    wholesale_margin_type: formValues.wholesaleMarginType || "amount",
+    retail_margin_value: formValues.retailMarginValue || 0,
+    retail_margin_type: formValues.retailMarginType || "amount",
 
     // Logistics
     items_per_carton: formValues.items_per_carton || 1,
@@ -171,36 +176,36 @@ export const upsertProduct = async (formValues: any) => {
 
     // Usage Instructions (JSON)
     usage_instructions: formValues.usageInstructions || {
-        "0_2": formValues.usage_0_2 || "",
-        "2_6": formValues.usage_2_6 || "",
-        "6_12": formValues.usage_6_12 || "",
-        "18_plus": formValues.usage_18_plus || "",
-        "contraindication": formValues.usage_contraindication || ""
-    }
+      "0_2": formValues.usage_0_2 || "",
+      "2_6": formValues.usage_2_6 || "",
+      "6_12": formValues.usage_6_12 || "",
+      "18_plus": formValues.usage_18_plus || "",
+      contraindication: formValues.usage_contraindication || "",
+    },
   };
 
   // 2. CHUẨN BỊ PAYLOAD UNITS (Tham số 2)
   const unitsJson = (formValues.units || []).map((u: any) => ({
-    id: u.id, 
+    id: u.id,
     unit_name: u.unit_name,
     unit_type: u.unit_type,
     conversion_rate: u.conversion_rate,
     price: u.price, // Nếu = 0 -> Backend tự tính theo Margin
     barcode: u.barcode,
     is_base: u.is_base,
-    is_direct_sale: u.is_direct_sale
+    is_direct_sale: u.is_direct_sale,
   }));
 
   // Handle Legacy implicit unit logic (Optional - Keep for safety)
-  if (formValues.retailUnit && !unitsJson.some((u:any) => u.is_base)) {
-     unitsJson.push({
-         unit_name: formValues.retailUnit,
-         conversion_rate: 1,
-         unit_type: 'base',
-         price: formValues.actualCost, // Base price
-         is_base: true,
-         is_direct_sale: true
-     });
+  if (formValues.retailUnit && !unitsJson.some((u: any) => u.is_base)) {
+    unitsJson.push({
+      unit_name: formValues.retailUnit,
+      conversion_rate: 1,
+      unit_type: "base",
+      price: formValues.actualCost, // Base price
+      is_base: true,
+      is_direct_sale: true,
+    });
   }
 
   // 3. CHUẨN BỊ PAYLOAD CONTENT (Tham số 3 - Marketing)
@@ -210,34 +215,36 @@ export const upsertProduct = async (formValues: any) => {
     seo_title: formValues.content?.seo_title,
     seo_description: formValues.content?.seo_description,
     seo_keywords: formValues.content?.seo_keywords || [],
-    is_published: true
+    is_published: true,
   };
 
   // 4. CHUẨN BỊ PAYLOAD INVENTORY (Tham số 4 - Cấu hình kho)
   let inventoryJson = formValues.inventorySettings || [];
-  
+
   // Transformation Logic: Object -> Array (nếu client gửi dạng Map)
-  if (!Array.isArray(inventoryJson) && typeof inventoryJson === 'object') {
-      inventoryJson = Object.values(inventoryJson).map((item: any) => {
-          if (!item.warehouse_id) return null;
-          return {
-              warehouse_id: item.warehouse_id,
-              min_stock: item.min,
-              max_stock: item.max,
-              shelf_location: item.shelf_location,
-              location_cabinet: item.location_cabinet,
-              location_row: item.location_row,
-              location_slot: item.location_slot
-          };
-      }).filter(Boolean);
+  if (!Array.isArray(inventoryJson) && typeof inventoryJson === "object") {
+    inventoryJson = Object.values(inventoryJson)
+      .map((item: any) => {
+        if (!item.warehouse_id) return null;
+        return {
+          warehouse_id: item.warehouse_id,
+          min_stock: item.min,
+          max_stock: item.max,
+          shelf_location: item.shelf_location,
+          location_cabinet: item.location_cabinet,
+          location_row: item.location_row,
+          location_slot: item.location_slot,
+        };
+      })
+      .filter(Boolean);
   }
 
   // 5. GỌI RPC V7 (upsert_product_with_units)
-  const { data, error } = await supabase.rpc('upsert_product_with_units', {
+  const { data, error } = await supabase.rpc("upsert_product_with_units", {
     p_product_json: productJson,
     p_units_json: unitsJson,
     p_contents_json: contentsJson,
-    p_inventory_json: inventoryJson
+    p_inventory_json: inventoryJson,
   });
 
   if (error) {
@@ -249,20 +256,27 @@ export const upsertProduct = async (formValues: any) => {
 };
 
 // Wrapper backward compatibility
-export const addProduct = async (formValues: any, inventoryPayload: any[] = []) => {
-    if (inventoryPayload && inventoryPayload.length > 0) {
-        formValues.inventorySettings = inventoryPayload;
-    }
-    return upsertProduct(formValues);
+export const addProduct = async (
+  formValues: any,
+  inventoryPayload: any[] = []
+) => {
+  if (inventoryPayload && inventoryPayload.length > 0) {
+    formValues.inventorySettings = inventoryPayload;
+  }
+  return upsertProduct(formValues);
 };
 
-export const updateProduct = async (id: number, formValues: any, inventoryPayload: any[] = []) => {
-    formValues.id = id;
-    if (inventoryPayload && inventoryPayload.length > 0) {
-        formValues.inventorySettings = inventoryPayload;
-    }
-    await upsertProduct(formValues);
-    return true;
+export const updateProduct = async (
+  id: number,
+  formValues: any,
+  inventoryPayload: any[] = []
+) => {
+  formValues.id = id;
+  if (inventoryPayload && inventoryPayload.length > 0) {
+    formValues.inventorySettings = inventoryPayload;
+  }
+  await upsertProduct(formValues);
+  return true;
 };
 
 // 5. HÀM CẬP NHẬT TRẠNG THÁI (HÀNG LOẠT)
@@ -498,18 +512,24 @@ export const searchProductsForPurchase = async (keyword: string) => {
 
 // 13. HÀM LẤY TOÀN BỘ SẢN PHẨM được phân trang Server-side Pagination
 
-export const getAllProductsLite = async (page: number = 1, pageSize: number = 20) => {
+export const getAllProductsLite = async (
+  page: number = 1,
+  pageSize: number = 20
+) => {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
   const { data, error, count } = await supabase
     .from("products")
-    .select(`
+    .select(
+      `
         id, name, sku, barcode, image_url, status,
         wholesale_unit, retail_unit, actual_cost, items_per_carton,
         product_units(id, unit_name, conversion_rate, unit_type, is_base),
         product_inventory(warehouse_id, min_stock, max_stock)
-    `, { count: 'exact' }) // [NEW] Yêu cầu đếm tổng số
+    `,
+      { count: "exact" }
+    ) // [NEW] Yêu cầu đếm tổng số
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .range(from, to); // [NEW] Chỉ lấy trong khoảng này
@@ -520,59 +540,70 @@ export const getAllProductsLite = async (page: number = 1, pageSize: number = 20
   }
   return { data: data || [], total: count || 0 };
   if (error) {
-        console.error("Lỗi getAllProductsLite:", error?.message);
+    console.error("Lỗi getAllProductsLite:", error?.message);
     return { data: [], total: 0 };
   }
   return { data: data || [], total: count || 0 };
 };
 
 // 14. HÀM TÌM KIẾM CHUYÊN BIỆT CHO CHUYỂN KHO (Có tồn kho & Đơn vị)
-export const searchProductsForTransfer = async (keyword: string, warehouseId: number) => {
-    // Gọi RPC V32.3 Final của Core
-    const { data, error } = await supabase.rpc('search_products_for_transfer', { 
-        p_warehouse_id: warehouseId, // BẮT BUỘC
-        p_keyword: keyword,
-        p_limit: 20
-    });
-    
-    if (error) {
-        console.error("RPC Error:", error);
-        return [];
-    }
-    return data || []; 
+export const searchProductsForTransfer = async (
+  keyword: string,
+  warehouseId: number
+) => {
+  // Gọi RPC V32.3 Final của Core
+  const { data, error } = await supabase.rpc("search_products_for_transfer", {
+    p_warehouse_id: warehouseId, // BẮT BUỘC
+    p_keyword: keyword,
+    p_limit: 20,
+  });
+
+  if (error) {
+    console.error("RPC Error:", error);
+    return [];
+  }
+  return data || [];
 };
 
 // 15. [NEW] CẬP NHẬT GIÁ BÁN (Bulk Update - V35.6)
 // 15. [NEW] CẬP NHẬT GIÁ BÁN (Bulk Update - V35.6)
-export const updateProductPrices = async (updates: { id: number; price: number }[]) => {
-    if (!updates || updates.length === 0) return { success: true, count: 0 };
+export const updateProductPrices = async (
+  updates: { id: number; price: number }[]
+) => {
+  if (!updates || updates.length === 0) return { success: true, count: 0 };
 
-    // Sử dụng Promise.all để chạy song song (vì số lượng ít)
-    // Nếu số lượng lớn cần dùng RPC hoặc chunk
-    try {
-        const promises = updates.map(u => 
-            supabase.from('product_units')
-                .update({ 
-                    price: u.price,       // Cột cũ
-                    price_sell: u.price,  // Cột mới (Update cả 2 để đồng bộ)
-                    updated_at: new Date().toISOString() 
-                }) 
-                .eq('id', u.id)
-                .select() // Quan trọng: Return data để kiểm tra có update thật không
-        );
-        
-        const results = await Promise.all(promises);
-        
-        // Đếm số dòng thực sự được update (data not null)
-        const successCount = results.filter(r => r.data && r.data.length > 0).length;
-        
-        if (successCount < updates.length) {
-            console.warn(`Chỉ update được ${successCount}/${updates.length} dòng. Có thể do lỗi quyền (RLS).`);
-        }
+  // Sử dụng Promise.all để chạy song song (vì số lượng ít)
+  // Nếu số lượng lớn cần dùng RPC hoặc chunk
+  try {
+    const promises = updates.map(
+      (u) =>
+        supabase
+          .from("product_units")
+          .update({
+            price: u.price, // Cột cũ
+            price_sell: u.price, // Cột mới (Update cả 2 để đồng bộ)
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", u.id)
+          .select() // Quan trọng: Return data để kiểm tra có update thật không
+    );
 
-        return { success: true, count: successCount };
-    } catch (err) {
-        console.error("Lỗi cập nhật giá bán:", err);
-        throw err;
+    const results = await Promise.all(promises);
+
+    // Đếm số dòng thực sự được update (data not null)
+    const successCount = results.filter(
+      (r) => r.data && r.data.length > 0
+    ).length;
+
+    if (successCount < updates.length) {
+      console.warn(
+        `Chỉ update được ${successCount}/${updates.length} dòng. Có thể do lỗi quyền (RLS).`
+      );
     }
+
+    return { success: true, count: successCount };
+  } catch (err) {
+    console.error("Lỗi cập nhật giá bán:", err);
+    throw err;
+  }
 };

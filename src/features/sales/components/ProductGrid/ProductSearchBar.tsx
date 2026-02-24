@@ -7,9 +7,9 @@ import {
 import { Select, Avatar, Tag, Empty, Spin, Row, Col } from "antd";
 import { useState, useMemo } from "react";
 
-import { useDebounce } from "@/shared/hooks/useDebounce";
 import { salesService } from "@/features/sales/api/salesService";
 import { ProductB2B } from "@/features/sales/types/b2b_sales";
+import { useDebounce } from "@/shared/hooks/useDebounce";
 
 interface Props {
   onSelect: (product: ProductB2B) => void;

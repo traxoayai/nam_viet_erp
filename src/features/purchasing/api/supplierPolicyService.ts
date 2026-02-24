@@ -1,16 +1,19 @@
 // src/features/purchasing/api/supplierPolicyService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
 import { PolicyFormValues } from "../types/supplierPolicy";
+
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const supplierPolicyService = {
   // LIST
   getPolicies: async (filters: any) => {
     let query = supabase
       .from("supplier_programs")
-      .select(`
+      .select(
+        `
         *,
         supplier: suppliers(id, name)
-      `)
+      `
+      )
       .order("created_at", { ascending: false });
 
     if (filters.supplier_id) {
@@ -30,7 +33,8 @@ export const supplierPolicyService = {
   getPolicyDetail: async (programId: number) => {
     const { data, error } = await supabase
       .from("supplier_programs")
-      .select(`
+      .select(
+        `
         *,
         groups: supplier_program_groups (
           *,
@@ -39,7 +43,8 @@ export const supplierPolicyService = {
             product: products ( id, name, sku, retail_unit, wholesale_unit )
           )
         )
-      `)
+      `
+      )
       .eq("id", programId)
       .single();
 

@@ -42,12 +42,12 @@ import viVN from "antd/locale/vi_VN";
 import React, { useState, useEffect } from "react"; // Sửa: Bỏ useRef
 
 // SỬA LỖI: Import component TextEditor
-import TextEditor from "@/shared/ui/common/TextEditor";
 import { useTemplateStore } from "@/features/settings/stores/useTemplateStore";
 import {
   TemplateRecord,
   DocumentTemplate,
 } from "@/features/settings/types/template";
+import TextEditor from "@/shared/ui/common/TextEditor";
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;

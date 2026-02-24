@@ -62,4 +62,4 @@ export const Constants = {
       transaction_type: ["thu", "chi"],
     },
   },
-} as const
+} as const;

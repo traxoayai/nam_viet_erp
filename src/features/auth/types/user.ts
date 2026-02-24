@@ -14,7 +14,7 @@ export interface UserRoleInfo {
   name: string;
   email: string;
   full_name?: string; // [NEW]
-  work_state?: 'working' | 'test' | 'resigned'; // [NEW]
+  work_state?: "working" | "test" | "resigned"; // [NEW]
   avatar: string | null;
   status: "pending_approval" | "active" | "inactive"; // Sẽ nâng cấp sau
   assignments: UserAssignment[] | null; // Mảng các quyền

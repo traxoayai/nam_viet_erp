@@ -2,13 +2,13 @@
 import { message } from "antd";
 import { create } from "zustand";
 
+import { ShippingPartner } from "@/features/partners/types/shippingPartner";
 import {
   CustomerB2B,
   ProductB2B,
   CartItem,
   VoucherRecord,
 } from "@/features/sales/types/b2b_sales";
-import { ShippingPartner } from "@/features/partners/types/shippingPartner";
 
 interface SalesState {
   // --- STATE ---
@@ -92,7 +92,6 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
   setItems: (items) => set({ items }), // [NEW]
 
-
   updateItem: (key, field, value) => {
     const { items } = get();
     const newItems = items.map((item) => {
@@ -148,12 +147,11 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     const totalQty = s.items.reduce((sum, i) => sum + i.quantity, 0);
 
     let discountAmount = 0;
-    
+
     // Ưu tiên Manual Discount nếu có (Override)
     if (s.manualDiscount > 0) {
-        discountAmount = s.manualDiscount;
-    } 
-    else if (s.selectedVoucher) {
+      discountAmount = s.manualDiscount;
+    } else if (s.selectedVoucher) {
       const v = s.selectedVoucher;
       if (subTotal >= v.min_order_value) {
         discountAmount =

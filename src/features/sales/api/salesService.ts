@@ -1,5 +1,4 @@
 // src/services/salesService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
 import {
   CustomerB2B,
   ProductB2B,
@@ -7,6 +6,7 @@ import {
   VoucherRecord,
   CreateSalesOrderPayload,
 } from "@/features/sales/types/b2b_sales"; // Import Type mới nhất
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // [NEW] Interface cho Update Order
 export interface UpdateOrderPayload {
@@ -17,7 +17,7 @@ export interface UpdateOrderPayload {
   p_note: string;
   p_discount_amount: number;
   p_shipping_fee: number;
-  p_status?: 'DRAFT' | 'QUOTE' | 'CONFIRMED';
+  p_status?: "DRAFT" | "QUOTE" | "CONFIRMED";
   p_items: {
     product_id: number;
     quantity: number;
@@ -43,12 +43,15 @@ export const salesService = {
   },
 
   // 2. Tìm sản phẩm (Type ProductB2B giờ đã có shelf_location)
-  async searchProducts(keyword: string, warehouseId: number = 1): Promise<ProductB2B[]> {
+  async searchProducts(
+    keyword: string,
+    warehouseId: number = 1
+  ): Promise<ProductB2B[]> {
     const { data, error } = await supabase.rpc(
       "search_products_for_b2b_order",
       {
         p_keyword: keyword || "",
-        p_warehouse_id: warehouseId // [FIX]
+        p_warehouse_id: warehouseId, // [FIX]
       }
     );
     if (error) return [];
@@ -87,9 +90,9 @@ export const salesService = {
 
   // 5.1 [NEW] Cập nhật đơn hàng (Spec V41)
   async updateOrder(payload: UpdateOrderPayload) {
-      const { error } = await supabase.rpc('update_sales_order', payload);
-      if (error) throw error;
-      return true;
+    const { error } = await supabase.rpc("update_sales_order", payload);
+    if (error) throw error;
+    return true;
   },
 
   // 6. [NEW] Lấy danh sách đơn hàng (Unified via RPC V8)
@@ -101,7 +104,7 @@ export const salesService = {
     status?: string;
     remittanceStatus?: string; // 'pending' để lọc đơn chưa nộp tiền
     dateFrom?: string; // ISO String
-    dateTo?: string;   // ISO String
+    dateTo?: string; // ISO String
     // New Filters
     creatorId?: string;
     paymentStatus?: string;
@@ -126,7 +129,7 @@ export const salesService = {
       // [NEW] Params
       p_payment_method: params.paymentMethod || null,
       p_warehouse_id: params.warehouseId || null,
-      p_customer_id: params.customerId || null
+      p_customer_id: params.customerId || null,
     });
 
     if (error) {
@@ -136,13 +139,13 @@ export const salesService = {
 
     // Data trả về từ RPC đã bao gồm total và stats
     return {
-        data: data?.data || [],
-        total: data?.total || 0,
-        stats: data?.stats || {
-            total_sales: 0,
-            count_pending_remittance: 0,
-            total_cash_pending: 0
-        }
+      data: data?.data || [],
+      total: data?.total || 0,
+      stats: data?.stats || {
+        total_sales: 0,
+        count_pending_remittance: 0,
+        total_cash_pending: 0,
+      },
     };
   },
 
@@ -150,13 +153,13 @@ export const salesService = {
   async updateInvoiceRequest(orderId: string, invoiceData: any) {
     // invoiceData: { companyName, taxCode, address, email, ... }
     const { error } = await supabase
-      .from('orders')
+      .from("orders")
       .update({
-        invoice_status: 'pending', // Chuyển trạng thái thành "Chờ xuất"
+        invoice_status: "pending", // Chuyển trạng thái thành "Chờ xuất"
         invoice_request_data: invoiceData,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
-      .eq('id', orderId);
+      .eq("id", orderId);
 
     if (error) throw error;
     return true;
@@ -167,8 +170,9 @@ export const salesService = {
   async getOrdersForInvoiceExport(orderIds: string[]) {
     // Lấy thông tin đơn hàng + items
     const { data, error } = await supabase
-      .from('orders')
-      .select(`
+      .from("orders")
+      .select(
+        `
         *,
         order_items (
           product_name,
@@ -178,8 +182,9 @@ export const salesService = {
           total_price,
           vat_rate -- Cần đảm bảo bảng order_items có cột này hoặc lấy từ product
         )
-      `)
-      .in('id', orderIds);
+      `
+      )
+      .in("id", orderIds);
 
     if (error) throw error;
     return data;
@@ -187,9 +192,9 @@ export const salesService = {
 
   // 9. [NEW] Xác nhận thu tiền đơn hàng (Bulk Action)
   async confirmPayment(orderIds: (string | number)[], fundAccountId: number) {
-    const { error } = await supabase.rpc('confirm_order_payment', {
+    const { error } = await supabase.rpc("confirm_order_payment", {
       p_order_ids: orderIds,
-      p_fund_account_id: fundAccountId
+      p_fund_account_id: fundAccountId,
     });
     if (error) throw error;
     return true;
@@ -197,22 +202,24 @@ export const salesService = {
 
   // 10. [NEW] Đánh dấu đơn hàng là Chuyển khoản (Cho flow B2B List)
   async markOrderAsBankTransfer(orderId: string | number) {
-      const { error } = await supabase.from('orders')
-        .update({ 
-            payment_method: 'bank_transfer', 
-            updated_at: new Date().toISOString() 
-        })
-        .eq('id', orderId);
-      
-      if (error) throw error;
-      return true;
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        payment_method: "bank_transfer",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", orderId);
+
+    if (error) throw error;
+    return true;
   },
 
   // [NEW] Thêm hàm này để lấy chi tiết đơn hàng cho việc in ấn
   async getOrderDetail(orderId: number | string) {
-        const { data, error } = await supabase
-            .from('orders')
-            .select(`
+    const { data, error } = await supabase
+      .from("orders")
+      .select(
+        `
                 *,
                 customer:customer_id(id, name, phone, shipping_address, tax_code, email),
                 items:order_items(
@@ -223,18 +230,19 @@ export const salesService = {
                     )
                 ),
                 sales_invoices(id, status, invoice_number, created_at)
-            `)
-            .eq('id', orderId)
-            .single();
+            `
+      )
+      .eq("id", orderId)
+      .single();
 
-        if (error) throw error;
-        return data;
+    if (error) throw error;
+    return data;
   },
 
   // 11. [NEW] Xóa đơn hàng (Admin Only)
   async deleteOrder(orderId: string | number) {
-      const { error } = await supabase.from('orders').delete().eq('id', orderId);
-      if (error) throw error;
-      return true;
-  }
+    const { error } = await supabase.from("orders").delete().eq("id", orderId);
+    if (error) throw error;
+    return true;
+  },
 };

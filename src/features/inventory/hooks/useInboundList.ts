@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+
 import { useInboundStore } from "../stores/useInboundStore";
 //import { InboundFilter } from "../types/inbound"; // Import Filter type if needed for direct exposure
 
@@ -26,10 +27,10 @@ export const useInboundList = () => {
   };
 
   const handleDateChange = (dates: any) => {
-     setFilters({
-         date_from: dates ? dates[0]?.toISOString() : undefined,
-         date_to: dates ? dates[1]?.toISOString() : undefined
-     });
+    setFilters({
+      date_from: dates ? dates[0]?.toISOString() : undefined,
+      date_to: dates ? dates[1]?.toISOString() : undefined,
+    });
   };
 
   const refreshList = () => {
@@ -45,6 +46,6 @@ export const useInboundList = () => {
     handleSearch,
     handleStatusChange,
     handleDateChange,
-    refreshList
+    refreshList,
   };
 };

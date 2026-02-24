@@ -4,9 +4,9 @@ import React, { useState, useEffect } from "react";
 
 import type { TableProps } from "antd";
 
-import { useDebounce } from "@/shared/hooks/useDebounce";
 import { useCustomerB2CStore } from "@/features/sales/stores/useCustomerB2CStore";
 import { CustomerListRecord } from "@/features/sales/types/customer";
+import { useDebounce } from "@/shared/hooks/useDebounce";
 
 const { Search } = Input;
 

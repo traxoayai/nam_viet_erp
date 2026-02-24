@@ -5,7 +5,7 @@ import {
   //FileTextOutlined,
   PrinterOutlined,
   SaveOutlined,
-  SnippetsOutlined // [NEW]
+  SnippetsOutlined, // [NEW]
 } from "@ant-design/icons";
 import { Button, Popconfirm, Space } from "antd";
 import { useNavigate } from "react-router-dom";
@@ -18,11 +18,17 @@ interface Props {
 }
 
 // Sửa lại Component để linh hoạt hơn
-export const ActionButtons = ({ loading, onSubmit, onPrint, onPrintPicking, style }: Props & { style?: React.CSSProperties }) => {
+export const ActionButtons = ({
+  loading,
+  onSubmit,
+  onPrint,
+  onPrintPicking,
+  style,
+}: Props & { style?: React.CSSProperties }) => {
   const navigate = useNavigate();
 
   // [REMOVED] Đã tách Alert ra ngoài để component này chỉ chứa nút bấm thuần túy
-  
+
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, ...style }}>
       <div
@@ -45,17 +51,17 @@ export const ActionButtons = ({ loading, onSubmit, onPrint, onPrintPicking, styl
         </Popconfirm>
 
         <Space>
-           {/* [NEW] Nút In Phiếu Nhặt */}
-           {onPrintPicking && (
-            <Button 
-                icon={<SnippetsOutlined />} 
-                size="large"
-                onClick={onPrintPicking}
-                loading={loading}
+          {/* [NEW] Nút In Phiếu Nhặt */}
+          {onPrintPicking ? (
+            <Button
+              icon={<SnippetsOutlined />}
+              size="large"
+              onClick={onPrintPicking}
+              loading={loading}
             >
-                In Phiếu Nhặt
+              In Phiếu Nhặt
             </Button>
-          )}
+          ) : null}
 
           <Button
             icon={<PrinterOutlined />}

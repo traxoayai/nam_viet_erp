@@ -3,10 +3,10 @@ import dayjs from "dayjs";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { supabase } from "@/shared/lib/supabaseClient";
-import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
 import { useProductStore } from "@/features/product/stores/productStore";
+import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
 import { POItem } from "@/features/purchasing/types/purchaseOrderTypes";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // Interface cho Shipping Partner
 interface ShippingPartner {
@@ -40,7 +40,9 @@ export const usePurchaseOrderLogic = () => {
     totalCartons: 0,
   });
   const [searchKey, setSearchKey] = useState<number>(0);
-  const [shippingPartners, setShippingPartners] = useState<ShippingPartner[]>([]);
+  const [shippingPartners, setShippingPartners] = useState<ShippingPartner[]>(
+    []
+  );
   const [supplierInfo, setSupplierInfo] = useState<any>(null);
 
   // Modal State
@@ -91,33 +93,36 @@ export const usePurchaseOrderLogic = () => {
 
       const mappedItems: POItem[] = (po.items || []).map((item: any) => {
         // [FIX] Normalize Data Keys (Phòng trường hợp RPC trả về biến thể khác)
-        const wholesaleUnit = item.wholesale_unit || item.wholesaleUnit || "Hộp";
+        const wholesaleUnit =
+          item.wholesale_unit || item.wholesaleUnit || "Hộp";
         const retailUnit = item.retail_unit || item.retailUnit || "Vỉ";
-        const itemsPerCarton = item.items_per_carton || item.itemsPerCarton || 1;
-        
+        const itemsPerCarton =
+          item.items_per_carton || item.itemsPerCarton || 1;
+
         return {
-            id: item.id,
-            product_id: item.product_id,
-            sku: item.sku,
-            name: item.product_name,
-            image_url: item.image_url,
-            quantity: item.quantity_ordered,
-            available_units: item.available_units || [],
-            // [LOGIC] Ưu tiên lấy đơn vị đã lưu trong đơn hàng
-            uom: item.uom_ordered || item.unit || wholesaleUnit, 
-            unit_price: Number(item.unit_price),
-            discount: 0,
-            _items_per_carton: itemsPerCarton,
-            _wholesale_unit: wholesaleUnit,
-            _retail_unit: retailUnit,
-            // [LOGIC] Tính lại giá gốc (Wholesale Price) để dùng khi đổi ĐVT
-            _base_price: Number(item.unit_price) /
+          id: item.id,
+          product_id: item.product_id,
+          sku: item.sku,
+          name: item.product_name,
+          image_url: item.image_url,
+          quantity: item.quantity_ordered,
+          available_units: item.available_units || [],
+          // [LOGIC] Ưu tiên lấy đơn vị đã lưu trong đơn hàng
+          uom: item.uom_ordered || item.unit || wholesaleUnit,
+          unit_price: Number(item.unit_price),
+          discount: 0,
+          _items_per_carton: itemsPerCarton,
+          _wholesale_unit: wholesaleUnit,
+          _retail_unit: retailUnit,
+          // [LOGIC] Tính lại giá gốc (Wholesale Price) để dùng khi đổi ĐVT
+          _base_price:
+            Number(item.unit_price) /
             (item.uom_ordered === wholesaleUnit ? 1 : 1 / itemsPerCarton),
-            vat_rate: item.vat_rate || 0,
-            rebate_rate: item.rebate_rate || 0,
-            allocated_shipping_fee: item.allocated_shipping_fee || 0,
-            bonus_quantity: item.bonus_quantity || 0,
-            is_bonus: item.is_bonus || false 
+          vat_rate: item.vat_rate || 0,
+          rebate_rate: item.rebate_rate || 0,
+          allocated_shipping_fee: item.allocated_shipping_fee || 0,
+          bonus_quantity: item.bonus_quantity || 0,
+          is_bonus: item.is_bonus || false,
         };
       });
 
@@ -135,13 +140,13 @@ export const usePurchaseOrderLogic = () => {
         carrier_name: po.carrier_name,
         carrier_phone: po.carrier_phone,
         total_packages: po.total_packages,
-        expected_delivery_time: po.expected_delivery_time 
-            ? dayjs(po.expected_delivery_time) 
-            : null, 
+        expected_delivery_time: po.expected_delivery_time
+          ? dayjs(po.expected_delivery_time)
+          : null,
         items: mappedItems,
       });
 
-      calculateTotals(mappedItems); 
+      calculateTotals(mappedItems);
     } catch (error: any) {
       message.error(error.message || "Lỗi tải đơn hàng");
       navigate("/purchase-orders");
@@ -175,11 +180,11 @@ export const usePurchaseOrderLogic = () => {
     (currentItems: POItem[]) => {
       let sub = 0;
       let cartons = 0;
-      
+
       currentItems.forEach((item) => {
         const qty = Number(item.quantity) || 0;
         // Nếu là hàng tặng (Bonus) thì giá = 0, nhưng vẫn tính số kiện
-        const price = item.is_bonus ? 0 : (Number(item.unit_price) || 0);
+        const price = item.is_bonus ? 0 : Number(item.unit_price) || 0;
         sub += qty * price;
 
         const packSize = item._items_per_carton || 1;
@@ -188,7 +193,7 @@ export const usePurchaseOrderLogic = () => {
       });
 
       const ship = form.getFieldValue("shipping_fee") || 0;
-      
+
       setFinancials((prev) => ({
         ...prev,
         subtotal: sub,
@@ -196,10 +201,10 @@ export const usePurchaseOrderLogic = () => {
         totalCartons: parseFloat(cartons.toFixed(1)),
       }));
 
-       const currentPackages = form.getFieldValue('total_packages');
-       if (!currentPackages || currentPackages === 0) {
-           form.setFieldsValue({ total_packages: Math.ceil(cartons) });
-       }
+      const currentPackages = form.getFieldValue("total_packages");
+      if (!currentPackages || currentPackages === 0) {
+        form.setFieldsValue({ total_packages: Math.ceil(cartons) });
+      }
     },
     [form]
   );
@@ -216,7 +221,7 @@ export const usePurchaseOrderLogic = () => {
   };
 
   const handleShippingFeeChange = () => {
-      calculateTotals(itemsList);
+    calculateTotals(itemsList);
   };
 
   // [FIX CRITICAL] Xử lý chọn sản phẩm
@@ -234,14 +239,25 @@ export const usePurchaseOrderLogic = () => {
     const retailUnit = p.retail_unit || p.retailUnit || "Vỉ";
     const itemsPerCarton = p.items_per_carton || p.itemsPerCarton || 1;
     // Giá cost: Ưu tiên giá nhập gần nhất -> giá vốn thực tế -> 0
-    const basePrice = p.latest_purchase_price || p.latestPurchasePrice || p.actual_cost || 0;
+    const basePrice =
+      p.latest_purchase_price || p.latestPurchasePrice || p.actual_cost || 0;
 
     // 2. Logic tạo dropdown Units
-    let unitsData = p.available_units || p.units || [];
+    const unitsData = p.available_units || p.units || [];
     if (unitsData.length === 0) {
-       // Chỉ push nếu unit tồn tại và không trùng
-       if (wholesaleUnit) unitsData.push({ unit_name: wholesaleUnit, conversion_rate: itemsPerCarton, is_base: false });
-       if (retailUnit && retailUnit !== wholesaleUnit) unitsData.push({ unit_name: retailUnit, conversion_rate: 1, is_base: true });
+      // Chỉ push nếu unit tồn tại và không trùng
+      if (wholesaleUnit)
+        unitsData.push({
+          unit_name: wholesaleUnit,
+          conversion_rate: itemsPerCarton,
+          is_base: false,
+        });
+      if (retailUnit && retailUnit !== wholesaleUnit)
+        unitsData.push({
+          unit_name: retailUnit,
+          conversion_rate: 1,
+          is_base: true,
+        });
     }
 
     const newItem: POItem = {
@@ -251,19 +267,19 @@ export const usePurchaseOrderLogic = () => {
       image_url: p.image_url,
       quantity: 1,
       available_units: unitsData,
-      
+
       // 3. [FIX] Luôn set mặc định là Đơn vị nhập (Wholesale Unit)
-      uom: wholesaleUnit, 
-      
+      uom: wholesaleUnit,
+
       // Giá nhập mặc định theo Wholesale Unit
       unit_price: basePrice,
-      
+
       discount: 0,
       _items_per_carton: itemsPerCarton,
       _wholesale_unit: wholesaleUnit,
       _retail_unit: retailUnit,
       _base_price: basePrice, // Giá gốc tham chiếu
-      is_bonus: false
+      is_bonus: false,
     };
 
     const newItems = [newItem, ...itemsList];
@@ -287,19 +303,19 @@ export const usePurchaseOrderLogic = () => {
         item.unit_price = item._base_price / (item._items_per_carton || 1);
       }
     }
-    
+
     // Logic: Nếu chọn Hàng tặng -> Giá về 0
     if (field === "is_bonus") {
-        if (value === true) {
-            item.unit_price = 0;
+      if (value === true) {
+        item.unit_price = 0;
+      } else {
+        // Khôi phục giá cũ dựa trên UOM hiện tại
+        if (item.uom === item._wholesale_unit) {
+          item.unit_price = item._base_price;
         } else {
-            // Khôi phục giá cũ dựa trên UOM hiện tại
-            if (item.uom === item._wholesale_unit) {
-                item.unit_price = item._base_price;
-            } else {
-                item.unit_price = item._base_price / (item._items_per_carton || 1);
-            }
+          item.unit_price = item._base_price / (item._items_per_carton || 1);
         }
+      }
     }
 
     newItems[index] = item;
@@ -319,51 +335,56 @@ export const usePurchaseOrderLogic = () => {
 
   // [NEW] Hàm dùng chung để lưu dữ liệu (Gọi RPC Update)
   const handleSaveOrder = async (values: any) => {
-      // 1. Lấy Items từ State (Giá mới nhất)
-      if (itemsList.length === 0) throw new Error("Vui lòng chọn ít nhất 1 sản phẩm");
+    // 1. Lấy Items từ State (Giá mới nhất)
+    if (itemsList.length === 0)
+      throw new Error("Vui lòng chọn ít nhất 1 sản phẩm");
 
-      const payloadItems = itemsList.map((item) => ({
-        product_id: item.product_id,
-        quantity: Number(item.quantity),
-        unit_price: Number(item.unit_price), // Giá mới nhất từ Table
-        uom: item.uom,
-        is_bonus: (item as any).is_bonus || false,
-      }));
+    const payloadItems = itemsList.map((item) => ({
+      product_id: item.product_id,
+      quantity: Number(item.quantity),
+      unit_price: Number(item.unit_price), // Giá mới nhất từ Table
+      uom: item.uom,
+      is_bonus: (item as any).is_bonus || false,
+    }));
 
-      // 2. Prepare Data
-      const payloadData = {
+    // 2. Prepare Data
+    const payloadData = {
+      supplier_id: values.supplier_id,
+      expected_delivery_date: values.expected_delivery_date,
+      note: values.note,
+      delivery_method: values.delivery_method,
+      shipping_partner_id: values.shipping_partner_id,
+      shipping_fee: values.shipping_fee,
+
+      // Logistics
+      carrier_name: values.carrier_name,
+      carrier_contact: values.carrier_contact, // Optional field
+      carrier_phone: values.carrier_phone,
+      total_packages: values.total_packages,
+      expected_delivery_time: values.expected_delivery_time
+        ? dayjs(values.expected_delivery_time).format("HH:mm")
+        : null,
+    };
+
+    if (isEditMode) {
+      // Update
+      await purchaseOrderService.updatePO(
+        Number(id),
+        payloadData,
+        payloadItems
+      );
+      return Number(id);
+    } else {
+      // Create
+      const result = await purchaseOrderService.createPO({
+        ...payloadData,
+        expected_date: payloadData.expected_delivery_date,
         supplier_id: values.supplier_id,
-        expected_delivery_date: values.expected_delivery_date,
-        note: values.note,
-        delivery_method: values.delivery_method,
-        shipping_partner_id: values.shipping_partner_id,
-        shipping_fee: values.shipping_fee,
-        
-        // Logistics
-        carrier_name: values.carrier_name,
-        carrier_contact: values.carrier_contact, // Optional field
-        carrier_phone: values.carrier_phone,
-        total_packages: values.total_packages,
-        expected_delivery_time: values.expected_delivery_time 
-           ? dayjs(values.expected_delivery_time).format('HH:mm') 
-           : null,
-      };
-
-      if (isEditMode) {
-        // Update
-        await purchaseOrderService.updatePO(Number(id), payloadData, payloadItems);
-        return Number(id);
-      } else {
-        // Create
-        const result = await purchaseOrderService.createPO({
-            ...payloadData,
-            expected_date: payloadData.expected_delivery_date,
-            supplier_id: values.supplier_id,
-            items: payloadItems,
-            status: 'DRAFT'
-        });
-        return result.id;
-      }
+        items: payloadItems,
+        status: "DRAFT",
+      });
+      return result.id;
+    }
   };
 
   // Nút Lưu Nháp (UI Trigger)
@@ -371,13 +392,15 @@ export const usePurchaseOrderLogic = () => {
     setLoading(true);
     try {
       const savedId = await handleSaveOrder(values);
-      message.success(isEditMode ? "Đã cập nhật đơn hàng!" : "Tạo đơn nháp thành công!");
-      
+      message.success(
+        isEditMode ? "Đã cập nhật đơn hàng!" : "Tạo đơn nháp thành công!"
+      );
+
       if (!isEditMode) {
-          navigate(`/purchase-orders/${savedId}`);
+        navigate(`/purchase-orders/${savedId}`);
       } else {
-          // [CRITICAL] Reload lại để hiển thị dữ liệu đã lưu
-          loadOrderDetail(savedId);
+        // [CRITICAL] Reload lại để hiển thị dữ liệu đã lưu
+        loadOrderDetail(savedId);
       }
     } catch (err: any) {
       console.error(err);
@@ -390,75 +413,79 @@ export const usePurchaseOrderLogic = () => {
   // Nút Đặt Hàng (UI Trigger) - [FIXED LOGIC]
   const confirmOrder = async () => {
     try {
-        // 1. Validate Form & State
-        const values = await form.validateFields();
-        if (itemsList.length === 0) return message.warning("Đơn hàng rỗng!");
+      // 1. Validate Form & State
+      const values = await form.validateFields();
+      if (itemsList.length === 0) return message.warning("Đơn hàng rỗng!");
 
-        modal.confirm({
-            title: "Xác nhận Đặt hàng?",
-            content: 'Đơn hàng sẽ được Lưu và chuyển trạng thái sang "Đã Đặt Hàng". Thông tin sẽ được chốt.',
-            okText: "Lưu & Đặt hàng",
-            onOk: async () => {
-                setLoading(true);
-                try {
-                    // 2. [CRITICAL] AUTO-SAVE: Lưu dữ liệu mới nhất vào DB trước
-                    // Nếu đang tạo mới -> Tạo xong lấy ID để confirm
-                    // Nếu đang sửa -> Update DB
-                    const savedId = await handleSaveOrder(values);
+      modal.confirm({
+        title: "Xác nhận Đặt hàng?",
+        content:
+          'Đơn hàng sẽ được Lưu và chuyển trạng thái sang "Đã Đặt Hàng". Thông tin sẽ được chốt.',
+        okText: "Lưu & Đặt hàng",
+        onOk: async () => {
+          setLoading(true);
+          try {
+            // 2. [CRITICAL] AUTO-SAVE: Lưu dữ liệu mới nhất vào DB trước
+            // Nếu đang tạo mới -> Tạo xong lấy ID để confirm
+            // Nếu đang sửa -> Update DB
+            const savedId = await handleSaveOrder(values);
 
-                    // 3. Confirm RPC (Đổi trạng thái)
-                    await purchaseOrderService.confirmPO(savedId);
-                    
-                    message.success("Đã đặt hàng thành công!");
-                    navigate("/purchase-orders"); // Quay về list
-                } catch (err: any) {
-                    message.error(err.message || "Lỗi khi đặt hàng");
-                } finally {
-                    setLoading(false);
-                }
-            },
-        });
+            // 3. Confirm RPC (Đổi trạng thái)
+            await purchaseOrderService.confirmPO(savedId);
+
+            message.success("Đã đặt hàng thành công!");
+            navigate("/purchase-orders"); // Quay về list
+          } catch (err: any) {
+            message.error(err.message || "Lỗi khi đặt hàng");
+          } finally {
+            setLoading(false);
+          }
+        },
+      });
     } catch (err) {
-        message.error("Vui lòng kiểm tra lại thông tin nhập liệu");
+      message.error("Vui lòng kiểm tra lại thông tin nhập liệu");
     }
   };
 
   const requestPayment = () => {
     const remaining = financials.final - (financials.paid || 0);
     if (remaining <= 0) {
-        message.info("Đơn hàng này đã thanh toán đủ!");
-        return;
+      message.info("Đơn hàng này đã thanh toán đủ!");
+      return;
     }
     setPaymentInitialValues({
-        business_type: 'trade', 
-        flow: 'out',
-        partner_type: 'supplier',
-        supplier_id: form.getFieldValue("supplier_id"),
-        amount: remaining,
-        description: `Thanh toán cho đơn hàng ${poCode}`,
-        ref_type: 'purchase_order',
-        ref_id: Number(id)
+      business_type: "trade",
+      flow: "out",
+      partner_type: "supplier",
+      supplier_id: form.getFieldValue("supplier_id"),
+      amount: remaining,
+      description: `Thanh toán cho đơn hàng ${poCode}`,
+      ref_type: "purchase_order",
+      ref_id: Number(id),
     });
     setPaymentModalOpen(true);
   };
 
   const handleCalculateInbound = () => {
-      navigate(`/purchasing/costing/${id}`);
+    navigate(`/purchasing/costing/${id}`);
   };
 
   const handleConfirmFinancials = async (processedItems: any[]) => {
-      setLoading(true);
-      try {
-          await purchaseOrderService.confirmPOFinancials(Number(id), processedItems);
-          message.success("Nhập kho & Chốt giá vốn thành công!");
-          setCostModalOpen(false);
-          loadOrderDetail(Number(id));
-      } catch (error: any) {
-          console.error(error);
-          message.error(error.message || "Lỗi nhập kho");
-      } finally {
-          setLoading(false);
-      }
+    setLoading(true);
+    try {
+      await purchaseOrderService.confirmPOFinancials(
+        Number(id),
+        processedItems
+      );
+      message.success("Nhập kho & Chốt giá vốn thành công!");
+      setCostModalOpen(false);
+      loadOrderDetail(Number(id));
+    } catch (error: any) {
+      console.error(error);
+      message.error(error.message || "Lỗi nhập kho");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return {

@@ -1,7 +1,11 @@
 // src/features/purchasing/types/supplierPolicy.ts
-export type RuleType = 'rebate_revenue' | 'buy_x_get_y' | 'buy_amt_get_gift' | 'direct_discount';
-export type PriceBasis = 'pre_vat' | 'post_vat';
-export type ProgramType = 'contract' | 'promotion';
+export type RuleType =
+  | "rebate_revenue"
+  | "buy_x_get_y"
+  | "buy_amt_get_gift"
+  | "direct_discount";
+export type PriceBasis = "pre_vat" | "post_vat";
+export type ProgramType = "contract" | "promotion";
 
 // UI Form Value Interface
 export interface PolicyFormValues {

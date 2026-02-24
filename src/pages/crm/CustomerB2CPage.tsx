@@ -55,9 +55,10 @@ import type { TableProps, UploadProps } from "antd";
 // import type { UploadRequestOption } from "antd/es/upload/interface";
 
 // IMPORT CÁC "BỘ NÃO" VÀ "KHUÔN MẪU"
-import GuardianSelectModal from "@/shared/ui/common/GuardianSelectModal";
-import { useDebounce } from "@/shared/hooks/useDebounce";
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 import { uploadAvatar } from "@/features/sales/api/customerService"; // Chỉ import service upload
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import GuardianSelectModal from "@/shared/ui/common/GuardianSelectModal";
 import { useCustomerB2CStore } from "@/features/sales/stores/useCustomerB2CStore";
 // import { useUserStore } from "@/stores/useUserStore"; // Dùng cho Tab Giám hộ
 // import { useWarehouseStore } from "@/stores/warehouseStore"; // Dùng cho Tab Tổ chức (sau)
@@ -78,7 +79,6 @@ const { TabPane } = Tabs;
 
 import { Access } from "@/shared/components/auth/Access"; // [NEW]
 import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
-import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 // --- CSS INLINE (Style từ Canvas) ---
 // SỬA LỖI B & G: Bỏ style 'layout' và 'cardBody'
@@ -151,9 +151,9 @@ const CustomerB2CPage: React.FC = () => {
     reactivateCustomer,
     exportToExcel,
     importCustomers,
-    page, 
-    pageSize, 
-    setPage, 
+    page,
+    pageSize,
+    setPage,
     showListView,
     showFormView,
   } = useCustomerB2CStore(); // State cục bộ
@@ -271,7 +271,7 @@ const CustomerB2CPage: React.FC = () => {
         cccd: values.cccd,
         cccd_issue_date: values.cccd_issue_date?.format("YYYY-MM-DD") || null,
         avatar_url: finalAvatarUrl,
-        cccd_front_url: null, 
+        cccd_front_url: null,
         cccd_back_url: null,
         occupation: values.occupation,
         lifestyle_habits: values.lifestyle_habits,
@@ -346,8 +346,8 @@ const CustomerB2CPage: React.FC = () => {
 
       // [UPDATE] Format dữ liệu cho Template (Thêm cột Nợ đầu kỳ)
       const formattedData = dataToExport.map((item: any) => ({
-          ...item,
-          "Nợ Hiện Tại": item.current_debt || 0, // Cột mẫu để Import
+        ...item,
+        "Nợ Hiện Tại": item.current_debt || 0, // Cột mẫu để Import
       }));
 
       const ws = XLSX.utils.json_to_sheet(formattedData); // Tạo Sổ làm việc
@@ -425,14 +425,23 @@ const CustomerB2CPage: React.FC = () => {
   // 1. Giao diện Danh sách (List View)
   const renderListView = () => {
     // [NEW] XỬ LÝ KHI BẤM HEADER TABLE
-    const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
-        // Reset sort debt nếu click cột khác, hoặc set giá trị nếu click cột nợ
-        if (sorter.field === 'current_debt') {
-            const order = sorter.order === 'ascend' ? 'asc' : (sorter.order === 'descend' ? 'desc' : null);
-            fetchCustomers({}, order); // Gọi store fetch với sort mới
-        } else {
-            fetchCustomers({}, null); // Reset sort
-        }
+    const handleTableChange = (
+      _pagination: any,
+      _filters: any,
+      sorter: any
+    ) => {
+      // Reset sort debt nếu click cột khác, hoặc set giá trị nếu click cột nợ
+      if (sorter.field === "current_debt") {
+        const order =
+          sorter.order === "ascend"
+            ? "asc"
+            : sorter.order === "descend"
+              ? "desc"
+              : null;
+        fetchCustomers({}, order); // Gọi store fetch với sort mới
+      } else {
+        fetchCustomers({}, null); // Reset sort
+      }
     };
 
     const columns: TableProps<CustomerListRecord>["columns"] = [
@@ -487,19 +496,24 @@ const CustomerB2CPage: React.FC = () => {
       },
       // [NEW] CỘT NỢ HIỆN TẠI
       {
-        title: 'Nợ hiện tại',
-        dataIndex: 'current_debt',
-        key: 'current_debt',
+        title: "Nợ hiện tại",
+        dataIndex: "current_debt",
+        key: "current_debt",
         width: 150,
-        align: 'right',
+        align: "right",
         sorter: true, // Bật tính năng sort header của Antd
         render: (val: number) => (
-            <span style={{ 
-                color: val > 0 ? '#ff4d4f' : '#52c41a', // Đỏ nếu nợ > 0, Xanh nếu sạch
-                fontWeight: val > 0 ? 600 : 400 
-            }}>
-            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0)}
-            </span>
+          <span
+            style={{
+              color: val > 0 ? "#ff4d4f" : "#52c41a", // Đỏ nếu nợ > 0, Xanh nếu sạch
+              fontWeight: val > 0 ? 600 : 400,
+            }}
+          >
+            {new Intl.NumberFormat("vi-VN", {
+              style: "currency",
+              currency: "VND",
+            }).format(val || 0)}
+          </span>
         ),
       },
       {
@@ -541,28 +555,28 @@ const CustomerB2CPage: React.FC = () => {
             </Tooltip>
             {/* SỬA LỖI: LOGIC 2 CHIỀU */}
             {record.status === "active" ? (
-               <Access permission={PERMISSIONS.CRM.B2C.DELETE}>
-                  <Tooltip title="Ngừng Giao dịch">
-                    <Popconfirm
-                      title={`Ngừng GD khách "${record.name}"?`}
-                      onConfirm={() => handleDelete(record)}
-                      okText="Đồng ý"
-                      cancelText="Hủy"
-                    >
-                      <Button type="text" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Tooltip>
+              <Access permission={PERMISSIONS.CRM.B2C.DELETE}>
+                <Tooltip title="Ngừng Giao dịch">
+                  <Popconfirm
+                    title={`Ngừng GD khách "${record.name}"?`}
+                    onConfirm={() => handleDelete(record)}
+                    okText="Đồng ý"
+                    cancelText="Hủy"
+                  >
+                    <Button type="text" danger icon={<DeleteOutlined />} />
+                  </Popconfirm>
+                </Tooltip>
               </Access>
             ) : (
               <Access permission={PERMISSIONS.CRM.B2C.EDIT}>
-                  <Tooltip title="Cho phép Giao dịch trở lại">
-                    <Button
-                      type="text"
-                      style={{ color: "green" }}
-                      icon={<SafetyOutlined />}
-                      onClick={() => handleReactivate(record)}
-                    />
-                  </Tooltip>
+                <Tooltip title="Cho phép Giao dịch trở lại">
+                  <Button
+                    type="text"
+                    style={{ color: "green" }}
+                    icon={<SafetyOutlined />}
+                    onClick={() => handleReactivate(record)}
+                  />
+                </Tooltip>
               </Access>
             )}
           </Space>
@@ -726,18 +740,22 @@ const CustomerB2CPage: React.FC = () => {
               </Col>
 
               <Col>
-                <Access 
-                    permission={isNew ? PERMISSIONS.CRM.B2C.CREATE : PERMISSIONS.CRM.B2C.EDIT}
-                    fallback={null} // Hide save button if no permission
+                <Access
+                  permission={
+                    isNew
+                      ? PERMISSIONS.CRM.B2C.CREATE
+                      : PERMISSIONS.CRM.B2C.EDIT
+                  }
+                  fallback={null} // Hide save button if no permission
                 >
-                    <Button
-                      type="primary"
-                      icon={<SaveOutlined />}
-                      htmlType="submit"
-                      loading={loading}
-                    >
-                      Lưu Hồ sơ
-                    </Button>
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
+                    htmlType="submit"
+                    loading={loading}
+                  >
+                    Lưu Hồ sơ
+                  </Button>
                 </Access>
               </Col>
             </Row>
@@ -1123,13 +1141,13 @@ height: 100px !important;
       <PermissionGuard permission={PERMISSIONS.CRM.B2C.VIEW}>
         {/* SỬA LỖI G: Sửa style và logic view */}  
         <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
-            {isFormView ? renderFormView() : renderListView()}  
+          {isFormView ? renderFormView() : renderListView()}  
         </Layout>
         {/* NÂNG CẤP: Modal Tìm kiếm Giám hộ */}  
         <GuardianSelectModal
-            open={isGuardianModalOpen}
-            onClose={() => setIsGuardianModalOpen(false)}
-            onSelect={handleSelectGuardian}
+          open={isGuardianModalOpen}
+          onClose={() => setIsGuardianModalOpen(false)}
+          onSelect={handleSelectGuardian}
         />
       </PermissionGuard>
     </ConfigProvider>

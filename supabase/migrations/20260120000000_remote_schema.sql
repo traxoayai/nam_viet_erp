@@ -4742,6 +4742,38 @@ COMMENT ON FUNCTION "public"."distribute_voucher_to_segment"("p_promotion_id" "u
 
 
 
+CREATE OR REPLACE FUNCTION "public"."doctor_approve_vaccination"("p_medical_visit_id" "uuid", "p_doctor_id" "uuid" DEFAULT "auth"."uid"(), "p_notes" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_appt_id UUID;
+BEGIN
+    -- 1. Chuyển trạng thái Phiếu khám
+    UPDATE public.medical_visits
+    SET 
+        status = 'waiting_vaccination',
+        doctor_notes = COALESCE(p_notes, doctor_notes),
+        doctor_id = COALESCE(p_doctor_id, doctor_id),
+        updated_at = NOW(),
+        updated_by = auth.uid()
+    WHERE id = p_medical_visit_id
+    RETURNING appointment_id INTO v_appt_id;
+
+    -- 2. Đẩy ra Màn hình Tivi / Hàng chờ phòng tiêm
+    IF v_appt_id IS NOT NULL THEN
+        UPDATE public.clinical_queues 
+        SET status = 'waiting' -- Quay lại chờ, nhưng lúc này hệ thống UI sẽ biết là chờ tiêm
+        WHERE appointment_id = v_appt_id;
+    END IF;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Đã duyệt: Bệnh nhân đủ điều kiện tiêm');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."doctor_approve_vaccination"("p_medical_visit_id" "uuid", "p_doctor_id" "uuid", "p_notes" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."export_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text") RETURNS TABLE("id" bigint, "customer_code" "text", "name" "text", "phone" "text", "email" "text", "tax_code" "text", "contact_person_name" "text", "contact_person_phone" "text", "vat_address" "text", "shipping_address" "text", "sales_staff_name" "text", "debt_limit" numeric, "payment_term" integer, "ranking" "text", "status" "public"."account_status", "loyalty_points" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -5138,6 +5170,59 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_trigger_update_debt_from_orders"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."generate_vaccine_timeline"("p_customer_id" bigint, "p_start_date" "date", "p_order_id" "uuid" DEFAULT NULL::"uuid", "p_package_id" bigint DEFAULT NULL::bigint, "p_product_id" bigint DEFAULT NULL::bigint, "p_consulted_by" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_item RECORD;
+    v_dose_count INT := 1;
+    v_inserted_count INT := 0;
+BEGIN
+    IF p_package_id IS NOT NULL THEN
+        -- A. Kịch bản mua GÓI TIÊM
+        FOR v_item IN 
+            SELECT item_id as product_id, quantity, schedule_days 
+            FROM public.service_package_items 
+            WHERE package_id = p_package_id 
+            ORDER BY schedule_days ASC
+        LOOP
+            INSERT INTO public.customer_vaccination_records (
+                customer_id, order_id, package_id, product_id, dose_number, 
+                expected_date, status, consulted_by
+            ) VALUES (
+                p_customer_id, p_order_id, p_package_id, v_item.product_id, v_dose_count,
+                p_start_date + COALESCE(v_item.schedule_days, 0), 'pending', p_consulted_by
+            );
+            v_dose_count := v_dose_count + 1;
+            v_inserted_count := v_inserted_count + 1;
+        END LOOP;
+
+    ELSIF p_product_id IS NOT NULL THEN
+        -- B. Kịch bản mua MŨI LẺ (Tự dò lịch sử để tăng dose_number)
+        SELECT COALESCE(MAX(dose_number), 0) + 1 INTO v_dose_count 
+        FROM public.customer_vaccination_records 
+        WHERE customer_id = p_customer_id AND product_id = p_product_id;
+
+        INSERT INTO public.customer_vaccination_records (
+            customer_id, order_id, product_id, dose_number, 
+            expected_date, status, consulted_by
+        ) VALUES (
+            p_customer_id, p_order_id, p_product_id, v_dose_count,
+            p_start_date, 'pending', p_consulted_by
+        );
+        v_inserted_count := 1;
+    ELSE
+        RAISE EXCEPTION 'Phải cung cấp package_id hoặc product_id';
+    END IF;
+
+    RETURN jsonb_build_object('success', true, 'inserted_count', v_inserted_count);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."generate_vaccine_timeline"("p_customer_id" bigint, "p_start_date" "date", "p_order_id" "uuid", "p_package_id" bigint, "p_product_id" bigint, "p_consulted_by" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_active_shipping_partners"() RETURNS TABLE("id" bigint, "name" "text", "phone" "text", "contact_person" "text", "speed_hours" integer, "base_fee" numeric)
@@ -9710,6 +9795,55 @@ COMMENT ON FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) IS
 
 
 
+CREATE OR REPLACE FUNCTION "public"."reschedule_vaccine_timeline"("p_record_id" bigint, "p_new_expected_date" "date") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_record RECORD;
+    v_delta_days INT;
+    v_updated_count INT := 0;
+BEGIN
+    -- Lấy mũi tiêm hiện tại
+    SELECT * INTO v_record FROM public.customer_vaccination_records WHERE id = p_record_id FOR UPDATE;
+    
+    IF v_record IS NULL THEN RAISE EXCEPTION 'Không tìm thấy lịch tiêm ID %', p_record_id; END IF;
+    IF v_record.status != 'pending' THEN RAISE EXCEPTION 'Chỉ có thể dời lịch những mũi tiêm chưa thực hiện.'; END IF;
+
+    -- Tính số ngày bị lùi/tiến
+    v_delta_days := p_new_expected_date - v_record.expected_date;
+
+    -- Update mũi hiện tại
+    UPDATE public.customer_vaccination_records
+    SET expected_date = p_new_expected_date, updated_at = NOW(), updated_by = auth.uid()
+    WHERE id = p_record_id;
+    
+    v_updated_count := 1;
+
+    -- Nếu là Gói tiêm -> Tịnh tiến các mũi tiếp theo
+    IF v_record.package_id IS NOT NULL AND v_delta_days != 0 THEN
+        WITH updated AS (
+            UPDATE public.customer_vaccination_records
+            SET 
+                expected_date = expected_date + v_delta_days,
+                updated_at = NOW(),
+                updated_by = auth.uid()
+            WHERE customer_id = v_record.customer_id
+              AND package_id = v_record.package_id
+              AND dose_number > v_record.dose_number -- Chỉ dời các mũi TƯƠNG LAI
+              AND status = 'pending'
+            RETURNING id
+        )
+        SELECT v_updated_count + COUNT(*) INTO v_updated_count FROM updated;
+    END IF;
+
+    RETURN jsonb_build_object('success', true, 'delta_days', v_delta_days, 'total_updated', v_updated_count);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."reschedule_vaccine_timeline"("p_record_id" bigint, "p_new_expected_date" "date") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."reverse_vat_invoice_entry"("p_invoice_id" bigint) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -13268,6 +13402,41 @@ ALTER TABLE "public"."customer_segments" ALTER COLUMN "id" ADD GENERATED BY DEFA
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."customer_vaccination_records" (
+    "id" bigint NOT NULL,
+    "customer_id" bigint NOT NULL,
+    "order_id" "uuid",
+    "medical_visit_id" "uuid",
+    "package_id" bigint,
+    "product_id" bigint NOT NULL,
+    "dose_number" integer DEFAULT 1 NOT NULL,
+    "expected_date" "date" NOT NULL,
+    "actual_date" "date",
+    "appointment_id" "uuid",
+    "status" "text" DEFAULT 'pending'::"text",
+    "consulted_by" "uuid",
+    "administered_by" "uuid",
+    "updated_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "customer_vaccination_records_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'completed'::"text", 'canceled'::"text"])))
+);
+
+
+ALTER TABLE "public"."customer_vaccination_records" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."customer_vaccination_records" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."customer_vaccination_records_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."customer_vouchers" (
     "id" bigint NOT NULL,
     "customer_id" bigint NOT NULL,
@@ -15285,6 +15454,11 @@ ALTER TABLE ONLY "public"."customer_segments"
 
 
 
+ALTER TABLE ONLY "public"."customer_vaccination_records"
+    ADD CONSTRAINT "customer_vaccination_records_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."customer_vouchers"
     ADD CONSTRAINT "customer_vouchers_pkey" PRIMARY KEY ("id");
 
@@ -16178,6 +16352,14 @@ CREATE INDEX "idx_users_work_state" ON "public"."users" USING "btree" ("work_sta
 
 
 
+CREATE INDEX "idx_vac_record_customer" ON "public"."customer_vaccination_records" USING "btree" ("customer_id");
+
+
+
+CREATE INDEX "idx_vac_record_status" ON "public"."customer_vaccination_records" USING "btree" ("status");
+
+
+
 CREATE INDEX "idx_vacc_items_template_id" ON "public"."vaccination_template_items" USING "btree" ("template_id");
 
 
@@ -16552,6 +16734,51 @@ ALTER TABLE ONLY "public"."customer_segment_members"
 
 ALTER TABLE ONLY "public"."customer_segment_members"
     ADD CONSTRAINT "customer_segment_members_segment_id_fkey" FOREIGN KEY ("segment_id") REFERENCES "public"."customer_segments"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."customer_vaccination_records"
+    ADD CONSTRAINT "customer_vaccination_records_administered_by_fkey" FOREIGN KEY ("administered_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."customer_vaccination_records"
+    ADD CONSTRAINT "customer_vaccination_records_appointment_id_fkey" FOREIGN KEY ("appointment_id") REFERENCES "public"."appointments"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."customer_vaccination_records"
+    ADD CONSTRAINT "customer_vaccination_records_consulted_by_fkey" FOREIGN KEY ("consulted_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."customer_vaccination_records"
+    ADD CONSTRAINT "customer_vaccination_records_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."customer_vaccination_records"
+    ADD CONSTRAINT "customer_vaccination_records_medical_visit_id_fkey" FOREIGN KEY ("medical_visit_id") REFERENCES "public"."medical_visits"("id");
+
+
+
+ALTER TABLE ONLY "public"."customer_vaccination_records"
+    ADD CONSTRAINT "customer_vaccination_records_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id");
+
+
+
+ALTER TABLE ONLY "public"."customer_vaccination_records"
+    ADD CONSTRAINT "customer_vaccination_records_package_id_fkey" FOREIGN KEY ("package_id") REFERENCES "public"."service_packages"("id");
+
+
+
+ALTER TABLE ONLY "public"."customer_vaccination_records"
+    ADD CONSTRAINT "customer_vaccination_records_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id");
+
+
+
+ALTER TABLE ONLY "public"."customer_vaccination_records"
+    ADD CONSTRAINT "customer_vaccination_records_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "auth"."users"("id");
 
 
 
@@ -17322,6 +17549,10 @@ CREATE POLICY "Enable all for authenticated" ON "public"."sales_invoices" TO "au
 
 
 
+CREATE POLICY "Enable all for authenticated users" ON "public"."customer_vaccination_records" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Enable all for items" ON "public"."purchase_order_items" TO "authenticated" USING (true);
 
 
@@ -17480,6 +17711,9 @@ ALTER TABLE "public"."customer_segment_members" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."customer_segments" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."customer_vaccination_records" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."customer_vouchers" ENABLE ROW LEVEL SECURITY;
 
 
@@ -17622,6 +17856,10 @@ ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
 
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."clinical_service_requests";
+
+
+
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."customer_vaccination_records";
 
 
 
@@ -18280,6 +18518,12 @@ GRANT ALL ON FUNCTION "public"."distribute_voucher_to_segment"("p_promotion_id" 
 
 
 
+GRANT ALL ON FUNCTION "public"."doctor_approve_vaccination"("p_medical_visit_id" "uuid", "p_doctor_id" "uuid", "p_notes" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."doctor_approve_vaccination"("p_medical_visit_id" "uuid", "p_doctor_id" "uuid", "p_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."doctor_approve_vaccination"("p_medical_visit_id" "uuid", "p_doctor_id" "uuid", "p_notes" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."export_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."export_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."export_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text") TO "service_role";
@@ -18325,6 +18569,12 @@ GRANT ALL ON FUNCTION "public"."fn_trigger_update_customer_debt"() TO "service_r
 GRANT ALL ON FUNCTION "public"."fn_trigger_update_debt_from_orders"() TO "anon";
 GRANT ALL ON FUNCTION "public"."fn_trigger_update_debt_from_orders"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_trigger_update_debt_from_orders"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."generate_vaccine_timeline"("p_customer_id" bigint, "p_start_date" "date", "p_order_id" "uuid", "p_package_id" bigint, "p_product_id" bigint, "p_consulted_by" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."generate_vaccine_timeline"("p_customer_id" bigint, "p_start_date" "date", "p_order_id" "uuid", "p_package_id" bigint, "p_product_id" bigint, "p_consulted_by" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."generate_vaccine_timeline"("p_customer_id" bigint, "p_start_date" "date", "p_order_id" "uuid", "p_package_id" bigint, "p_product_id" bigint, "p_consulted_by" "uuid") TO "service_role";
 
 
 
@@ -18944,6 +19194,12 @@ GRANT ALL ON FUNCTION "public"."recalculate_final_amount"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."refresh_segment_members"("p_segment_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."reschedule_vaccine_timeline"("p_record_id" bigint, "p_new_expected_date" "date") TO "anon";
+GRANT ALL ON FUNCTION "public"."reschedule_vaccine_timeline"("p_record_id" bigint, "p_new_expected_date" "date") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reschedule_vaccine_timeline"("p_record_id" bigint, "p_new_expected_date" "date") TO "service_role";
 
 
 
@@ -19657,6 +19913,18 @@ GRANT ALL ON TABLE "public"."customer_segments" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."customer_segments_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."customer_segments_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."customer_segments_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."customer_vaccination_records" TO "anon";
+GRANT ALL ON TABLE "public"."customer_vaccination_records" TO "authenticated";
+GRANT ALL ON TABLE "public"."customer_vaccination_records" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."customer_vaccination_records_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."customer_vaccination_records_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."customer_vaccination_records_id_seq" TO "service_role";
 
 
 

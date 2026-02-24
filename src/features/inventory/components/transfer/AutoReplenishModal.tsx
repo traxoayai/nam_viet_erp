@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
-import { Modal, Form, Select, Button } from 'antd';
-import { useWarehouseStore } from '../../stores/warehouseStore';
+import { Modal, Form, Select, Button } from "antd";
+import React, { useEffect } from "react";
+
+import { useWarehouseStore } from "../../stores/warehouseStore";
 
 interface AutoReplenishModalProps {
   open: boolean;
@@ -43,12 +44,16 @@ export const AutoReplenishModal: React.FC<AutoReplenishModalProps> = ({
         <Button key="cancel" onClick={onCancel} disabled={loading}>
           Hủy
         </Button>,
-        <Button 
-            key="submit" 
-            type="primary" 
-            onClick={handleSubmit} 
-            loading={loading}
-            icon={<span role="img" aria-label="bolt">⚡</span>} // Simple emoji icon for now
+        <Button
+          key="submit"
+          type="primary"
+          onClick={handleSubmit}
+          loading={loading}
+          icon={
+            <span role="img" aria-label="bolt">
+              ⚡
+            </span>
+          } // Simple emoji icon for now
         >
           Xác nhận tạo
         </Button>,
@@ -58,16 +63,16 @@ export const AutoReplenishModal: React.FC<AutoReplenishModalProps> = ({
         <Form.Item
           name="warehouseId"
           label="Chọn Kho đích (Cần bù hàng)"
-          rules={[{ required: true, message: 'Vui lòng chọn kho đích' }]}
+          rules={[{ required: true, message: "Vui lòng chọn kho đích" }]}
           extra="Hệ thống sẽ tự động tính toán dựa trên cấu hình Min/Max của từng sản phẩm tại kho này."
         >
           <Select
             placeholder="Chọn kho..."
             loading={!warehouses.length}
-            options={warehouses.map(w => ({ label: w.name, value: w.id }))}
+            options={warehouses.map((w) => ({ label: w.name, value: w.id }))}
             showSearch
             filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              (option?.label ?? "").toLowerCase().includes(input.toLowerCase())
             }
           />
         </Form.Item>

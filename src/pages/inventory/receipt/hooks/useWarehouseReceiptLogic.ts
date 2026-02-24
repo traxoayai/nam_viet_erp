@@ -4,11 +4,11 @@ import dayjs from "dayjs";
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { useWarehouseTools } from "@/features/inventory/hooks/useWarehouseTools";
-import { supabase } from "@/shared/lib/supabaseClient";
-import { inventoryService } from "@/features/inventory/api/inventoryService";
 import { invoiceService } from "@/features/finance/api/invoiceService";
+import { inventoryService } from "@/features/inventory/api/inventoryService";
+import { useWarehouseTools } from "@/features/inventory/hooks/useWarehouseTools";
 import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export interface ReceiptItem {
   key: string;

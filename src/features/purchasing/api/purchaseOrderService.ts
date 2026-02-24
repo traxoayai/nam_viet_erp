@@ -1,6 +1,7 @@
 // src/services/purchaseOrderService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
 import dayjs from "dayjs";
+
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const purchaseOrderService = {
   // 1. Lấy danh sách PO
@@ -39,39 +40,42 @@ export const purchaseOrderService = {
     shipping_partner_id?: number;
     shipping_fee?: number;
     items: any[];
-    status: 'DRAFT' | 'PENDING';
+    status: "DRAFT" | "PENDING";
   }) {
     // Mapping tham số chuẩn xác 100% với RPC create_purchase_order
     const rpcPayload = {
       p_supplier_id: payload.supplier_id,
       p_expected_date: payload.expected_date || null,
-      p_note: payload.note || '',
-      p_delivery_method: payload.delivery_method || 'self_shipping',
+      p_note: payload.note || "",
+      p_delivery_method: payload.delivery_method || "self_shipping",
       p_shipping_partner_id: payload.shipping_partner_id || null,
       p_shipping_fee: payload.shipping_fee || 0,
       p_status: payload.status,
-      
+
       // Map Items Array
-      p_items: payload.items.map(i => ({
-          product_id: i.product_id || i.id,
-          // Frontend gửi 'quantity', Backend V29.1 sẽ tự map vào 'quantity_ordered'
-          quantity: i.quantity, 
-          // Giá nhập
-          unit_price: i.unit_price || i.price,
-          // Đơn vị (Backend sẽ lưu vào uom_ordered và unit)
-          unit: i.unit || i.uom,
-          // [QUAN TRỌNG] Hàng tặng/Khuyến mãi (Core V20)
-          is_bonus: i.is_bonus || false 
-      }))
+      p_items: payload.items.map((i) => ({
+        product_id: i.product_id || i.id,
+        // Frontend gửi 'quantity', Backend V29.1 sẽ tự map vào 'quantity_ordered'
+        quantity: i.quantity,
+        // Giá nhập
+        unit_price: i.unit_price || i.price,
+        // Đơn vị (Backend sẽ lưu vào uom_ordered và unit)
+        unit: i.unit || i.uom,
+        // [QUAN TRỌNG] Hàng tặng/Khuyến mãi (Core V20)
+        is_bonus: i.is_bonus || false,
+      })),
     };
 
     console.log("📤 Creating PO with Payload:", rpcPayload);
 
-    const { data, error } = await supabase.rpc('create_purchase_order', rpcPayload);
-    
+    const { data, error } = await supabase.rpc(
+      "create_purchase_order",
+      rpcPayload
+    );
+
     if (error) {
-        console.error("RPC Error:", error);
-        throw error;
+      console.error("RPC Error:", error);
+      throw error;
     }
     return data; // Trả về { id, code, status, message }
   },
@@ -81,9 +85,11 @@ export const purchaseOrderService = {
     // [LOGIC] Combine Date + Time for p_expected_delivery_time
     let fullDateTime = null;
     if (payload.expected_delivery_date) {
-        const dateStr = dayjs(payload.expected_delivery_date).format('YYYY-MM-DD');
-        const timeStr = payload.expected_delivery_time || "00:00";
-        fullDateTime = dayjs(`${dateStr}T${timeStr}`).toISOString();
+      const dateStr = dayjs(payload.expected_delivery_date).format(
+        "YYYY-MM-DD"
+      );
+      const timeStr = payload.expected_delivery_time || "00:00";
+      fullDateTime = dayjs(`${dateStr}T${timeStr}`).toISOString();
     }
 
     const params = {
@@ -97,13 +103,13 @@ export const purchaseOrderService = {
             : 1,
         uom_ordered: item.uom,
         unit_price: item.unit_price || 0,
-        is_bonus: item.is_bonus || false // [FIX] Add bonus flag
+        is_bonus: item.is_bonus || false, // [FIX] Add bonus flag
       })),
-      
+
       p_supplier_id: payload.supplier_id,
       p_expected_date: payload.expected_delivery_date, // Keep legacy param if needed by core, or maybe core uses p_expected_delivery_time now? User said RPC V35.9 adds p_expected_delivery_time. I will keep both if unsure, or just follow user list. User listed p_expected_delivery_time. I will include everything.
       p_expected_delivery_time: fullDateTime,
-      
+
       p_note: payload.note,
       p_delivery_method: payload.delivery_method,
       p_shipping_partner_id: payload.shipping_partner_id || null,
@@ -114,7 +120,7 @@ export const purchaseOrderService = {
       p_carrier_name: payload.carrier_name || null,
       p_carrier_contact: payload.carrier_contact || null,
       p_carrier_phone: payload.carrier_phone || null,
-      p_total_packages: payload.total_packages || 0
+      p_total_packages: payload.total_packages || 0,
     };
 
     const { error } = await supabase.rpc("update_purchase_order", params);
@@ -166,57 +172,60 @@ export const purchaseOrderService = {
 
   // 9b. [NEW] Lấy danh sách chương trình/hợp đồng của NCC
   async getActiveProgramsBySupplier(supplierId: number) {
-      const { data, error } = await supabase
-          .from('supplier_programs')
-          .select('id, name, code, description')
-          .eq('supplier_id', supplierId)
-          .eq('status', 'active');
-      
-      if (error) {
-          console.error("Error loading programs:", error);
-          return [];
-      }
-      return data;
+    const { data, error } = await supabase
+      .from("supplier_programs")
+      .select("id, name, code, description")
+      .eq("supplier_id", supplierId)
+      .eq("status", "active");
+
+    if (error) {
+      console.error("Error loading programs:", error);
+      return [];
+    }
+    return data;
   },
 
   // 9c. [NEW] Lấy chi tiết chương trình (Bao gồm Groups & Rules) - [FIX] Chuẩn query theo Group ID
   async getProgramDetail(programId: number | string) {
-      try {
-          // 1. Fetch Groups trước
-          const { data: groups, error: errGroups } = await supabase
-              .from('supplier_program_groups')
-              .select('*')
-              .eq('program_id', programId);
+    try {
+      // 1. Fetch Groups trước
+      const { data: groups, error: errGroups } = await supabase
+        .from("supplier_program_groups")
+        .select("*")
+        .eq("program_id", programId);
 
-          if (errGroups) throw errGroups;
-          if (!groups || groups.length === 0) return { groups: [], items: [] };
+      if (errGroups) throw errGroups;
+      if (!groups || groups.length === 0) return { groups: [], items: [] };
 
-          // 2. Lấy danh sách Group IDs
-          const groupIds = groups.map((g: any) => g.id);
+      // 2. Lấy danh sách Group IDs
+      const groupIds = groups.map((g: any) => g.id);
 
-          // 3. Fetch Products theo Group IDs
-          const { data: items, error: errItems } = await supabase
-              .from('supplier_program_products')
-              .select('*')
-              .in('group_id', groupIds); // Query theo group_id
-          
-          if (errItems) throw errItems;
+      // 3. Fetch Products theo Group IDs
+      const { data: items, error: errItems } = await supabase
+        .from("supplier_program_products")
+        .select("*")
+        .in("group_id", groupIds); // Query theo group_id
 
-          return { groups, items };
-      } catch (error) {
-          console.error("Error loading program detail:", error);
-          return null;
-      }
+      if (errItems) throw errItems;
+
+      return { groups, items };
+    } catch (error) {
+      console.error("Error loading program detail:", error);
+      return null;
+    }
   },
 
   // 10. Chốt nhập kho & Tính giá vốn (V34)
   async confirmPOFinancials(poId: number, itemsData: any[]) {
-      const { data, error } = await supabase.rpc('confirm_purchase_order_financials', {
-          p_po_id: poId,
-          p_items_data: itemsData
-      });
-      if (error) throw error;
-      return data;
+    const { data, error } = await supabase.rpc(
+      "confirm_purchase_order_financials",
+      {
+        p_po_id: poId,
+        p_items_data: itemsData,
+      }
+    );
+    if (error) throw error;
+    return data;
   },
 
   // 11. [NEW] V35 Core Costing Confirmation
@@ -224,36 +233,39 @@ export const purchaseOrderService = {
     p_po_id: number;
     p_total_shipping_fee: number;
     p_items_data: {
-        id: number;
-        product_id: number;
-        final_unit_cost: number;
-        rebate_rate: number;
-        vat_rate: number;
-        quantity_received: number;
-        bonus_quantity: number;
+      id: number;
+      product_id: number;
+      final_unit_cost: number;
+      rebate_rate: number;
+      vat_rate: number;
+      quantity_received: number;
+      bonus_quantity: number;
     }[];
     p_gifts_data: {
-        name: string;
-        code?: string;
-        quantity: number;
-        estimated_value: number;
-        image_url?: string;
-        unit_name: string;
+      name: string;
+      code?: string;
+      quantity: number;
+      estimated_value: number;
+      image_url?: string;
+      unit_name: string;
     }[];
   }) {
     console.log("🚀 Submitting Costing V35:", payload);
-    const { data, error } = await supabase.rpc('confirm_purchase_costing', payload);
+    const { data, error } = await supabase.rpc(
+      "confirm_purchase_costing",
+      payload
+    );
     if (error) throw error;
     return data;
   },
 
   // 12. [NEW] Snapshot Price before Update (Fix Costing V35.8)
   async getProductCostsSnapshot(productIds: number[]) {
-      const { data, error } = await supabase
-          .from('products')
-          .select('id, actual_cost') // Chỉ cần lấy actual_cost hiện tại
-          .in('id', productIds);
-      if (error) throw error;
-      return data;
-  }
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, actual_cost") // Chỉ cần lấy actual_cost hiện tại
+      .in("id", productIds);
+    if (error) throw error;
+    return data;
+  },
 };

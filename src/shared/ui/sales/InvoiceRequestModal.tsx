@@ -52,7 +52,12 @@ export const InvoiceRequestModal = ({
         <Button key="cancel" onClick={onCancel}>
           Hủy
         </Button>,
-        <Button key="submit" type="primary" loading={loading} onClick={handleOk}>
+        <Button
+          key="submit"
+          type="primary"
+          loading={loading}
+          onClick={handleOk}
+        >
           Xác nhận Yêu cầu
         </Button>,
       ]}
@@ -79,7 +84,10 @@ export const InvoiceRequestModal = ({
           label="Địa chỉ xuất hóa đơn"
           rules={[{ required: true, message: "Vui lòng nhập địa chỉ" }]}
         >
-          <Input.TextArea rows={2} placeholder="Số nhà, đường, phường, quận..." />
+          <Input.TextArea
+            rows={2}
+            placeholder="Số nhà, đường, phường, quận..."
+          />
         </Form.Item>
 
         <Form.Item name="buyerName" label="Người mua hàng (Người liên hệ)">

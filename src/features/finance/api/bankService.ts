@@ -1,6 +1,6 @@
 // src/services/bankService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
 import { Bank } from "@/features/finance/types/bank";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // API công khai của VietQR (từ file .pdf Sếp gửi)
 const VIETQR_API_URL = "https://api.vietqr.io/v2/banks";

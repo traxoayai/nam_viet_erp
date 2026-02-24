@@ -1,9 +1,16 @@
-import React, { useState, useRef } from 'react';
-import { Select, Spin, Avatar, Tag, Typography, Button } from 'antd';
-import { UserOutlined, TeamOutlined, UsergroupAddOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
-import { debounce } from 'lodash'; 
-import { posService } from '../api/posService';
-import { PosCustomerSearchResult } from '../types/pos.types';
+import {
+  UserOutlined,
+  TeamOutlined,
+  UsergroupAddOutlined,
+  SearchOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
+import { Select, Spin, Avatar, Tag, Typography, Button } from "antd";
+import { debounce } from "lodash";
+import React, { useState, useRef } from "react";
+
+import { posService } from "../api/posService";
+import { PosCustomerSearchResult } from "../types/pos.types";
 
 const { Text } = Typography;
 
@@ -34,8 +41,8 @@ export const PosCustomerSearch: React.FC<Props> = ({ onSelect, onAddNew }) => {
   ).current;
 
   const getIcon = (type: string) => {
-    if (type === 'ToChuc') return <TeamOutlined />;
-    if (type === 'NguoiGiamHo') return <UsergroupAddOutlined />; // Icon phụ huynh
+    if (type === "ToChuc") return <TeamOutlined />;
+    if (type === "NguoiGiamHo") return <UsergroupAddOutlined />; // Icon phụ huynh
     return <UserOutlined />;
   };
 
@@ -43,26 +50,30 @@ export const PosCustomerSearch: React.FC<Props> = ({ onSelect, onAddNew }) => {
     <Select
       showSearch
       placeholder="Tìm khách (F4): Tên, SĐT, Phụ huynh..."
-      style={{ width: '100%' }}
+      style={{ width: "100%" }}
       filterOption={false}
       onSearch={fetchUser}
       notFoundContent={
-        fetching ? <Spin size="small" /> : (
-            <div style={{ textAlign: 'center', padding: 8 }}>
-                <Typography.Text type="secondary">Không tìm thấy khách hàng?</Typography.Text>
-                <br/>
-                {onAddNew && (
-                    <Button 
-                        type="primary" 
-                        size="small" 
-                        icon={<PlusOutlined />} 
-                        style={{ marginTop: 8 }}
-                        onClick={onAddNew}
-                    >
-                        Thêm Khách Mới Ngay
-                    </Button>
-                )}
-            </div>
+        fetching ? (
+          <Spin size="small" />
+        ) : (
+          <div style={{ textAlign: "center", padding: 8 }}>
+            <Typography.Text type="secondary">
+              Không tìm thấy khách hàng?
+            </Typography.Text>
+            <br />
+            {onAddNew ? (
+              <Button
+                type="primary"
+                size="small"
+                icon={<PlusOutlined />}
+                style={{ marginTop: 8 }}
+                onClick={onAddNew}
+              >
+                Thêm Khách Mới Ngay
+              </Button>
+            ) : null}
+          </div>
         )
       }
       onChange={(_value, option: any) => {
@@ -73,29 +84,53 @@ export const PosCustomerSearch: React.FC<Props> = ({ onSelect, onAddNew }) => {
     >
       {data.map((d) => (
         <Select.Option key={d.id} value={d.id} item={d}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
-            <Avatar 
-                style={{ backgroundColor: d.debt_amount > 0 ? '#ffccc7' : '#f0f0f0', color: '#333' }} 
-                icon={getIcon(d.type)} 
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "4px 0",
+            }}
+          >
+            <Avatar
+              style={{
+                backgroundColor: d.debt_amount > 0 ? "#ffccc7" : "#f0f0f0",
+                color: "#333",
+              }}
+              icon={getIcon(d.type)}
             />
             <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <Text strong>{d.name}</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>{d.phone}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {d.phone}
+                </Text>
               </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                 {/* HIỂN THỊ SUB_LABEL (QUAN TRỌNG) */}
-                 <div style={{ fontSize: 11, color: '#1890ff', fontStyle: 'italic' }}>
-                    {d.sub_label || (d.type === 'ToChuc' ? 'Tổ chức' : '')}
-                 </div>
 
-                 {/* Cảnh báo nợ */}
-                 {d.debt_amount > 0 && (
-                   <Tag color="error" style={{ margin: 0, fontSize: 10 }}>
-                     Nợ: {d.debt_amount.toLocaleString()}
-                   </Tag>
-                 )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                {/* HIỂN THỊ SUB_LABEL (QUAN TRỌNG) */}
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#1890ff",
+                    fontStyle: "italic",
+                  }}
+                >
+                  {d.sub_label || (d.type === "ToChuc" ? "Tổ chức" : "")}
+                </div>
+
+                {/* Cảnh báo nợ */}
+                {d.debt_amount > 0 && (
+                  <Tag color="error" style={{ margin: 0, fontSize: 10 }}>
+                    Nợ: {d.debt_amount.toLocaleString()}
+                  </Tag>
+                )}
               </div>
             </div>
           </div>

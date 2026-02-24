@@ -58,7 +58,7 @@ export interface ProductB2B {
   name: string;
   image_url: string | null;
   stock_quantity: number; // Keep for legacy
-  real_stock?: number;     // [NEW] V20
+  real_stock?: number; // [NEW] V20
   available_stock?: number; // [NEW] V20
   shelf_location: string;
   lot_number: string | null;

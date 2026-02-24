@@ -2,9 +2,10 @@
 import { BarcodeOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import { Select, Avatar, Tag, Typography, Spin, Empty, Tooltip } from "antd";
 import { useState, useEffect } from "react";
-import { useDebounce } from "@/shared/hooks/useDebounce";
+
 import { salesService } from "@/features/sales/api/salesService";
 import { ProductB2B } from "@/features/sales/types/b2b_sales";
+import { useDebounce } from "@/shared/hooks/useDebounce";
 
 const { Text } = Typography;
 
@@ -14,7 +15,10 @@ interface ProductSearchB2BProps {
   warehouseId?: number;
 }
 
-export const ProductSearchB2B = ({ onSelect, warehouseId = 1 }: ProductSearchB2BProps) => {
+export const ProductSearchB2B = ({
+  onSelect,
+  warehouseId = 1,
+}: ProductSearchB2BProps) => {
   const [options, setOptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -30,16 +34,18 @@ export const ProductSearchB2B = ({ onSelect, warehouseId = 1 }: ProductSearchB2B
       // Auto add nếu khớp barcode 100%
       if (results.length === 1 && keyword.length > 8 && !loading) {
         onSelect(results[0]); // Gọi prop từ cha
-        setSearch(""); 
+        setSearch("");
         setOptions([]);
         return;
       }
 
-      setOptions(results.map((p) => ({
-        label: renderOption(p),
-        value: p.id,
-        product: p,
-      })));
+      setOptions(
+        results.map((p) => ({
+          label: renderOption(p),
+          value: p.id,
+          product: p,
+        }))
+      );
     } catch (e) {
       console.error(e);
     } finally {
@@ -64,7 +70,7 @@ export const ProductSearchB2B = ({ onSelect, warehouseId = 1 }: ProductSearchB2B
         <div style={{ fontSize: 11, color: "#666" }}>
           <Tag color="blue">{p.sku}</Tag>
           {/* Hiển thị đơn vị bán buôn */}
-          <Tag color="orange">{p.wholesale_unit || 'Lẻ'}</Tag>
+          <Tag color="orange">{p.wholesale_unit || "Lẻ"}</Tag>
           <EnvironmentOutlined /> {p.shelf_location}
         </div>
       </div>
@@ -75,29 +81,29 @@ export const ProductSearchB2B = ({ onSelect, warehouseId = 1 }: ProductSearchB2B
         </Text>
         {/* [V20 LOGIC] Color Stock Display */}
         {(() => {
-            const available = p.available_stock ?? p.stock_quantity ?? 0;
-            const real = p.real_stock ?? p.stock_quantity ?? 0;
-            
-            let color = "red"; // Default: Hết hàng (Real <= 0)
-            let statusText = "Hết hàng";
+          const available = p.available_stock ?? p.stock_quantity ?? 0;
+          const real = p.real_stock ?? p.stock_quantity ?? 0;
 
-            if (available > 0) {
-                color = "green";
-                statusText = `Sẵn sàng: ${available}`;
-            } else if (real > 0) {
-                color = "gold"; // Có hàng nhưng đã committed
-                statusText = "Đang giữ hàng";
-            }
+          let color = "red"; // Default: Hết hàng (Real <= 0)
+          let statusText = "Hết hàng";
 
-            return (
-                <div style={{ fontSize: 11, marginTop: 4 }}>
-                   <Tooltip title={`Thực tế: ${real} / Khả dụng: ${available}`}>
-                        <Tag color={color} style={{ marginRight: 0 }}>
-                            {available > 0 ? `Tồn: ${available}` : statusText}
-                        </Tag>
-                   </Tooltip>
-                </div>
-            );
+          if (available > 0) {
+            color = "green";
+            statusText = `Sẵn sàng: ${available}`;
+          } else if (real > 0) {
+            color = "gold"; // Có hàng nhưng đã committed
+            statusText = "Đang giữ hàng";
+          }
+
+          return (
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              <Tooltip title={`Thực tế: ${real} / Khả dụng: ${available}`}>
+                <Tag color={color} style={{ marginRight: 0 }}>
+                  {available > 0 ? `Tồn: ${available}` : statusText}
+                </Tag>
+              </Tooltip>
+            </div>
+          );
         })()}
       </div>
     </div>
@@ -119,7 +125,9 @@ export const ProductSearchB2B = ({ onSelect, warehouseId = 1 }: ProductSearchB2B
       options={options}
       style={{ width: "100%" }}
       size="large"
-      notFoundContent={loading ? <Spin size="small" /> : <Empty description="Không tìm thấy" />}
+      notFoundContent={
+        loading ? <Spin size="small" /> : <Empty description="Không tìm thấy" />
+      }
     />
   );
 };

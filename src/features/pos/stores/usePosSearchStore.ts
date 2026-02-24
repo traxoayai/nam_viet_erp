@@ -1,5 +1,6 @@
 // src/features/pos/stores/usePosSearchStore.ts
 import { create } from "zustand";
+
 import { posService } from "../api/posService";
 import { PosProductSearchResult } from "../types/pos.types";
 
@@ -20,8 +21,8 @@ export const usePosSearchStore = create<PosSearchState>((set, get) => ({
   searchProducts: async (warehouseId) => {
     const { keyword } = get();
     if (!keyword.trim()) {
-        set({ results: [] });
-        return;
+      set({ results: [] });
+      return;
     }
     set({ loading: true });
     try {
@@ -33,5 +34,5 @@ export const usePosSearchStore = create<PosSearchState>((set, get) => ({
       set({ loading: false });
     }
   },
-  clearResults: () => set({ results: [], keyword: "" })
+  clearResults: () => set({ results: [], keyword: "" }),
 }));

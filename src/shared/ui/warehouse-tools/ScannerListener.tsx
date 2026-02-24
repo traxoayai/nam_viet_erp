@@ -1,7 +1,7 @@
 // src/shared/ui/warehouse-tools/ScannerListener.tsx
-import { useEffect, useRef, useState } from "react";
-import { Zap, ZapOff } from "lucide-react";
 import { Tag } from "antd";
+import { Zap, ZapOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 interface ScannerListenerProps {
   onScan: (code: string) => void;
@@ -35,7 +35,7 @@ export const ScannerListener = ({
           // Barcode hợp lệ (ít nhất 3 ký tự)
           onScan(buffer.current);
           buffer.current = "";
-          
+
           // Visual feedback
           setIsReady(true);
           setTimeout(() => setIsReady(false), 2000);

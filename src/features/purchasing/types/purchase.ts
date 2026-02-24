@@ -10,7 +10,7 @@ export interface PurchaseOrderMaster {
   supplier_id: number;
   supplier_name: string;
   status: string; // Main status: new, approved, ordering, completed, cancelled
-  
+
   // Logistics & Status
   delivery_status: DeliveryStatus;
   payment_status: PaymentStatus;
@@ -21,7 +21,7 @@ export interface PurchaseOrderMaster {
   carrier_name?: string; // Tên nhà vận chuyển
   carrier_phone?: string; // SĐT nhà vận chuyển
   shipping_partner_name?: string;
-  
+
   // Metrics
   final_amount: number;
   total_paid: number;
@@ -29,10 +29,10 @@ export interface PurchaseOrderMaster {
   total_cartons: number; // Tổng số thùng
   total_packages?: number; // Tổng số kiện (nếu có logic riêng)
   created_at: string;
-  
+
   // Optional for UI consistency if needed
-  items_count?: number; 
-  received_count?: number; 
+  items_count?: number;
+  received_count?: number;
 }
 
 export interface PurchaseStats {
@@ -53,7 +53,7 @@ export interface PoLogisticsStat {
 export interface PurchaseOrderFilters {
   search?: string;
   status_delivery?: string; // hoặc DeliveryStatus
-  status_payment?: string;  // hoặc PaymentStatus
+  status_payment?: string; // hoặc PaymentStatus
   date_from?: string;
   date_to?: string;
   page?: number;

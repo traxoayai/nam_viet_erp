@@ -107,17 +107,17 @@ const POHeaderAction: React.FC<Props> = ({
                   Yêu cầu Thanh toán
                 </Button>
               )}
-              
+
               {/* [NEW] Nút Tính toán & Nhập kho (V34) - Hiện khi Pending hoặc Shipping - ENABLED for V35 */}
               {(poStatus === "PENDING" || poStatus === "SHIPPING") && (
-                 <Button
-                    type="primary"
-                    style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
-                    icon={<DollarCircleOutlined />}
-                    onClick={onCalculateInbound}
-                 >
-                    Tính Giá vốn
-                 </Button>
+                <Button
+                  type="primary"
+                  style={{ backgroundColor: "#722ed1", borderColor: "#722ed1" }}
+                  icon={<DollarCircleOutlined />}
+                  onClick={onCalculateInbound}
+                >
+                  Tính Giá vốn
+                </Button>
               )}
             </Space>
           </Col>

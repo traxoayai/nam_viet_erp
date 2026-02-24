@@ -45,12 +45,6 @@ import {
   AudioOutlined,
 } from "@ant-design/icons";
 import {
-  LogOut, CircleChevronLeft, CircleChevronRight,
-  Home, Store, Stethoscope, Briefcase, Gift, Package, Rocket,
-  Handshake, Users, Megaphone, ClipboardList, CircleDollarSign,
-  PieChart, Settings, ChevronRight, ChevronLeft, FlaskConical
-} from "lucide-react";
-import {
   Layout,
   Button,
   Grid,
@@ -61,13 +55,35 @@ import {
   type MenuProps,
   App as AntApp,
 } from "antd";
+import {
+  LogOut,
+  CircleChevronLeft,
+  CircleChevronRight,
+  Home,
+  Store,
+  Stethoscope,
+  Briefcase,
+  Gift,
+  Package,
+  Rocket,
+  Handshake,
+  Users,
+  Megaphone,
+  ClipboardList,
+  CircleDollarSign,
+  PieChart,
+  Settings,
+  ChevronRight,
+  ChevronLeft,
+  FlaskConical,
+} from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 
 import Logo from "@/assets/logo.png";
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
-import { useAutoLogout } from "@/shared/hooks/useAutoLogout"; // [NEW]
 import { NotificationBell } from "@/features/notifications/components/NotificationBell"; // [NEW]
+import { useAutoLogout } from "@/shared/hooks/useAutoLogout"; // [NEW]
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid; // Hook kiểm tra kích thước màn hình
@@ -85,75 +101,93 @@ function getItem(
 
 const finalMenuItems: MenuItem[] = [
   // 1. Trang chủ
-  getItem(<Link to="/">Trang chủ</Link>, "/", <Home size={20} color="#4b5563" strokeWidth={1.5} />),
-  getItem(<Link to="/connect">Thông báo & Ý kiến</Link>, "/connect", <Megaphone size={20} color="#4b5563" strokeWidth={1.5} />),
+  getItem(
+    <Link to="/">Trang chủ</Link>,
+    "/",
+    <Home size={20} color="#4b5563" strokeWidth={1.5} />
+  ),
+  getItem(
+    <Link to="/connect">Thông báo & Ý kiến</Link>,
+    "/connect",
+    <Megaphone size={20} color="#4b5563" strokeWidth={1.5} />
+  ),
 
   // 2. Kênh Cửa Hàng
-  getItem("Kênh Cửa Hàng", "store", <Store size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/store/dashboard">Dashboard Cửa hàng</Link>,
-      "/store/dashboard",
-      <AppstoreOutlined />
-    ),
-    getItem(
-      <Link to="/medical/reception">Tiếp Đón & Lịch Hẹn</Link>,
-      "/medical/reception",
-      <ScheduleOutlined />
-    ),
-    // getItem(
-    //   <Link to="/store/products">Sản phẩm store</Link>,
-    //   "/store/products",
-    //   <FileTextOutlined />
-    // ),
-    getItem(
-      <Link to="/blank/pos">Tạo đơn tại Cửa Hàng [POS]</Link>,
-      "/blank/pos",
-      <WalletOutlined />
-    ),
-    getItem(
-      <Link to="/store/shipping-order">Tạo đơn Gửi Đi</Link>,
-      "/store/shipping-order",
-      <SendOutlined />
-    ),
-    getItem(
-      <Link to="/store/b2c-orders">DS đơn hàng B2C</Link>,
-      "/store/b2c-orders",
-      <ContainerOutlined />
-    ),
-    getItem(
-      <Link to="/store/ecommerce">Kết nối Sàn TMĐT</Link>,
-      "/store/ecommerce",
-      <GlobalOutlined />
-    ),
-    getItem("Quản lý Website Bán Lẻ", "website-retail", <GlobalOutlined />, [
+  getItem(
+    "Kênh Cửa Hàng",
+    "store",
+    <Store size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
       getItem(
-        <Link to="/store/website/general">Thông tin chung</Link>,
-        "/store/website/general"
+        <Link to="/store/dashboard">Dashboard Cửa hàng</Link>,
+        "/store/dashboard",
+        <AppstoreOutlined />
       ),
       getItem(
-        <Link to="/store/website/config">Cấu hình Đơn hàng & SP</Link>,
-        "/store/website/config"
+        <Link to="/medical/reception">Dịch vụ & Lịch Hẹn</Link>,
+        "/medical/reception",
+        <ScheduleOutlined />
+      ),
+      // getItem(
+      //   <Link to="/store/products">Sản phẩm store</Link>,
+      //   "/store/products",
+      //   <FileTextOutlined />
+      // ),
+      getItem(
+        <Link to="/blank/pos">Tạo đơn tại Cửa Hàng [POS]</Link>,
+        "/blank/pos",
+        <WalletOutlined />
       ),
       getItem(
-        <Link to="/store/website/content">Quản lý Nội dung & CS</Link>,
-        "/store/website/content"
+        <Link to="/store/shipping-order">Tạo đơn Gửi Đi</Link>,
+        "/store/shipping-order",
+        <SendOutlined />
       ),
-    ]),
-  ]),
+      getItem(
+        <Link to="/store/b2c-orders">DS đơn hàng B2C</Link>,
+        "/store/b2c-orders",
+        <ContainerOutlined />
+      ),
+      getItem(
+        <Link to="/store/ecommerce">Kết nối Sàn TMĐT</Link>,
+        "/store/ecommerce",
+        <GlobalOutlined />
+      ),
+      getItem("Quản lý Website Bán Lẻ", "website-retail", <GlobalOutlined />, [
+        getItem(
+          <Link to="/store/website/general">Thông tin chung</Link>,
+          "/store/website/general"
+        ),
+        getItem(
+          <Link to="/store/website/config">Cấu hình Đơn hàng & SP</Link>,
+          "/store/website/config"
+        ),
+        getItem(
+          <Link to="/store/website/content">Quản lý Nội dung & CS</Link>,
+          "/store/website/content"
+        ),
+      ]),
+    ]
+  ),
 
   // 3. Nghiệp vụ Y Tế
-  getItem("Nghiệp vụ Y Tế", "medical", <Stethoscope size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/medical/dashboard">Dashboard Y Tế</Link>,
-      "/medical/dashboard",
-      <AppstoreOutlined />
-    ),
-    getItem(
-      <Link to="/medical/examination">Khám & Tiêm</Link>,
-      "/medical/examination",
-      <Stethoscope size={18} />
-    ),
-  ]),
+  getItem(
+    "Nghiệp vụ Y Tế",
+    "medical",
+    <Stethoscope size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
+      getItem(
+        <Link to="/medical/dashboard">Dashboard Y Tế</Link>,
+        "/medical/dashboard",
+        <AppstoreOutlined />
+      ),
+      getItem(
+        <Link to="/medical/examination">Khám & Tiêm</Link>,
+        "/medical/examination",
+        <Stethoscope size={18} />
+      ),
+    ]
+  ),
 
   // 3.5 Cận Lâm Sàng
   getItem(
@@ -163,37 +197,42 @@ const finalMenuItems: MenuItem[] = [
   ),
 
   // 4. Bán buôn
-  getItem("Bán buôn (B2B)", "b2b", <Briefcase size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/b2b/dashboard">Thông tin chung B2B</Link>,
-      "/b2b/dashboard",
-      <AppstoreOutlined />
-    ),
-    getItem(
-      <Link to="/b2b/create-order">Tạo Đơn Hàng B2B</Link>,
-      "/b2b/create-order",
-      <PlusOutlined />
-    ),
-    getItem(
-      <Link to="/b2b/orders">Danh sách đơn hàng</Link>,
-      "/b2b/orders",
-      <ContainerOutlined />
-    ),
-    getItem("Website B2B", "website-b2b", <GlobalOutlined />, [
+  getItem(
+    "Bán buôn (B2B)",
+    "b2b",
+    <Briefcase size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
       getItem(
-        <Link to="/b2b/website/general">Thông tin chung</Link>,
-        "/b2b/website/general"
+        <Link to="/b2b/dashboard">Thông tin chung B2B</Link>,
+        "/b2b/dashboard",
+        <AppstoreOutlined />
       ),
       getItem(
-        <Link to="/b2b/website/config">Cấu hình Đơn hàng & SP</Link>,
-        "/b2b/website/config"
+        <Link to="/b2b/create-order">Tạo Đơn Hàng B2B</Link>,
+        "/b2b/create-order",
+        <PlusOutlined />
       ),
       getItem(
-        <Link to="/b2b/website/content">Quản lý Nội dung & CS</Link>,
-        "/b2b/website/content"
+        <Link to="/b2b/orders">Danh sách đơn hàng</Link>,
+        "/b2b/orders",
+        <ContainerOutlined />
       ),
-    ]),
-  ]),
+      getItem("Website B2B", "website-b2b", <GlobalOutlined />, [
+        getItem(
+          <Link to="/b2b/website/general">Thông tin chung</Link>,
+          "/b2b/website/general"
+        ),
+        getItem(
+          <Link to="/b2b/website/config">Cấu hình Đơn hàng & SP</Link>,
+          "/b2b/website/config"
+        ),
+        getItem(
+          <Link to="/b2b/website/content">Quản lý Nội dung & CS</Link>,
+          "/b2b/website/content"
+        ),
+      ]),
+    ]
+  ),
 
   // 5. Combo và Dịch Vụ
   getItem(
@@ -203,345 +242,391 @@ const finalMenuItems: MenuItem[] = [
   ),
 
   // 6. Kho - Hàng Hóa
-  getItem("Kho – Hàng Hóa", "inventory", <Package size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/inventory/products">Danh sách Sản Phẩm</Link>,
-      "/inventory/products",
-      <ProductOutlined />
-    ),
-    getItem(
-      <Link to="/inventory/purchase">Mua hàng</Link>,
-      "/inventory/purchase",
-      <ShoppingCartOutlined />
-    ),
-    // --- MỚI: NHẬP KHO (INBOUND) ---
-    getItem(
-      <Link to="/inventory/inbound">Nhập Kho</Link>,
-      "/inventory/inbound",
-      <DownloadOutlined />
-    ),
-    getItem(
-      <Link to="/inventory/outbound">Xuất Kho</Link>,
-      "/inventory/outbound",
-      <LogOut size={16} /> // Lucide Icon
-    ),
-    getItem(
-      <Link to="/inventory/transfer">Chuyển kho</Link>,
-      "/inventory/transfer",
-      <SendOutlined />
-    ),
-    getItem(
-      <Link to="/inventory/stocktake">Kiểm hàng</Link>,
-      "/inventory/stocktake",
-      <AuditOutlined />
-    ),
-    getItem(
-      <Link to="/inventory/cost-adjustment">Điều chỉnh Giá Vốn</Link>,
-      "/inventory/cost-adjustment",
-      <DollarCircleOutlined />
-    ),
-  ]),
+  getItem(
+    "Kho – Hàng Hóa",
+    "inventory",
+    <Package size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
+      getItem(
+        <Link to="/inventory/products">Danh sách Sản Phẩm</Link>,
+        "/inventory/products",
+        <ProductOutlined />
+      ),
+      getItem(
+        <Link to="/inventory/purchase">Mua hàng</Link>,
+        "/inventory/purchase",
+        <ShoppingCartOutlined />
+      ),
+      // --- MỚI: NHẬP KHO (INBOUND) ---
+      getItem(
+        <Link to="/inventory/inbound">Nhập Kho</Link>,
+        "/inventory/inbound",
+        <DownloadOutlined />
+      ),
+      getItem(
+        <Link to="/inventory/outbound">Xuất Kho</Link>,
+        "/inventory/outbound",
+        <LogOut size={16} /> // Lucide Icon
+      ),
+      getItem(
+        <Link to="/inventory/transfer">Chuyển kho</Link>,
+        "/inventory/transfer",
+        <SendOutlined />
+      ),
+      getItem(
+        <Link to="/inventory/stocktake">Kiểm hàng</Link>,
+        "/inventory/stocktake",
+        <AuditOutlined />
+      ),
+      getItem(
+        <Link to="/inventory/cost-adjustment">Điều chỉnh Giá Vốn</Link>,
+        "/inventory/cost-adjustment",
+        <DollarCircleOutlined />
+      ),
+    ]
+  ),
 
   // 7. Thao tác Nhanh
-  getItem("Thao tác Nhanh", "quick-actions", <Rocket size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/quick/unit-setup">Cài nhanh Quy Cách (Smart Match)</Link>,
-      "/quick/unit-setup",
-      <ThunderboltOutlined />
-    ),
-    getItem(
-      <Link to="/quick/price-edit">Sửa giá Sản Phẩm nhanh</Link>,
-      "/quick/price-edit",
-      <DollarCircleOutlined />
-    ),
-    getItem(
-      <Link to="/quick/min-max">Cài Min/Max & Tồn kho (Voice)</Link>,
-      "/quick/min-max",
-      <AudioOutlined />
-    ),
-    getItem(
-      <Link to="/quick/product-location">Cài nhanh Vị trí Sản phẩm</Link>,
-      "/quick/product-location",
-      <AimOutlined />
-    ),
-    getItem(
-      <Link to="/quick/barcode-edit">Cập nhật Mã Vạch Nhanh</Link>,
-      "/quick/barcode-edit",
-      <BarcodeOutlined />
-    ),
-    getItem(
-      <Link to="/quick/promo-code">Tạo nhanh Mã Giảm Giá</Link>,
-      "/quick/promo-code",
-      <GiftOutlined />
-    ),
-    getItem(
-      <Link to="/quick/prescription-template">Đơn thuốc Mẫu</Link>,
-      "/quick/prescription-template",
-      <MedicineBoxOutlined />
-    ),
-    getItem(
-      <Link to="/quick/vaccination-template">Phác đồ Tiêm Chủng Mẫu</Link>,
-      "/quick/vaccination-template",
-      <ExperimentOutlined />
-    ),
-  ]),
+  getItem(
+    "Thao tác Nhanh",
+    "quick-actions",
+    <Rocket size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
+      getItem(
+        <Link to="/quick/unit-setup">Cài nhanh Quy Cách (Smart Match)</Link>,
+        "/quick/unit-setup",
+        <ThunderboltOutlined />
+      ),
+      getItem(
+        <Link to="/quick/price-edit">Sửa giá Sản Phẩm nhanh</Link>,
+        "/quick/price-edit",
+        <DollarCircleOutlined />
+      ),
+      getItem(
+        <Link to="/quick/min-max">Cài Min/Max & Tồn kho (Voice)</Link>,
+        "/quick/min-max",
+        <AudioOutlined />
+      ),
+      getItem(
+        <Link to="/quick/product-location">Cài nhanh Vị trí Sản phẩm</Link>,
+        "/quick/product-location",
+        <AimOutlined />
+      ),
+      getItem(
+        <Link to="/quick/barcode-edit">Cập nhật Mã Vạch Nhanh</Link>,
+        "/quick/barcode-edit",
+        <BarcodeOutlined />
+      ),
+      getItem(
+        <Link to="/quick/promo-code">Tạo nhanh Mã Giảm Giá</Link>,
+        "/quick/promo-code",
+        <GiftOutlined />
+      ),
+      getItem(
+        <Link to="/quick/prescription-template">Đơn thuốc Mẫu</Link>,
+        "/quick/prescription-template",
+        <MedicineBoxOutlined />
+      ),
+      getItem(
+        <Link to="/quick/vaccination-template">Phác đồ Tiêm Chủng Mẫu</Link>,
+        "/quick/vaccination-template",
+        <ExperimentOutlined />
+      ),
+    ]
+  ),
 
   // 8. Đối tác
-  getItem("Đối tác", "partners", <Handshake size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/partners/suppliers">Nhà Cung Cấp</Link>,
-      "/partners/suppliers",
-      <UserAddOutlined />
-    ),
-    getItem(
-      <Link to="/partners/policies">Chính sách & Hợp đồng</Link>,
-      "/partners/policies",
-      <AuditOutlined />
-    ),
-    getItem(
-      <Link to="/partners/shipping">Đối tác Vận Chuyển</Link>,
-      "/partners/shipping",
-      <TruckOutlined />
-    ),
-  ]),
+  getItem(
+    "Đối tác",
+    "partners",
+    <Handshake size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
+      getItem(
+        <Link to="/partners/suppliers">Nhà Cung Cấp</Link>,
+        "/partners/suppliers",
+        <UserAddOutlined />
+      ),
+      getItem(
+        <Link to="/partners/policies">Chính sách & Hợp đồng</Link>,
+        "/partners/policies",
+        <AuditOutlined />
+      ),
+      getItem(
+        <Link to="/partners/shipping">Đối tác Vận Chuyển</Link>,
+        "/partners/shipping",
+        <TruckOutlined />
+      ),
+    ]
+  ),
 
   // 9. CRM
-  getItem("Quản lý Khách hàng", "crm", <Users size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/crm/retail">Khách kênh Cửa Hàng</Link>,
-      "/crm/retail",
-      <ShopOutlined />
-    ),
-    getItem(<Link to="/crm/b2b">Khách B2B</Link>, "/crm/b2b", <TeamOutlined />),
-  ]),
+  getItem(
+    "Quản lý Khách hàng",
+    "crm",
+    <Users size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
+      getItem(
+        <Link to="/crm/retail">Khách kênh Cửa Hàng</Link>,
+        "/crm/retail",
+        <ShopOutlined />
+      ),
+      getItem(
+        <Link to="/crm/b2b">Khách B2B</Link>,
+        "/crm/b2b",
+        <TeamOutlined />
+      ),
+    ]
+  ),
 
   // 10. Marketing
-  getItem("Quản lý Marketing", "marketing", <Megaphone size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/marketing/dashboard">Dashboard Marketing</Link>,
-      "/marketing/dashboard",
-      <AppstoreOutlined />
-    ),
-    getItem(
-      <Link to="/marketing/campaigns">Quản lý Chiến dịch</Link>,
-      "/marketing/campaigns",
-      <SendOutlined />
-    ),
-    getItem("Công cụ Marketing", "marketing-tools", <ToolOutlined />, [
+  getItem(
+    "Quản lý Marketing",
+    "marketing",
+    <Megaphone size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
       getItem(
-        <Link to="/marketing/tools/segmentation">Tạo Phân khúc KH</Link>,
-        "/marketing/tools/segmentation"
+        <Link to="/marketing/dashboard">Dashboard Marketing</Link>,
+        "/marketing/dashboard",
+        <AppstoreOutlined />
       ),
       getItem(
-        <Link to="/marketing/tools/promo">Tạo Voucher & QR Code</Link>,
-        "/marketing/tools/promo"
+        <Link to="/marketing/campaigns">Quản lý Chiến dịch</Link>,
+        "/marketing/campaigns",
+        <SendOutlined />
       ),
-           
+      getItem("Công cụ Marketing", "marketing-tools", <ToolOutlined />, [
+        getItem(
+          <Link to="/marketing/tools/segmentation">Tạo Phân khúc KH</Link>,
+          "/marketing/tools/segmentation"
+        ),
+        getItem(
+          <Link to="/marketing/tools/promo">Tạo Voucher & QR Code</Link>,
+          "/marketing/tools/promo"
+        ),
+
+        getItem(
+          <Link to="/marketing/tools/distribution">Phân Phối Voucher</Link>,
+          "/marketing/tools/distribution"
+        ),
+
+        getItem(
+          <Link to="/marketing/tools/library">Thư viện Nội dung</Link>,
+          "/marketing/tools/library"
+        ),
+      ]),
       getItem(
-        <Link to="/marketing/tools/distribution">Phân Phối Voucher</Link>,
-        "/marketing/tools/distribution"
+        <Link to="/marketing/chatbot">Quản lý Chatbot AI</Link>,
+        "/marketing/chatbot",
+        <GlobalOutlined />
       ),
-      
-      getItem(
-        <Link to="/marketing/tools/library">Thư viện Nội dung</Link>,
-        "/marketing/tools/library"
-      ),
-      
-    ]),
-    getItem(
-      <Link to="/marketing/chatbot">Quản lý Chatbot AI</Link>,
-      "/marketing/chatbot",
-      <GlobalOutlined />
-    ),
-  ]),
+    ]
+  ),
 
   // 11. Nhân sự
-  getItem("Quản lý Nhân sự", "hr", <ClipboardList size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/hr/dashboard">Dashboard Nhân sự</Link>,
-      "/hr/dashboard",
-      <AppstoreOutlined />
-    ),
-    getItem(
-      <Link to="/hr/employees">Quản lý Hồ sơ Nhân viên</Link>,
-      "/hr/employees",
-      <UserOutlined />
-    ),
-    getItem(
-      <Link to="/hr/contracts">Quản lý Hợp đồng & Giấy tờ</Link>,
-      "/hr/contracts",
-      <ContainerOutlined />
-    ),
-    getItem(
-      <Link to="/hr/training">Quản lý Đào tạo</Link>,
-      "/hr/training",
-      <SolutionOutlined />
-    ),
-    getItem(
-      <Link to="/hr/kpi">Giao việc & KPI</Link>,
-      "/hr/kpi",
-      <StockOutlined />
-    ),
-    getItem(
-      <Link to="/hr/payroll">Quản lý Lương & Chế Độ</Link>,
-      "/hr/payroll",
-      <DollarCircleOutlined />
-    ),
-  ]),
+  getItem(
+    "Quản lý Nhân sự",
+    "hr",
+    <ClipboardList size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
+      getItem(
+        <Link to="/hr/dashboard">Dashboard Nhân sự</Link>,
+        "/hr/dashboard",
+        <AppstoreOutlined />
+      ),
+      getItem(
+        <Link to="/hr/employees">Quản lý Hồ sơ Nhân viên</Link>,
+        "/hr/employees",
+        <UserOutlined />
+      ),
+      getItem(
+        <Link to="/hr/contracts">Quản lý Hợp đồng & Giấy tờ</Link>,
+        "/hr/contracts",
+        <ContainerOutlined />
+      ),
+      getItem(
+        <Link to="/hr/training">Quản lý Đào tạo</Link>,
+        "/hr/training",
+        <SolutionOutlined />
+      ),
+      getItem(
+        <Link to="/hr/kpi">Giao việc & KPI</Link>,
+        "/hr/kpi",
+        <StockOutlined />
+      ),
+      getItem(
+        <Link to="/hr/payroll">Quản lý Lương & Chế Độ</Link>,
+        "/hr/payroll",
+        <DollarCircleOutlined />
+      ),
+    ]
+  ),
 
   // 12. Tài Chính & Kế Toán (CẬP NHẬT MENU MỚI TẠI ĐÂY)
-  getItem("Tài Chính & Kế Toán", "finance", <CircleDollarSign size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/finance/dashboard">Dashboard Tài chính</Link>,
-      "/finance/dashboard",
-      <AppstoreOutlined />
-    ),
+  getItem(
+    "Tài Chính & Kế Toán",
+    "finance",
+    <CircleDollarSign size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
+      getItem(
+        <Link to="/finance/dashboard">Dashboard Tài chính</Link>,
+        "/finance/dashboard",
+        <AppstoreOutlined />
+      ),
 
-    // --- MỤC MỚI: KHO HÓA ĐƠN SỐ ---
-    getItem(
-      <Link to="/finance/invoices">Kho Hóa Đơn Số (AI Scan)</Link>,
-      "/finance/invoices",
-      <FilePdfOutlined />
-    ),
-    // -------------------------------
+      // --- MỤC MỚI: KHO HÓA ĐƠN SỐ ---
+      getItem(
+        <Link to="/finance/invoices">Kho Hóa Đơn Số (AI Scan)</Link>,
+        "/finance/invoices",
+        <FilePdfOutlined />
+      ),
+      // -------------------------------
 
-    getItem(
-      <Link to="/finance/transactions">Quản lý Thu – Chi</Link>,
-      "/finance/transactions",
-      <WalletOutlined />
-    ),
-    getItem(
-      <Link to="/finance/debts">Quản lý Công Nợ</Link>,
-      "/finance/debts",
-      <DollarCircleOutlined />
-    ),
-    getItem(
-      <Link to="/finance/assets">Quản Lý Tài Sản</Link>,
-      "/finance/assets",
-      <AuditOutlined />
-    ),
-    getItem(
-      <Link to="/finance/reconciliation">Đối Soát Giao Dịch</Link>,
-      "/finance/reconciliation",
-      <AuditOutlined />
-    ),
-    getItem("Nghiệp Vụ Kế Toán", "accounting", <ApartmentOutlined />, [
       getItem(
-        <Link to="/finance/accounting/chart-of-accounts">
-          Hệ thống Tài Khoản
-        </Link>,
-        "/finance/accounting/chart-of-accounts"
+        <Link to="/finance/transactions">Quản lý Thu – Chi</Link>,
+        "/finance/transactions",
+        <WalletOutlined />
       ),
       getItem(
-        <Link to="/finance/accounting/journal">Sổ Nhật ký Chung</Link>,
-        "/finance/accounting/journal"
+        <Link to="/finance/debts">Quản lý Công Nợ</Link>,
+        "/finance/debts",
+        <DollarCircleOutlined />
       ),
       getItem(
-        <Link to="/finance/accounting/misa-integration">Tích hợp MISA</Link>,
-        "/finance/accounting/misa-integration"
+        <Link to="/finance/assets">Quản Lý Tài Sản</Link>,
+        "/finance/assets",
+        <AuditOutlined />
       ),
-    ]),
-    getItem(
-      <Link to="/finance/vat">Quản lý Hóa Đơn VAT (Xuất)</Link>,
-      "/finance/vat",
-      <ContainerOutlined />
-    ),
-  ]),
+      getItem(
+        <Link to="/finance/reconciliation">Đối Soát Giao Dịch</Link>,
+        "/finance/reconciliation",
+        <AuditOutlined />
+      ),
+      getItem("Nghiệp Vụ Kế Toán", "accounting", <ApartmentOutlined />, [
+        getItem(
+          <Link to="/finance/accounting/chart-of-accounts">
+            Hệ thống Tài Khoản
+          </Link>,
+          "/finance/accounting/chart-of-accounts"
+        ),
+        getItem(
+          <Link to="/finance/accounting/journal">Sổ Nhật ký Chung</Link>,
+          "/finance/accounting/journal"
+        ),
+        getItem(
+          <Link to="/finance/accounting/misa-integration">Tích hợp MISA</Link>,
+          "/finance/accounting/misa-integration"
+        ),
+      ]),
+      getItem(
+        <Link to="/finance/vat">Quản lý Hóa Đơn VAT (Xuất)</Link>,
+        "/finance/vat",
+        <ContainerOutlined />
+      ),
+    ]
+  ),
 
   // 13. Báo Cáo
-  getItem("Báo Cáo", "reports", <PieChart size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem("Báo cáo Kinh doanh", "report-sales", <AreaChartOutlined />, [
-      getItem(
-        <Link to="/reports/sales/overview">Báo cáo Bán hàng</Link>,
-        "/reports/sales/overview"
-      ),
-      getItem(
-        <Link to="/reports/sales/profit-loss">Báo cáo Lãi - Lỗ</Link>,
-        "/reports/sales/profit-loss"
-      ),
-      getItem(
-        <Link to="/reports/sales/marketing">Báo cáo Marketing</Link>,
-        "/reports/sales/marketing"
-      ),
-    ]),
-    getItem("Báo cáo Vận hành", "report-ops", <DatabaseOutlined />, [
-      getItem(
-        <Link to="/reports/ops/inventory">Báo cáo Kho</Link>,
-        "/reports/ops/inventory"
-      ),
-      getItem(
-        <Link to="/reports/ops/purchase">Báo cáo Nhập hàng</Link>,
-        "/reports/ops/purchase"
-      ),
-      getItem(
-        <Link to="/reports/ops/crm">Báo cáo Chăm sóc KH</Link>,
-        "/reports/ops/crm"
-      ),
-    ]),
-    getItem("Báo cáo Quản trị", "report-admin", <SolutionOutlined />, [
-      getItem(
-        <Link to="/reports/admin/hr">Báo cáo Nhân viên & KPI</Link>,
-        "/reports/admin/hr"
-      ),
-      getItem(
-        <Link to="/reports/admin/tasks">Báo cáo Tiến độ Công việc</Link>,
-        "/reports/admin/tasks"
-      ),
-    ]),
-    getItem("Báo cáo Tài chính", "report-finance", <BankOutlined />, [
-      getItem(
-        <Link to="/reports/finance/cashflow">Sổ quỹ</Link>,
-        "/reports/finance/cashflow"
-      ),
-    ]),
-  ]),
+  getItem(
+    "Báo Cáo",
+    "reports",
+    <PieChart size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
+      getItem("Báo cáo Kinh doanh", "report-sales", <AreaChartOutlined />, [
+        getItem(
+          <Link to="/reports/sales/overview">Báo cáo Bán hàng</Link>,
+          "/reports/sales/overview"
+        ),
+        getItem(
+          <Link to="/reports/sales/profit-loss">Báo cáo Lãi - Lỗ</Link>,
+          "/reports/sales/profit-loss"
+        ),
+        getItem(
+          <Link to="/reports/sales/marketing">Báo cáo Marketing</Link>,
+          "/reports/sales/marketing"
+        ),
+      ]),
+      getItem("Báo cáo Vận hành", "report-ops", <DatabaseOutlined />, [
+        getItem(
+          <Link to="/reports/ops/inventory">Báo cáo Kho</Link>,
+          "/reports/ops/inventory"
+        ),
+        getItem(
+          <Link to="/reports/ops/purchase">Báo cáo Nhập hàng</Link>,
+          "/reports/ops/purchase"
+        ),
+        getItem(
+          <Link to="/reports/ops/crm">Báo cáo Chăm sóc KH</Link>,
+          "/reports/ops/crm"
+        ),
+      ]),
+      getItem("Báo cáo Quản trị", "report-admin", <SolutionOutlined />, [
+        getItem(
+          <Link to="/reports/admin/hr">Báo cáo Nhân viên & KPI</Link>,
+          "/reports/admin/hr"
+        ),
+        getItem(
+          <Link to="/reports/admin/tasks">Báo cáo Tiến độ Công việc</Link>,
+          "/reports/admin/tasks"
+        ),
+      ]),
+      getItem("Báo cáo Tài chính", "report-finance", <BankOutlined />, [
+        getItem(
+          <Link to="/reports/finance/cashflow">Sổ quỹ</Link>,
+          "/reports/finance/cashflow"
+        ),
+      ]),
+    ]
+  ),
 
   // 14. Cấu hình (Đã nâng cấp thành Submenu)
-  getItem("Cấu hình hệ thống", "settings-group", <Settings size={20} color="#4b5563" strokeWidth={1.5} />, [
-    getItem(
-      <Link to="/settings">Tổng quan Cấu hình</Link>,
-      "/settings",
-      <AppstoreOutlined />
-    ),
-    // [NEW] Nút Nhập Tồn Đầu Kỳ (Shortcut)
-    getItem(
-      <Link to="/settings/opening-stock">Nhập Tồn Đầu Kỳ</Link>,
-      "/settings/opening-stock",
-      <ImportOutlined />
-    ),
-    // [NEW] Master Data
-    getItem(
-      <Link to="/settings/data/master">Import/Export Sản Phẩm</Link>,
-      "/settings/data/master",
-      <DatabaseOutlined />
-    ),
-  ]),
+  getItem(
+    "Cấu hình hệ thống",
+    "settings-group",
+    <Settings size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
+      getItem(
+        <Link to="/settings">Tổng quan Cấu hình</Link>,
+        "/settings",
+        <AppstoreOutlined />
+      ),
+      // [NEW] Nút Nhập Tồn Đầu Kỳ (Shortcut)
+      getItem(
+        <Link to="/settings/opening-stock">Nhập Tồn Đầu Kỳ</Link>,
+        "/settings/opening-stock",
+        <ImportOutlined />
+      ),
+      // [NEW] Master Data
+      getItem(
+        <Link to="/settings/data/master">Import/Export Sản Phẩm</Link>,
+        "/settings/data/master",
+        <DatabaseOutlined />
+      ),
+    ]
+  ),
 ];
 
 // 1. ĐỊNH NGHĨA QUYỀN TRUY CẬP CHO TỪNG MENU (Dựa trên SQL Core cung cấp)
 // Key của Menu => Permission Key trong DB
 const MENU_PERMISSIONS: Record<string, string> = {
   // --- KHO ---
-  '/inventory/products': 'inv-product-view',
-  '/inventory/purchase': 'inv-po-create',
-  '/inventory/stocktake': 'inv-count-create',
-  
+  "/inventory/products": "inv-product-view",
+  "/inventory/purchase": "inv-po-create",
+  "/inventory/stocktake": "inv-count-create",
+
   // --- TÀI CHÍNH (ĐÃ SỬA ĐỔI) ---
-  '/finance/dashboard': 'finance.view',     // [FIX] Dùng quyền view
-  '/finance/transactions': 'finance.view',  // [FIX] Dùng quyền view (thay vì fin-approve-cash)
-  '/finance/debts': 'finance.view',         // [FIX] Dùng quyền view
-  
+  "/finance/dashboard": "finance.view", // [FIX] Dùng quyền view
+  "/finance/transactions": "finance.view", // [FIX] Dùng quyền view (thay vì fin-approve-cash)
+  "/finance/debts": "finance.view", // [FIX] Dùng quyền view
+
   // --- CẤU HÌNH ---
-  'settings-group': 'settings', 
+  "settings-group": "settings",
 };
 
-
 const MainLayout: React.FC = () => {
-  useAutoLogout(); // [NEW] Kích hoạt bảo vệ 
+  useAutoLogout(); // [NEW] Kích hoạt bảo vệ
   const screens = useBreakpoint(); // Kiểm tra màn hình (xs, sm, md...)
   const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false); // State cho Mobile Drawer
-
 
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
@@ -558,7 +643,7 @@ const MainLayout: React.FC = () => {
         // 2. Nếu có con, lọc con trước (Đệ quy)
         if (newItem.children && newItem.children.length > 0) {
           newItem.children = filterMenuItems(newItem.children);
-          
+
           // [QUAN TRỌNG] Nếu lọc xong mà rỗng con -> Ẩn luôn cha
           if (newItem.children.length === 0) {
             return null;
@@ -568,8 +653,10 @@ const MainLayout: React.FC = () => {
         // 3. Check quyền của chính item này (Nếu có quy định trong MENU_PERMISSIONS)
         const requiredPerm = MENU_PERMISSIONS[newItem.key as string];
         if (requiredPerm) {
-           const hasPerm = permissions.includes(requiredPerm) || permissions.includes('admin-all');
-           if (!hasPerm) return null; // Không có quyền -> Ẩn
+          const hasPerm =
+            permissions.includes(requiredPerm) ||
+            permissions.includes("admin-all");
+          if (!hasPerm) return null; // Không có quyền -> Ẩn
         }
 
         // 4. Mặc định hiển thị (nếu không dính các case trên)
@@ -580,7 +667,7 @@ const MainLayout: React.FC = () => {
 
   // Tính toán menu hiển thị thực tế
   const visibleMenuItems = React.useMemo(() => {
-     return filterMenuItems(finalMenuItems);
+    return filterMenuItems(finalMenuItems);
   }, [permissions]); // Chỉ tính lại khi quyền thay đổi
 
   // Tự động đóng Drawer khi chuyển trang trên mobile
@@ -616,87 +703,96 @@ const MainLayout: React.FC = () => {
     },
   ];
 
-
-
-
-
   return (
     <Layout style={{ minHeight: "100vh" }}>
       {/* 1. SIDEBAR CHO DESKTOP (Ẩn khi màn hình nhỏ) */}
       {screens.md ? (
-      <Sider
-        collapsible
-        collapsed={collapsed}
-        onCollapse={(value) => setCollapsed(value)}
-        width={250}
-        collapsedWidth={55}
-        style={{
-          background: "#fff",
-          borderRight: "1px solid #f0f0f0",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          position: "fixed",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          zIndex: 1001, 
-        }}
-        trigger={
-           <div className="w-full h-10 flex items-center justify-center bg-gray-50 border-t border-gray-100 text-gray-500 hover:text-blue-600 transition-colors">
-              {collapsed ? <ChevronRight size={18} /> : <div className="flex items-center gap-2 text-xs font-semibold"><ChevronLeft size={16}/> Thu gọn sidebar</div>}
-           </div>
-        }
-      >
-        <div
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={(value) => setCollapsed(value)}
+          width={250}
+          collapsedWidth={55}
           style={{
-            height: 64,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderBottom: "1px solid #f0f0f0",
-            overflow: "hidden" // [QUAN TRỌNG] Để ẩn chữ khi thu gọn
+            background: "#fff",
+            borderRight: "1px solid #f0f0f0",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            position: "fixed",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            zIndex: 1001,
           }}
+          trigger={
+            <div className="w-full h-10 flex items-center justify-center bg-gray-50 border-t border-gray-100 text-gray-500 hover:text-blue-600 transition-colors">
+              {collapsed ? (
+                <ChevronRight size={18} />
+              ) : (
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <ChevronLeft size={16} /> Thu gọn sidebar
+                </div>
+              )}
+            </div>
+          }
         >
-          {/* 1. LOGO (Có hiệu ứng trượt margin) */}
-          <img 
-            src={Logo} 
-            alt="Logo" 
-            style={{ 
+          <div
+            style={{
+              height: 64,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderBottom: "1px solid #f0f0f0",
+              overflow: "hidden", // [QUAN TRỌNG] Để ẩn chữ khi thu gọn
+            }}
+          >
+            {/* 1. LOGO (Có hiệu ứng trượt margin) */}
+            <img
+              src={Logo}
+              alt="Logo"
+              style={{
                 height: 32, // Kích thước chuẩn
                 // Nếu đóng thì margin = 0, nếu mở thì cách phải 8px
-                marginRight: collapsed ? 0 : 8, 
-                transition: "all 0.2s" 
-            }} 
-          />
-
-          {/* 2. CHỮ THƯƠNG HIỆU (Chỉ hiện khi MENU MỞ) */}
-          {!collapsed && (
-            <span
-              style={{
-                fontSize: "16px",
-                fontWeight: 700,
-                color: "#00b96b", // Màu xanh thương hiệu
-                whiteSpace: "nowrap", // Không xuống dòng
-                opacity: collapsed ? 0 : 1,
-                transition: "opacity 0.3s",
+                marginRight: collapsed ? 0 : 8,
+                transition: "all 0.2s",
               }}
-            >
-              DƯỢC NAM VIỆT
-            </span>
-          )}
-        </div>
-        
-        {/* Scrollable Area for Menu */}
-        <div className="custom-scrollbar" style={{ height: "calc(100vh - 110px)", overflowY: "auto", overflowX: 'hidden' }}>
-            <Menu
-            theme="light"
-            defaultSelectedKeys={[location.pathname]}
-            mode="inline"
-            items={visibleMenuItems} // Sử dụng menu đã lọc
-            style={{ borderRight: 0 }}
-
             />
-        </div>
-      </Sider>) : null}
+
+            {/* 2. CHỮ THƯƠNG HIỆU (Chỉ hiện khi MENU MỞ) */}
+            {!collapsed && (
+              <span
+                style={{
+                  fontSize: "16px",
+                  fontWeight: 700,
+                  color: "#00b96b", // Màu xanh thương hiệu
+                  whiteSpace: "nowrap", // Không xuống dòng
+                  opacity: collapsed ? 0 : 1,
+                  transition: "opacity 0.3s",
+                }}
+              >
+                DƯỢC NAM VIỆT
+              </span>
+            )}
+          </div>
+
+          {/* Scrollable Area for Menu */}
+          <div
+            className="custom-scrollbar"
+            style={{
+              height: "calc(100vh - 110px)",
+              overflowY: "auto",
+              overflowX: "hidden",
+            }}
+          >
+            <Menu
+              theme="light"
+              defaultSelectedKeys={[location.pathname]}
+              mode="inline"
+              items={visibleMenuItems} // Sử dụng menu đã lọc
+              style={{ borderRight: 0 }}
+            />
+          </div>
+        </Sider>
+      ) : null}
 
       {/* 2. DRAWER CHO MOBILE (Chỉ hiện khi màn hình nhỏ) */}
       {!screens.md && (
@@ -719,27 +815,30 @@ const MainLayout: React.FC = () => {
               borderBottom: "0px solid #f0f0f0",
             }}
           >
-            <img src={Logo} alt="Logo" 
-            style={{ 
-                height: 32, 
-                // Biến collapsed chỉ tồn tại ở file này
-                marginRight: collapsed ? 0 : 8, 
-                transition: "all 0.2s" 
-            }} />
-            {!collapsed && (
-            <span
+            <img
+              src={Logo}
+              alt="Logo"
               style={{
-                fontSize: "16px",
-                fontWeight: 700,
-                color: "#00b96b",
-                whiteSpace: "nowrap",
-                opacity: collapsed ? 0 : 1,
-                transition: "opacity 0.3s",
+                height: 32,
+                // Biến collapsed chỉ tồn tại ở file này
+                marginRight: collapsed ? 0 : 8,
+                transition: "all 0.2s",
               }}
-            >
-              DƯỢC NAM VIỆT
-            </span>
-          )}
+            />
+            {!collapsed && (
+              <span
+                style={{
+                  fontSize: "16px",
+                  fontWeight: 700,
+                  color: "#00b96b",
+                  whiteSpace: "nowrap",
+                  opacity: collapsed ? 0 : 1,
+                  transition: "opacity 0.3s",
+                }}
+              >
+                DƯỢC NAM VIỆT
+              </span>
+            )}
           </div>
           <Menu
             mode="inline"
@@ -778,9 +877,17 @@ const MainLayout: React.FC = () => {
                 type="text"
                 icon={
                   collapsed ? (
-                    <CircleChevronRight color="#4b5563" size={24} strokeWidth={1.5} />
+                    <CircleChevronRight
+                      color="#4b5563"
+                      size={24}
+                      strokeWidth={1.5}
+                    />
                   ) : (
-                    <CircleChevronLeft color="#4b5563" size={24} strokeWidth={1.5} />
+                    <CircleChevronLeft
+                      color="#4b5563"
+                      size={24}
+                      strokeWidth={1.5}
+                    />
                   )
                 }
                 onClick={() => setCollapsed(!collapsed)}
@@ -799,7 +906,7 @@ const MainLayout: React.FC = () => {
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <NotificationBell />
-            
+
             {/* [REMOVED] Đã xóa nút Button "Tạo Lịch Hẹn" ở đây */}
 
             <Dropdown menu={{ items: userMenuItems }} trigger={["click"]}>

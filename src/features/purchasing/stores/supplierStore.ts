@@ -1,12 +1,12 @@
 // src/stores/supplierStore.ts
 import { create } from "zustand";
 
-import { supabase } from "@/shared/lib/supabaseClient";
 import {
   SupplierStoreState,
   SupplierFilters,
   Supplier,
 } from "@/features/purchasing/types/supplier";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
   suppliers: [],
@@ -22,7 +22,7 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
     set({ loading: true });
     try {
       const { filters, page, pageSize } = get();
-      
+
       // [CORE UPDATE]: Gọi RPC mới có trả về cột 'debt'
       const { data, error } = await supabase.rpc("get_suppliers_list", {
         search_query: filters.search_query || null,
@@ -38,7 +38,7 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
       const mappedSuppliers = (data || []).map((item: any) => ({
         ...item,
         // Đảm bảo debt luôn là số
-        debt: item.debt ? Number(item.debt) : 0 
+        debt: item.debt ? Number(item.debt) : 0,
       }));
 
       const totalCount = data && data.length > 0 ? data[0].total_count : 0;

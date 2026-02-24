@@ -37,9 +37,9 @@ import {
 import viVN from "antd/locale/vi_VN";
 import React, { useEffect, useState } from "react";
 
-import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect";
 import { useVaccinationTemplateStore } from "@/features/marketing/stores/useVaccinationTemplateStore";
 import { VaccinationTemplate } from "@/features/marketing/types/vaccination";
+import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;

@@ -28,17 +28,17 @@ import {
   Spin,
   Tabs,
 } from "antd";
+import { Statistic } from "antd"; // [NEW]
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
+import { useBankStore } from "@/features/finance/stores/useBankStore";
+import { supplierService } from "@/features/purchasing/api/supplierService"; // [NEW]
 import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
-import { useBankStore } from "@/features/finance/stores/useBankStore"; 
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
-import { supplierService } from "@/features/purchasing/api/supplierService";  // [NEW]
-import { Statistic } from "antd"; // [NEW]
 import { Access } from "@/shared/components/auth/Access"; // [NEW]
 import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
-import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -68,16 +68,16 @@ const SupplierDetailPage: React.FC = () => {
 
   // [NEW] Finance States
   const [financeModalOpen, setFinanceModalOpen] = useState(false);
-  const [financeModalFlow, setFinanceModalFlow] = useState<'in' | 'out'>('out'); // [NEW] Control Flow
+  const [financeModalFlow, setFinanceModalFlow] = useState<"in" | "out">("out"); // [NEW] Control Flow
   const [quickInfo, setQuickInfo] = useState<any>(null);
 
   const fetchQuickInfo = async () => {
     if (!id) return;
     try {
-        const data = await supplierService.getQuickInfo(Number(id));
-        setQuickInfo(data);
+      const data = await supplierService.getQuickInfo(Number(id));
+      setQuickInfo(data);
     } catch (err) {
-        console.error(err);
+      console.error(err);
     }
   };
 
@@ -182,13 +182,13 @@ const SupplierDetailPage: React.FC = () => {
               </Button>
               {isEditing && formDisabled ? (
                 <Access permission={PERMISSIONS.PARTNER.SUPPLIER.EDIT}>
-                    <Button
+                  <Button
                     type="primary"
                     icon={<EditOutlined />}
                     onClick={() => setFormDisabled(false)}
-                    >
+                  >
                     Chỉnh sửa
-                    </Button>
+                  </Button>
                 </Access>
               ) : null}
             </Space>
@@ -371,71 +371,87 @@ const SupplierDetailPage: React.FC = () => {
             </Tabs.TabPane>
             {/* TAB FINANCE - [NEW] */}
             <Tabs.TabPane
-              tab={<Space><BankOutlined /> Tài chính & Công nợ</Space>}
+              tab={
+                <Space>
+                  <BankOutlined /> Tài chính & Công nợ
+                </Space>
+              }
               key="finance"
             >
-               <Card bordered={false}>
-                   <Row gutter={24}>
-                       <Col span={8}>
-                           <Statistic 
-                               title="Nợ cần trả" 
-                               value={quickInfo?.current_debt || 0} 
-                               precision={0}
-                               suffix="₫"
-                               valueStyle={{ color: (quickInfo?.current_debt || 0) > 0 ? '#cf1322' : '#3f8600' }}
-                           />
-                           <Space style={{ marginTop: 16 }}>
-                               <Button 
-                                   type="primary" 
-                                   danger 
-                                   onClick={() => {
-                                       setFinanceModalFlow('out');
-                                       setFinanceModalOpen(true);
-                                   }}
-                                   disabled={(quickInfo?.current_debt || 0) <= 0}
-                               >
-                                   Thanh toán công nợ
-                               </Button>
-                               <Button 
-                                   onClick={() => {
-                                        setFinanceModalFlow('in');
-                                        setFinanceModalOpen(true);
-                                   }}
-                               >
-                                   Nhận Chiết khấu/Hoàn tiền
-                               </Button>
-                           </Space>
-                       </Col>
-                       <Col span={8}>
-                           <Statistic title="Đã mua (Tháng này)" value={quickInfo?.purchased_this_month || 0} precision={0} suffix="₫"/>
-                       </Col>
-                   </Row>
-               </Card>
+              <Card bordered={false}>
+                <Row gutter={24}>
+                  <Col span={8}>
+                    <Statistic
+                      title="Nợ cần trả"
+                      value={quickInfo?.current_debt || 0}
+                      precision={0}
+                      suffix="₫"
+                      valueStyle={{
+                        color:
+                          (quickInfo?.current_debt || 0) > 0
+                            ? "#cf1322"
+                            : "#3f8600",
+                      }}
+                    />
+                    <Space style={{ marginTop: 16 }}>
+                      <Button
+                        type="primary"
+                        danger
+                        onClick={() => {
+                          setFinanceModalFlow("out");
+                          setFinanceModalOpen(true);
+                        }}
+                        disabled={(quickInfo?.current_debt || 0) <= 0}
+                      >
+                        Thanh toán công nợ
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setFinanceModalFlow("in");
+                          setFinanceModalOpen(true);
+                        }}
+                      >
+                        Nhận Chiết khấu/Hoàn tiền
+                      </Button>
+                    </Space>
+                  </Col>
+                  <Col span={8}>
+                    <Statistic
+                      title="Đã mua (Tháng này)"
+                      value={quickInfo?.purchased_this_month || 0}
+                      precision={0}
+                      suffix="₫"
+                    />
+                  </Col>
+                </Row>
+              </Card>
             </Tabs.TabPane>
-            
+
             {/* Modal Finance */}
-            <FinanceFormModal 
-                open={financeModalOpen}
-                onCancel={() => setFinanceModalOpen(false)}
-                onSuccess={() => {
-                    setFinanceModalOpen(false);
-                    fetchQuickInfo(); // Reload debt info
-                }}
-                initialFlow={financeModalFlow}
-                initialValues={{
-                    business_type: 'trade',
-                    partner_type: 'supplier',
-                    partner_id: Number(id),
-                    // Logic dynamic initial values
-                    amount: financeModalFlow === 'out' ? (quickInfo?.current_debt || 0) : 0,
-                    description: financeModalFlow === 'out' 
-                        ? `Thanh toán công nợ cho NCC ${currentSupplier?.name}`
-                        : `Nhận chiết khấu thương mại / Trả hàng từ ${currentSupplier?.name}`
-                }}
+            <FinanceFormModal
+              open={financeModalOpen}
+              onCancel={() => setFinanceModalOpen(false)}
+              onSuccess={() => {
+                setFinanceModalOpen(false);
+                fetchQuickInfo(); // Reload debt info
+              }}
+              initialFlow={financeModalFlow}
+              initialValues={{
+                business_type: "trade",
+                partner_type: "supplier",
+                partner_id: Number(id),
+                // Logic dynamic initial values
+                amount:
+                  financeModalFlow === "out" ? quickInfo?.current_debt || 0 : 0,
+                description:
+                  financeModalFlow === "out"
+                    ? `Thanh toán công nợ cho NCC ${currentSupplier?.name}`
+                    : `Nhận chiết khấu thương mại / Trả hàng từ ${currentSupplier?.name}`,
+              }}
             />
 
             {/* TAB HISTORY - Renamed key to keep old key if needed, or just replace */}
-            {/* <Tabs.TabPane ... removed/replaced above */ }
+            {/* <Tabs.TabPane ... removed/replaced above */}
           </Tabs>
 
           {/* Thanh Action */}
@@ -461,7 +477,7 @@ const SupplierDetailPage: React.FC = () => {
                     icon={<SaveOutlined />}
                     onClick={handleSave}
                     loading={loadingDetails}
-                    disabled={isEditing && formDisabled} // Allow save if editing enabled
+                    disabled={isEditing ? formDisabled : undefined} // Allow save if editing enabled
                   >
                     Lưu thay đổi
                   </Button>
@@ -471,35 +487,36 @@ const SupplierDetailPage: React.FC = () => {
           ) : null}
         </Form>
       </Card>
-      
+
       {/* --- HOTFIX: CHÈN MODAL VÀO ĐÂY --- */}
-      <FinanceFormModal 
-          open={financeModalOpen}
-          onCancel={() => setFinanceModalOpen(false)}
-          initialFlow={financeModalFlow}
-          initialValues={{
-              business_type: 'trade',
-              partner_type: 'supplier',
-              partner_id: String(id), // Ép kiểu string cho chắc
-              amount: financeModalFlow === 'out' ? (quickInfo?.current_debt || 0) : 0,
-              description: financeModalFlow === 'out' 
-                  ? `Thanh toán công nợ cho NCC ${currentSupplier?.name}`
-                  : `Nhận chiết khấu/hoàn tiền từ NCC ${currentSupplier?.name}`
-          }}
-          onSuccess={() => {
-              setFinanceModalOpen(false);
-              fetchQuickInfo(); // Reload số nợ
-              antMessage.success("Giao dịch thành công!");
-          }}
+      <FinanceFormModal
+        open={financeModalOpen}
+        onCancel={() => setFinanceModalOpen(false)}
+        initialFlow={financeModalFlow}
+        initialValues={{
+          business_type: "trade",
+          partner_type: "supplier",
+          partner_id: String(id), // Ép kiểu string cho chắc
+          amount: financeModalFlow === "out" ? quickInfo?.current_debt || 0 : 0,
+          description:
+            financeModalFlow === "out"
+              ? `Thanh toán công nợ cho NCC ${currentSupplier?.name}`
+              : `Nhận chiết khấu/hoàn tiền từ NCC ${currentSupplier?.name}`,
+        }}
+        onSuccess={() => {
+          setFinanceModalOpen(false);
+          fetchQuickInfo(); // Reload số nợ
+          antMessage.success("Giao dịch thành công!");
+        }}
       />
     </Spin>
   );
 };
 
 const ProtectedSupplierDetailPage = () => (
-    <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
-        <SupplierDetailPage />
-    </PermissionGuard>
+  <PermissionGuard permission={PERMISSIONS.PARTNER.SUPPLIER.VIEW}>
+    <SupplierDetailPage />
+  </PermissionGuard>
 );
 
 export default ProtectedSupplierDetailPage;

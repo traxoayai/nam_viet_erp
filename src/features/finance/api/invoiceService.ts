@@ -108,43 +108,47 @@ export const invoiceService = {
   // 4. Xóa hóa đơn (An toàn: Trừ kho VAT trước)
   async deleteInvoice(id: number) {
     try {
-        // Bước 1: Gọi RPC để trừ kho VAT (Reverse Entry)
-        const { error: rpcError } = await supabase.rpc("reverse_vat_invoice_entry", {
-          p_invoice_id: id
-        });
-        
-        if (rpcError) {
-            console.error("Lỗi RPC Reverse:", rpcError);
-            
-            // Phân tích lỗi từ Database trả về để báo user
-            if (rpcError.message.includes("violates check constraint")) {
-                throw new Error("Không thể xóa hóa đơn này vì hàng đã được xuất bán (Tồn kho VAT không đủ để trừ). Vui lòng kiểm tra lại các phiếu xuất.");
-            }
-            
-            throw rpcError; 
+      // Bước 1: Gọi RPC để trừ kho VAT (Reverse Entry)
+      const { error: rpcError } = await supabase.rpc(
+        "reverse_vat_invoice_entry",
+        {
+          p_invoice_id: id,
+        }
+      );
+
+      if (rpcError) {
+        console.error("Lỗi RPC Reverse:", rpcError);
+
+        // Phân tích lỗi từ Database trả về để báo user
+        if (rpcError.message.includes("violates check constraint")) {
+          throw new Error(
+            "Không thể xóa hóa đơn này vì hàng đã được xuất bán (Tồn kho VAT không đủ để trừ). Vui lòng kiểm tra lại các phiếu xuất."
+          );
         }
 
-        // Bước 2: Sau khi trừ kho thành công, mới xóa record hóa đơn
-        const { error: deleteError } = await supabase
-          .from("finance_invoices")
-          .delete()
-          .eq("id", id);
+        throw rpcError;
+      }
 
-        if (deleteError) throw deleteError;
-        
-        return true;
+      // Bước 2: Sau khi trừ kho thành công, mới xóa record hóa đơn
+      const { error: deleteError } = await supabase
+        .from("finance_invoices")
+        .delete()
+        .eq("id", id);
 
+      if (deleteError) throw deleteError;
+
+      return true;
     } catch (error: any) {
-        console.error("Delete Invoice Failed:", error);
-        // Ném lỗi tiếp để UI (InvoiceListPage) bắt được và hiện message.error
-        throw error;
+      console.error("Delete Invoice Failed:", error);
+      // Ném lỗi tiếp để UI (InvoiceListPage) bắt được và hiện message.error
+      throw error;
     }
   },
 
   // 1. Hàm gọi VAT Engine
   async processVatEntry(invoiceId: number) {
     const { error } = await supabase.rpc("process_vat_invoice_entry", {
-      p_invoice_id: invoiceId
+      p_invoice_id: invoiceId,
     });
     if (error) console.error("⚠️ Lỗi nhập kho VAT:", error);
   },
@@ -153,11 +157,13 @@ export const invoiceService = {
   async createInvoice(payload: any) {
     const { data, error } = await supabase
       .from("finance_invoices")
-      .insert([{ 
-          ...payload, 
-          status: "verified", 
-          created_at: new Date().toISOString() 
-      }])
+      .insert([
+        {
+          ...payload,
+          status: "verified",
+          created_at: new Date().toISOString(),
+        },
+      ])
       .select()
       .single(); // Insert luôn trả về 1 dòng nên dùng single() ok
 
@@ -165,7 +171,7 @@ export const invoiceService = {
 
     // Kích hoạt nhập kho VAT
     if (data && data.id) await this.processVatEntry(data.id);
-    
+
     return data;
   },
 
@@ -173,17 +179,20 @@ export const invoiceService = {
   async verifyInvoice(id: number, payload: any) {
     const { data, error } = await supabase
       .from("finance_invoices")
-      .update({ 
-          ...payload, 
-          status: "verified" 
+      .update({
+        ...payload,
+        status: "verified",
       })
       .eq("id", id)
       .select()
       .maybeSingle(); // <-- DÙNG MAYBESINGLE ĐỂ TRÁNH CRASH NẾU KHÔNG TÌM THẤY
 
     if (error) throw error;
-    
-    if (!data) throw new Error("Không tìm thấy hóa đơn để cập nhật (ID sai hoặc không có quyền).");
+
+    if (!data)
+      throw new Error(
+        "Không tìm thấy hóa đơn để cập nhật (ID sai hoặc không có quyền)."
+      );
 
     // Kích hoạt nhập kho VAT
     if (data && data.id) await this.processVatEntry(data.id);
@@ -204,64 +213,72 @@ export const invoiceService = {
 
   // 5. Lưu Nháp (Create/Update with status='draft', Skip VAT Entry)
   async saveDraft(id: number | null, payload: any) {
-      const draftPayload = { ...payload, status: 'draft' };
-      
-      let res;
-      if (id) {
-          // Update
-          res = await supabase
-              .from("finance_invoices")
-              .update(draftPayload)
-              .eq("id", id)
-              .select()
-              .single();
-      } else {
-          // Create
-          res = await supabase
-              .from("finance_invoices")
-              .insert([{ ...draftPayload, created_at: new Date().toISOString() }])
-              .select()
-              .single();
-      }
+    const draftPayload = { ...payload, status: "draft" };
 
-      const { data, error } = res;
-      if (error) throw error;
-      return data;
+    let res;
+    if (id) {
+      // Update
+      res = await supabase
+        .from("finance_invoices")
+        .update(draftPayload)
+        .eq("id", id)
+        .select()
+        .single();
+    } else {
+      // Create
+      res = await supabase
+        .from("finance_invoices")
+        .insert([{ ...draftPayload, created_at: new Date().toISOString() }])
+        .select()
+        .single();
+    }
+
+    const { data, error } = res;
+    if (error) throw error;
+    return data;
   },
 
   // 2. Hàm Lấy Mapping (Sửa lại để tránh lỗi null unit)
-  async getMappedProduct(taxCode: string, productName: string, vendorUnit: string) {
+  async getMappedProduct(
+    taxCode: string,
+    productName: string,
+    vendorUnit: string
+  ) {
     const { data, error } = await supabase.rpc("get_mapped_product", {
       p_tax_code: taxCode,
       p_product_name: productName,
-      p_vendor_unit: vendorUnit || "" // <-- QUAN TRỌNG: Tránh gửi null/undefined
+      p_vendor_unit: vendorUnit || "", // <-- QUAN TRỌNG: Tránh gửi null/undefined
     });
     if (error) throw error;
-    
+
     if (data && data.length > 0) {
-        return {
-            productId: data[0].internal_product_id,
-            unit: data[0].internal_unit
-        };
+      return {
+        productId: data[0].internal_product_id,
+        unit: data[0].internal_unit,
+      };
     }
     return null;
   },
 
   // [UPDATED] Lưu mapping mới (Có thêm Unit)
-  async saveProductMapping(taxCode: string, productName: string, vendorUnit: string, internalId: number, internalUnit: string) {
-      const { error } = await supabase
-        .from('vendor_product_mappings')
-        .upsert(
-            { 
-                vendor_tax_code: taxCode, 
-                vendor_product_name: productName,
-                vendor_unit: vendorUnit,    // <-- Mới thêm
-                internal_product_id: internalId,
-                internal_unit: internalUnit, // <-- Mới thêm
-                last_used_at: new Date().toISOString()
-            },
-            { onConflict: 'vendor_tax_code, vendor_product_name, vendor_unit' } // <-- Constraint mới
-        );
-      if (error) console.error("Auto-learn mapping failed:", error); 
-  }
+  async saveProductMapping(
+    taxCode: string,
+    productName: string,
+    vendorUnit: string,
+    internalId: number,
+    internalUnit: string
+  ) {
+    const { error } = await supabase.from("vendor_product_mappings").upsert(
+      {
+        vendor_tax_code: taxCode,
+        vendor_product_name: productName,
+        vendor_unit: vendorUnit, // <-- Mới thêm
+        internal_product_id: internalId,
+        internal_unit: internalUnit, // <-- Mới thêm
+        last_used_at: new Date().toISOString(),
+      },
+      { onConflict: "vendor_tax_code, vendor_product_name, vendor_unit" } // <-- Constraint mới
+    );
+    if (error) console.error("Auto-learn mapping failed:", error);
+  },
 };

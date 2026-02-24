@@ -5,7 +5,10 @@ interface ShippingLabelProps {
   packageCount: number; // Tổng số kiện (ví dụ 3)
 }
 
-export const ShippingLabelTemplate = ({ orderInfo, packageCount }: ShippingLabelProps) => {
+export const ShippingLabelTemplate = ({
+  orderInfo,
+  packageCount,
+}: ShippingLabelProps) => {
   if (!orderInfo) return null;
 
   // Tạo mảng số kiện: [1, 2, 3]
@@ -57,28 +60,39 @@ export const ShippingLabelTemplate = ({ orderInfo, packageCount }: ShippingLabel
 
           <div className="row">
             <div className="label">ĐVVC:</div>
-            <div className="value" style={{fontWeight: 'bold', fontSize: 16}}>{orderInfo.shipping_partner}</div>
+            <div className="value" style={{ fontWeight: "bold", fontSize: 16 }}>
+              {orderInfo.shipping_partner}
+            </div>
           </div>
 
-          <div className="row" style={{ marginTop: 10, borderTop: "1px solid #ccc", paddingTop: 10 }}>
+          <div
+            className="row"
+            style={{
+              marginTop: 10,
+              borderTop: "1px solid #ccc",
+              paddingTop: 10,
+            }}
+          >
             <div className="label">Người nhận:</div>
             <div className="value">
-                <b>{orderInfo.customer_name}</b>
-                <div style={{fontSize: 12}}>{orderInfo.delivery_address}</div>
+              <b>{orderInfo.customer_name}</b>
+              <div style={{ fontSize: 12 }}>{orderInfo.delivery_address}</div>
             </div>
           </div>
 
           <div className="row" style={{ marginTop: 10 }}>
-             <div className="label">Ghi chú:</div>
-             <div className="value">{orderInfo.note || "Cho xem hàng"}</div>
+            <div className="label">Ghi chú:</div>
+            <div className="value">{orderInfo.note || "Cho xem hàng"}</div>
           </div>
 
           <div className="package-badge">
-             Kiện {pkgNum}/{packageCount}
+            Kiện {pkgNum}/{packageCount}
           </div>
-          
-          <div style={{position: 'absolute', bottom: 10, left: 10, fontSize: 10}}>
-             Powered by Nam Viet ERP
+
+          <div
+            style={{ position: "absolute", bottom: 10, left: 10, fontSize: 10 }}
+          >
+            Powered by Nam Viet ERP
           </div>
         </div>
       ))}

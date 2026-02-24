@@ -3,9 +3,9 @@ import { UserOutlined, LoadingOutlined } from "@ant-design/icons";
 import { Select, Typography, Empty, Avatar, Tag } from "antd";
 import { useState, useMemo } from "react";
 
-import { useDebounce } from "@/shared/hooks/useDebounce";
 import { salesService } from "@/features/sales/api/salesService";
 import { CustomerB2B } from "@/features/sales/types/b2b_sales";
+import { useDebounce } from "@/shared/hooks/useDebounce";
 
 const { Text } = Typography;
 

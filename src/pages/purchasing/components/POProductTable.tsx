@@ -34,7 +34,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
   // Helper: Render Unit Select (Shared between Mobile & Desktop)
   const renderUnitSelect = (item: POItem, idx: number) => {
     // Ưu tiên hiển thị giá trị đang chọn
-    const currentValue = item.uom; 
+    const currentValue = item.uom;
 
     return (
       <Select
@@ -44,11 +44,11 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
         onChange={(val) => {
           // 1. Cập nhật đơn vị mới cho State
           onItemChange(idx, "uom", val);
-          
+
           // 2. [Optional] Tìm unit trong mảng để cập nhật giá gợi ý (nếu cần)
           // const selectedUnit = item.available_units?.find(u => u.unit_name === val);
           // if (selectedUnit && selectedUnit.price_sell) {
-          //    onItemChange(idx, "unit_price", selectedUnit.price_sell); 
+          //    onItemChange(idx, "unit_price", selectedUnit.price_sell);
           // }
         }}
       >
@@ -56,16 +56,17 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
         {item.available_units && item.available_units.length > 0 ? (
           item.available_units.map((u) => (
             <Option key={u.id} value={u.unit_name}>
-              {u.unit_name} {u.conversion_rate > 1 ? `(x${u.conversion_rate})` : ''}
+              {u.unit_name}{" "}
+              {u.conversion_rate > 1 ? `(x${u.conversion_rate})` : ""}
             </Option>
           ))
         ) : (
           /* Fallback cho dữ liệu cũ (Legacy) */
           <>
             <Option value={item._wholesale_unit}>{item._wholesale_unit}</Option>
-            {item._retail_unit && item._retail_unit !== item._wholesale_unit && (
-               <Option value={item._retail_unit}>{item._retail_unit}</Option>
-            )}
+            {item._retail_unit && item._retail_unit !== item._wholesale_unit ? (
+              <Option value={item._retail_unit}>{item._retail_unit}</Option>
+            ) : null}
           </>
         )}
       </Select>
@@ -83,12 +84,15 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
             styles={{ body: { padding: 8 } }}
           >
             <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-              <Avatar 
-                shape="square" 
-                size={64} 
-                src={item.image_url} 
+              <Avatar
+                shape="square"
+                size={64}
+                src={item.image_url}
                 icon={<PictureOutlined />}
-                style={{ backgroundColor: '#f5f5f5', border: '1px solid #d9d9d9' }}
+                style={{
+                  backgroundColor: "#f5f5f5",
+                  border: "1px solid #d9d9d9",
+                }}
               />
               <div style={{ flex: 1 }}>
                 <Text strong>{item.name}</Text>
@@ -114,7 +118,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
               }}
             >
               <Form.Item label="ĐVT" style={{ marginBottom: 0 }}>
-                 {renderUnitSelect(item, idx)}
+                {renderUnitSelect(item, idx)}
               </Form.Item>
 
               <Form.Item label="SL" style={{ marginBottom: 0 }}>
@@ -168,12 +172,15 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
       width: 300,
       render: (_: any, r: POItem) => (
         <Space>
-          <Avatar 
-            shape="square" 
-            size={48} 
-            src={r.image_url} 
-            icon={<PictureOutlined />} 
-            style={{ backgroundColor: '#f5f5f5', border: '1px solid #747474ff' }} 
+          <Avatar
+            shape="square"
+            size={48}
+            src={r.image_url}
+            icon={<PictureOutlined />}
+            style={{
+              backgroundColor: "#f5f5f5",
+              border: "1px solid #747474ff",
+            }}
           />
           <div>
             <div style={{ fontWeight: 500 }}>{r.name}</div>
@@ -215,19 +222,19 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
       ),
     },
     {
-       title: "Hàng tặng", // [NEW] Bonus Column
-       width: 90,
-       align: 'center' as const,
-       render: (_: any, r: POItem, idx: number) => (
-         <Checkbox 
-           checked={r.is_bonus}
-           onChange={(e) => {
-               const val = e.target.checked;
-               onItemChange(idx, "is_bonus", val);
-               if (val) onItemChange(idx, "unit_price", 0);
-           }}
-         />
-       )
+      title: "Hàng tặng", // [NEW] Bonus Column
+      width: 90,
+      align: "center" as const,
+      render: (_: any, r: POItem, idx: number) => (
+        <Checkbox
+          checked={r.is_bonus}
+          onChange={(e) => {
+            const val = e.target.checked;
+            onItemChange(idx, "is_bonus", val);
+            if (val) onItemChange(idx, "unit_price", 0);
+          }}
+        />
+      ),
     },
 
     {

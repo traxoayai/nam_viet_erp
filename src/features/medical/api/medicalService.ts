@@ -31,7 +31,7 @@ export const medicalService = {
       retail_price: s.price,
       image: null,
       type: s.type, // 'service' hoặc 'bundle'
-      clinical_category: s.clinical_category, 
+      clinical_category: s.clinical_category,
     }));
   },
 };

@@ -1,9 +1,17 @@
+import {
+  OutboundTask,
+  OutboundStats,
+  OutboundDetailResponse,
+  OutboundFilter,
+} from "../types/outbound";
+
 import { supabase } from "@/shared/lib/supabaseClient";
-import { OutboundTask, OutboundStats, OutboundDetailResponse, OutboundFilter } from "../types/outbound";
 
 export const outboundService = {
   // 1. Get List with Filters (V3)
-  async getOutboundTasks(filter: OutboundFilter): Promise<{ data: OutboundTask[]; total: number }> {
+  async getOutboundTasks(
+    filter: OutboundFilter
+  ): Promise<{ data: OutboundTask[]; total: number }> {
     const { data, error } = await supabase.rpc("get_warehouse_outbound_tasks", {
       p_page: filter.page,
       p_page_size: filter.pageSize,
@@ -12,7 +20,7 @@ export const outboundService = {
       p_type: filter.type || null,
       p_date_from: filter.date_from || null,
       p_date_to: filter.date_to || null,
-      p_warehouse_id: 1, 
+      p_warehouse_id: 1,
     });
 
     if (error) {
@@ -62,29 +70,32 @@ export const outboundService = {
 
   // 6. Cancel Task
   async cancelTask(taskId: string, reason: string): Promise<void> {
-    const { data: userData } = await supabase.auth.getUser(); 
+    const { data: userData } = await supabase.auth.getUser();
     const { error } = await supabase.rpc("cancel_outbound_task", {
       p_order_id: taskId,
       p_reason: reason,
-      p_user_id: userData.user?.id
+      p_user_id: userData.user?.id,
     });
     if (error) throw error;
   },
 
   // 7. Save Draft Progress (FIXED RPC NAME)
-  async saveProgress(orderId: string, items: {product_id: number, quantity_picked: number}[]): Promise<void> {
-      const { error } = await supabase.rpc("save_outbound_progress", {
-          p_order_id: orderId,
-          p_items: items
-      });
-      if (error) throw error;
+  async saveProgress(
+    orderId: string,
+    items: { product_id: number; quantity_picked: number }[]
+  ): Promise<void> {
+    const { error } = await supabase.rpc("save_outbound_progress", {
+      p_order_id: orderId,
+      p_items: items,
+    });
+    if (error) throw error;
   },
 
   // 8. Handover to Shipping (V5)
   async handoverShipping(orderId: string): Promise<void> {
-      const { error } = await supabase.rpc("handover_to_shipping", {
-          p_order_id: orderId
-      });
-      if (error) throw error;
-  }
+    const { error } = await supabase.rpc("handover_to_shipping", {
+      p_order_id: orderId,
+    });
+    if (error) throw error;
+  },
 };

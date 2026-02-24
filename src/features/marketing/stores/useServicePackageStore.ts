@@ -29,7 +29,10 @@ interface StoreState {
   ) => Promise<boolean>;
   deletePackage: (id: number) => Promise<boolean>;
   deletePackages: (ids: number[]) => Promise<boolean>; // [NEW]
-  updateStatus: (ids: number[], status: "active" | "inactive") => Promise<boolean>; // [NEW]
+  updateStatus: (
+    ids: number[],
+    status: "active" | "inactive"
+  ) => Promise<boolean>; // [NEW]
   getPackageDetails: (id: number) => Promise<void>;
   calculateCost: (items: ServicePackageItemInput[]) => Promise<number>;
 
@@ -130,19 +133,19 @@ export const useServicePackageStore = create<StoreState>((set, get) => ({
   },
 
   updateStatus: async (ids, status) => {
-      set({ loading: true });
-      try {
-        await servicePackageService.updatePackagesStatus(ids, status);
-        message.success(`Đã cập nhật trạng thái ${ids.length} gói`);
-        get().fetchPackages();
-        return true;
-      } catch (error) {
-        message.error("Cập nhật trạng thái thất bại");
-        return false;
-      } finally {
-        set({ loading: false });
-      }
-    },
+    set({ loading: true });
+    try {
+      await servicePackageService.updatePackagesStatus(ids, status);
+      message.success(`Đã cập nhật trạng thái ${ids.length} gói`);
+      get().fetchPackages();
+      return true;
+    } catch (error) {
+      message.error("Cập nhật trạng thái thất bại");
+      return false;
+    } finally {
+      set({ loading: false });
+    }
+  },
 
   calculateCost: async (items) => {
     // Gọi service tính giá

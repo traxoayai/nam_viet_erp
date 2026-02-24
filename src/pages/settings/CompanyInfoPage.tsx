@@ -29,8 +29,8 @@ import React, { useState, useEffect } from "react";
 import type { UploadProps, UploadFile } from "antd";
 
 // --- NÂNG CẤP V400: Import đúng service ---
-import { supabase } from "@/shared/lib/supabaseClient";
 import { uploadFile } from "@/shared/api/storageService"; // Dùng service chung
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // Định nghĩa kiểu dữ liệu cho thông tin công ty
 interface CompanyInfo {

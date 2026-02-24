@@ -1,7 +1,7 @@
 // src/features/product/types/ai.types.ts
 
 // 1. Định nghĩa các đơn vị (khớp với prompt Gemini)
-export type AiUnitType = 'base' | 'retail' | 'wholesale' | 'logistics';
+export type AiUnitType = "base" | "retail" | "wholesale" | "logistics";
 
 export interface AiUnit {
   unit_name: string;
@@ -35,13 +35,13 @@ export interface AiExtractedData {
   manufacturer_name: string;
   active_ingredients: { name: string; amount: string }[];
   packing_spec: string;
-  
+
   // [NEW] Hỗ trợ cấu trúc JSON cho HDSD
   usage_instructions?: AiUsageInstructions;
-  
+
   // Units
   units: AiUnit[];
-  
+
   // Marketing
   marketing_content?: AiMarketingContent;
 }

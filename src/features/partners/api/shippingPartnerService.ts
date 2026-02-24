@@ -1,11 +1,11 @@
 // src/services/shippingPartnerService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
-// import { uploadFile } from "@/services/storageService"; // Giả định service upload
 import {
   ShippingPartnerListRecord,
   ShippingPartnerFormData,
   ShippingRule,
 } from "@/features/partners/types/shippingPartner";
+import { supabase } from "@/shared/lib/supabaseClient";
+// import { uploadFile } from "@/services/storageService"; // Giả định service upload
 
 // --- BUCKET LƯU TRỮ (Nâng cấp sau) ---
 // const PARTNER_FILES_BUCKET = "shipping_partner_files";

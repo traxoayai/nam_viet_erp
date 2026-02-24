@@ -1,10 +1,10 @@
-import { useState } from "react";
 import { Grid, Card, Space, Button } from "antd";
 import { ScanBarcode } from "lucide-react";
+import { useState } from "react";
 
+import { AIVisionCamera } from "./AIVisionCamera";
 import { ScannerListener } from "./ScannerListener";
 import { VoiceCommander } from "./VoiceCommander";
-import { AIVisionCamera } from "./AIVisionCamera";
 
 const { useBreakpoint } = Grid;
 
@@ -12,7 +12,7 @@ interface WarehouseToolBarProps {
   onScan: (code: string) => void;
   onVoice?: (text: string) => void;
   onAICamResult?: (data: any) => void;
-  
+
   // Tuỳ chọn
   enableScanner?: boolean;
   enableVoice?: boolean;
@@ -57,54 +57,60 @@ export const WarehouseToolBar = ({
       <ScannerListener onScan={onScan} enabled={enableScanner} />
 
       {/* 3. AI Camera Modal (Chỉ render nếu cần) */}
-      {enableAICam && onAICamResult && (
+      {enableAICam && onAICamResult ? (
         <AIVisionCamera
           visible={camVisible}
           onClose={() => setCamVisible(false)}
           onResult={onAICamResult}
         />
-      )}
+      ) : null}
 
       {/* 4. Toolbar UI */}
       {screens.md ? (
         // DESKTOP: Render như một Card nhỏ gọn
-        <Card size="small" bodyStyle={{ padding: "8px 16px" }} style={containerStyle}>
-           <Space size="large">
-              {enableVoice && onVoice && (
-                 <Space>
-                    <VoiceCommander onCommand={onVoice} />
-                    <span>Ra lệnh giọng nói</span>
-                 </Space>
-              )}
-              
-              {enableAICam && (
-                 <Button 
-                    icon={<ScanBarcode size={18} />} 
-                    onClick={() => setCamVisible(true)}
-                 >
-                    Mở AI Camera
-                 </Button>
-              )}
-           </Space>
+        <Card
+          size="small"
+          bodyStyle={{ padding: "8px 16px" }}
+          style={containerStyle}
+        >
+          <Space size="large">
+            {enableVoice && onVoice ? (
+              <Space>
+                <VoiceCommander onCommand={onVoice} />
+                <span>Ra lệnh giọng nói</span>
+              </Space>
+            ) : null}
+
+            {enableAICam ? (
+              <Button
+                icon={<ScanBarcode size={18} />}
+                onClick={() => setCamVisible(true)}
+              >
+                Mở AI Camera
+              </Button>
+            ) : null}
+          </Space>
         </Card>
       ) : (
         // MOBILE: Render Fixed Footer
         <div style={containerStyle}>
-           <div style={{ fontWeight: 500, color: "#666" }}>Smart Tools:</div>
-           
-           <Space size="middle">
-              {enableVoice && onVoice && <VoiceCommander onCommand={onVoice} />}
-              
-              {enableAICam && (
-                 <Button 
-                    type="primary"
-                    shape="circle"
-                    size="large"
-                    icon={<ScanBarcode size={24} />}
-                    onClick={() => setCamVisible(true)}
-                 />
-              )}
-           </Space>
+          <div style={{ fontWeight: 500, color: "#666" }}>Smart Tools:</div>
+
+          <Space size="middle">
+            {enableVoice && onVoice ? (
+              <VoiceCommander onCommand={onVoice} />
+            ) : null}
+
+            {enableAICam ? (
+              <Button
+                type="primary"
+                shape="circle"
+                size="large"
+                icon={<ScanBarcode size={24} />}
+                onClick={() => setCamVisible(true)}
+              />
+            ) : null}
+          </Space>
         </div>
       )}
     </>

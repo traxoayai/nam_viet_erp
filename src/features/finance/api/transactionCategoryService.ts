@@ -1,9 +1,9 @@
 // src/services/transactionCategoryService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
 import {
   CoaAccount,
   TransactionCategory,
 } from "@/features/finance/types/transactionCategory";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // === NGHIỆP VỤ LOẠI THU/CHI ===
 

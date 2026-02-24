@@ -39,14 +39,14 @@ import { FinanceFormModal } from "./components/FinanceFormModal";
 import { TransactionDetailModal } from "./components/TransactionDetailModal"; // Import Modal mới
 import { useFinanceTransactionLogic } from "./hooks/useFinanceTransactionLogic";
 
-import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
+import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 import { useUserStore } from "@/features/auth/stores/useUserStore"; // [NEW]
+import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
 import { TransactionRecord } from "@/features/finance/types/finance";
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
 import { generatePaymentVoucherHTML } from "@/shared/utils/printTemplates"; // [NEW]
 import { printHTML } from "@/shared/utils/printUtils"; // [RESTORED]
-import { Access } from "@/shared/components/auth/Access"; // [NEW]
-import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -64,20 +64,25 @@ const FinanceTransactionPage = () => {
 
   // [NEW] Load users for filter
   useState(() => {
-     fetchUsers();
+    fetchUsers();
   });
 
   // [NEW] Lấy danh sách quyền của user hiện tại
   const { permissions } = useAuthStore();
-  
+
   // Helper check quyền nhanh
-  const canApprove = permissions.includes('finance.approve') || permissions.includes('admin-all');
-  const canExecute = permissions.includes('finance.execute') || permissions.includes('admin-all');
-  
+  const canApprove =
+    permissions.includes("finance.approve") ||
+    permissions.includes("admin-all");
+  const canExecute =
+    permissions.includes("finance.execute") ||
+    permissions.includes("admin-all");
+
   // Chỉ xóa phiếu Pending và có quyền xóa
-  const canDelete = (record: TransactionRecord) => 
-      record.status === "pending" && 
-      (permissions.includes('finance.delete') || permissions.includes('admin-all'));
+  const canDelete = (record: TransactionRecord) =>
+    record.status === "pending" &&
+    (permissions.includes("finance.delete") ||
+      permissions.includes("admin-all"));
 
   const handleDelete = async (id: number) => {
     const success = await deleteTransaction(id);
@@ -86,8 +91,8 @@ const FinanceTransactionPage = () => {
 
   // [NEW] Print Handler
   const handlePrint = (record: TransactionRecord) => {
-      const html = generatePaymentVoucherHTML(record);
-      printHTML(html);
+    const html = generatePaymentVoucherHTML(record);
+    printHTML(html);
   };
 
   const columns = [
@@ -102,9 +107,9 @@ const FinanceTransactionPage = () => {
       dataIndex: "creator_name", // [FIX] Map field creator_name
       width: 240,
       render: (name: string) => (
-          <Tag color="cyan" style={{ margin: 0 }}>
-              {name || "N/A"}
-          </Tag>
+        <Tag color="cyan" style={{ margin: 0 }}>
+          {name || "N/A"}
+        </Tag>
       ),
     },
     {
@@ -208,17 +213,17 @@ const FinanceTransactionPage = () => {
         <Space size="small">
           {/* [NEW] Print Button */}
           <Tooltip title="In Phiếu">
-              <Button 
-                size="small" 
-                icon={<PrinterOutlined />} 
-                onClick={() => handlePrint(record)} 
-              />
+            <Button
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={() => handlePrint(record)}
+            />
           </Tooltip>
 
           {/* --- LOGIC NÚT DUYỆT THÔNG MINH --- */}
 
           {/* TRƯỜNG HỢP 1: PHIẾU THU (Mới -> Đã Thu) - Cần quyền Execute */}
-          {record.flow === "in" && record.status === "pending" && canExecute && (
+          {record.flow === "in" && record.status === "pending" && canExecute ? (
             <Tooltip title="Xác nhận đã nhận tiền">
               <Popconfirm
                 title="Xác nhận ĐÃ THU tiền?"
@@ -237,10 +242,12 @@ const FinanceTransactionPage = () => {
                 </Button>
               </Popconfirm>
             </Tooltip>
-          )}
+          ) : null}
 
           {/* TRƯỜNG HỢP 2: PHIẾU CHI (Mới -> Duyệt Chi) - Cần quyền Approve */}
-          {record.flow === "out" && record.status === "pending" && canApprove && (
+          {record.flow === "out" &&
+          record.status === "pending" &&
+          canApprove ? (
             <Tooltip title="Quản lý duyệt chi">
               <Popconfirm
                 title="Duyệt khoản chi này?"
@@ -258,10 +265,12 @@ const FinanceTransactionPage = () => {
                 </Button>
               </Popconfirm>
             </Tooltip>
-          )}
+          ) : null}
 
           {/* TRƯỜNG HỢP 3: PHIẾU CHI (Đã Duyệt -> Đã Chi) - Cần quyền Execute */}
-          {record.flow === "out" && record.status === "approved" && canExecute && (
+          {record.flow === "out" &&
+          record.status === "approved" &&
+          canExecute ? (
             <Tooltip title="Thủ quỹ xác nhận xuất tiền">
               <Popconfirm
                 title="Xác nhận ĐÃ CHI tiền?"
@@ -281,7 +290,7 @@ const FinanceTransactionPage = () => {
                 </Button>
               </Popconfirm>
             </Tooltip>
-          )}
+          ) : null}
 
           <Tooltip title="Xem chi tiết">
             <Button
@@ -312,27 +321,27 @@ const FinanceTransactionPage = () => {
         <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={8}>
             <Card bordered={false}>
-              <Access 
-                permission={PERMISSIONS.FINANCE.VIEW_BALANCE} 
+              <Access
+                permission={PERMISSIONS.FINANCE.VIEW_BALANCE}
                 hide={true} // [FIX] Bắt buộc ẩn và hiện fallback
                 fallback={
-                    // Hiển thị khi không có quyền
-                    <Statistic 
-                        title="Tổng Quỹ Thực Tế (Tất cả các quỹ)" 
-                        value="***" 
-                        valueStyle={{ color: "#1890ff", filter: "blur(4px)" }} 
-                        prefix={<WalletOutlined />} 
-                    />
-                }
-              >
+                  // Hiển thị khi không có quyền
                   <Statistic
                     title="Tổng Quỹ Thực Tế (Tất cả các quỹ)"
-                    value={logic.totalBalance}
-                    precision={0}
-                    valueStyle={{ color: "#1890ff" }}
+                    value="***"
+                    valueStyle={{ color: "#1890ff", filter: "blur(4px)" }}
                     prefix={<WalletOutlined />}
-                    suffix="đ"
                   />
+                }
+              >
+                <Statistic
+                  title="Tổng Quỹ Thực Tế (Tất cả các quỹ)"
+                  value={logic.totalBalance}
+                  precision={0}
+                  valueStyle={{ color: "#1890ff" }}
+                  prefix={<WalletOutlined />}
+                  suffix="đ"
+                />
               </Access>
             </Card>
           </Col>
@@ -374,16 +383,19 @@ const FinanceTransactionPage = () => {
                 style={{ width: 180 }}
                 showSearch
                 optionFilterProp="children"
-                onChange={(val) => logic.setFilters({ creatorId: val })} 
+                onChange={(val) => logic.setFilters({ creatorId: val })}
               >
                 {users
-                    // [FIX] Chỉ hiện nhân viên Active và Đang làm việc (Bỏ qua 'test', 'resigned')
-                    .filter(u => u.status === 'active' && u.work_state === 'working')
-                    .map(u => (
-                        <Select.Option key={u.key} value={u.key}>
-                            {u.full_name || u.name || u.email} {/* [FIX] Dùng full_name ưu tiên */}
-                        </Select.Option>
-                ))}
+                  // [FIX] Chỉ hiện nhân viên Active và Đang làm việc (Bỏ qua 'test', 'resigned')
+                  .filter(
+                    (u) => u.status === "active" && u.work_state === "working"
+                  )
+                  .map((u) => (
+                    <Select.Option key={u.key} value={u.key}>
+                      {u.full_name || u.name || u.email}{" "}
+                      {/* [FIX] Dùng full_name ưu tiên */}
+                    </Select.Option>
+                  ))}
               </Select>
               <RangePicker
                 style={{ width: 240 }}

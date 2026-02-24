@@ -47,10 +47,10 @@ import dayjs from "dayjs";
 import React, { useState, useEffect } from "react";
 
 // Import Stores & Components
-import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect"; // <-- MỚI: Component dùng chung
-import { useServicePackageStore } from "@/features/marketing/stores/useServicePackageStore";
 import { useWarehouseStore } from "@/features/inventory/stores/warehouseStore"; // <-- MỚI: Store kho
+import { useServicePackageStore } from "@/features/marketing/stores/useServicePackageStore";
 import { ServicePackageRecord } from "@/features/marketing/types/servicePackage";
+import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect"; // <-- MỚI: Component dùng chung
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -286,9 +286,10 @@ const ServicePackagePage: React.FC = () => {
           if (cat === "imaging") return <Tag color="purple">CĐHA</Tag>;
           if (cat === "procedure") return <Tag color="orange">Thủ thuật</Tag>;
           if (cat === "examination") return <Tag color="green">Khám bệnh</Tag>;
-          if (cat === "vaccination") return <Tag color="magenta">Tiêm chủng</Tag>;
+          if (cat === "vaccination")
+            return <Tag color="magenta">Tiêm chủng</Tag>;
           return <Text type="secondary">-</Text>;
-        }
+        },
       },
       {
         title: "Giá Bán",
@@ -420,8 +421,8 @@ const ServicePackagePage: React.FC = () => {
                     size="small"
                     icon={<CheckCircleOutlined />}
                     onClick={() => {
-                        updateStatus(selectedRowKeys as number[], "active");
-                        setSelectedRowKeys([]);
+                      updateStatus(selectedRowKeys as number[], "active");
+                      setSelectedRowKeys([]);
                     }}
                   >
                     Kích hoạt
@@ -431,8 +432,8 @@ const ServicePackagePage: React.FC = () => {
                     icon={<StopOutlined />}
                     danger
                     onClick={() => {
-                        updateStatus(selectedRowKeys as number[], "inactive");
-                        setSelectedRowKeys([]);
+                      updateStatus(selectedRowKeys as number[], "inactive");
+                      setSelectedRowKeys([]);
                     }}
                   >
                     Ngừng kinh doanh
@@ -441,13 +442,18 @@ const ServicePackagePage: React.FC = () => {
                     title="Xóa các gói đã chọn?"
                     description="Hành động này không thể hoàn tác!"
                     onConfirm={() => {
-                        deletePackages(selectedRowKeys as number[]);
-                        setSelectedRowKeys([]);
+                      deletePackages(selectedRowKeys as number[]);
+                      setSelectedRowKeys([]);
                     }}
                     okText="Xóa vĩnh viễn"
                     okType="danger"
                   >
-                    <Button size="small" type="primary" danger icon={<DeleteOutlined />}>
+                    <Button
+                      size="small"
+                      type="primary"
+                      danger
+                      icon={<DeleteOutlined />}
+                    >
                       Xóa ({selectedRowKeys.length})
                     </Button>
                   </Popconfirm>
@@ -647,7 +653,8 @@ const ServicePackagePage: React.FC = () => {
     // LOGIC MỚI: Xác định loại cần tìm dựa trên formType
     // Nếu là 'service' (Tạo dịch vụ lẻ) -> Cần tìm Vật tư tiêu hao (Product) để tính giá vốn
     // Nếu là 'bundle' (Tạo gói) -> Cần tìm Dịch vụ con (Service) hoặc Sản phẩm (Product) để bán kèm
-    const typesToSearch = formType === 'service' ? ['product'] : ['service', 'product'];
+    const typesToSearch =
+      formType === "service" ? ["product"] : ["service", "product"];
 
     return (
       <Form
@@ -699,28 +706,36 @@ const ServicePackagePage: React.FC = () => {
               <Col span={12}>
                 <Form.Item name="type" label="Loại hình kinh doanh">
                   <Radio.Group buttonStyle="solid" disabled={!!editingPackage}>
-                    <Radio.Button value="service">Dịch vụ (Khám/Lẻ)</Radio.Button>
+                    <Radio.Button value="service">
+                      Dịch vụ (Khám/Lẻ)
+                    </Radio.Button>
                     <Radio.Button value="bundle">
                       Gói Combo (Dùng nhiều lần)
                     </Radio.Button>
                   </Radio.Group>
                 </Form.Item>
               </Col>
-              
+
               <Col span={12}>
-                <Form.Item 
-                  name="clinicalCategory" 
-                  label="Phân loại Y tế (Cho Bác sĩ)" 
+                <Form.Item
+                  name="clinicalCategory"
+                  label="Phân loại Y tế (Cho Bác sĩ)"
                   initialValue="none"
                   tooltip="Phân loại này giúp Bác sĩ tìm kiếm đúng nhóm dịch vụ khi khám bệnh."
                 >
                   <Select>
-                    <Select.Option value="none">Không áp dụng (Bán lẻ)</Select.Option>
+                    <Select.Option value="none">
+                      Không áp dụng (Bán lẻ)
+                    </Select.Option>
                     <Select.Option value="examination">Khám bệnh</Select.Option>
                     <Select.Option value="lab">Xét nghiệm</Select.Option>
-                    <Select.Option value="imaging">CĐHA (Siêu âm/XQ...)</Select.Option>
+                    <Select.Option value="imaging">
+                      CĐHA (Siêu âm/XQ...)
+                    </Select.Option>
                     <Select.Option value="procedure">Thủ thuật</Select.Option>
-                    <Select.Option value="vaccination">Tiêm chủng</Select.Option>
+                    <Select.Option value="vaccination">
+                      Tiêm chủng
+                    </Select.Option>
                   </Select>
                 </Form.Item>
               </Col>

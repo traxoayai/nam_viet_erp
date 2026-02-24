@@ -1,14 +1,29 @@
 // src/features/pos/components/PosCartTable.tsx
-import { Table, Avatar, Tag, Space, Input, Select, InputNumber, Button, Tooltip, Typography, message } from "antd";
 import { DeleteOutlined, PrinterOutlined } from "@ant-design/icons";
+import {
+  Table,
+  Avatar,
+  Tag,
+  Space,
+  Input,
+  Select,
+  InputNumber,
+  Button,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
+
 import { usePosCartStore } from "../stores/usePosCartStore";
 import { CartItem } from "../types/pos.types";
+
 import { printInstruction } from "@/shared/utils/printTemplates";
 
 const { Text } = Typography;
 
 export const PosCartTable = () => {
-  const { updateQuantity, updateItemField, removeFromCart, getCurrentOrder } = usePosCartStore();
+  const { updateQuantity, updateItemField, removeFromCart, getCurrentOrder } =
+    usePosCartStore();
   const currentOrder = getCurrentOrder();
   const items = currentOrder?.items || [];
 
@@ -19,12 +34,22 @@ export const PosCartTable = () => {
       width: 280,
       render: (_: any, r: CartItem) => (
         <Space align="start">
-          <Avatar shape="square" src={r.image_url} size={48} style={{backgroundColor: '#f5f5f5'}} />
+          <Avatar
+            shape="square"
+            src={r.image_url}
+            size={48}
+            style={{ backgroundColor: "#f5f5f5" }}
+          />
           <div>
-            <div style={{fontWeight: 600, fontSize: 14}}>{r.name}</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{r.name}</div>
             <div style={{ fontSize: 11, color: "#8c8c8c", marginTop: 2 }}>
-              <Tag color="orange" style={{ marginRight: 4, padding: "0 4px", fontSize: 10 }}>
-                {r.location?.cabinet ? `${r.location.cabinet}-${r.location.row}` : 'Kho'}
+              <Tag
+                color="orange"
+                style={{ marginRight: 4, padding: "0 4px", fontSize: 10 }}
+              >
+                {r.location?.cabinet
+                  ? `${r.location.cabinet}-${r.location.row}`
+                  : "Kho"}
               </Tag>
               {r.sku}
             </div>
@@ -32,7 +57,7 @@ export const PosCartTable = () => {
         </Space>
       ),
     },
-    
+
     {
       title: "Liều dùng",
       dataIndex: "dosage",
@@ -47,9 +72,12 @@ export const PosCartTable = () => {
             placeholder="Chọn hoặc nhập liều..."
             onChange={(val) => updateItemField(r.id, "dosage", val)}
             options={[
-                { value: "Sáng 1 - Tối 1", label: "Sáng 1 - Tối 1" },
-                { value: "Sáng 1 - Chiều 1 - Tối 1", label: "Sáng 1 - Chiều 1 - Tối 1" },
-                { value: "Uống khi đau/sốt", label: "Uống khi đau/sốt" }
+              { value: "Sáng 1 - Tối 1", label: "Sáng 1 - Tối 1" },
+              {
+                value: "Sáng 1 - Chiều 1 - Tối 1",
+                label: "Sáng 1 - Chiều 1 - Tối 1",
+              },
+              { value: "Uống khi đau/sốt", label: "Uống khi đau/sốt" },
             ]}
             mode="tags"
           />
@@ -57,10 +85,15 @@ export const PosCartTable = () => {
             <Button
               size="small"
               icon={<PrinterOutlined />}
-              style={{ width: 32, padding: 0, color: '#1890ff', borderColor: '#1890ff' }}
+              style={{
+                width: 32,
+                padding: 0,
+                color: "#1890ff",
+                borderColor: "#1890ff",
+              }}
               onClick={() => {
-                  if (!t) return message.warning("Chưa nhập liều dùng!");
-                  printInstruction(r.name, t); // Calls the template function
+                if (!t) return message.warning("Chưa nhập liều dùng!");
+                printInstruction(r.name, t); // Calls the template function
               }}
             />
           </Tooltip>

@@ -60,7 +60,7 @@ export interface B2BOrderDetail {
   created_at: string;
   note?: string;
   payment_method?: string;
-  
+
   // Thông tin khách hàng (Join)
   customer_id: string;
   customer_name: string;
@@ -77,13 +77,12 @@ export interface B2BOrderDetail {
 
   // Danh sách sản phẩm
   items: B2BOrderDetailItem[];
-  
+
   // Thông tin hóa đơn VAT
   sales_invoices?: {
-      id: number;
-      status: 'pending' | 'processing' | 'issued' | 'verified';
-      invoice_number?: string;
-      created_at: string;
+    id: number;
+    status: "pending" | "processing" | "issued" | "verified";
+    invoice_number?: string;
+    created_at: string;
   } | null;
 }
-

@@ -1,6 +1,7 @@
 // src/main.tsx
-import 'regenerator-runtime/runtime'; // <--- [BẮT BUỘC] THÊM DÒNG NÀY ĐẦU TIÊN
+import "regenerator-runtime/runtime"; // <--- [BẮT BUỘC] THÊM DÒNG NÀY ĐẦU TIÊN
 import "@ant-design/v5-patch-for-react-19";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConfigProvider, App as AntApp } from "antd";
 import viVN from "antd/locale/vi_VN";
 import React from "react";
@@ -13,7 +14,6 @@ import "./app/styles/globals.css";
 import "dayjs/locale/vi";
 
 // --- React Query ---
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // --- MỚI: Import Context ---
 import { AuthProvider } from "@/app/contexts/AuthProvider";
@@ -39,11 +39,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           >
             {/* Bọc NotificationProvider trong ConfigProvider để ăn theo Theme */}
             <NotificationProvider>
-            <PermissionGate>
-              <AntApp>
-                <App />
-              </AntApp>
-            </PermissionGate>
+              <PermissionGate>
+                <AntApp>
+                  <App />
+                </AntApp>
+              </PermissionGate>
             </NotificationProvider>
           </ConfigProvider>
         </AuthProvider>

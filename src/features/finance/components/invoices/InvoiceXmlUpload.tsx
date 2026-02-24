@@ -2,6 +2,7 @@ import { InboxOutlined, FileTextOutlined } from "@ant-design/icons";
 import { Modal, Upload } from "antd";
 import React from "react";
 import { useNavigate } from "react-router-dom";
+
 import { useXmlInvoice } from "../../hooks/useXmlInvoice"; // Nexus Hook
 
 const { Dragger } = Upload;
@@ -22,11 +23,11 @@ export const InvoiceXmlUpload: React.FC<Props> = ({ open, onCancel }) => {
     if (result) {
       onCancel();
       // Chuyển sang trang đối chiếu, truyền dữ liệu đã parse qua State
-      navigate("/finance/invoices/verify/new-xml", { 
-        state: { 
+      navigate("/finance/invoices/verify/new-xml", {
+        state: {
           source: "xml",
-          xmlData: result 
-        } 
+          xmlData: result,
+        },
       });
     }
     return false; // Prevent default upload

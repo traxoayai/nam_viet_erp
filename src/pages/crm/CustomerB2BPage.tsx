@@ -55,15 +55,12 @@ import * as XLSX from "xlsx"; // Import Excel
 import type { TableProps, TabsProps } from "antd"; // Fix Duplicate
 // import type { UploadRequestOption } from "antd/es/upload/interface";
 
-import { Access } from "@/shared/components/auth/Access"; // [NEW]
-import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
 import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 
 // IMPORT "BỘ NÃO" VÀ "KHUÔN MẪU"
-import { useDebounce } from "@/shared/hooks/useDebounce";
+import { useUserStore } from "@/features/auth/stores/useUserStore"; // Store Users (cho NVKD)
 import { uploadLicense } from "@/features/sales/api/customerB2BService"; // Service B2B
 import { useCustomerB2BStore } from "@/features/sales/stores/useCustomerB2BStore"; // Store B2B
-import { useUserStore } from "@/features/auth/stores/useUserStore"; // Store Users (cho NVKD)
 import { CustomerStatus } from "@/features/sales/types/customer"; // Lấy Status từ B2C
 import {
   CustomerB2BListRecord,
@@ -71,6 +68,9 @@ import {
   //   CustomerB2BContact,
   TransactionHistory,
 } from "@/features/sales/types/customerB2B";
+import { Access } from "@/shared/components/auth/Access"; // [NEW]
+import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
+import { useDebounce } from "@/shared/hooks/useDebounce";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -146,7 +146,6 @@ const CustomerB2BPage: React.FC = () => {
     setPage,
     showListView,
     showFormView,
-    
   } = useCustomerB2BStore(); // Lấy NVKD từ UserStore
 
   const { users, fetchUsers } = useUserStore(); // State cục bộ
@@ -328,9 +327,9 @@ const CustomerB2BPage: React.FC = () => {
 
       // [UPDATE] Format dữ liệu cho Template (Thêm cột Nợ đầu kỳ)
       const formattedData = dataToExport.map((item: any) => ({
-          ...item,
-          // Thêm cột này để làm mẫu cho người dùng nhập liệu (Import lại)
-          "Nợ Hiện Tại": item.current_debt || 0, 
+        ...item,
+        // Thêm cột này để làm mẫu cho người dùng nhập liệu (Import lại)
+        "Nợ Hiện Tại": item.current_debt || 0,
       }));
 
       const ws = XLSX.utils.json_to_sheet(formattedData);
@@ -454,13 +453,22 @@ const CustomerB2BPage: React.FC = () => {
 
   const renderListView = () => {
     // [NEW] Xử lý Sort Table
-    const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
-        if (sorter.field === 'current_debt') {
-            const order = sorter.order === 'ascend' ? 'asc' : (sorter.order === 'descend' ? 'desc' : null);
-            fetchCustomers({}, order); // Gọi store fetch với sort mới
-        } else {
-            fetchCustomers({}, null); // Reset sort
-        }
+    const handleTableChange = (
+      _pagination: any,
+      _filters: any,
+      sorter: any
+    ) => {
+      if (sorter.field === "current_debt") {
+        const order =
+          sorter.order === "ascend"
+            ? "asc"
+            : sorter.order === "descend"
+              ? "desc"
+              : null;
+        fetchCustomers({}, order); // Gọi store fetch với sort mới
+      } else {
+        fetchCustomers({}, null); // Reset sort
+      }
     };
 
     const columns: TableProps<CustomerB2BListRecord>["columns"] = [
@@ -542,28 +550,28 @@ const CustomerB2BPage: React.FC = () => {
               />
             </Tooltip>
             {record.status === "active" ? (
-               <Access permission={PERMISSIONS.CRM.B2B.DELETE}>
-                  <Tooltip title="Ngừng Giao dịch">
-                    <Popconfirm
-                      title={`Ngừng GD khách "${record.name}"?`}
-                      onConfirm={() => handleDelete(record)}
-                      okText="Đồng ý"
-                      cancelText="Hủy"
-                    >
-                      <Button type="text" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Tooltip>
+              <Access permission={PERMISSIONS.CRM.B2B.DELETE}>
+                <Tooltip title="Ngừng Giao dịch">
+                  <Popconfirm
+                    title={`Ngừng GD khách "${record.name}"?`}
+                    onConfirm={() => handleDelete(record)}
+                    okText="Đồng ý"
+                    cancelText="Hủy"
+                  >
+                    <Button type="text" danger icon={<DeleteOutlined />} />
+                  </Popconfirm>
+                </Tooltip>
               </Access>
             ) : (
               <Access permission={PERMISSIONS.CRM.B2B.EDIT}>
-                  <Tooltip title="Cho phép Giao dịch trở lại">
-                    <Button
-                      type="text"
-                      style={{ color: "green" }}
-                      icon={<SafetyOutlined />}
-                      onClick={() => handleReactivate(record)}
-                    />
-                  </Tooltip>
+                <Tooltip title="Cho phép Giao dịch trở lại">
+                  <Button
+                    type="text"
+                    style={{ color: "green" }}
+                    icon={<SafetyOutlined />}
+                    onClick={() => handleReactivate(record)}
+                  />
+                </Tooltip>
               </Access>
             )}
           </Space>
@@ -599,13 +607,13 @@ const CustomerB2BPage: React.FC = () => {
                     Xuất Excel
                   </Button>
                   <Access permission={PERMISSIONS.CRM.B2B.CREATE}>
-                      <Button
-                        type="primary"
-                        icon={<TeamOutlined />}
-                        onClick={() => showFormView()}
-                      >
-                        Thêm Khách B2B Mới
-                      </Button>
+                    <Button
+                      type="primary"
+                      icon={<TeamOutlined />}
+                      onClick={() => showFormView()}
+                    >
+                      Thêm Khách B2B Mới
+                    </Button>
                   </Access>
                 </Space>
               </Col>
@@ -642,22 +650,21 @@ const CustomerB2BPage: React.FC = () => {
                 action={
                   <Space>
                     <Access permission={PERMISSIONS.CRM.B2B.EDIT}>
-                        <Button
+                      <Button
                         size="small"
                         onClick={() => handleBulkAction("reactivate")}
-                        >
+                      >
                           <SafetyOutlined /> Giao dịch lại
-                        </Button>
+                      </Button>
                     </Access>
-
                     <Access permission={PERMISSIONS.CRM.B2B.DELETE}>
-                        <Button
+                      <Button
                         size="small"
                         danger
                         onClick={() => handleBulkAction("delete")}
-                        >
+                      >
                           <DeleteOutlined /> Ngừng Giao dịch
-                        </Button>
+                      </Button>
                     </Access>
                        
                   </Space>
@@ -1102,8 +1109,6 @@ const CustomerB2BPage: React.FC = () => {
     );
   };
 
-
-
   // --- RENDER CHÍNH ---
   return (
     <ConfigProvider locale={viVN}>
@@ -1116,7 +1121,7 @@ const CustomerB2BPage: React.FC = () => {
       `}</style>
       <PermissionGuard permission={PERMISSIONS.CRM.B2B.VIEW}>
         <Layout style={{ minHeight: "100vh", backgroundColor: "#f9f9f9" }}>
-            {isFormView ? renderFormView() : renderListView()} {/* SỬA LỖI G */}
+          {isFormView ? renderFormView() : renderListView()} {/* SỬA LỖI G */}
         </Layout>
       </PermissionGuard>
     </ConfigProvider>

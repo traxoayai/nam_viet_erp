@@ -1,9 +1,9 @@
 // src/stores/useAuthStore.ts
 import { create } from "zustand";
 
-import { supabase } from "@/shared/lib/supabaseClient";
 import * as authService from "@/features/auth/api/authService";
 import { AuthStoreState } from "@/features/auth/types/auth";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
   // State (Trạng thái)
@@ -20,22 +20,24 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   fetchProfile: async () => {
     set({ isLoadingProfile: true });
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
-         set({ profile: null, permissions: [], isLoadingProfile: false });
-         return null;
+        set({ profile: null, permissions: [], isLoadingProfile: false });
+        return null;
       }
 
       // 1. Lấy thông tin user (Code cũ)
       const profile = await authService.getSelfProfile();
 
       // 2. [NEW] Gọi RPC lấy danh sách quyền
-      const { data: perms } = await supabase.rpc('get_my_permissions');
+      const { data: perms } = await supabase.rpc("get_my_permissions");
 
-      set({ 
-        profile, 
-        permissions: perms || [], 
-        isLoadingProfile: false 
+      set({
+        profile,
+        permissions: perms || [],
+        isLoadingProfile: false,
       });
       return profile;
     } catch (error) {
