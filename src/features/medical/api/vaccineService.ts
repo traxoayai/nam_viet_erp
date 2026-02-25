@@ -16,7 +16,7 @@ export const getCustomerTimeline = async (customerId: number) => {
             expected_date,
             actual_date,
             status,
-            products(name, sku, category_id)
+            products(name, sku)
         `
     )
     .eq("customer_id", customerId)

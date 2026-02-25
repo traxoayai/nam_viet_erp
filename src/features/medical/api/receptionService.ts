@@ -24,6 +24,7 @@ export const receptionService = {
       appointment_time: payload.appointment_time,
       room_id: payload.room_id,
       service_ids: payload.service_ids,
+      service_type: payload.service_type,
       priority: payload.priority || "normal",
       note: payload.note,
       doctor_id: payload.doctor_id,

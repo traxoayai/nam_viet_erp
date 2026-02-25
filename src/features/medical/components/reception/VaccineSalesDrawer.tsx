@@ -177,19 +177,13 @@ export const VaccineSalesDrawer: React.FC<VaccineSalesDrawerProps> = ({
                 >
                   <div className="flex flex-col gap-2 pl-2 border-l-2 border-blue-200">
                     {item.service_package_items.map((pi: any, i2: number) => {
-                      // Tính nhẩm ngày dự kiến
-                      const expected = new Date();
-                      expected.setDate(
-                        expected.getDate() + (pi.schedule_days || 0)
-                      );
-
                       return (
                         <div key={i2} className="text-sm flex justify-between">
                           <span className="text-gray-700 font-medium">
                             {pi.products?.name}
                           </span>
-                          <span className="text-orange-600 text-xs">
-                            Sau {pi.schedule_days || 0} ngày
+                          <span className="text-orange-600 text-xs pl-2 text-right">
+                            Mũi {i2 + 1}: {dayjs().add(pi.schedule_days || 0, 'day').format('DD/MM/YYYY')} (Sau {pi.schedule_days || 0} ngày)
                           </span>
                         </div>
                       );

@@ -26,6 +26,7 @@ import { SellPackageDrawer } from "@/features/medical/components/reception/SellP
 import { VaccineSalesDrawer } from "@/features/medical/components/reception/VaccineSalesDrawer";
 import { VaccineTimelineDrawer } from "@/features/medical/components/vaccination/VaccineTimelineDrawer";
 import { ReceptionAppointment } from "@/features/medical/types/reception.types";
+import { supabase } from "@/shared/lib/supabaseClient";
 import { printAppointmentSlip } from "@/shared/utils/printTemplates"; // Import hàm in mới
 
 // --- HELPERS ---
@@ -212,6 +213,23 @@ export default function ReceptionPage() {
 
   useEffect(() => {
     fetchData();
+
+    // Lắng nghe realtime từ bảng appointments theo yêu cầu từ Lệnh tác chiến
+    const channel = supabase
+      .channel("reception_live_queue")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        (payload) => {
+          console.log("Có thay đổi lịch hẹn, Auto-refresh!", payload);
+          fetchData(); // Tự động gọi lại hàm lấy danh sách
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [searchTerm, filterDate, filterRoom, filterStaff]);
 
   // Load resources for Modal & Filter
@@ -295,6 +313,12 @@ export default function ReceptionPage() {
         return s ? s.name : `Dịch vụ #${id}`;
       });
 
+      // Xác định loại dịch vụ (Vaccination hoặc Examination)
+      const isVaccination = serviceNames.some(
+        (n) => n.toLowerCase().includes("tiêm") || n.toLowerCase().includes("vaccine") || n.toLowerCase().includes("vắc")
+      );
+      const serviceTypeToSave = isVaccination ? "vaccination" : "examination";
+
       const tempApptForPrint = {
         customer_name: formData.customerData?.name,
         customer_yob: dayjs(formData.customerData?.dob).year(),
@@ -312,6 +336,7 @@ export default function ReceptionPage() {
         appointment_time: formData.appointmentTime,
         room_id: formData.roomId ? Number(formData.roomId) : null,
         service_ids: selectedServices,
+        service_type: serviceTypeToSave,
         priority: formData.priority,
         note: formData.note,
         doctor_id: null,
@@ -518,10 +543,25 @@ export default function ReceptionPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1.5">
-                      {row.service_names?.map((s, idx) => (
-                        <ServiceTag key={idx} type={s} />
-                      ))}
+                    <div className="flex flex-col gap-1.5">
+                      {row.service_type && (
+                        <div className="mb-1">
+                          {row.service_type.toLowerCase() === 'tiêm chủng' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase border bg-purple-100 text-purple-700 border-purple-200 whitespace-nowrap"><Syringe size={12} /> Tiêm Chủng</span>
+                          ) : row.service_type.toLowerCase() === 'khám bệnh' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase border bg-blue-100 text-blue-700 border-blue-200 whitespace-nowrap"><Stethoscope size={12} /> Khám Bệnh</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase border bg-gray-100 text-gray-700 border-gray-200 whitespace-nowrap">{row.service_type}</span>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-1.5">
+                        {row.service_names && row.service_names.length > 0 ? row.service_names.map((s, idx) => (
+                          <ServiceTag key={idx} type={s} />
+                        )) : (
+                          <span className="text-gray-400 text-xs italic">Không có dịch vụ</span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">

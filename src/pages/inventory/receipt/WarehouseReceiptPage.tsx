@@ -265,62 +265,63 @@ const WarehouseReceiptPage = () => {
     {
       title: "Số Lượng Nhập",
       width: 50,
-      render: (_: any, record: InboundDetailItem) => (
-        <InputNumber
-          min={0}
-          value={record.input_quantity}
-          onChange={(val) =>
-            updateWorkingItem(record.product_id, { input_quantity: val || 0 })
-          }
-          style={{ width: "100%" }}
-          disabled={isDone} // [NEW] Khóa khi đã hoàn tất
-          placeholder="0"
-          status={(record.input_quantity || 0) > 0 ? "warning" : ""}
-        />
-      ),
+      render: (_: any, record: InboundDetailItem) => {
+          // [NEW] Nếu đơn đã khóa, hiển thị số lượng ĐÃ NHẬP. Nếu chưa khóa, hiển thị số lượng ĐANG NHẬP.
+          const displayQty = isDone ? record.quantity_received_prev : record.input_quantity;
+
+          return (
+              <InputNumber 
+                  min={0}
+                  value={displayQty}
+                  onChange={(val) => updateWorkingItem(record.product_id, { input_quantity: val || 0 })}
+                  style={{ width: "100%" }}
+                  disabled={isDone} 
+                  placeholder="0"
+                  status={(!isDone && (record.input_quantity || 0) > 0) ? "warning" : ""}
+              />
+          );
+      }
     },
     // SPLIT COLUMNS LOGIC
     {
-      title: "Số Lô",
-      width: 100,
-      render: (_: any, record: InboundDetailItem) => {
-        if (record.stock_management_type !== "lot_date")
-          return <Text disabled>--</Text>;
-        return (
-          <Input
-            placeholder="Nhập số lô"
-            value={record.input_lot}
-            onChange={(e) =>
-              updateWorkingItem(record.product_id, {
-                input_lot: e.target.value,
-              })
-            }
-            disabled={isDone} // [NEW] Khóa khi đã hoàn tất
-          />
-        );
-      },
+        title: "Số Lô",
+        width: 100,
+        render: (_: any, record: InboundDetailItem) => {
+             if (record.stock_management_type !== 'lot_date') return <Text disabled>--</Text>;
+             
+             // [NEW] Lấy từ State (input_lot) HOẶC DB (lot_number/lot)
+             const displayLot = record.input_lot || (record as any).lot_number || (record as any).lot || "";
+
+             return (
+                 <Input 
+                    placeholder="Nhập số lô"
+                    value={displayLot}
+                    onChange={(e) => updateWorkingItem(record.product_id, { input_lot: e.target.value })}
+                    disabled={isDone} 
+                 />
+             )
+        }
     },
     {
-      title: "Hạn Sử Dụng",
-      width: 100,
-      render: (_: any, record: InboundDetailItem) => {
-        if (record.stock_management_type !== "lot_date")
-          return <Text disabled>--</Text>;
-        return (
-          <DatePicker
-            placeholder="Chọn ngày"
-            style={{ width: "100%" }}
-            format="DD/MM/YYYY"
-            value={record.input_expiry ? dayjs(record.input_expiry) : null}
-            onChange={(date) =>
-              updateWorkingItem(record.product_id, {
-                input_expiry: date ? date.toISOString() : undefined,
-              })
-            }
-            disabled={isDone} // [NEW] Khóa khi đã hoàn tất
-          />
-        );
-      },
+        title: "Hạn Sử Dụng",
+        width: 100,
+        render: (_: any, record: InboundDetailItem) => {
+             if (record.stock_management_type !== 'lot_date') return <Text disabled>--</Text>;
+
+             // [NEW] Lấy từ State (input_expiry) HOẶC DB (expiry_date/exp_date)
+             const displayExpiry = record.input_expiry || (record as any).expiry_date || (record as any).exp_date;
+
+             return (
+                 <DatePicker 
+                    placeholder="Chọn ngày"
+                    style={{ width: "100%" }}
+                    format="DD/MM/YYYY"
+                    value={displayExpiry ? dayjs(displayExpiry) : null}
+                    onChange={(date) => updateWorkingItem(record.product_id, { input_expiry: date ? date.toISOString() : undefined })}
+                    disabled={isDone} 
+                 />
+             )
+        }
     },
   ];
 

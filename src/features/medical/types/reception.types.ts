@@ -18,6 +18,7 @@ export interface ReceptionAppointment {
   // Dịch vụ (Dùng service_names.map(...) để render badges)
   service_ids: number[];
   service_names: string[];
+  service_type: string | null;
 
   // Trạng thái & Phân loại
   priority: "normal" | "emergency" | "vip";
@@ -33,6 +34,7 @@ export interface CreateAppointmentPayload {
   appointment_time: string;
   room_id: number | null;
   service_ids: number[];
+  service_type: string;
   priority: "normal" | "emergency" | "vip";
   note: string;
   doctor_id: string | null;

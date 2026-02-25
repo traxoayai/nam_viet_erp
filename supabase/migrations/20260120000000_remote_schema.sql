@@ -1589,32 +1589,47 @@ CREATE OR REPLACE FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", 
 ALTER FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid" DEFAULT NULL::"uuid", "p_priority" "text" DEFAULT 'normal'::"text", "p_symptoms" "jsonb" DEFAULT '[]'::"jsonb", "p_notes" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid" DEFAULT NULL::"uuid", "p_priority" "text" DEFAULT 'normal'::"text", "p_symptoms" "jsonb" DEFAULT '[]'::"jsonb", "p_notes" "text" DEFAULT NULL::"text", "p_service_ids" bigint[] DEFAULT '{}'::bigint[], "p_service_type" "text" DEFAULT 'examination'::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 DECLARE
-    v_queue_num INTEGER; v_appt_id UUID; v_queue_id BIGINT;
+    v_queue_num INTEGER; 
+    v_appt_id UUID; 
+    v_queue_id BIGINT;
 BEGIN
-    SELECT COALESCE(MAX(queue_number), 0) + 1 INTO v_queue_num FROM public.clinical_queues WHERE date(created_at) = CURRENT_DATE;
+    -- Lấy số thứ tự (reset mỗi ngày)
+    SELECT COALESCE(MAX(queue_number), 0) + 1 INTO v_queue_num 
+    FROM public.clinical_queues 
+    WHERE date(created_at) = CURRENT_DATE;
 
-    INSERT INTO public.appointments (customer_id, doctor_id, appointment_time, status, symptoms, note, service_type, check_in_time) 
-    VALUES (p_customer_id, p_doctor_id, now(), 'waiting', p_symptoms, p_notes, 'examination', now()) 
+    -- TẠO LỊCH HẸN: Đã lưu được service_ids và service_type
+    INSERT INTO public.appointments (
+        customer_id, doctor_id, appointment_time, status, 
+        symptoms, note, service_type, check_in_time, 
+        service_ids -- [CORE LƯU DỮ LIỆU]
+    ) 
+    VALUES (
+        p_customer_id, p_doctor_id, now(), 'waiting', 
+        p_symptoms, p_notes, p_service_type::public.appointment_service_type, now(), 
+        p_service_ids -- [CORE LƯU DỮ LIỆU]
+    ) 
     RETURNING id INTO v_appt_id;
     
-    INSERT INTO public.clinical_queues (appointment_id, customer_id, doctor_id, queue_number, status, priority_level) 
-    VALUES (v_appt_id, p_customer_id, p_doctor_id, v_queue_num, 'waiting', p_priority::public.queue_priority) 
+    -- XẾP HÀNG ĐỢI
+    INSERT INTO public.clinical_queues (
+        appointment_id, customer_id, doctor_id, queue_number, status, priority_level
+    ) 
+    VALUES (
+        v_appt_id, p_customer_id, p_doctor_id, v_queue_num, 'waiting', p_priority::public.queue_priority
+    ) 
     RETURNING id INTO v_queue_id;
     
-    RETURN jsonb_build_object('success', true, 'queue_number', v_queue_num, 'queue_id', v_queue_id);
+    RETURN jsonb_build_object('success', true, 'queue_number', v_queue_num, 'queue_id', v_queue_id, 'appointment_id', v_appt_id);
 END;
 $$;
 
 
-ALTER FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") IS 'Check-in tại quầy: Tạo lịch hẹn ngay lập tức và xếp số vào hàng đợi';
-
+ALTER FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text", "p_service_ids" bigint[], "p_service_type" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."check_invoice_exists"("p_tax_code" "text", "p_symbol" "text", "p_number" "text") RETURNS boolean
@@ -5179,39 +5194,74 @@ DECLARE
     v_item RECORD;
     v_dose_count INT := 1;
     v_inserted_count INT := 0;
+    v_expected_date DATE;
+    v_appt_id UUID;
+    v_service_array BIGINT[];
 BEGIN
     IF p_package_id IS NOT NULL THEN
         -- A. Kịch bản mua GÓI TIÊM
+        v_service_array := ARRAY[p_package_id]; -- Lưu ID của Gói vào mảng dịch vụ
+
         FOR v_item IN 
             SELECT item_id as product_id, quantity, schedule_days 
             FROM public.service_package_items 
             WHERE package_id = p_package_id 
             ORDER BY schedule_days ASC
         LOOP
+            v_expected_date := p_start_date + COALESCE(v_item.schedule_days, 0);
+
+            -- TẠO LỊCH HẸN TỰ ĐỘNG (Thêm service_ids)
+            INSERT INTO public.appointments (
+                customer_id, appointment_time, status, service_type, note, created_by, service_ids
+            ) VALUES (
+                p_customer_id, v_expected_date + interval '8 hours', 'pending', 'vaccination', 'Lịch tiêm tự động từ Gói', p_consulted_by, v_service_array
+            ) RETURNING id INTO v_appt_id;
+
+            -- Đưa vào Sổ tiêm
             INSERT INTO public.customer_vaccination_records (
                 customer_id, order_id, package_id, product_id, dose_number, 
-                expected_date, status, consulted_by
+                expected_date, status, consulted_by, appointment_id
             ) VALUES (
                 p_customer_id, p_order_id, p_package_id, v_item.product_id, v_dose_count,
-                p_start_date + COALESCE(v_item.schedule_days, 0), 'pending', p_consulted_by
+                v_expected_date, 'pending', p_consulted_by, v_appt_id
             );
+            
             v_dose_count := v_dose_count + 1;
             v_inserted_count := v_inserted_count + 1;
         END LOOP;
 
     ELSIF p_product_id IS NOT NULL THEN
-        -- B. Kịch bản mua MŨI LẺ (Tự dò lịch sử để tăng dose_number)
+        -- B. Kịch bản mua MŨI LẺ (product_id đang trỏ tới ID của bảng products, nhưng bảng appointments mong đợi ID của service_packages)
+        -- Tạm thời để trống mảng hoặc truy vấn ngược tìm service_package tương ứng
+        -- Ở đây ta truy vấn ngược để tìm ID dịch vụ tiêm lẻ tương ứng với vắc-xin này
+        SELECT id INTO v_service_array[1] 
+        FROM public.service_packages 
+        WHERE type = 'service' AND clinical_category = 'vaccination' 
+          AND id IN (SELECT package_id FROM public.service_package_items WHERE item_id = p_product_id)
+        LIMIT 1;
+
         SELECT COALESCE(MAX(dose_number), 0) + 1 INTO v_dose_count 
         FROM public.customer_vaccination_records 
         WHERE customer_id = p_customer_id AND product_id = p_product_id;
 
+        v_expected_date := p_start_date;
+
+        -- Tạo Lịch hẹn tự động (Thêm service_ids)
+        INSERT INTO public.appointments (
+            customer_id, appointment_time, status, service_type, note, created_by, service_ids
+        ) VALUES (
+            p_customer_id, v_expected_date + interval '8 hours', 'pending', 'vaccination', 'Lịch tiêm Mũi lẻ', p_consulted_by, v_service_array
+        ) RETURNING id INTO v_appt_id;
+
+        -- Đưa vào Sổ tiêm
         INSERT INTO public.customer_vaccination_records (
             customer_id, order_id, product_id, dose_number, 
-            expected_date, status, consulted_by
+            expected_date, status, consulted_by, appointment_id
         ) VALUES (
             p_customer_id, p_order_id, p_product_id, v_dose_count,
-            p_start_date, 'pending', p_consulted_by
+            v_expected_date, 'pending', p_consulted_by, v_appt_id
         );
+        
         v_inserted_count := 1;
     ELSE
         RAISE EXCEPTION 'Phải cung cấp package_id hoặc product_id';
@@ -6992,14 +7042,13 @@ $$;
 ALTER FUNCTION "public"."get_purchase_orders_master"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status_delivery" "text", "p_status_payment" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_reception_queue"("p_date" "date" DEFAULT CURRENT_DATE, "p_search" "text" DEFAULT ''::"text") RETURNS TABLE("id" "uuid", "appointment_time" timestamp with time zone, "customer_id" bigint, "customer_name" "text", "customer_phone" "text", "customer_code" "text", "customer_gender" "text", "customer_yob" integer, "service_ids" bigint[], "room_id" bigint, "service_names" "text"[], "room_name" "text", "priority" "text", "doctor_name" "text", "creator_name" "text", "payment_status" "text", "status" "text", "contact_status" "text")
+CREATE OR REPLACE FUNCTION "public"."get_reception_queue"("p_date" "date" DEFAULT CURRENT_DATE, "p_search" "text" DEFAULT ''::"text") RETURNS TABLE("id" "uuid", "appointment_time" timestamp with time zone, "customer_id" bigint, "customer_name" "text", "customer_phone" "text", "customer_code" "text", "customer_gender" "text", "customer_yob" integer, "service_ids" bigint[], "room_id" bigint, "service_names" "text"[], "room_name" "text", "priority" "text", "doctor_name" "text", "creator_name" "text", "payment_status" "text", "status" "text", "contact_status" "text", "service_type" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 DECLARE
     v_text_part TEXT;
     v_phone_part TEXT;
 BEGIN
-    -- Logic tách từ khóa tìm kiếm (Smart Search)
     v_phone_part := regexp_replace(p_search, '[^0-9]', '', 'g');
     v_text_part := trim(regexp_replace(p_search, '[0-9]', '', 'g'));
     
@@ -7013,7 +7062,7 @@ BEGIN
         c.id as customer_id,
         COALESCE(c.name, 'Khách vãng lai') as customer_name, 
         c.phone as customer_phone,
-        c.customer_code, -- [CORE FIXED]: Sửa từ c.code thành c.customer_code
+        c.customer_code,
         c.gender::text,
         CAST(EXTRACT(YEAR FROM c.dob) AS INTEGER) as customer_yob,
         
@@ -7028,13 +7077,9 @@ BEGIN
         
         COALESCE(w.name, 'Chưa xếp phòng') as room_name,
         a.priority,
-        
         COALESCE(u_doc.raw_user_meta_data->>'full_name', u_doc.email, 'Chưa chỉ định') as doctor_name,
-        
-        -- Lấy tên người tạo
         COALESCE(u_creator.raw_user_meta_data->>'full_name', u_creator.email, 'System') as creator_name,
         
-        -- Check trạng thái thanh toán (Lấy đơn hàng mới nhất trong ngày)
         (
             SELECT o.payment_status 
             FROM public.orders o 
@@ -7045,7 +7090,8 @@ BEGIN
         ) as payment_status,
         
         a.status::text, 
-        a.contact_status
+        a.contact_status,
+        a.service_type::text -- [CORE BỔ SUNG LẤY DỮ LIỆU CỘT NÀY]
     FROM public.appointments a
     JOIN public.customers c ON a.customer_id = c.id
     LEFT JOIN auth.users u_doc ON a.doctor_id = u_doc.id 
@@ -9803,40 +9849,55 @@ DECLARE
     v_delta_days INT;
     v_updated_count INT := 0;
 BEGIN
-    -- Lấy mũi tiêm hiện tại
+    -- 1. Lấy mũi tiêm hiện tại (Bọc FOR UPDATE để tránh tranh chấp dữ liệu khi nhiều người thao tác)
     SELECT * INTO v_record FROM public.customer_vaccination_records WHERE id = p_record_id FOR UPDATE;
     
     IF v_record IS NULL THEN RAISE EXCEPTION 'Không tìm thấy lịch tiêm ID %', p_record_id; END IF;
     IF v_record.status != 'pending' THEN RAISE EXCEPTION 'Chỉ có thể dời lịch những mũi tiêm chưa thực hiện.'; END IF;
 
-    -- Tính số ngày bị lùi/tiến
+    -- 2. Tính số ngày bị lùi/tiến (Delta)
     v_delta_days := p_new_expected_date - v_record.expected_date;
 
-    -- Update mũi hiện tại
+    -- 3. UPDATE MŨI HIỆN TẠI (Sổ Tiêm + Lịch Hẹn)
     UPDATE public.customer_vaccination_records
     SET expected_date = p_new_expected_date, updated_at = NOW(), updated_by = auth.uid()
     WHERE id = p_record_id;
     
+    IF v_record.appointment_id IS NOT NULL THEN
+        UPDATE public.appointments 
+        SET appointment_time = p_new_expected_date + interval '8 hours'
+        WHERE id = v_record.appointment_id;
+    END IF;
+    
     v_updated_count := 1;
 
-    -- Nếu là Gói tiêm -> Tịnh tiến các mũi tiếp theo
+    -- 4. TỊNH TIẾN CÁC MŨI TIẾP THEO (Nếu nằm trong 1 Gói tiêm)
     IF v_record.package_id IS NOT NULL AND v_delta_days != 0 THEN
-        WITH updated AS (
-            UPDATE public.customer_vaccination_records
-            SET 
-                expected_date = expected_date + v_delta_days,
-                updated_at = NOW(),
-                updated_by = auth.uid()
-            WHERE customer_id = v_record.customer_id
-              AND package_id = v_record.package_id
-              AND dose_number > v_record.dose_number -- Chỉ dời các mũi TƯƠNG LAI
-              AND status = 'pending'
-            RETURNING id
-        )
-        SELECT v_updated_count + COUNT(*) INTO v_updated_count FROM updated;
+        
+        -- A. Tịnh tiến Sổ tiêm trước
+        UPDATE public.customer_vaccination_records
+        SET 
+            expected_date = expected_date + v_delta_days,
+            updated_at = NOW(),
+            updated_by = auth.uid()
+        WHERE customer_id = v_record.customer_id
+          AND package_id = v_record.package_id
+          AND dose_number > v_record.dose_number
+          AND status = 'pending';
+          
+        -- B. Tịnh tiến đồng loạt Lịch hẹn tương ứng
+        UPDATE public.appointments a
+        SET appointment_time = r.expected_date + interval '8 hours' -- [CORE TỐI ƯU]: Ép chuẩn 8h sáng theo ngày mới nhất
+        FROM public.customer_vaccination_records r
+        WHERE r.appointment_id = a.id
+          AND r.customer_id = v_record.customer_id
+          AND r.package_id = v_record.package_id
+          AND r.dose_number > v_record.dose_number
+          AND r.status = 'pending';
+          
     END IF;
 
-    RETURN jsonb_build_object('success', true, 'delta_days', v_delta_days, 'total_updated', v_updated_count);
+    RETURN jsonb_build_object('success', true, 'delta_days', v_delta_days, 'message', 'Đã tịnh tiến Sổ tiêm và Lịch hẹn thành công');
 END;
 $$;
 
@@ -17855,6 +17916,10 @@ ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
 
 
 
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."appointments";
+
+
+
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."clinical_service_requests";
 
 
@@ -18182,9 +18247,9 @@ GRANT ALL ON FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", "p_re
 
 
 
-GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text", "p_service_ids" bigint[], "p_service_type" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text", "p_service_ids" bigint[], "p_service_type" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid", "p_priority" "text", "p_symptoms" "jsonb", "p_notes" "text", "p_service_ids" bigint[], "p_service_type" "text") TO "service_role";
 
 
 
