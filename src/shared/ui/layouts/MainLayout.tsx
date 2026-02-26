@@ -186,6 +186,11 @@ const finalMenuItems: MenuItem[] = [
         "/medical/examination",
         <Stethoscope size={18} />
       ),
+      getItem(
+        <Link to="/medical/nurse">Trạm Điều Dưỡng</Link>, // [NEW]
+        "/medical/nurse",
+        <MedicineBoxOutlined />
+      ),
     ]
   ),
 

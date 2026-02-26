@@ -957,6 +957,77 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_service_wallets: {
+        Row: {
+          created_at: string | null
+          customer_id: number
+          expiry_date: string | null
+          id: number
+          order_id: string | null
+          package_id: number | null
+          product_id: number
+          status: string | null
+          total_quantity: number
+          updated_at: string | null
+          used_quantity: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id: number
+          expiry_date?: string | null
+          id?: number
+          order_id?: string | null
+          package_id?: number | null
+          product_id: number
+          status?: string | null
+          total_quantity: number
+          updated_at?: string | null
+          used_quantity?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: number
+          expiry_date?: string | null
+          id?: number
+          order_id?: string | null
+          package_id?: number | null
+          product_id?: number
+          status?: string | null
+          total_quantity?: number
+          updated_at?: string | null
+          used_quantity?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_service_wallets_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_service_wallets_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_service_wallets_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "service_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_service_wallets_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_vaccination_records: {
         Row: {
           actual_date: string | null
@@ -4953,6 +5024,16 @@ export type Database = {
         }
         Returns: Json
       }
+      execute_vaccination_combo: {
+        Args: {
+          p_appointment_id: string
+          p_customer_id: number
+          p_nurse_id?: string
+          p_scanned_product_ids: number[]
+          p_warehouse_id: number
+        }
+        Returns: Json
+      }
       export_customers_b2b_list: {
         Args: {
           sales_staff_filter: string
@@ -5326,6 +5407,7 @@ export type Database = {
         }[]
       }
       get_my_permissions: { Args: never; Returns: string[] }
+      get_nurse_execution_queue: { Args: { p_date?: string }; Returns: Json }
       get_outbound_order_detail: { Args: { p_order_id: string }; Returns: Json }
       get_outbound_stats: { Args: { p_warehouse_id: number }; Returns: Json }
       get_partner_debt_live: {
@@ -6112,6 +6194,14 @@ export type Database = {
         }
         Returns: Json
       }
+      sell_medical_packages: {
+        Args: {
+          p_customer_id: number
+          p_fund_account_id?: number
+          p_packages: Json
+        }
+        Returns: Json
+      }
       send_notification: {
         Args: {
           p_message: string
@@ -6183,12 +6273,6 @@ export type Database = {
         Args: { p_actual_quantity: number; p_item_id: number }
         Returns: Json
       }
-      update_medical_visit:
-        | { Args: { p_data: Json; p_visit_id: string }; Returns: undefined }
-        | {
-            Args: { p_data: Json; p_doctor_id?: string; p_visit_id: string }
-            Returns: undefined
-          }
       update_outbound_package_count: {
         Args: { p_count: number; p_order_id: string }
         Returns: Json
@@ -6357,6 +6441,9 @@ export type Database = {
         | "checked_in"
         | "waiting"
         | "examining"
+        | "waiting_vaccination"
+        | "waiting_procedure"
+        | "observing"
       asset_status: "active" | "storage" | "repair" | "disposed"
       business_type:
         | "trade"
@@ -6383,7 +6470,14 @@ export type Database = {
         | "DELIVERED"
         | "CANCELLED"
       queue_priority: "normal" | "high"
-      queue_status: "waiting" | "examining" | "completed" | "skipped"
+      queue_status:
+        | "waiting"
+        | "examining"
+        | "completed"
+        | "skipped"
+        | "waiting_vaccination"
+        | "waiting_procedure"
+        | "observing"
       service_package_type: "service" | "bundle"
       shipping_partner_type: "app" | "coach" | "internal"
       stock_management_type: "lot_date" | "lot_only" | "serial" | "simple"
@@ -6549,6 +6643,9 @@ export const Constants = {
         "checked_in",
         "waiting",
         "examining",
+        "waiting_vaccination",
+        "waiting_procedure",
+        "observing",
       ],
       asset_status: ["active", "storage", "repair", "disposed"],
       business_type: [
@@ -6578,7 +6675,15 @@ export const Constants = {
         "CANCELLED",
       ],
       queue_priority: ["normal", "high"],
-      queue_status: ["waiting", "examining", "completed", "skipped"],
+      queue_status: [
+        "waiting",
+        "examining",
+        "completed",
+        "skipped",
+        "waiting_vaccination",
+        "waiting_procedure",
+        "observing",
+      ],
       service_package_type: ["service", "bundle"],
       shipping_partner_type: ["app", "coach", "internal"],
       stock_management_type: ["lot_date", "lot_only", "serial", "simple"],

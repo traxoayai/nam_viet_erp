@@ -24,6 +24,7 @@ import {
   Activity,
   Stethoscope,
   BrainCircuit,
+  Syringe,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -73,6 +74,7 @@ const DoctorPage = () => {
     medicalVisitId,
     isReadOnly,
     isPrescriptionSent,
+    prePurchasedVaccines,
   } = useDoctorWorkbench();
 
   // History Hook for "Copy Prescription"
@@ -212,6 +214,14 @@ const DoctorPage = () => {
             Xem KQ Xét Nghiệm
           </Button>
         </div>
+
+        {/* THÔNG BÁO VẮC XIN ĐÃ MUA */}
+        {prePurchasedVaccines && prePurchasedVaccines.length > 0 && (
+          <div className="bg-purple-100 border border-purple-300 text-purple-800 p-3 rounded-lg mb-4 font-bold text-lg flex items-center shadow-sm">
+            <Syringe className="mr-2" /> Bệnh nhân đã thanh toán Dịch vụ Tiêm chủng: 
+            {prePurchasedVaccines.map(v => ` ${v.products?.name} (Mũi ${v.dose_number})`).join(", ")}
+          </div>
+        )}
 
         {/* 1.5 SMART ASSISTANT */}
         <SmartClinicalAssistant
@@ -483,6 +493,7 @@ const DoctorPage = () => {
             onPrint={handlePrint}
             onScheduleFollowUp={handleScheduleFollowUp}
             loading={loading}
+            hasVaccines={prePurchasedVaccines && prePurchasedVaccines.length > 0}
           />
         ) : (
           <div className="bg-white p-4 border-t border-gray-200 mt-4 flex justify-between items-center sticky bottom-0 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">

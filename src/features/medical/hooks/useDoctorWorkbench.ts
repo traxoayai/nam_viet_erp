@@ -1,7 +1,7 @@
 // src/features/medical/hooks/useDoctorWorkbench.ts
 import { message } from "antd";
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 
 import {
   MedicalVisitRow,
@@ -14,6 +14,7 @@ import { printMedicalVisit } from "@/shared/utils/printTemplates";
 
 export const useDoctorWorkbench = () => {
   const { id: appointmentId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuthStore();
 
   // --- STATE ---
@@ -60,6 +61,7 @@ export const useDoctorWorkbench = () => {
   const [serviceOrders, setServiceOrders] = useState<any[]>([]);
   const [patientInfo, setPatientInfo] = useState<any>(null);
   const [isPrescriptionSent, setIsPrescriptionSent] = useState(false);
+  const [prePurchasedVaccines, setPrePurchasedVaccines] = useState<any[]>([]);
 
   // --- LOADING ---
   useEffect(() => {
@@ -85,12 +87,42 @@ export const useDoctorWorkbench = () => {
         .maybeSingle();
 
       // Fetch Chỉ định Cận Lâm Sàng hiện có
+      let currentRequests: any[] = [];
       if (visitData?.id) {
         const { data: requests } = await supabase
           .from("clinical_service_requests")
           .select("*")
           .eq("medical_visit_id", visitData.id);
-        if (requests) setServiceOrders(requests);
+        if (requests) {
+          currentRequests = requests;
+          setServiceOrders(requests);
+        }
+      }
+
+      // Fetch Vắc xin đã mua sẵn
+      const { data: vaccines } = await supabase
+        .from("customer_vaccination_records")
+        .select("id, dose_number, products(name)")
+        .eq("appointment_id", apptId);
+        
+      if (vaccines) {
+        setPrePurchasedVaccines(vaccines);
+        // [FIX BLOCK 3]: Gộp vắc-xin vào mảng Service Orders để hiển thị trên Table
+        const mappedVaccines = vaccines.map((v: any) => ({
+          id: `vac_${v.id}`, 
+          request_id: v.id, 
+          service_name_snapshot: `${v.products?.name} (Mũi ${v.dose_number})`,
+          category: 'vaccination',
+          price: 0, 
+          payment_order_id: 'PAID' // Đánh dấu đã thanh toán để không bị xóa
+        }));
+        
+        // Nối vào mảng existing requests
+        if (currentRequests.length > 0) {
+           setServiceOrders([...currentRequests, ...mappedVaccines]);
+        } else {
+           setServiceOrders(mappedVaccines);
+        }
       }
 
       if (visitData) {
@@ -138,7 +170,7 @@ export const useDoctorWorkbench = () => {
   // --- ACTIONS ---
   const isReadOnly = visit.status === "finished";
 
-  const handleSave = async (status: "in_progress" | "finished") => {
+  const handleSave = async (status: "in_progress" | "finished" | "ready_for_vaccine") => {
     if (!user || !user.id) {
       message.error("Lỗi phiên đăng nhập!");
       return;
@@ -163,28 +195,15 @@ export const useDoctorWorkbench = () => {
       delete (flatPayload as any).patient;
       delete (flatPayload as any).prescriptions;
 
-      let currentVisitId = visit?.id;
-
-      // [FIX 2]: LOGIC SELF-HEALING (Tự sửa lỗi Duplicate)
-      if (currentVisitId) {
-        const { error } = await supabase.rpc("update_medical_visit", {
-          p_visit_id: currentVisitId,
-          p_doctor_id: user.id,
-          p_data: flatPayload,
-        });
-        if (error) throw error;
-      } else {
-        // Nếu chưa có ID, gọi Create.
-        // Hàm Create mới của Core đã có ON CONFLICT DO UPDATE, nên sẽ an toàn.
-        const { data, error } = await supabase.rpc("create_medical_visit", {
-          p_appointment_id: appointmentId,
-          p_customer_id: patientInfo?.id,
-          p_data: flatPayload,
-        });
-
-        if (error) throw error;
-        currentVisitId = data;
-      }
+      // [FIX 2]: Lệnh duy nhất - Upsert thông qua RPC
+      const { data, error } = await supabase.rpc("create_medical_visit", {
+        p_appointment_id: appointmentId,
+        p_customer_id: patientInfo?.id,
+        p_data: flatPayload, // Nhớ gửi status: 'ready_for_vaccine' nếu ấn nút Tiêm
+      });
+      if (error) throw error;
+      
+      const currentVisitId = data;
 
       // [FIX 3]: CẬP NHẬT STATE NGAY LẬP TỨC
       setVisit((prev) => ({
@@ -194,9 +213,13 @@ export const useDoctorWorkbench = () => {
         status: status,
       }));
 
+      // [FIX ROUTING]: Thông báo và đá bác sĩ ra ngoài
       if (status === "finished") {
         message.success("Đã hoàn thành & Chuyển Dược!");
-        // [FIX 4]: KHÔNG NAVIGATE. Ở lại trang để bác sĩ xem lại.
+      } else if (status === "ready_for_vaccine") {
+        message.success("Bệnh nhân Đủ điều kiện. Đã chuyển sang Trạm Tiêm Chủng!");
+        navigate("/medical/examination"); // Đá bác sĩ về màn hình danh sách chờ
+        return; 
       } else {
         message.success("Đã lưu nháp!");
       }
@@ -298,5 +321,6 @@ export const useDoctorWorkbench = () => {
     medicalVisitId: visit.id,
     isReadOnly,
     isPrescriptionSent,
+    prePurchasedVaccines,
   };
 };

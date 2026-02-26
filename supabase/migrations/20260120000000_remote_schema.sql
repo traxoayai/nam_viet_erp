@@ -120,7 +120,10 @@ CREATE TYPE "public"."appointment_status" AS ENUM (
     'cancelled',
     'checked_in',
     'waiting',
-    'examining'
+    'examining',
+    'waiting_vaccination',
+    'waiting_procedure',
+    'observing'
 );
 
 
@@ -258,7 +261,10 @@ CREATE TYPE "public"."queue_status" AS ENUM (
     'waiting',
     'examining',
     'completed',
-    'skipped'
+    'skipped',
+    'waiting_vaccination',
+    'waiting_procedure',
+    'observing'
 );
 
 
@@ -3757,7 +3763,6 @@ ALTER FUNCTION "public"."create_manual_transfer"("p_source_warehouse_id" bigint,
 
 CREATE OR REPLACE FUNCTION "public"."create_medical_visit"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_data" "jsonb") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
 DECLARE
     v_visit_id UUID;
@@ -3767,17 +3772,21 @@ DECLARE
 BEGIN
     v_doctor_id := auth.uid();
     
-    -- Lấy trạng thái gửi lên từ FE (in_progress hoặc finished)
+    -- Lấy trạng thái gửi lên từ FE
     v_visit_status := COALESCE(p_data->>'status', 'in_progress');
 
-    -- Map sang trạng thái của Appointment/Queue
-    IF v_visit_status = 'finished' THEN
-        v_sync_status := 'completed';
+    -- [CORE FIX ROUTING]: ĐIỀU HƯỚNG BỆNH NHÂN DỰA VÀO TRẠNG THÁI BÁC SĨ TRUYỀN XUỐNG
+    IF v_visit_status = 'ready_for_vaccine' THEN
+        v_sync_status := 'waiting_vaccination'; -- Bẻ lái sang Trạm Y tá Tiêm!
+    ELSIF v_visit_status = 'ready_for_procedure' THEN
+        v_sync_status := 'waiting_procedure';   -- Bẻ lái sang Trạm Thủ thuật!
+    ELSIF v_visit_status = 'finished' THEN
+        v_sync_status := 'completed';           -- Ra về / Chờ lấy thuốc
     ELSE
-        v_sync_status := 'examining';
+        v_sync_status := 'examining';           -- Đang khám / Lưu nháp
     END IF;
 
-    -- [LOGIC CŨ]: INSERT ... ON CONFLICT (Giữ nguyên)
+    -- [LOGIC CŨ]: INSERT ... ON CONFLICT (Upsert) để lưu toàn bộ dữ liệu khám
     INSERT INTO public.medical_visits (
         appointment_id, customer_id, doctor_id, created_by, status,
         pulse, temperature, sp02, respiratory_rate, bp_systolic, bp_diastolic,
@@ -3807,8 +3816,9 @@ BEGIN
     DO UPDATE SET
         updated_at = NOW(),
         updated_by = v_doctor_id,
-        status = v_visit_status, -- Cập nhật trạng thái phiếu khám
-        -- (Các trường data khác giữ nguyên như bản trước - rút gọn cho dễ nhìn)
+        status = v_visit_status, -- Lưu trạng thái (in_progress, ready_for_vaccine, v.v...)
+        
+        -- Cập nhật lại toàn bộ các trường y lệnh
         pulse = EXCLUDED.pulse, temperature = EXCLUDED.temperature, sp02 = EXCLUDED.sp02,
         respiratory_rate = EXCLUDED.respiratory_rate, bp_systolic = EXCLUDED.bp_systolic, bp_diastolic = EXCLUDED.bp_diastolic,
         weight = EXCLUDED.weight, height = EXCLUDED.height, bmi = EXCLUDED.bmi,
@@ -3824,8 +3834,7 @@ BEGIN
         
     RETURNING id INTO v_visit_id;
 
-    -- [REAL-TIME SYNC]: Đồng bộ trạng thái sang Lịch hẹn & Hàng đợi
-    -- Cast kiểu dữ liệu an toàn để tránh lỗi ENUM
+    -- [REAL-TIME SYNC]: Đồng bộ trạng thái sang Lịch hẹn & Hàng đợi (Bẻ lái tại đây)
     UPDATE public.appointments 
     SET status = v_sync_status::public.appointment_status 
     WHERE id = p_appointment_id;
@@ -4787,6 +4796,94 @@ $$;
 
 
 ALTER FUNCTION "public"."doctor_approve_vaccination"("p_medical_visit_id" "uuid", "p_doctor_id" "uuid", "p_notes" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."execute_vaccination_combo"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_scanned_product_ids" bigint[], "p_warehouse_id" bigint, "p_nurse_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_prod_id BIGINT;
+    v_batch RECORD;
+    v_qty_needed INT;
+    v_order_code TEXT;
+BEGIN
+    -- 1. Lấy mã phiếu để làm Ref ID cho Kế toán
+    SELECT code INTO v_order_code FROM public.orders 
+    WHERE id = (SELECT order_id FROM public.customer_vaccination_records WHERE appointment_id = p_appointment_id LIMIT 1);
+    IF v_order_code IS NULL THEN v_order_code := 'VACCINE-' || p_appointment_id::text; END IF;
+
+    -- 2. Cập nhật Sổ Tiêm Chủng
+    UPDATE public.customer_vaccination_records
+    SET 
+        status = 'completed',
+        actual_date = CURRENT_DATE,
+        administered_by = p_nurse_id,
+        updated_at = NOW()
+    WHERE appointment_id = p_appointment_id 
+      AND product_id = ANY(p_scanned_product_ids)
+      AND status = 'pending';
+
+    -- 3. VÒNG LẶP TRỪ KHO FEFO CHO TỪNG LỌ VẮC-XIN
+    FOREACH v_prod_id IN ARRAY p_scanned_product_ids
+    LOOP
+        v_qty_needed := 1; -- Mỗi mũi tiêm mặc định là 1 Base Unit (1 Lọ/Ống)
+
+        -- Quét tìm Lô (Batch) cận date nhất trong tủ lạnh
+        FOR v_batch IN 
+            SELECT ib.id, ib.batch_id, ib.quantity, b.batch_code, b.inbound_price
+            FROM public.inventory_batches ib
+            JOIN public.batches b ON ib.batch_id = b.id
+            WHERE ib.warehouse_id = p_warehouse_id
+              AND ib.product_id = v_prod_id
+              AND ib.quantity > 0
+            ORDER BY b.expiry_date ASC, b.created_at ASC
+            FOR UPDATE -- Khóa dòng chống double-spending
+        LOOP
+            IF v_qty_needed <= 0 THEN EXIT; END IF;
+
+            -- Trừ kho Lô
+            UPDATE public.inventory_batches
+            SET quantity = quantity - 1, updated_at = NOW()
+            WHERE id = v_batch.id;
+
+            -- Ghi Log Phiếu Xuất (Inventory Transaction) cho Kế toán
+            INSERT INTO public.inventory_transactions (
+                warehouse_id, product_id, batch_id, type, action_group, 
+                quantity, unit_price, ref_id, description, partner_id, created_by
+            ) VALUES (
+                p_warehouse_id, v_prod_id, v_batch.batch_id, 'sale_order', 'USE', 
+                -1, -- Xuất kho ghi âm
+                COALESCE(v_batch.inbound_price, 0), v_order_code, 
+                'Xuất sử dụng Vắc-xin (Lô: ' || v_batch.batch_code || ')', 
+                p_customer_id, p_nurse_id
+            );
+
+            v_qty_needed := 0;
+        END LOOP;
+
+        -- [CẢNH BÁO MẠNH MẼ]: Nếu thuốc không có trong kho vẫn bị trừ âm?
+        -- Tạm thời theo logic ERP: Báo lỗi để Y tá phải làm phiếu nhập kho trước.
+        IF v_qty_needed > 0 THEN
+            RAISE EXCEPTION 'Trong tủ lạnh (Kho ID: %) không còn thuốc cho Product ID: %', p_warehouse_id, v_prod_id;
+        END IF;
+
+        -- Trừ kho Tổng (Bảng product_inventory)
+        UPDATE public.product_inventory
+        SET stock_quantity = stock_quantity - 1, updated_at = NOW()
+        WHERE warehouse_id = p_warehouse_id AND product_id = v_prod_id;
+
+    END LOOP;
+
+    -- 4. Chuyển trạng thái Bệnh nhân sang Đợi 30 phút Sốc phản vệ
+    UPDATE public.appointments SET status = 'observing', updated_at = NOW() WHERE id = p_appointment_id;
+    UPDATE public.clinical_queues SET status = 'observing', updated_at = NOW() WHERE appointment_id = p_appointment_id;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Đã xác nhận tiêm, trừ kho thành công. Chuyển bệnh nhân sang khu vực theo dõi 30 phút.');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."execute_vaccination_combo"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_scanned_product_ids" bigint[], "p_warehouse_id" bigint, "p_nurse_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."export_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text") RETURNS TABLE("id" bigint, "customer_code" "text", "name" "text", "phone" "text", "email" "text", "tax_code" "text", "contact_person_name" "text", "contact_person_phone" "text", "vat_address" "text", "shipping_address" "text", "sales_staff_name" "text", "debt_limit" numeric, "payment_term" integer, "ranking" "text", "status" "public"."account_status", "loyalty_points" integer)
@@ -6139,6 +6236,77 @@ CREATE OR REPLACE FUNCTION "public"."get_my_permissions"() RETURNS "text"[]
 
 
 ALTER FUNCTION "public"."get_my_permissions"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_nurse_execution_queue"("p_date" "date" DEFAULT CURRENT_DATE) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_result JSONB;
+BEGIN
+    SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+            'appointment_id', a.id,
+            'queue_number', cq.queue_number,
+            'customer_id', c.id,
+            'customer_name', c.name,
+            'customer_phone', c.phone,
+            'gender', c.gender,
+            'yob', EXTRACT(YEAR FROM c.dob),
+            'status', a.status,
+            'service_type', a.service_type,
+            
+            -- Lấy Cảnh báo dị ứng / Sốc phản vệ từ Phiếu khám (Nếu có)
+            'red_flags', COALESCE(mv.red_flags, '[]'::jsonb),
+            'doctor_notes', mv.doctor_notes,
+
+            -- Danh sách Vắc-xin cần tiêm (Nếu là Tiêm chủng)
+            'vaccines', (
+                SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                    'record_id', cvr.id,
+                    'product_id', p.id,
+                    'product_name', p.name,
+                    'sku', p.sku,
+                    'barcode', p.barcode, -- Quan trọng để súng tít map dữ liệu
+                    'dose_number', cvr.dose_number,
+                    'status', cvr.status
+                )), '[]'::jsonb)
+                FROM public.customer_vaccination_records cvr
+                JOIN public.products p ON cvr.product_id = p.id
+                WHERE cvr.appointment_id = a.id
+            ),
+
+            -- Danh sách Thủ thuật cần làm (Nếu là Khám/Thủ thuật)
+            'procedures', (
+                SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                    'request_id', csr.id,
+                    'service_name', csr.service_name_snapshot,
+                    'status', csr.status
+                )), '[]'::jsonb)
+                FROM public.clinical_service_requests csr
+                WHERE csr.medical_visit_id = mv.id 
+                  AND csr.category = 'procedure'
+            )
+        )
+    ORDER BY 
+        CASE WHEN a.status = 'observing' THEN 1 ELSE 0 END, -- Ưu tiên đẩy người đang đợi 30p xuống dưới
+        cq.queue_number ASC
+    ), '[]'::jsonb) INTO v_result
+
+    FROM public.appointments a
+    JOIN public.clinical_queues cq ON a.id = cq.appointment_id
+    JOIN public.customers c ON a.customer_id = c.id
+    LEFT JOIN public.medical_visits mv ON mv.appointment_id = a.id
+    WHERE 
+        DATE(a.appointment_time AT TIME ZONE 'Asia/Ho_Chi_Minh') = p_date
+        AND a.status IN ('waiting_vaccination', 'waiting_procedure', 'observing');
+
+    RETURN v_result;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_nurse_execution_queue"("p_date" "date") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_outbound_order_detail"("p_order_id" "uuid") RETURNS "jsonb"
@@ -10855,6 +11023,91 @@ $_$;
 ALTER FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_category" "text", "p_manufacturer" "text", "p_status" "text", "p_limit" integer, "p_offset" integer, "p_warehouse_id" integer) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."sell_medical_packages"("p_customer_id" bigint, "p_packages" "jsonb", "p_fund_account_id" bigint DEFAULT 1) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_order_id UUID;
+    v_order_code TEXT;
+    v_trans_code TEXT;
+    v_pkg JSONB;
+    v_item JSONB;
+    v_total_amount NUMERIC := 0;
+    v_pkg_price NUMERIC;
+    v_validity_days INT;
+    v_expiry_date DATE;
+    v_customer_name TEXT;
+BEGIN
+    SELECT name INTO v_customer_name FROM public.customers WHERE id = p_customer_id;
+
+    -- 1. Tạo Đơn hàng (Loại POS - Bán tại quầy)
+    v_order_code := 'PKG-' || to_char(NOW(), 'YYMMDD') || '-' || floor(random() * 10000)::text;
+    INSERT INTO public.orders (
+        code, customer_b2c_id, creator_id, order_type, status, payment_method,
+        total_amount, final_amount, paid_amount, payment_status, remittance_status, note
+    ) VALUES (
+        v_order_code, p_customer_id, auth.uid(), 'POS', 'COMPLETED', 'cash',
+        0, 0, 0, 'paid', 'pending', 'Bán Gói Dịch vụ/Khám bệnh'
+    ) RETURNING id INTO v_order_id;
+
+    -- 2. Vòng lặp bóc tách Gói (Packages)
+    FOR v_pkg IN SELECT * FROM jsonb_array_elements(p_packages)
+    LOOP
+        v_pkg_price := (v_pkg->>'price')::NUMERIC;
+        v_total_amount := v_total_amount + v_pkg_price;
+
+        -- Lấy thời hạn gói
+        SELECT validity_days INTO v_validity_days FROM public.service_packages WHERE id = (v_pkg->>'id')::BIGINT;
+        IF v_validity_days IS NOT NULL THEN
+            v_expiry_date := CURRENT_DATE + v_validity_days;
+        ELSE
+            v_expiry_date := CURRENT_DATE + 3650; -- Mặc định 10 năm nếu không set hạn
+        END IF;
+
+        -- Bóc tách từng dịch vụ con (Items) bên trong Gói để nhét vào Ví Dịch Vụ
+        FOR v_item IN SELECT * FROM jsonb_array_elements(v_pkg->'service_package_items')
+        LOOP
+            INSERT INTO public.customer_service_wallets (
+                customer_id, order_id, package_id, product_id, 
+                total_quantity, used_quantity, expiry_date, status
+            ) VALUES (
+                p_customer_id, v_order_id, (v_pkg->>'id')::BIGINT, (v_item->>'item_id')::BIGINT,
+                (v_item->>'quantity')::INT, 0, v_expiry_date, 'active'
+            );
+            
+            -- Ghi nhận Order Items (Để kế toán biết đã bán cái gì)
+            -- Phân bổ giá vốn/bán xuống item nếu cần (Ở đây bán nguyên gói nên lưu item giá 0 để track số lượng)
+            INSERT INTO public.order_items (order_id, product_id, quantity, uom, unit_price, note)
+            VALUES (v_order_id, (v_item->>'item_id')::BIGINT, (v_item->>'quantity')::INT, 'Lần', 0, 'Thuộc gói: ' || (v_pkg->>'name'));
+        END LOOP;
+    END LOOP;
+
+    -- 3. Cập nhật Tổng tiền Hóa đơn
+    UPDATE public.orders 
+    SET total_amount = v_total_amount, final_amount = v_total_amount, paid_amount = v_total_amount
+    WHERE id = v_order_id;
+
+    -- 4. TẠO PHIẾU THU TÀI CHÍNH
+    IF v_total_amount > 0 THEN
+        v_trans_code := 'PT-' || to_char(NOW(), 'YYMMDD') || '-' || LPAD(floor(random() * 10000)::text, 4, '0');
+        INSERT INTO public.finance_transactions (
+            code, transaction_date, flow, business_type, amount, fund_account_id,
+            partner_type, partner_id, partner_name_cache, ref_type, ref_id, description, status, created_by
+        ) VALUES (
+            v_trans_code, NOW(), 'in', 'trade', v_total_amount, p_fund_account_id,
+            'customer', p_customer_id::text, COALESCE(v_customer_name, 'Khách Lẻ'), 
+            'order', v_order_id::text, 'Thu tiền bán Gói Khám ' || v_order_code, 'completed', auth.uid()
+        );
+    END IF;
+
+    RETURN jsonb_build_object('success', true, 'order_id', v_order_id, 'total_amount', v_total_amount);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."sell_medical_packages"("p_customer_id" bigint, "p_packages" "jsonb", "p_fund_account_id" bigint) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."send_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text" DEFAULT 'info'::"text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -11910,143 +12163,6 @@ $$;
 
 
 ALTER FUNCTION "public"."update_inventory_check_item_quantity"("p_item_id" bigint, "p_actual_quantity" numeric) OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-BEGIN
-    UPDATE public.medical_visits
-    SET
-        updated_by = auth.uid(),
-        updated_at = NOW(),
-        
-        -- Chỉ số cơ bản
-        pulse = COALESCE((p_data->>'pulse')::INT, pulse),
-        temperature = COALESCE((p_data->>'temperature')::NUMERIC, temperature),
-        sp02 = COALESCE((p_data->>'sp02')::INT, sp02),
-        respiratory_rate = COALESCE((p_data->>'respiratory_rate')::INT, respiratory_rate),
-        bp_systolic = COALESCE((p_data->>'bp_systolic')::INT, bp_systolic),
-        bp_diastolic = COALESCE((p_data->>'bp_diastolic')::INT, bp_diastolic),
-        weight = COALESCE((p_data->>'weight')::NUMERIC, weight),
-        height = COALESCE((p_data->>'height')::NUMERIC, height),
-        bmi = COALESCE((p_data->>'bmi')::NUMERIC, bmi),
-        head_circumference = COALESCE((p_data->>'head_circumference')::NUMERIC, head_circumference),
-        birth_weight = COALESCE((p_data->>'birth_weight')::NUMERIC, birth_weight),
-        birth_height = COALESCE((p_data->>'birth_height')::NUMERIC, birth_height),
-        
-        -- Lâm sàng
-        symptoms = COALESCE(p_data->>'symptoms', symptoms),
-        examination_summary = COALESCE(p_data->>'examination_summary', examination_summary),
-        diagnosis = COALESCE(p_data->>'diagnosis', diagnosis),
-        icd_code = COALESCE(p_data->>'icd_code', icd_code),
-        doctor_notes = COALESCE(p_data->>'doctor_notes', doctor_notes),
-        
-        -- [NEW] Chuyên sâu
-        fontanelle = COALESCE(p_data->>'fontanelle', fontanelle),
-        reflexes = COALESCE(p_data->>'reflexes', reflexes),
-        jaundice = COALESCE(p_data->>'jaundice', jaundice),
-        feeding_status = COALESCE(p_data->>'feeding_status', feeding_status),
-        dental_status = COALESCE(p_data->>'dental_status', dental_status),
-        motor_development = COALESCE(p_data->>'motor_development', motor_development),
-        language_development = COALESCE(p_data->>'language_development', language_development),
-        puberty_stage = COALESCE(p_data->>'puberty_stage', puberty_stage),
-        scoliosis_status = COALESCE(p_data->>'scoliosis_status', scoliosis_status),
-        visual_acuity_left = COALESCE(p_data->>'visual_acuity_left', visual_acuity_left),
-        visual_acuity_right = COALESCE(p_data->>'visual_acuity_right', visual_acuity_right),
-        lifestyle_alcohol = COALESCE((p_data->>'lifestyle_alcohol')::BOOLEAN, lifestyle_alcohol),
-        lifestyle_smoking = COALESCE((p_data->>'lifestyle_smoking')::BOOLEAN, lifestyle_smoking),
-        
-        -- Cho phép update trạng thái nếu có gửi lên (VD: 'completed')
-        status = COALESCE(p_data->>'status', status)
-    WHERE id = p_visit_id;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb", "p_doctor_id" "uuid" DEFAULT NULL::"uuid") RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $$
-DECLARE
-    v_appt_id UUID;
-    v_visit_status TEXT;
-    v_sync_status TEXT;
-BEGIN
-    -- Lấy trạng thái mới
-    v_visit_status := COALESCE(p_data->>'status', 'in_progress');
-
-    -- Map trạng thái
-    IF v_visit_status = 'finished' THEN
-        v_sync_status := 'completed';
-    ELSE
-        v_sync_status := 'examining';
-    END IF;
-
-    -- Update phiếu khám và LẤY RA appointment_id để đồng bộ ngược
-    UPDATE public.medical_visits
-    SET
-        updated_by = auth.uid(),
-        updated_at = NOW(),
-        doctor_id = COALESCE(p_doctor_id, doctor_id),
-        
-        -- Data fields
-        pulse = COALESCE((p_data->>'pulse')::INT, pulse),
-        temperature = COALESCE((p_data->>'temperature')::NUMERIC, temperature),
-        sp02 = COALESCE((p_data->>'sp02')::INT, sp02),
-        respiratory_rate = COALESCE((p_data->>'respiratory_rate')::INT, respiratory_rate),
-        bp_systolic = COALESCE((p_data->>'bp_systolic')::INT, bp_systolic),
-        bp_diastolic = COALESCE((p_data->>'bp_diastolic')::INT, bp_diastolic),
-        weight = COALESCE((p_data->>'weight')::NUMERIC, weight),
-        height = COALESCE((p_data->>'height')::NUMERIC, height),
-        bmi = COALESCE((p_data->>'bmi')::NUMERIC, bmi),
-        head_circumference = COALESCE((p_data->>'head_circumference')::NUMERIC, head_circumference),
-        birth_weight = COALESCE((p_data->>'birth_weight')::NUMERIC, birth_weight),
-        birth_height = COALESCE((p_data->>'birth_height')::NUMERIC, birth_height),
-        symptoms = COALESCE(p_data->>'symptoms', symptoms),
-        examination_summary = COALESCE(p_data->>'examination_summary', examination_summary),
-        diagnosis = COALESCE(p_data->>'diagnosis', diagnosis),
-        icd_code = COALESCE(p_data->>'icd_code', icd_code),
-        doctor_notes = COALESCE(p_data->>'doctor_notes', doctor_notes),
-        fontanelle = COALESCE(p_data->>'fontanelle', fontanelle),
-        reflexes = COALESCE(p_data->>'reflexes', reflexes),
-        jaundice = COALESCE(p_data->>'jaundice', jaundice),
-        feeding_status = COALESCE(p_data->>'feeding_status', feeding_status),
-        dental_status = COALESCE(p_data->>'dental_status', dental_status),
-        motor_development = COALESCE(p_data->>'motor_development', motor_development),
-        language_development = COALESCE(p_data->>'language_development', language_development),
-        puberty_stage = COALESCE(p_data->>'puberty_stage', puberty_stage),
-        scoliosis_status = COALESCE(p_data->>'scoliosis_status', scoliosis_status),
-        visual_acuity_left = COALESCE(p_data->>'visual_acuity_left', visual_acuity_left),
-        visual_acuity_right = COALESCE(p_data->>'visual_acuity_right', visual_acuity_right),
-        lifestyle_alcohol = COALESCE((p_data->>'lifestyle_alcohol')::BOOLEAN, lifestyle_alcohol),
-        lifestyle_smoking = COALESCE((p_data->>'lifestyle_smoking')::BOOLEAN, lifestyle_smoking),
-        red_flags = COALESCE(p_data->'red_flags', red_flags),
-        vac_screening = COALESCE(p_data->'vac_screening', vac_screening),
-        
-        status = v_visit_status
-    WHERE id = p_visit_id
-    RETURNING appointment_id INTO v_appt_id; -- Lấy ID lịch hẹn để update bảng cha
-
-    -- [REAL-TIME SYNC]: Đồng bộ trạng thái về bảng cha
-    IF v_appt_id IS NOT NULL THEN
-        UPDATE public.appointments 
-        SET status = v_sync_status::public.appointment_status 
-        WHERE id = v_appt_id;
-
-        UPDATE public.clinical_queues 
-        SET status = v_sync_status::public.queue_status 
-        WHERE appointment_id = v_appt_id;
-    END IF;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb", "p_doctor_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."update_outbound_package_count"("p_order_id" "uuid", "p_count" integer) RETURNS "jsonb"
@@ -13454,6 +13570,36 @@ COMMENT ON TABLE "public"."customer_segments" IS 'Lưu trữ các nhóm khách h
 
 ALTER TABLE "public"."customer_segments" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
     SEQUENCE NAME "public"."customer_segments_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."customer_service_wallets" (
+    "id" bigint NOT NULL,
+    "customer_id" bigint NOT NULL,
+    "order_id" "uuid",
+    "package_id" bigint,
+    "product_id" bigint NOT NULL,
+    "total_quantity" integer NOT NULL,
+    "used_quantity" integer DEFAULT 0,
+    "expiry_date" "date",
+    "status" "text" DEFAULT 'active'::"text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "customer_service_wallets_status_check" CHECK (("status" = ANY (ARRAY['active'::"text", 'completed'::"text", 'expired'::"text", 'canceled'::"text"])))
+);
+
+
+ALTER TABLE "public"."customer_service_wallets" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."customer_service_wallets" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."customer_service_wallets_id_seq"
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -15515,6 +15661,11 @@ ALTER TABLE ONLY "public"."customer_segments"
 
 
 
+ALTER TABLE ONLY "public"."customer_service_wallets"
+    ADD CONSTRAINT "customer_service_wallets_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."customer_vaccination_records"
     ADD CONSTRAINT "customer_vaccination_records_pkey" PRIMARY KEY ("id");
 
@@ -16373,6 +16524,10 @@ CREATE INDEX "idx_sp_clinical_cat" ON "public"."service_packages" USING "btree" 
 
 
 
+CREATE INDEX "idx_svc_wallet_customer" ON "public"."customer_service_wallets" USING "btree" ("customer_id");
+
+
+
 CREATE INDEX "idx_template_items_template_id" ON "public"."prescription_template_items" USING "btree" ("template_id");
 
 
@@ -16795,6 +16950,26 @@ ALTER TABLE ONLY "public"."customer_segment_members"
 
 ALTER TABLE ONLY "public"."customer_segment_members"
     ADD CONSTRAINT "customer_segment_members_segment_id_fkey" FOREIGN KEY ("segment_id") REFERENCES "public"."customer_segments"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."customer_service_wallets"
+    ADD CONSTRAINT "customer_service_wallets_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."customer_service_wallets"
+    ADD CONSTRAINT "customer_service_wallets_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id");
+
+
+
+ALTER TABLE ONLY "public"."customer_service_wallets"
+    ADD CONSTRAINT "customer_service_wallets_package_id_fkey" FOREIGN KEY ("package_id") REFERENCES "public"."service_packages"("id");
+
+
+
+ALTER TABLE ONLY "public"."customer_service_wallets"
+    ADD CONSTRAINT "customer_service_wallets_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id");
 
 
 
@@ -17610,6 +17785,10 @@ CREATE POLICY "Enable all for authenticated" ON "public"."sales_invoices" TO "au
 
 
 
+CREATE POLICY "Enable all for authenticated users" ON "public"."customer_service_wallets" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "Enable all for authenticated users" ON "public"."customer_vaccination_records" TO "authenticated" USING (true) WITH CHECK (true);
 
 
@@ -17770,6 +17949,9 @@ ALTER TABLE "public"."customer_segment_members" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."customer_segments" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."customer_service_wallets" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."customer_vaccination_records" ENABLE ROW LEVEL SECURITY;
@@ -18589,6 +18771,12 @@ GRANT ALL ON FUNCTION "public"."doctor_approve_vaccination"("p_medical_visit_id"
 
 
 
+GRANT ALL ON FUNCTION "public"."execute_vaccination_combo"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_scanned_product_ids" bigint[], "p_warehouse_id" bigint, "p_nurse_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."execute_vaccination_combo"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_scanned_product_ids" bigint[], "p_warehouse_id" bigint, "p_nurse_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."execute_vaccination_combo"("p_appointment_id" "uuid", "p_customer_id" bigint, "p_scanned_product_ids" bigint[], "p_warehouse_id" bigint, "p_nurse_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."export_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."export_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."export_customers_b2b_list"("search_query" "text", "sales_staff_filter" "uuid", "status_filter" "text") TO "service_role";
@@ -18772,6 +18960,12 @@ GRANT ALL ON FUNCTION "public"."get_mapped_product"("p_tax_code" "text", "p_prod
 GRANT ALL ON FUNCTION "public"."get_my_permissions"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_my_permissions"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_my_permissions"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_nurse_execution_queue"("p_date" "date") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_nurse_execution_queue"("p_date" "date") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_nurse_execution_queue"("p_date" "date") TO "service_role";
 
 
 
@@ -19352,6 +19546,12 @@ GRANT ALL ON FUNCTION "public"."search_products_v2"("p_keyword" "text", "p_categ
 
 
 
+GRANT ALL ON FUNCTION "public"."sell_medical_packages"("p_customer_id" bigint, "p_packages" "jsonb", "p_fund_account_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."sell_medical_packages"("p_customer_id" bigint, "p_packages" "jsonb", "p_fund_account_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."sell_medical_packages"("p_customer_id" bigint, "p_packages" "jsonb", "p_fund_account_id" bigint) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."send_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."send_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."send_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text") TO "service_role";
@@ -19598,18 +19798,6 @@ GRANT ALL ON FUNCTION "public"."update_inventory_check_info"("p_check_id" bigint
 GRANT ALL ON FUNCTION "public"."update_inventory_check_item_quantity"("p_item_id" bigint, "p_actual_quantity" numeric) TO "anon";
 GRANT ALL ON FUNCTION "public"."update_inventory_check_item_quantity"("p_item_id" bigint, "p_actual_quantity" numeric) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_inventory_check_item_quantity"("p_item_id" bigint, "p_actual_quantity" numeric) TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") TO "anon";
-GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb", "p_doctor_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb", "p_doctor_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."update_medical_visit"("p_visit_id" "uuid", "p_data" "jsonb", "p_doctor_id" "uuid") TO "service_role";
 
 
 
@@ -19978,6 +20166,18 @@ GRANT ALL ON TABLE "public"."customer_segments" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."customer_segments_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."customer_segments_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."customer_segments_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."customer_service_wallets" TO "anon";
+GRANT ALL ON TABLE "public"."customer_service_wallets" TO "authenticated";
+GRANT ALL ON TABLE "public"."customer_service_wallets" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."customer_service_wallets_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."customer_service_wallets_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."customer_service_wallets_id_seq" TO "service_role";
 
 
 

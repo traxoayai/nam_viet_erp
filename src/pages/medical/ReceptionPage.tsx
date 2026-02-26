@@ -696,6 +696,7 @@ export default function ReceptionPage() {
       <SellPackageDrawer
         open={drawers.package}
         onClose={() => setDrawers({ ...drawers, package: false })}
+        customerId={selectedCustomerId}
       />
 
       <VaccineSalesDrawer

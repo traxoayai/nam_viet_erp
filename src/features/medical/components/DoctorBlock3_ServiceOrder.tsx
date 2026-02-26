@@ -95,6 +95,7 @@ export const DoctorBlock3_ServiceOrder: React.FC<Props> = ({
         if (cat === "imaging") return <Tag color="purple">CĐHA</Tag>;
         if (cat === "procedure") return <Tag color="orange">Thủ thuật</Tag>;
         if (cat === "examination") return <Tag color="green">Khám bệnh</Tag>;
+        if (cat === "vaccination") return <Tag color="purple">Tiêm chủng</Tag>;
         return <Text type="secondary">-</Text>;
       },
     },

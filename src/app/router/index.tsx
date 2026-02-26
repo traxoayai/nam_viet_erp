@@ -23,6 +23,7 @@ import DoctorPage from "@/pages/medical/DoctorPage";
 import ReceptionPage from "@/pages/medical/ReceptionPage"; // [NEW]
 import DoctorQueuePage from "@/pages/medical/DoctorQueuePage";
 import ParaclinicalPage from "@/pages/medical/ParaclinicalPage"; // [NEW]
+import NurseExecutionPage from "@/pages/medical/NurseExecutionPage"; // [NEW]
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 import FinanceTransactionPage from "@/pages/finance/FinanceTransactionPage";
 import InvoiceListPage from "@/pages/finance/invoices/InvoiceListPage";
@@ -157,6 +158,10 @@ const routes: RouteObject[] = [
           {
             path: "medical/examination/:id", // Trang khám chi tiết
             element: <DoctorPage />,
+          },
+          {
+            path: "medical/nurse", // [NEW] Trạm điều dưỡng
+            element: <NurseExecutionPage />,
           },
           {
             path: "medical/paraclinical",

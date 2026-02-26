@@ -85,3 +85,21 @@ export const receptionService = {
     if (error) throw error;
   },
 };
+
+export const getMedicalPackages = async (keyword?: string) => {
+  const query = supabase
+    .from("service_packages")
+    .select(`
+      id, name, price, status, clinical_category,
+      service_package_items(item_id, products(name), quantity)
+    `)
+    .eq("status", "active")
+    .eq("type", "bundle")
+    .neq("clinical_category", "vaccination") // Tuyệt đối không lôi Vắc-xin vào đây
+    .ilike("name", `%${keyword || ""}%`)
+    .limit(20);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+};

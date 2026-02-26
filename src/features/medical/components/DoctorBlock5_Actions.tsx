@@ -6,13 +6,15 @@ import {
 } from "@ant-design/icons";
 import { Button, Popconfirm, Popover, DatePicker, message } from "antd";
 import dayjs from "dayjs";
+import { Syringe } from "lucide-react";
 import React, { useState } from "react";
 
 interface Props {
-  onSave: (status: "in_progress" | "finished") => void;
+  onSave: (status: "in_progress" | "finished" | "ready_for_vaccine") => void;
   onPrint: () => void;
   onScheduleFollowUp: (date: string) => void;
   loading?: boolean;
+  hasVaccines?: boolean;
 }
 
 export const DoctorBlock5_Actions: React.FC<Props> = ({
@@ -20,6 +22,7 @@ export const DoctorBlock5_Actions: React.FC<Props> = ({
   onPrint,
   onScheduleFollowUp,
   loading,
+  hasVaccines,
 }) => {
   const [reExamDate, setReExamDate] = useState<dayjs.Dayjs | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -71,6 +74,14 @@ export const DoctorBlock5_Actions: React.FC<Props> = ({
 
       {/* RIGHT: Main Actions */}
       <div className="flex gap-2">
+        {hasVaccines && (
+          <Popconfirm title="Xác nhận đủ sức khỏe?" onConfirm={() => onSave("ready_for_vaccine")} okText="Đồng ý">
+            <Button size="large" type="primary" className="bg-purple-600 hover:bg-purple-700 border-purple-600" loading={loading} icon={<Syringe />}>
+              Đủ điều kiện Tiêm chủng
+            </Button>
+          </Popconfirm>
+        )}
+
         <Button
           size="large"
           icon={<SaveOutlined />}
@@ -81,7 +92,7 @@ export const DoctorBlock5_Actions: React.FC<Props> = ({
         </Button>
 
         <Popconfirm
-          title="Hoàn tất & Chuyển Dược?"
+          title="Hoàn tất"
           description="Đơn thuốc sẽ được gửi sang bộ phận Dược sĩ."
           onConfirm={() => onSave("finished")}
           okText="Đồng ý"
