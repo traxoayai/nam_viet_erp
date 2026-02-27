@@ -249,6 +249,12 @@ export const FinanceFormModal: React.FC<Props> = ({
         <Form.Item name="partner_id" hidden>
           <Input />
         </Form.Item>
+        <Form.Item name="supplier_id" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="employee_id" hidden>
+          <Input />
+        </Form.Item>
 
         {/* Loading / Checking Pending */}
         {checkingPending ? (

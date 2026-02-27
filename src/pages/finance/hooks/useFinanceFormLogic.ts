@@ -342,9 +342,12 @@ export const useFinanceFormLogic = (
         payload.p_partner_type = values.partner_type; 
         
         if (values.partner_type === "supplier") {
-          payload.p_partner_id = values.supplier_id;
-          const sup = suppliers.find((s) => s.id === values.supplier_id);
-          if (sup) payload.p_partner_name = sup.name;
+          // Fallback id nếu truyền nhầm sang partner_id
+          payload.p_partner_id = values.supplier_id || values.partner_id; 
+          
+          const sup = suppliers.find((s) => s.id === Number(payload.p_partner_id));
+          // Fallback name: Ưu tiên tên trong Store, nếu không có thì lấy tên từ form UI
+          payload.p_partner_name = sup ? sup.name : values.partner_name;
         } else if (values.partner_type === "customer" || values.partner_type === "customer_b2b") {
           payload.p_partner_id = values.partner_id;
           payload.p_partner_name = values.partner_name;
