@@ -13,6 +13,8 @@ import {
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { financeService } from "@/features/finance/api/financeService";
+
 import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate";
 import { salesService } from "@/features/sales/api/salesService";
 import { ActionButtons } from "@/features/sales/components/Footer/ActionButtons";
@@ -110,11 +112,13 @@ const CreateB2BOrderPage = () => {
 
         // 2. HYDRATION KHÁCH HÀNG
         if (orderData.customer) {
+          // [NEW] Không dùng orderData.customer.current_debt cũ nữa.
+          const actualDebt = await financeService.getB2BDebt(orderData.customer.id);
           const mappedCustomer = {
             ...orderData.customer,
             shipping_address:
               orderData.delivery_address || orderData.customer.address || "",
-            current_debt: orderData.customer.current_debt || 0,
+            current_debt: actualDebt,
           };
           setCustomer(mappedCustomer);
         } else {

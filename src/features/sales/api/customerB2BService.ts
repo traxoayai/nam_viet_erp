@@ -34,8 +34,31 @@ export const fetchCustomers = async (
 
   if (error) throw error;
 
-  const totalCount = data && data.length > 0 ? data[0].total_count : 0;
-  return { data: data || [], totalCount: Number(totalCount) };
+  const rawData = data || [];
+  
+  // [NEW] Gộp dữ liệu Công nợ Realtime từ View b2b_customer_debt_view
+  if (rawData.length > 0) {
+    const customerIds = rawData.map((c: any) => c.id);
+    const { data: debtData } = await supabase
+      .from("b2b_customer_debt_view")
+      .select("customer_id, actual_current_debt")
+      .in("customer_id", customerIds);
+
+    if (debtData) {
+      const debtMap = debtData.reduce((acc: any, row: any) => {
+        acc[row.customer_id] = row.actual_current_debt;
+        return acc;
+      }, {});
+
+      // Merge debt into raw data
+      for (const row of rawData) {
+        row.current_debt = debtMap[row.id] || 0;
+      }
+    }
+  }
+
+  const totalCount = rawData.length > 0 ? rawData[0].total_count : 0;
+  return { data: rawData, totalCount: Number(totalCount) };
 };
 
 /**
@@ -46,6 +69,22 @@ export const fetchCustomerDetails = async (id: number): Promise<any> => {
     p_id: id,
   });
   if (error) throw error;
+  
+  // [NEW] Cập nhật Nợ từ View thay vì bảng cũ
+  if (data && data.customer) {
+    const { data: debtData } = await supabase
+      .from("b2b_customer_debt_view")
+      .select("actual_current_debt")
+      .eq("customer_id", id)
+      .single();
+      
+    if (debtData) {
+       data.customer.current_debt = debtData.actual_current_debt;
+    } else {
+       data.customer.current_debt = 0;
+    }
+  }
+
   return data;
 };
 

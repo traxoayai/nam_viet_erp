@@ -27,6 +27,9 @@ import React, { useEffect, useState } from "react";
 
 import { useFinanceFormLogic } from "../hooks/useFinanceFormLogic";
 
+import { BulkPaymentAllocationTable } from "@/features/finance/components/BulkPaymentAllocationTable";
+import { useBulkPaymentAllocation } from "@/features/finance/hooks/useBulkPaymentAllocation";
+
 import { useBankStore } from "@/features/finance/stores/useBankStore";
 import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
 import { useTransactionCategoryStore } from "@/features/finance/stores/useTransactionCategoryStore";
@@ -93,6 +96,24 @@ export const FinanceFormModal: React.FC<Props> = ({
     handleSearchPartner,
     handleSelectPartner,
   } = useFinanceFormLogic(open, onCancel, initialFlow, initialValues);
+
+  // [NEW] Bulk Payment Hooks
+  const flow = Form.useWatch("flow", form);
+  const partnerType = Form.useWatch("partner_type", form);
+  const partnerId = Form.useWatch("partner_id", form);
+
+  const isB2BBulkPayment = flow === "in" && partnerType === "customer_b2b" && !!partnerId;
+
+  const {
+      loading: bulkLoading,
+      allocatedOrders,
+      selectedRowKeys,
+      handleRowSelectionChange,
+      totalReceived,
+      handleTotalReceivedChange,
+      totalAllocated,
+      remainingToAdvance
+  } = useBulkPaymentAllocation(isB2BBulkPayment ? Number(partnerId) : undefined);
 
   useEffect(() => {
     fetchFunds();
@@ -172,7 +193,6 @@ export const FinanceFormModal: React.FC<Props> = ({
 
   const amount = Form.useWatch("amount", form);
   const desc = Form.useWatch("description", form);
-  const flow = Form.useWatch("flow", form);
 
   useEffect(() => {
     if (flow === "out" && amount > 0) {
@@ -202,6 +222,15 @@ export const FinanceFormModal: React.FC<Props> = ({
           if (walletAmount > 0) {
             values.wallet_usage = walletAmount;
           }
+
+          // [NEW] Inject B2B Bulk Allocation Payload
+          if (isB2BBulkPayment) {
+             values.b2b_bulk_allocations = allocatedOrders
+                 .filter((o) => o.allocated_amount > 0)
+                 .map((o) => ({ order_id: o.id, allocated_amount: o.allocated_amount }));
+             values.amount = totalReceived;
+          }
+
           const success = await handleFinish(values);
           if (success && onSuccess) onSuccess();
         }}
@@ -483,6 +512,7 @@ export const FinanceFormModal: React.FC<Props> = ({
                       <Option value="customer">Khách lẻ (B2C)</Option>
                       <Option value="customer_b2b">Khách Doanh nghiệp</Option>
                       <Option value="employee">Nhân viên</Option>
+                      <Option value="shipping_partner">Nhà vận chuyển / Logistics</Option>
                       <Option value="other">Khác</Option>
                     </Select>
                   </Form.Item>
@@ -605,7 +635,7 @@ export const FinanceFormModal: React.FC<Props> = ({
                         );
                       }
 
-                      // 4. KHÁC
+                      // 4. KHÁC VÀ NHÀ VẬN CHUYỂN
                       return (
                         <Form.Item
                           name="partner_name"
@@ -621,6 +651,23 @@ export const FinanceFormModal: React.FC<Props> = ({
               </>
             )}
           </Row>
+        )}
+
+        {/* [NEW] Bảng Gạch nợ Waterfall cho B2B (Phiếu Thu) */}
+        {isB2BBulkPayment && (
+            <BulkPaymentAllocationTable
+              loading={bulkLoading}
+              dataSource={allocatedOrders}
+              selectedRowKeys={selectedRowKeys}
+              onRowSelectionChange={handleRowSelectionChange}
+              totalReceived={totalReceived}
+              totalAllocated={totalAllocated}
+              remainingToAdvance={remainingToAdvance}
+              onTotalReceivedChange={(val) => {
+                 handleTotalReceivedChange(val);
+                 form.setFieldValue("amount", val); // Cập nhật ui cho form cha biết
+              }}
+            />
         )}
 
         <Divider />
@@ -707,9 +754,10 @@ export const FinanceFormModal: React.FC<Props> = ({
             <Form.Item
               name="amount"
               label="Số tiền giao dịch"
-              rules={[{ required: true }]}
+              rules={[{ required: !isB2BBulkPayment }]}
             >
               <InputNumber
+                disabled={isB2BBulkPayment}
                 style={{
                   width: "100%",
                   fontSize: 16,
@@ -718,6 +766,7 @@ export const FinanceFormModal: React.FC<Props> = ({
                 }}
                 formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                 addonAfter="₫"
+                placeholder={isB2BBulkPayment ? "Nhập ở bảng gạch nợ" : "Nhập số tiền..."}
               />
             </Form.Item>
           </Col>

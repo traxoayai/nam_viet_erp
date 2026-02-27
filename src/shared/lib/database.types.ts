@@ -847,6 +847,13 @@ export type Database = {
             foreignKeyName: "customer_b2b_contacts_customer_b2b_id_fkey"
             columns: ["customer_b2b_id"]
             isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_b2b_contacts_customer_b2b_id_fkey"
+            columns: ["customer_b2b_id"]
+            isOneToOne: false
             referencedRelation: "customers_b2b"
             referencedColumns: ["id"]
           },
@@ -2649,6 +2656,13 @@ export type Database = {
             foreignKeyName: "orders_customer_b2b_fkey"
             columns: ["customer_id"]
             isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "orders_customer_b2b_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
             referencedRelation: "customers_b2b"
             referencedColumns: ["id"]
           },
@@ -3676,6 +3690,13 @@ export type Database = {
             foreignKeyName: "sales_invoices_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "sales_invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
             referencedRelation: "customers_b2b"
             referencedColumns: ["id"]
           },
@@ -4575,7 +4596,18 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      b2b_customer_debt_view: {
+        Row: {
+          actual_current_debt: number | null
+          customer_code: string | null
+          customer_id: number | null
+          customer_name: string | null
+          customer_phone: string | null
+          total_invoiced: number | null
+          total_paid: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       add_item_to_check_session: {
@@ -6002,6 +6034,16 @@ export type Database = {
       }
       pay_purchase_order_via_wallet: {
         Args: { p_amount: number; p_po_id: number }
+        Returns: Json
+      }
+      process_bulk_payment: {
+        Args: {
+          p_allocations: Json
+          p_customer_id: number
+          p_description?: string
+          p_fund_account_id?: number
+          p_total_amount: number
+        }
         Returns: Json
       }
       process_inbound_receipt: {

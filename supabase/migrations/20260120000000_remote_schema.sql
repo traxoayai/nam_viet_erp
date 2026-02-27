@@ -5294,10 +5294,11 @@ DECLARE
     v_expected_date DATE;
     v_appt_id UUID;
     v_service_array BIGINT[];
+    v_temp_svc_id BIGINT; -- Biến tạm để hứng ID, khắc phục lỗi 42804
 BEGIN
     IF p_package_id IS NOT NULL THEN
         -- A. Kịch bản mua GÓI TIÊM
-        v_service_array := ARRAY[p_package_id]; -- Lưu ID của Gói vào mảng dịch vụ
+        v_service_array := ARRAY[p_package_id];
 
         FOR v_item IN 
             SELECT item_id as product_id, quantity, schedule_days 
@@ -5307,7 +5308,7 @@ BEGIN
         LOOP
             v_expected_date := p_start_date + COALESCE(v_item.schedule_days, 0);
 
-            -- TẠO LỊCH HẸN TỰ ĐỘNG (Thêm service_ids)
+            -- TẠO LỊCH HẸN TỰ ĐỘNG
             INSERT INTO public.appointments (
                 customer_id, appointment_time, status, service_type, note, created_by, service_ids
             ) VALUES (
@@ -5328,14 +5329,17 @@ BEGIN
         END LOOP;
 
     ELSIF p_product_id IS NOT NULL THEN
-        -- B. Kịch bản mua MŨI LẺ (product_id đang trỏ tới ID của bảng products, nhưng bảng appointments mong đợi ID của service_packages)
-        -- Tạm thời để trống mảng hoặc truy vấn ngược tìm service_package tương ứng
-        -- Ở đây ta truy vấn ngược để tìm ID dịch vụ tiêm lẻ tương ứng với vắc-xin này
-        SELECT id INTO v_service_array[1] 
+        -- B. Kịch bản mua MŨI LẺ
+        
+        -- Dùng biến tạm để hứng ID dịch vụ
+        SELECT id INTO v_temp_svc_id 
         FROM public.service_packages 
         WHERE type = 'service' AND clinical_category = 'vaccination' 
           AND id IN (SELECT package_id FROM public.service_package_items WHERE item_id = p_product_id)
         LIMIT 1;
+
+        -- Gán vào mảng an toàn
+        v_service_array := ARRAY[v_temp_svc_id];
 
         SELECT COALESCE(MAX(dose_number), 0) + 1 INTO v_dose_count 
         FROM public.customer_vaccination_records 
@@ -5343,7 +5347,7 @@ BEGIN
 
         v_expected_date := p_start_date;
 
-        -- Tạo Lịch hẹn tự động (Thêm service_ids)
+        -- Tạo Lịch hẹn tự động
         INSERT INTO public.appointments (
             customer_id, appointment_time, status, service_type, note, created_by, service_ids
         ) VALUES (
@@ -6247,7 +6251,8 @@ BEGIN
     SELECT COALESCE(jsonb_agg(
         jsonb_build_object(
             'appointment_id', a.id,
-            'queue_number', cq.queue_number,
+            -- [FIX 1]: Xử lý an toàn nếu không có Số thứ tự
+            'queue_number', COALESCE(cq.queue_number, 0), 
             'customer_id', c.id,
             'customer_name', c.name,
             'customer_phone', c.phone,
@@ -6256,18 +6261,16 @@ BEGIN
             'status', a.status,
             'service_type', a.service_type,
             
-            -- Lấy Cảnh báo dị ứng / Sốc phản vệ từ Phiếu khám (Nếu có)
             'red_flags', COALESCE(mv.red_flags, '[]'::jsonb),
             'doctor_notes', mv.doctor_notes,
 
-            -- Danh sách Vắc-xin cần tiêm (Nếu là Tiêm chủng)
             'vaccines', (
                 SELECT COALESCE(jsonb_agg(jsonb_build_object(
                     'record_id', cvr.id,
                     'product_id', p.id,
                     'product_name', p.name,
                     'sku', p.sku,
-                    'barcode', p.barcode, -- Quan trọng để súng tít map dữ liệu
+                    'barcode', p.barcode,
                     'dose_number', cvr.dose_number,
                     'status', cvr.status
                 )), '[]'::jsonb)
@@ -6276,7 +6279,6 @@ BEGIN
                 WHERE cvr.appointment_id = a.id
             ),
 
-            -- Danh sách Thủ thuật cần làm (Nếu là Khám/Thủ thuật)
             'procedures', (
                 SELECT COALESCE(jsonb_agg(jsonb_build_object(
                     'request_id', csr.id,
@@ -6289,12 +6291,14 @@ BEGIN
             )
         )
     ORDER BY 
-        CASE WHEN a.status = 'observing' THEN 1 ELSE 0 END, -- Ưu tiên đẩy người đang đợi 30p xuống dưới
-        cq.queue_number ASC
+        CASE WHEN a.status = 'observing' THEN 1 ELSE 0 END, 
+        -- Sắp xếp an toàn: Không có số thứ tự thì đẩy xuống cuối (999)
+        COALESCE(cq.queue_number, 999) ASC
     ), '[]'::jsonb) INTO v_result
 
     FROM public.appointments a
-    JOIN public.clinical_queues cq ON a.id = cq.appointment_id
+    -- [FIX 2 CỐT LÕI]: Đổi INNER JOIN thành LEFT JOIN
+    LEFT JOIN public.clinical_queues cq ON a.id = cq.appointment_id 
     JOIN public.customers c ON a.customer_id = c.id
     LEFT JOIN public.medical_visits mv ON mv.appointment_id = a.id
     WHERE 
@@ -9482,6 +9486,97 @@ $$;
 
 
 ALTER FUNCTION "public"."pay_purchase_order_via_wallet"("p_po_id" bigint, "p_amount" numeric) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."process_bulk_payment"("p_customer_id" bigint, "p_total_amount" numeric, "p_allocations" "jsonb", "p_fund_account_id" bigint DEFAULT 1, "p_description" "text" DEFAULT 'Thanh toán gộp công nợ'::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_item JSONB;
+    v_order_id UUID;
+    v_alloc_amount NUMERIC;
+    v_order_final NUMERIC;
+    v_order_paid NUMERIC;
+    v_new_paid NUMERIC;
+    v_customer_name TEXT;
+    v_trans_code TEXT;
+    v_sum_allocated NUMERIC := 0;
+BEGIN
+    SELECT name INTO v_customer_name FROM public.customers_b2b WHERE id = p_customer_id;
+
+    -- 1. Vòng lặp xử lý từng Đơn hàng và Cộng dồn số tiền phân bổ
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_allocations)
+    LOOP
+        v_order_id := (v_item->>'order_id')::UUID;
+        v_alloc_amount := (v_item->>'allocated_amount')::NUMERIC;
+        
+        IF v_alloc_amount > 0 THEN
+            v_sum_allocated := v_sum_allocated + v_alloc_amount;
+
+            -- Khóa dòng đơn hàng để update an toàn
+            SELECT final_amount, paid_amount INTO v_order_final, v_order_paid 
+            FROM public.orders WHERE id = v_order_id FOR UPDATE;
+
+            v_new_paid := COALESCE(v_order_paid, 0) + v_alloc_amount;
+
+            -- A. Cập nhật tiền và trạng thái chuẩn mực 3 bước (unpaid, partial, paid)
+            UPDATE public.orders
+            SET 
+                paid_amount = v_new_paid,
+                payment_status = CASE 
+                    WHEN v_new_paid <= 0 THEN 'unpaid'
+                    WHEN v_new_paid < v_order_final THEN 'partial' 
+                    ELSE 'paid' 
+                END,
+                updated_at = NOW()
+            WHERE id = v_order_id;
+
+            -- B. Sinh Phiếu Thu Tài Chính chi tiết
+            v_trans_code := 'PT-' || to_char(NOW(), 'YYMMDD') || '-' || LPAD(floor(random() * 10000)::text, 4, '0');
+            INSERT INTO public.finance_transactions (
+                code, transaction_date, flow, business_type, amount, fund_account_id,
+                partner_type, partner_id, partner_name_cache, ref_type, ref_id, 
+                description, status, created_by
+            ) VALUES (
+                v_trans_code, NOW(), 'in', 'trade', v_alloc_amount, p_fund_account_id,
+                'customer', p_customer_id::text, v_customer_name, 'order', v_order_id::text, 
+                p_description || ' (Gạch nợ đơn: ' || v_order_id || ')', 'completed', auth.uid()
+            );
+        END IF;
+    END LOOP;
+
+    -- ==============================================================================
+    -- [CHỐT CHẶN BẢO MẬT]: KIỂM TRA TỔNG TIỀN PHÂN BỔ SO VỚI TIỀN THỰC THU
+    -- ==============================================================================
+    IF v_sum_allocated > p_total_amount THEN
+        RAISE EXCEPTION 'LỖI KẾ TOÁN: Số tiền gạch nợ chi tiết (%, đ) không được phép lớn hơn Tổng tiền thực thu (%, đ)!', v_sum_allocated, p_total_amount;
+    END IF;
+
+    -- Xử lý tiền thừa (Khách đưa 10tr nhưng chỉ gạch 9.5tr, dư 500k nộp trước)
+    IF p_total_amount > v_sum_allocated THEN
+        v_trans_code := 'PT-' || to_char(NOW(), 'YYMMDD') || '-' || LPAD(floor(random() * 10000)::text, 4, '0');
+        INSERT INTO public.finance_transactions (
+            code, transaction_date, flow, business_type, amount, fund_account_id,
+            partner_type, partner_id, partner_name_cache, ref_type, ref_id, 
+            description, status, created_by
+        ) VALUES (
+            v_trans_code, NOW(), 'in', 'trade', (p_total_amount - v_sum_allocated), p_fund_account_id,
+            'customer', p_customer_id::text, v_customer_name, 'other', NULL, 
+            'Tiền khách nộp thừa/Tạm ứng (Chưa phân bổ)', 'completed', auth.uid()
+        );
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'message', 'Đã phân bổ thanh toán thành công!',
+        'total_received', p_total_amount,
+        'total_allocated', v_sum_allocated
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."process_bulk_payment"("p_customer_id" bigint, "p_total_amount" numeric, "p_allocations" "jsonb", "p_fund_account_id" bigint, "p_description" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") RETURNS "jsonb"
@@ -13198,6 +13293,133 @@ ALTER SEQUENCE "public"."assets_id_seq" OWNED BY "public"."assets"."id";
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."customers_b2b" (
+    "id" bigint NOT NULL,
+    "customer_code" "text",
+    "name" "text" NOT NULL,
+    "tax_code" "text",
+    "debt_limit" numeric DEFAULT 100000000,
+    "payment_term" integer DEFAULT 30,
+    "ranking" "text",
+    "business_license_number" "text",
+    "business_license_url" "text",
+    "sales_staff_id" "uuid",
+    "status" "public"."account_status" DEFAULT 'active'::"public"."account_status" NOT NULL,
+    "phone" "text",
+    "email" "text",
+    "vat_address" "text",
+    "shipping_address" "text",
+    "gps_lat" numeric,
+    "gps_long" numeric,
+    "bank_name" "text",
+    "bank_account_name" "text",
+    "bank_account_number" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "loyalty_points" integer DEFAULT 0,
+    "current_debt" numeric DEFAULT 0
+);
+
+
+ALTER TABLE "public"."customers_b2b" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."finance_transactions" (
+    "id" bigint NOT NULL,
+    "code" "text" NOT NULL,
+    "transaction_date" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "flow" "public"."transaction_flow" NOT NULL,
+    "business_type" "public"."business_type" DEFAULT 'other'::"public"."business_type" NOT NULL,
+    "category_id" bigint,
+    "amount" numeric NOT NULL,
+    "fund_account_id" bigint NOT NULL,
+    "partner_type" "text",
+    "partner_id" "text",
+    "partner_name_cache" "text",
+    "ref_type" "text",
+    "ref_id" "text",
+    "description" "text",
+    "evidence_url" "text",
+    "created_by" "uuid" DEFAULT "auth"."uid"(),
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "status" "public"."transaction_status" DEFAULT 'pending'::"public"."transaction_status" NOT NULL,
+    "cash_tally" "jsonb",
+    "ref_advance_id" bigint,
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "target_bank_info" "jsonb",
+    CONSTRAINT "check_ref_id_required" CHECK (((("ref_type" = 'order'::"text") AND ("ref_id" IS NOT NULL) AND ("ref_id" <> ''::"text")) OR ("ref_type" <> 'order'::"text") OR ("ref_type" IS NULL))),
+    CONSTRAINT "finance_transactions_amount_check" CHECK (("amount" > (0)::numeric))
+);
+
+
+ALTER TABLE "public"."finance_transactions" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."orders" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "code" "text" NOT NULL,
+    "customer_id" bigint,
+    "creator_id" "uuid",
+    "status" "text" DEFAULT 'PENDING'::"text",
+    "total_amount" numeric DEFAULT 0,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "final_amount" numeric DEFAULT 0,
+    "paid_amount" numeric DEFAULT 0,
+    "shipping_fee" numeric DEFAULT 0,
+    "discount_amount" numeric DEFAULT 0,
+    "quote_expires_at" timestamp with time zone,
+    "delivery_address" "text",
+    "delivery_time" "text",
+    "fee_payer" "text" DEFAULT 'receiver'::"text",
+    "shipping_partner_id" bigint,
+    "note" "text",
+    "delivery_method" "text" DEFAULT 'internal'::"text",
+    "package_count" integer DEFAULT 1,
+    "order_type" "text" DEFAULT 'B2B'::"text",
+    "customer_b2c_id" bigint,
+    "payment_status" "text" DEFAULT 'unpaid'::"text",
+    "remittance_status" "text" DEFAULT 'pending'::"text",
+    "remittance_transaction_id" bigint,
+    "payment_method" "text" DEFAULT 'cash'::"text",
+    "warehouse_id" bigint,
+    "invoice_status" "public"."invoice_request_status" DEFAULT 'none'::"public"."invoice_request_status",
+    "invoice_request_data" "jsonb"
+);
+
+
+ALTER TABLE "public"."orders" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."b2b_customer_debt_view" AS
+ WITH "order_accrual" AS (
+         SELECT "orders"."customer_id",
+            COALESCE("sum"("orders"."final_amount"), (0)::numeric) AS "total_invoiced_amount"
+           FROM "public"."orders"
+          WHERE (("orders"."customer_id" IS NOT NULL) AND ("orders"."status" = ANY (ARRAY['PACKED'::"text", 'SHIPPING'::"text", 'DELIVERED'::"text", 'COMPLETED'::"text"])))
+          GROUP BY "orders"."customer_id"
+        ), "payment_made" AS (
+         SELECT ("finance_transactions"."partner_id")::bigint AS "customer_id",
+            COALESCE("sum"("finance_transactions"."amount"), (0)::numeric) AS "total_paid_amount"
+           FROM "public"."finance_transactions"
+          WHERE (("finance_transactions"."partner_type" = 'customer'::"text") AND ("finance_transactions"."flow" = 'in'::"public"."transaction_flow") AND ("finance_transactions"."status" = 'completed'::"public"."transaction_status") AND ("finance_transactions"."partner_id" ~ '^[0-9]+$'::"text"))
+          GROUP BY ("finance_transactions"."partner_id")::bigint
+        )
+ SELECT "c"."id" AS "customer_id",
+    "c"."customer_code",
+    "c"."name" AS "customer_name",
+    "c"."phone" AS "customer_phone",
+    COALESCE("oa"."total_invoiced_amount", (0)::numeric) AS "total_invoiced",
+    COALESCE("pm"."total_paid_amount", (0)::numeric) AS "total_paid",
+    (COALESCE("oa"."total_invoiced_amount", (0)::numeric) - COALESCE("pm"."total_paid_amount", (0)::numeric)) AS "actual_current_debt"
+   FROM (("public"."customers_b2b" "c"
+     LEFT JOIN "order_accrual" "oa" ON (("c"."id" = "oa"."customer_id")))
+     LEFT JOIN "payment_made" "pm" ON (("c"."id" = "pm"."customer_id")));
+
+
+ALTER VIEW "public"."b2b_customer_debt_view" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."banks" (
     "id" bigint NOT NULL,
     "name" "text" NOT NULL,
@@ -13709,37 +13931,6 @@ COMMENT ON COLUMN "public"."customers"."last_purchase_at" IS 'Thời điểm ho�
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."customers_b2b" (
-    "id" bigint NOT NULL,
-    "customer_code" "text",
-    "name" "text" NOT NULL,
-    "tax_code" "text",
-    "debt_limit" numeric DEFAULT 100000000,
-    "payment_term" integer DEFAULT 30,
-    "ranking" "text",
-    "business_license_number" "text",
-    "business_license_url" "text",
-    "sales_staff_id" "uuid",
-    "status" "public"."account_status" DEFAULT 'active'::"public"."account_status" NOT NULL,
-    "phone" "text",
-    "email" "text",
-    "vat_address" "text",
-    "shipping_address" "text",
-    "gps_lat" numeric,
-    "gps_long" numeric,
-    "bank_name" "text",
-    "bank_account_name" "text",
-    "bank_account_number" "text",
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "loyalty_points" integer DEFAULT 0,
-    "current_debt" numeric DEFAULT 0
-);
-
-
-ALTER TABLE "public"."customers_b2b" OWNER TO "postgres";
-
-
 CREATE SEQUENCE IF NOT EXISTS "public"."customers_b2b_id_seq"
     START WITH 1
     INCREMENT BY 1
@@ -13865,37 +14056,6 @@ ALTER TABLE "public"."finance_invoices" ALTER COLUMN "id" ADD GENERATED BY DEFAU
     CACHE 1
 );
 
-
-
-CREATE TABLE IF NOT EXISTS "public"."finance_transactions" (
-    "id" bigint NOT NULL,
-    "code" "text" NOT NULL,
-    "transaction_date" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "flow" "public"."transaction_flow" NOT NULL,
-    "business_type" "public"."business_type" DEFAULT 'other'::"public"."business_type" NOT NULL,
-    "category_id" bigint,
-    "amount" numeric NOT NULL,
-    "fund_account_id" bigint NOT NULL,
-    "partner_type" "text",
-    "partner_id" "text",
-    "partner_name_cache" "text",
-    "ref_type" "text",
-    "ref_id" "text",
-    "description" "text",
-    "evidence_url" "text",
-    "created_by" "uuid" DEFAULT "auth"."uid"(),
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "status" "public"."transaction_status" DEFAULT 'pending'::"public"."transaction_status" NOT NULL,
-    "cash_tally" "jsonb",
-    "ref_advance_id" bigint,
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "target_bank_info" "jsonb",
-    CONSTRAINT "check_ref_id_required" CHECK (((("ref_type" = 'order'::"text") AND ("ref_id" IS NOT NULL) AND ("ref_id" <> ''::"text")) OR ("ref_type" <> 'order'::"text") OR ("ref_type" IS NULL))),
-    CONSTRAINT "finance_transactions_amount_check" CHECK (("amount" > (0)::numeric))
-);
-
-
-ALTER TABLE "public"."finance_transactions" OWNER TO "postgres";
 
 
 ALTER TABLE "public"."finance_transactions" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
@@ -14357,42 +14517,6 @@ CREATE TABLE IF NOT EXISTS "public"."order_items" (
 
 
 ALTER TABLE "public"."order_items" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."orders" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "code" "text" NOT NULL,
-    "customer_id" bigint,
-    "creator_id" "uuid",
-    "status" "text" DEFAULT 'PENDING'::"text",
-    "total_amount" numeric DEFAULT 0,
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "final_amount" numeric DEFAULT 0,
-    "paid_amount" numeric DEFAULT 0,
-    "shipping_fee" numeric DEFAULT 0,
-    "discount_amount" numeric DEFAULT 0,
-    "quote_expires_at" timestamp with time zone,
-    "delivery_address" "text",
-    "delivery_time" "text",
-    "fee_payer" "text" DEFAULT 'receiver'::"text",
-    "shipping_partner_id" bigint,
-    "note" "text",
-    "delivery_method" "text" DEFAULT 'internal'::"text",
-    "package_count" integer DEFAULT 1,
-    "order_type" "text" DEFAULT 'B2B'::"text",
-    "customer_b2c_id" bigint,
-    "payment_status" "text" DEFAULT 'unpaid'::"text",
-    "remittance_status" "text" DEFAULT 'pending'::"text",
-    "remittance_transaction_id" bigint,
-    "payment_method" "text" DEFAULT 'cash'::"text",
-    "warehouse_id" bigint,
-    "invoice_status" "public"."invoice_request_status" DEFAULT 'none'::"public"."invoice_request_status",
-    "invoice_request_data" "jsonb"
-);
-
-
-ALTER TABLE "public"."orders" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."paraclinical_templates" (
@@ -19402,6 +19526,12 @@ GRANT ALL ON FUNCTION "public"."pay_purchase_order_via_wallet"("p_po_id" bigint,
 
 
 
+GRANT ALL ON FUNCTION "public"."process_bulk_payment"("p_customer_id" bigint, "p_total_amount" numeric, "p_allocations" "jsonb", "p_fund_account_id" bigint, "p_description" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."process_bulk_payment"("p_customer_id" bigint, "p_total_amount" numeric, "p_allocations" "jsonb", "p_fund_account_id" bigint, "p_description" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."process_bulk_payment"("p_customer_id" bigint, "p_total_amount" numeric, "p_allocations" "jsonb", "p_fund_account_id" bigint, "p_description" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "service_role";
@@ -20013,6 +20143,30 @@ GRANT ALL ON SEQUENCE "public"."assets_id_seq" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."customers_b2b" TO "anon";
+GRANT ALL ON TABLE "public"."customers_b2b" TO "authenticated";
+GRANT ALL ON TABLE "public"."customers_b2b" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."finance_transactions" TO "anon";
+GRANT ALL ON TABLE "public"."finance_transactions" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_transactions" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."orders" TO "anon";
+GRANT ALL ON TABLE "public"."orders" TO "authenticated";
+GRANT ALL ON TABLE "public"."orders" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."b2b_customer_debt_view" TO "anon";
+GRANT ALL ON TABLE "public"."b2b_customer_debt_view" TO "authenticated";
+GRANT ALL ON TABLE "public"."b2b_customer_debt_view" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."banks" TO "anon";
 GRANT ALL ON TABLE "public"."banks" TO "authenticated";
 GRANT ALL ON TABLE "public"."banks" TO "service_role";
@@ -20211,12 +20365,6 @@ GRANT ALL ON TABLE "public"."customers" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."customers_b2b" TO "anon";
-GRANT ALL ON TABLE "public"."customers_b2b" TO "authenticated";
-GRANT ALL ON TABLE "public"."customers_b2b" TO "service_role";
-
-
-
 GRANT ALL ON SEQUENCE "public"."customers_b2b_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."customers_b2b_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."customers_b2b_id_seq" TO "service_role";
@@ -20262,12 +20410,6 @@ GRANT ALL ON TABLE "public"."finance_invoices" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."finance_invoices_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."finance_invoices_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."finance_invoices_id_seq" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."finance_transactions" TO "anon";
-GRANT ALL ON TABLE "public"."finance_transactions" TO "authenticated";
-GRANT ALL ON TABLE "public"."finance_transactions" TO "service_role";
 
 
 
@@ -20424,12 +20566,6 @@ GRANT ALL ON TABLE "public"."notifications" TO "service_role";
 GRANT ALL ON TABLE "public"."order_items" TO "anon";
 GRANT ALL ON TABLE "public"."order_items" TO "authenticated";
 GRANT ALL ON TABLE "public"."order_items" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."orders" TO "anon";
-GRANT ALL ON TABLE "public"."orders" TO "authenticated";
-GRANT ALL ON TABLE "public"."orders" TO "service_role";
 
 
 

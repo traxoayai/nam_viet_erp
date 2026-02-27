@@ -299,6 +299,20 @@ export const useFinanceFormLogic = (
         };
       }
 
+      // [NEW] B2B Bulk Payment Logic (Gọi RPC riêng biệt của Core thay vì tạo phiếu đơn lẻ)
+      if (values.b2b_bulk_allocations && values.b2b_bulk_allocations.length > 0) {
+         await financeService.processBulkPayment({
+             p_customer_id: Number(values.partner_id),
+             p_total_amount: Number(values.amount),
+             p_allocations: values.b2b_bulk_allocations,
+             p_fund_account_id: values.fund_account_id,
+             p_description: values.description
+         });
+         message.success("Phân bổ thanh toán và gạch nợ B2B thành công!");
+         onCancel();
+         return true;
+      }
+
       const payload: CreateTransactionParams = {
         p_flow: values.flow,
         p_business_type: values.business_type,
@@ -319,30 +333,28 @@ export const useFinanceFormLogic = (
         p_target_bank_info: targetBankInfo, // [NEW] Add to payload
       };
 
-      if (["advance", "reimbursement"].includes(values.business_type)) {
+      // Xử lý đối tượng mặc định từ Select Form
+      if (values.business_type === "advance" || values.business_type === "reimbursement") {
         payload.p_partner_type = "employee";
         payload.p_partner_id = values.employee_id;
       } else if (values.business_type === "trade") {
+        // [FIX BỌC THÉP] Truyền chính xác type mà user đã chọn trên Form
+        payload.p_partner_type = values.partner_type; 
+        
         if (values.partner_type === "supplier") {
-          payload.p_partner_type = "supplier";
           payload.p_partner_id = values.supplier_id;
           const sup = suppliers.find((s) => s.id === values.supplier_id);
           if (sup) payload.p_partner_name = sup.name;
-        } else {
-          payload.p_partner_type = "customer";
-          payload.p_partner_type = "customer";
+        } else if (values.partner_type === "customer" || values.partner_type === "customer_b2b") {
+          payload.p_partner_id = values.partner_id;
+          payload.p_partner_name = values.partner_name;
+        } else if (values.partner_type === "shipping_partner" || values.partner_type === "other") {
+          // Nhà xe hoặc Khác hiện tại chỉ nhập tên tay (Chưa có select ID)
           payload.p_partner_name = values.partner_name;
         }
       } else {
-        payload.p_partner_name = values.partner_name;
-      }
-
-      // [NEW] Ưu tiên lấy partner_id/type từ form values (Do logic tìm kiếm mới)
-      if (values.partner_type && values.partner_id) {
-        // [FIX] Giữ nguyên partner_type chuẩn (customer_b2b hoặc customer)
-        // Để Trigger SQL phân biệt được đâu là B2B, đâu là B2C
-        payload.p_partner_type = values.partner_type;
-        payload.p_partner_id = values.partner_id;
+         payload.p_partner_type = "other";
+         payload.p_partner_name = values.partner_name;
       }
 
       const success = await createTransaction(payload);
