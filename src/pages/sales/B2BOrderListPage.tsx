@@ -599,7 +599,7 @@ const B2BOrderListPage = () => {
             ),
           },
           {
-            label: "Xuất Excel Misa",
+            label: "Xuất Excel Đơn Hàng",
             icon: <FileExcelOutlined />,
             onClick: handleExportInvoiceExcel,
             type: "default",

@@ -175,12 +175,16 @@ export const salesService = {
         `
         *,
         order_items (
-          product_name,
-          unit_name,
+          uom,
           quantity,
           unit_price,
-          total_price,
-          vat_rate -- Cần đảm bảo bảng order_items có cột này hoặc lấy từ product
+          total_line,
+          batch_no,
+          expiry_date,
+          product:product_id (
+            sku,
+            name
+          )
         )
       `
       )
