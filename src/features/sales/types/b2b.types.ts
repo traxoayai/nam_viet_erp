@@ -45,6 +45,8 @@ export interface B2BOrderFilters {
 export interface B2BOrderDetailItem {
   id: string;
   product_id: string;
+  batch_no?: string;
+  expiry_date?: string;
   product_name: string;
   product_image?: string;
   quantity: number;

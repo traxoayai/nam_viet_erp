@@ -4722,7 +4722,9 @@ export type Database = {
             Args: { p_fund_account_id: number; p_order_ids: string[] }
             Returns: Json
           }
-      confirm_outbound_packing: { Args: { p_order_id: string }; Returns: Json }
+      confirm_outbound_packing:
+        | { Args: { p_order_id: string }; Returns: Json }
+        | { Args: { p_order_id: string; p_user_id?: string }; Returns: Json }
       confirm_post_read: { Args: { p_post_id: number }; Returns: undefined }
       confirm_purchase_costing: {
         Args: {
@@ -5417,6 +5419,7 @@ export type Database = {
           actual_cost: number
           conversion_rate: number
           current_stock: number
+          distributor_id: number
           image_url: string
           max_stock: number
           min_stock: number
@@ -5948,7 +5951,7 @@ export type Database = {
           p_shipping_partner_id?: number
           p_status?: string
           p_type?: string
-          p_warehouse_id: number
+          p_warehouse_id?: number
         }
         Returns: {
           code: string

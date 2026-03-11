@@ -2326,6 +2326,138 @@ COMMENT ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") IS 
 
 
 
+CREATE OR REPLACE FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid", "p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+    v_current_status TEXT;
+    v_warehouse_id BIGINT;
+    v_customer_id BIGINT;
+    v_order_code TEXT;
+    
+    v_item RECORD;
+    v_batch RECORD;
+    v_qty_needed INTEGER; -- Số lượng theo Base Unit
+    v_deduct_amount INTEGER;
+    v_conversion_factor INTEGER;
+
+    -- [CORE BỔ SUNG]: Biến tạm để ghép Lô và Date
+    v_agg_batch_no TEXT;
+    v_min_expiry DATE;
+BEGIN
+    -- A. Lấy thông tin đơn hàng
+    SELECT status, warehouse_id, code, customer_id 
+    INTO v_current_status, v_warehouse_id, v_order_code, v_customer_id
+    FROM public.orders WHERE id = p_order_id;
+
+    IF v_current_status IS NULL THEN RAISE EXCEPTION 'Không tìm thấy đơn hàng.'; END IF;
+    
+    -- Chỉ cho phép đóng gói khi đơn đang CONFIRMED (Đã duyệt)
+    IF v_current_status != 'CONFIRMED' THEN
+        RAISE EXCEPTION 'Đơn hàng không ở trạng thái chờ đóng gói (CONFIRMED).';
+    END IF;
+
+    IF v_warehouse_id IS NULL THEN v_warehouse_id := 1; END IF; -- Fallback an toàn
+
+    -- B. LOOP: Duyệt từng sản phẩm trong đơn
+    FOR v_item IN 
+        SELECT oi.id as order_item_id, oi.product_id, oi.quantity, oi.uom, oi.conversion_factor, p.name as product_name, p.actual_cost
+        FROM public.order_items oi
+        JOIN public.products p ON oi.product_id = p.id
+        WHERE oi.order_id = p_order_id
+    LOOP
+        -- Tính tổng số lượng Base cần xuất (VD: 2 Thùng x 24 = 48 lon)
+        v_conversion_factor := COALESCE(v_item.conversion_factor, 1);
+        v_qty_needed := v_item.quantity * v_conversion_factor;
+        
+        -- [CORE BỔ SUNG]: Reset biến tạm cho từng sản phẩm
+        v_agg_batch_no := '';
+        v_min_expiry := NULL;
+
+        -- C. FEFO LOOP: Quét lô để trừ kho
+        FOR v_batch IN 
+            SELECT ib.id, ib.batch_id, ib.quantity, b.inbound_price, b.batch_code, b.expiry_date -- Lấy thêm mã Lô và HSD
+            FROM public.inventory_batches ib
+            JOIN public.batches b ON ib.batch_id = b.id
+            WHERE ib.product_id = v_item.product_id 
+              AND ib.warehouse_id = v_warehouse_id
+              AND ib.quantity > 0
+            ORDER BY b.expiry_date ASC, b.created_at ASC 
+            FOR UPDATE
+        LOOP
+            EXIT WHEN v_qty_needed <= 0;
+
+            -- Tính lượng trừ tại lô này
+            IF v_batch.quantity >= v_qty_needed THEN
+                v_deduct_amount := v_qty_needed;
+            ELSE
+                v_deduct_amount := v_batch.quantity;
+            END IF;
+
+            -- 1. Trừ kho chi tiết
+            UPDATE public.inventory_batches
+            SET quantity = quantity - v_deduct_amount, updated_at = NOW()
+            WHERE id = v_batch.id;
+
+            -- 2. Ghi nhận giao dịch tài chính (Unit Price = Giá vốn)
+            INSERT INTO public.inventory_transactions (
+                warehouse_id, product_id, batch_id, 
+                type, action_group, 
+                quantity, unit_price,
+                ref_id, description, partner_id, created_at, created_by
+            ) VALUES (
+                v_warehouse_id, v_item.product_id, v_batch.batch_id,
+                'sale_order', 'SALE',
+                -v_deduct_amount, COALESCE(v_batch.inbound_price, v_item.actual_cost, 0),
+                v_order_code, 'Xuất kho đơn ' || v_order_code, v_customer_id::text, NOW(), p_user_id
+            );
+
+            -- ==========================================================
+            -- [CORE BỔ SUNG]: LƯU DẤU VẾT LÔ VÀ DATE
+            -- ==========================================================
+            IF v_agg_batch_no = '' THEN 
+                v_agg_batch_no := v_batch.batch_code; 
+                v_min_expiry := v_batch.expiry_date;
+            ELSE 
+                -- Nếu 1 món phải lấy từ 2 lô, ghép tên 2 lô lại
+                v_agg_batch_no := v_agg_batch_no || ', ' || v_batch.batch_code;
+                -- Chỉ lấy Hạn sử dụng của lô ngắn nhất (cận date nhất)
+                IF v_batch.expiry_date < v_min_expiry THEN 
+                    v_min_expiry := v_batch.expiry_date; 
+                END IF;
+            END IF;
+
+            v_qty_needed := v_qty_needed - v_deduct_amount;
+        END LOOP;
+
+        -- D. Validation cuối cùng
+        IF v_qty_needed > 0 THEN
+            RAISE EXCEPTION 'Kho không đủ hàng xuất cho sản phẩm "%". Thiếu % (đvcs). Vui lòng kiểm tra tồn kho.', v_item.product_name, v_qty_needed;
+        END IF;
+
+        -- E. Cập nhật Order Items (Số lượng đã nhặt + TÊN LÔ + DATE)
+        UPDATE public.order_items 
+        SET 
+            quantity_picked = (v_item.quantity * v_conversion_factor),
+            batch_no = v_agg_batch_no,        -- [CORE BỔ SUNG]
+            expiry_date = v_min_expiry        -- [CORE BỔ SUNG]
+        WHERE id = v_item.order_item_id;
+
+    END LOOP;
+
+    -- F. Chuyển trạng thái đơn -> PACKED
+    UPDATE public.orders
+    SET status = 'PACKED', updated_at = NOW()
+    WHERE id = p_order_id;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Đã xuất kho và đóng gói thành công.');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."confirm_post_read"("p_post_id" bigint) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -6145,14 +6277,13 @@ CREATE OR REPLACE FUNCTION "public"."get_inventory_drift"("p_check_id" bigint) R
 ALTER FUNCTION "public"."get_inventory_drift"("p_check_id" bigint) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_inventory_setup_grid"("p_warehouse_id" bigint, "p_search" "text" DEFAULT ''::"text", "p_limit" integer DEFAULT 20, "p_offset" integer DEFAULT 0, "p_has_setup_only" boolean DEFAULT false) RETURNS TABLE("product_id" bigint, "sku" "text", "name" "text", "image_url" "text", "actual_cost" numeric, "unit_name" "text", "conversion_rate" integer, "min_stock" integer, "max_stock" integer, "current_stock" integer, "total_count" bigint)
+CREATE OR REPLACE FUNCTION "public"."get_inventory_setup_grid"("p_warehouse_id" bigint, "p_search" "text" DEFAULT ''::"text", "p_has_setup_only" boolean DEFAULT false, "p_limit" integer DEFAULT 50, "p_offset" integer DEFAULT 0) RETURNS TABLE("product_id" bigint, "sku" "text", "name" "text", "image_url" "text", "actual_cost" numeric, "unit_name" "text", "conversion_rate" integer, "min_stock" integer, "max_stock" integer, "current_stock" integer, "distributor_id" bigint, "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
 BEGIN
     RETURN QUERY
     WITH filtered_products AS (
-        SELECT p.id, p.sku, p.name, p.image_url, p.actual_cost, p.created_at
+        SELECT p.id, p.sku, p.name, p.image_url, p.actual_cost, p.distributor_id, p.created_at
         FROM public.products p
         WHERE p.status = 'active'
           AND (p_search IS NULL OR p_search = '' OR p.name ILIKE '%' || p_search || '%' OR p.sku ILIKE '%' || p_search || '%')
@@ -6164,21 +6295,20 @@ BEGIN
         fp.image_url,
         COALESCE(fp.actual_cost, 0) as actual_cost,
         
-        -- Logic hiển thị đơn vị: Ưu tiên đơn vị Bán buôn (thùng/hộp) để cài Min/Max cho chẵn
         COALESCE(u_wholesale.unit_name, u_base.unit_name, 'Cái') as unit_name,
         COALESCE(u_wholesale.conversion_rate::integer, 1) as conversion_rate,
         
-        -- Dữ liệu phẳng Min/Max của kho p_warehouse_id
         COALESCE(inv.min_stock, 0) as min_stock,
         COALESCE(inv.max_stock, 0) as max_stock,
         COALESCE(inv.stock_quantity, 0) as current_stock,
+        
+        fp.distributor_id, 
         
         (COUNT(*) OVER()) as total_count
         
     FROM filtered_products fp
     LEFT JOIN public.product_units u_base ON fp.id = u_base.product_id AND u_base.is_base = true
     LEFT JOIN public.product_units u_wholesale ON fp.id = u_wholesale.product_id AND u_wholesale.unit_type = 'wholesale'
-    -- JOIN chính xác vào kho đang chọn
     LEFT JOIN public.product_inventory inv ON fp.id = inv.product_id AND inv.warehouse_id = p_warehouse_id
     
     WHERE 
@@ -6191,7 +6321,7 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."get_inventory_setup_grid"("p_warehouse_id" bigint, "p_search" "text", "p_limit" integer, "p_offset" integer, "p_has_setup_only" boolean) OWNER TO "postgres";
+ALTER FUNCTION "public"."get_inventory_setup_grid"("p_warehouse_id" bigint, "p_search" "text", "p_has_setup_only" boolean, "p_limit" integer, "p_offset" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_mapped_product"("p_tax_code" "text", "p_product_name" "text", "p_vendor_unit" "text" DEFAULT NULL::"text") RETURNS TABLE("internal_product_id" bigint, "internal_unit" "text")
@@ -8141,105 +8271,124 @@ COMMENT ON FUNCTION "public"."get_warehouse_inbound_tasks"("p_warehouse_id" bigi
 
 
 
-CREATE OR REPLACE FUNCTION "public"."get_warehouse_outbound_tasks"("p_warehouse_id" bigint, "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_search" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_date_from" "date" DEFAULT NULL::"date", "p_date_to" "date" DEFAULT NULL::"date", "p_type" "text" DEFAULT NULL::"text") RETURNS TABLE("task_id" "uuid", "code" "text", "task_type" "text", "customer_name" "text", "created_at" timestamp with time zone, "delivery_deadline" timestamp with time zone, "priority" "text", "status" "text", "shipping_partner_name" "text", "shipping_contact_name" "text", "shipping_contact_phone" "text", "package_count" integer, "progress_picked" bigint, "progress_total" bigint, "status_label" "text", "total_count" bigint)
+CREATE OR REPLACE FUNCTION "public"."get_warehouse_outbound_tasks"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 20, "p_search" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_type" "text" DEFAULT NULL::"text", "p_date_from" "date" DEFAULT NULL::"date", "p_date_to" "date" DEFAULT NULL::"date", "p_warehouse_id" bigint DEFAULT 1, "p_shipping_partner_id" bigint DEFAULT NULL::bigint) RETURNS TABLE("task_id" "uuid", "code" "text", "task_type" "text", "customer_name" "text", "created_at" timestamp with time zone, "delivery_deadline" timestamp with time zone, "priority" "text", "status" "text", "shipping_partner_name" "text", "shipping_contact_name" "text", "shipping_contact_phone" "text", "package_count" integer, "progress_picked" integer, "progress_total" integer, "status_label" "text", "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $$
-    DECLARE
-        v_offset INTEGER;
-    BEGIN
-        v_offset := (p_page - 1) * p_page_size;
+DECLARE
+    v_offset INTEGER;
+BEGIN
+    v_offset := (p_page - 1) * p_page_size;
 
-        RETURN QUERY
-        WITH task_metrics AS (
-            SELECT 
-                oi.order_id,
-                COALESCE(SUM(oi.quantity), 0) AS _total_qty,
-                COALESCE(SUM(oi.quantity_picked), 0) AS _picked_qty
-            FROM public.order_items oi
-            GROUP BY oi.order_id
-        ),
-        raw_data AS (
-            SELECT 
-                o.id AS _internal_id,
-                o.code AS _internal_code,
-                o.status AS _internal_status,
-                o.created_at AS _internal_created_at,
-                o.package_count AS _internal_package_count,
-                
-                -- [FIX LOGIC V4] Ưu tiên check Customer trước
-                CASE 
-                    WHEN o.customer_id IS NOT NULL THEN 'Bán hàng'
-                    WHEN o.delivery_method = 'internal' THEN 'Chuyển kho'
-                    ELSE 'Khác' 
-                END::TEXT AS _internal_type,
-
-                COALESCE(c.name, 'Khách lẻ') AS _internal_cust_name,
-                (o.created_at + interval '24 hours')::TIMESTAMPTZ AS _internal_deadline,
-
-                CASE 
-                    WHEN o.status IN ('DELIVERED', 'CANCELLED') THEN 'Normal'
-                    WHEN NOW() > (o.created_at + interval '24 hours') THEN 'High'
-                    ELSE 'Normal'
-                END AS _internal_priority,
-
-                COALESCE(sp.name, 'Tự vận chuyển') AS _internal_ship_partner,
-                COALESCE(sp.contact_person, 'N/A') AS _internal_ship_contact,
-                COALESCE(sp.phone, 'N/A') AS _internal_ship_phone,
-
-                COALESCE(tm._picked_qty, 0) AS _internal_picked,
-                COALESCE(tm._total_qty, 0) AS _internal_total
-
-            FROM public.orders o
-            LEFT JOIN public.customers_b2b c ON o.customer_id = c.id
-            LEFT JOIN public.shipping_partners sp ON o.shipping_partner_id = sp.id
-            LEFT JOIN task_metrics tm ON o.id = tm.order_id
-            WHERE 
-                o.status NOT IN ('DRAFT', 'QUOTE')
-                AND (p_status IS NULL OR o.status = p_status)
-                AND (p_shipping_partner_id IS NULL OR o.shipping_partner_id = p_shipping_partner_id)
-                AND (p_date_from IS NULL OR date(o.created_at) >= p_date_from)
-                AND (p_date_to IS NULL OR date(o.created_at) <= p_date_to)
-                -- Deep Search Logic giữ nguyên
-                AND (
-                    p_search IS NULL OR p_search = '' 
-                    OR o.code ILIKE ('%' || p_search || '%')       
-                    OR c.name ILIKE ('%' || p_search || '%')       
-                    OR EXISTS (
-                        SELECT 1 FROM public.order_items sub_oi 
-                        JOIN public.products sub_p ON sub_oi.product_id = sub_p.id 
-                        WHERE sub_oi.order_id = o.id AND sub_p.name ILIKE ('%' || p_search || '%')
-                    )
-                )
-        )
+    RETURN QUERY
+    WITH task_metrics AS (
         SELECT 
-            rd._internal_id, rd._internal_code, rd._internal_type, rd._internal_cust_name,
-            rd._internal_created_at, rd._internal_deadline, rd._internal_priority, rd._internal_status,
-            rd._internal_ship_partner, rd._internal_ship_contact, rd._internal_ship_phone,
-            COALESCE(rd._internal_package_count, 1),
-            rd._internal_picked, rd._internal_total,
+            oi.order_id,
+            COALESCE(SUM(oi.quantity), 0) AS _total_qty,
+            COALESCE(SUM(oi.quantity_picked), 0) AS _picked_qty
+        FROM public.order_items oi
+        GROUP BY oi.order_id
+    ),
+    raw_data AS (
+        SELECT 
+            o.id AS _internal_id,
+            o.code AS _internal_code,
+            o.status AS _internal_status,
+            o.created_at AS _internal_created_at,
+            o.package_count AS _internal_package_count,
+            
             CASE 
-                WHEN rd._internal_status = 'CANCELLED' THEN 'Đã hủy'
-                WHEN rd._internal_status = 'DELIVERED' THEN 'Hoàn tất'
-                WHEN rd._internal_status = 'SHIPPING' THEN 'Đang giao'
-                WHEN rd._internal_picked = 0 THEN 'Chờ xử lý'
-                WHEN rd._internal_picked < rd._internal_total THEN 'Đang nhặt'
-                WHEN rd._internal_picked >= rd._internal_total THEN 'Chờ giao'
-                ELSE 'Chờ xử lý'
-            END,
-            COUNT(*) OVER()
-        FROM raw_data rd
-        WHERE (p_type IS NULL OR p_type = '' OR rd._internal_type = p_type) -- Filter Type sau khi tính toán
-        ORDER BY 
-            (CASE WHEN rd._internal_status IN ('DELIVERED', 'SHIPPING', 'CANCELLED') THEN 1 ELSE 0 END) ASC,
-            (CASE WHEN rd._internal_priority = 'High' THEN 0 ELSE 1 END) ASC,
-            rd._internal_created_at ASC
-        LIMIT p_page_size OFFSET v_offset;
-    END;
-    $$;
+                WHEN o.customer_id IS NOT NULL THEN 'Bán hàng'
+                WHEN o.delivery_method = 'internal' THEN 'Chuyển kho'
+                ELSE 'Khác' 
+            END::TEXT AS _internal_type,
+
+            COALESCE(c.name, 'Khách lẻ') AS _internal_cust_name,
+            (o.created_at + interval '24 hours')::TIMESTAMPTZ AS _internal_deadline,
+
+            CASE 
+                WHEN o.status IN ('DELIVERED', 'CANCELLED') THEN 'Normal'
+                WHEN NOW() > (o.created_at + interval '24 hours') THEN 'High'
+                ELSE 'Normal'
+            END AS _internal_priority,
+
+            COALESCE(sp.name, 'Tự vận chuyển') AS _internal_ship_partner,
+            COALESCE(sp.contact_person, 'N/A') AS _internal_ship_contact,
+            COALESCE(sp.phone, 'N/A') AS _internal_ship_phone,
+
+            COALESCE(tm._picked_qty, 0) AS _internal_picked,
+            COALESCE(tm._total_qty, 0) AS _internal_total
+
+        FROM public.orders o
+        LEFT JOIN public.customers_b2b c ON o.customer_id = c.id
+        LEFT JOIN public.shipping_partners sp ON o.shipping_partner_id = sp.id
+        LEFT JOIN task_metrics tm ON o.id = tm.order_id
+        WHERE 
+            o.status NOT IN ('DRAFT', 'QUOTE')
+            AND (p_status IS NULL OR o.status = p_status)
+            AND (p_shipping_partner_id IS NULL OR o.shipping_partner_id = p_shipping_partner_id)
+            AND (p_date_from IS NULL OR date(o.created_at) >= p_date_from)
+            AND (p_date_to IS NULL OR date(o.created_at) <= p_date_to)
+            AND (
+                p_search IS NULL OR p_search = '' 
+                OR o.code ILIKE ('%' || p_search || '%')       
+                OR c.name ILIKE ('%' || p_search || '%')       
+                OR EXISTS (
+                    SELECT 1 FROM public.order_items sub_oi 
+                    JOIN public.products sub_p ON sub_oi.product_id = sub_p.id 
+                    WHERE sub_oi.order_id = o.id AND sub_p.name ILIKE ('%' || p_search || '%')
+                )
+            )
+    )
+    SELECT 
+        rd._internal_id AS task_id,
+        rd._internal_code AS code,
+        rd._internal_type AS task_type,
+        rd._internal_cust_name AS customer_name,
+        rd._internal_created_at AS created_at,
+        rd._internal_deadline AS delivery_deadline,
+        rd._internal_priority AS priority,
+        rd._internal_status AS status,
+        rd._internal_ship_partner AS shipping_partner_name,
+        rd._internal_ship_contact AS shipping_contact_name,
+        rd._internal_ship_phone AS shipping_contact_phone,
+        COALESCE(rd._internal_package_count, 1) AS package_count,
+        rd._internal_picked::INTEGER AS progress_picked,
+        rd._internal_total::INTEGER AS progress_total,
+        CASE 
+            WHEN rd._internal_status = 'CANCELLED' THEN 'Đã hủy'
+            WHEN rd._internal_status = 'DELIVERED' THEN 'Hoàn tất'
+            WHEN rd._internal_status = 'SHIPPING' THEN 'Đang giao'
+            WHEN rd._internal_picked = 0 THEN 'Chờ xử lý'
+            WHEN rd._internal_picked < rd._internal_total THEN 'Đang nhặt'
+            WHEN rd._internal_picked >= rd._internal_total THEN 'Chờ giao'
+            ELSE 'Chờ xử lý'
+        END AS status_label,
+        COUNT(*) OVER() AS total_count
+    FROM raw_data rd
+    WHERE (p_type IS NULL OR p_type = '' OR rd._internal_type = p_type)
+    ORDER BY 
+        -- 1. Ưu tiên NHÓM THEO NGÀY (Ngày mới nhất lên đầu)
+        DATE(rd._internal_created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') DESC,
+        
+        -- 2. Trong cùng 1 ngày -> Ưu tiên trạng thái (Cần làm trước)
+        CASE 
+            WHEN rd._internal_status = 'CONFIRMED' THEN 1   
+            WHEN rd._internal_status = 'PACKED' THEN 2      
+            WHEN rd._internal_status = 'SHIPPING' THEN 3    
+            WHEN rd._internal_status IN ('DELIVERED', 'COMPLETED') THEN 4 
+            WHEN rd._internal_status = 'CANCELLED' THEN 5   
+            ELSE 6 
+        END ASC,
+        
+        -- 3. Trong cùng Ngày + Cùng Trạng thái -> Ưu tiên giờ/phút mới nhất
+        rd._internal_created_at DESC 
+        
+    LIMIT p_page_size OFFSET v_offset;
+END;
+$$;
 
 
-ALTER FUNCTION "public"."get_warehouse_outbound_tasks"("p_warehouse_id" bigint, "p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_shipping_partner_id" bigint, "p_date_from" "date", "p_date_to" "date", "p_type" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."get_warehouse_outbound_tasks"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_type" "text", "p_date_from" "date", "p_date_to" "date", "p_warehouse_id" bigint, "p_shipping_partner_id" bigint) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."handle_fund_balance_update"() RETURNS "trigger"
@@ -9504,7 +9653,7 @@ DECLARE
 BEGIN
     SELECT name INTO v_customer_name FROM public.customers_b2b WHERE id = p_customer_id;
 
-    -- 1. Vòng lặp xử lý từng Đơn hàng và Cộng dồn số tiền phân bổ
+    -- 1. Vòng lặp xử lý Đơn hàng
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_allocations)
     LOOP
         v_order_id := (v_item->>'order_id')::UUID;
@@ -9513,13 +9662,12 @@ BEGIN
         IF v_alloc_amount > 0 THEN
             v_sum_allocated := v_sum_allocated + v_alloc_amount;
 
-            -- Khóa dòng đơn hàng để update an toàn
             SELECT final_amount, paid_amount INTO v_order_final, v_order_paid 
             FROM public.orders WHERE id = v_order_id FOR UPDATE;
 
             v_new_paid := COALESCE(v_order_paid, 0) + v_alloc_amount;
 
-            -- A. Cập nhật tiền và trạng thái chuẩn mực 3 bước (unpaid, partial, paid)
+            -- Cập nhật đơn hàng
             UPDATE public.orders
             SET 
                 paid_amount = v_new_paid,
@@ -9531,7 +9679,7 @@ BEGIN
                 updated_at = NOW()
             WHERE id = v_order_id;
 
-            -- B. Sinh Phiếu Thu Tài Chính chi tiết
+            -- [CORE FIX 1]: Đổi 'customer' thành 'customer_b2b'
             v_trans_code := 'PT-' || to_char(NOW(), 'YYMMDD') || '-' || LPAD(floor(random() * 10000)::text, 4, '0');
             INSERT INTO public.finance_transactions (
                 code, transaction_date, flow, business_type, amount, fund_account_id,
@@ -9539,20 +9687,17 @@ BEGIN
                 description, status, created_by
             ) VALUES (
                 v_trans_code, NOW(), 'in', 'trade', v_alloc_amount, p_fund_account_id,
-                'customer', p_customer_id::text, v_customer_name, 'order', v_order_id::text, 
+                'customer_b2b', p_customer_id::text, v_customer_name, 'order', v_order_id::text, 
                 p_description || ' (Gạch nợ đơn: ' || v_order_id || ')', 'completed', auth.uid()
             );
         END IF;
     END LOOP;
 
-    -- ==============================================================================
-    -- [CHỐT CHẶN BẢO MẬT]: KIỂM TRA TỔNG TIỀN PHÂN BỔ SO VỚI TIỀN THỰC THU
-    -- ==============================================================================
     IF v_sum_allocated > p_total_amount THEN
-        RAISE EXCEPTION 'LỖI KẾ TOÁN: Số tiền gạch nợ chi tiết (%, đ) không được phép lớn hơn Tổng tiền thực thu (%, đ)!', v_sum_allocated, p_total_amount;
+        RAISE EXCEPTION 'LỖI KẾ TOÁN: Số tiền gạch nợ chi tiết (%, đ) không được lớn hơn Tổng tiền thực thu (%, đ)!', v_sum_allocated, p_total_amount;
     END IF;
 
-    -- Xử lý tiền thừa (Khách đưa 10tr nhưng chỉ gạch 9.5tr, dư 500k nộp trước)
+    -- Xử lý tiền nộp thừa (Chưa phân bổ / Tạm ứng)
     IF p_total_amount > v_sum_allocated THEN
         v_trans_code := 'PT-' || to_char(NOW(), 'YYMMDD') || '-' || LPAD(floor(random() * 10000)::text, 4, '0');
         INSERT INTO public.finance_transactions (
@@ -9561,7 +9706,7 @@ BEGIN
             description, status, created_by
         ) VALUES (
             v_trans_code, NOW(), 'in', 'trade', (p_total_amount - v_sum_allocated), p_fund_account_id,
-            'customer', p_customer_id::text, v_customer_name, 'other', NULL, 
+            'customer_b2b', p_customer_id::text, v_customer_name, 'other', NULL, 
             'Tiền khách nộp thừa/Tạm ứng (Chưa phân bổ)', 'completed', auth.uid()
         );
     END IF;
@@ -10998,7 +11143,6 @@ ALTER FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_i
 
 CREATE OR REPLACE FUNCTION "public"."search_products_v2"("p_keyword" "text" DEFAULT NULL::"text", "p_category" "text" DEFAULT NULL::"text", "p_manufacturer" "text" DEFAULT NULL::"text", "p_status" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 20, "p_offset" integer DEFAULT 0, "p_warehouse_id" integer DEFAULT NULL::integer) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
     AS $_$
 DECLARE
     v_sql TEXT;
@@ -11011,10 +11155,11 @@ BEGIN
     -- 1. XÂY DỰNG MỆNH ĐỀ WHERE ĐỘNG
     
     -- Filter: Status
-    IF p_status IS NOT NULL THEN
+    -- [CORE FIX]: Nếu truyền rỗng hoặc null, mặc định chỉ lấy 'active'
+    IF p_status IS NOT NULL AND p_status != '' THEN
         v_where_clauses := array_append(v_where_clauses, format('p.status = %L', p_status));
     ELSE
-        v_where_clauses := array_append(v_where_clauses, 'p.status != ''deleted''');
+        v_where_clauses := array_append(v_where_clauses, 'p.status = ''active''');
     END IF;
 
     -- Filter: Manufacturer
@@ -11110,7 +11255,7 @@ BEGIN
     -- 3. THỰC THI
     EXECUTE v_sql INTO v_result;
 
-    RETURN v_result;
+    RETURN COALESCE(v_result, '{"data": [], "total_count": 0}'::jsonb);
 END;
 $_$;
 
@@ -13399,11 +13544,12 @@ CREATE OR REPLACE VIEW "public"."b2b_customer_debt_view" AS
           WHERE (("orders"."customer_id" IS NOT NULL) AND ("orders"."status" = ANY (ARRAY['PACKED'::"text", 'SHIPPING'::"text", 'DELIVERED'::"text", 'COMPLETED'::"text"])))
           GROUP BY "orders"."customer_id"
         ), "payment_made" AS (
-         SELECT ("finance_transactions"."partner_id")::bigint AS "customer_id",
-            COALESCE("sum"("finance_transactions"."amount"), (0)::numeric) AS "total_paid_amount"
-           FROM "public"."finance_transactions"
-          WHERE (("finance_transactions"."partner_type" = 'customer'::"text") AND ("finance_transactions"."flow" = 'in'::"public"."transaction_flow") AND ("finance_transactions"."status" = 'completed'::"public"."transaction_status") AND ("finance_transactions"."partner_id" ~ '^[0-9]+$'::"text"))
-          GROUP BY ("finance_transactions"."partner_id")::bigint
+         SELECT COALESCE("o"."customer_id", (NULLIF("ft"."partner_id", ''::"text"))::bigint) AS "customer_id",
+            COALESCE("sum"("ft"."amount"), (0)::numeric) AS "total_paid_amount"
+           FROM ("public"."finance_transactions" "ft"
+             LEFT JOIN "public"."orders" "o" ON ((("ft"."ref_type" = 'order'::"text") AND (("ft"."ref_id" = "o"."code") OR ("ft"."ref_id" = ("o"."id")::"text")))))
+          WHERE (("ft"."flow" = 'in'::"public"."transaction_flow") AND ("ft"."status" = 'completed'::"public"."transaction_status") AND (("o"."customer_id" IS NOT NULL) OR (("ft"."partner_type" = ANY (ARRAY['customer'::"text", 'customer_b2b'::"text"])) AND ("ft"."partner_id" ~ '^[0-9]+$'::"text"))))
+          GROUP BY COALESCE("o"."customer_id", (NULLIF("ft"."partner_id", ''::"text"))::bigint)
         )
  SELECT "c"."id" AS "customer_id",
     "c"."customer_code",
@@ -18625,6 +18771,12 @@ GRANT ALL ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid") T
 
 
 
+GRANT ALL ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid", "p_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid", "p_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."confirm_outbound_packing"("p_order_id" "uuid", "p_user_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."confirm_post_read"("p_post_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."confirm_post_read"("p_post_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."confirm_post_read"("p_post_id" bigint) TO "service_role";
@@ -19069,9 +19221,9 @@ GRANT ALL ON FUNCTION "public"."get_inventory_drift"("p_check_id" bigint) TO "se
 
 
 
-GRANT ALL ON FUNCTION "public"."get_inventory_setup_grid"("p_warehouse_id" bigint, "p_search" "text", "p_limit" integer, "p_offset" integer, "p_has_setup_only" boolean) TO "anon";
-GRANT ALL ON FUNCTION "public"."get_inventory_setup_grid"("p_warehouse_id" bigint, "p_search" "text", "p_limit" integer, "p_offset" integer, "p_has_setup_only" boolean) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_inventory_setup_grid"("p_warehouse_id" bigint, "p_search" "text", "p_limit" integer, "p_offset" integer, "p_has_setup_only" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."get_inventory_setup_grid"("p_warehouse_id" bigint, "p_search" "text", "p_has_setup_only" boolean, "p_limit" integer, "p_offset" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_inventory_setup_grid"("p_warehouse_id" bigint, "p_search" "text", "p_has_setup_only" boolean, "p_limit" integer, "p_offset" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_inventory_setup_grid"("p_warehouse_id" bigint, "p_search" "text", "p_has_setup_only" boolean, "p_limit" integer, "p_offset" integer) TO "service_role";
 
 
 
@@ -19315,9 +19467,9 @@ GRANT ALL ON FUNCTION "public"."get_warehouse_inbound_tasks"("p_warehouse_id" bi
 
 
 
-GRANT ALL ON FUNCTION "public"."get_warehouse_outbound_tasks"("p_warehouse_id" bigint, "p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_shipping_partner_id" bigint, "p_date_from" "date", "p_date_to" "date", "p_type" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_warehouse_outbound_tasks"("p_warehouse_id" bigint, "p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_shipping_partner_id" bigint, "p_date_from" "date", "p_date_to" "date", "p_type" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_warehouse_outbound_tasks"("p_warehouse_id" bigint, "p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_shipping_partner_id" bigint, "p_date_from" "date", "p_date_to" "date", "p_type" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."get_warehouse_outbound_tasks"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_type" "text", "p_date_from" "date", "p_date_to" "date", "p_warehouse_id" bigint, "p_shipping_partner_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_warehouse_outbound_tasks"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_type" "text", "p_date_from" "date", "p_date_to" "date", "p_warehouse_id" bigint, "p_shipping_partner_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_warehouse_outbound_tasks"("p_page" integer, "p_page_size" integer, "p_search" "text", "p_status" "text", "p_type" "text", "p_date_from" "date", "p_date_to" "date", "p_warehouse_id" bigint, "p_shipping_partner_id" bigint) TO "service_role";
 
 
 

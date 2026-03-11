@@ -9,8 +9,6 @@ import { supabase } from "@/shared/lib/supabaseClient";
 
 export const b2bService = {
   getOrderDetail: async (id: string): Promise<B2BOrderDetail> => {
-    // Query data with joins
-    // SENKO V400 FIX: Corrected column names based on Schema
     const { data, error } = await supabase
       .from("orders")
       .select(
@@ -29,9 +27,12 @@ export const b2bService = {
           id,
           quantity,
           unit_price,
-          total_line,        
+          total_line,
+          batch_no,
+          expiry_date,
           product:product_id (
             id,
+            sku,
             name,
             image_url,
             wholesale_unit   
@@ -80,6 +81,9 @@ export const b2bService = {
       items: (orderData.order_items || []).map((item: any) => ({
         id: item.id,
         product_id: item.product?.id,
+        sku: item.product?.sku,
+        batch_no: item.batch_no,
+        expiry_date: item.expiry_date,
         product_name: item.product?.name || "Sản phẩm đã xóa",
         product_image: item.product?.image_url,
         quantity: item.quantity,

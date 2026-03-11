@@ -43,6 +43,7 @@ import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
 import SupplierPolicyFormPage from "@/pages/partners/policies/SupplierPolicyFormPage"; // [NEW]
 import PurchaseCostingPage from "@/pages/purchasing/PurchaseCostingPage"; // [NEW]
+import PurchaseOrderWorkbench from "@/pages/purchasing/PurchaseOrderWorkbench"; // [MỚI THÊM]
 import PurchaseOrderDetail from "@/pages/purchasing/PurchaseOrderDetail";
 import PurchaseOrderMasterPage from "@/pages/purchasing/PurchaseOrderMasterPage";
 import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
@@ -282,6 +283,16 @@ const routes: RouteObject[] = [
                 path: "costing/:id",
                 element: <PurchaseCostingPage />, // [NEW] V35 Costing
               },
+              // -------- ĐOẠN CHÈN THÊM VÀO ĐỂ TEST --------
+              {
+                path: "workbench-test/new",
+                element: <PurchaseOrderWorkbench />,
+              },
+              {
+                path: "workbench-test/:id",
+                element: <PurchaseOrderWorkbench />,
+              },
+              // --------------------------------------------
             ],
           },
 

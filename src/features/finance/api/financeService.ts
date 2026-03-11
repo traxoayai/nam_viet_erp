@@ -1,3 +1,4 @@
+// src/features/finance/api/financeService.ts
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const financeService = {

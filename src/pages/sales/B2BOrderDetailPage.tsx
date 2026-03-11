@@ -1,4 +1,6 @@
 // src/pages/sales/B2BOrderDetailPage.tsx
+import dayjs from "dayjs";
+import * as XLSX from "xlsx";
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
@@ -7,6 +9,7 @@ import {
   PhoneOutlined,
   EnvironmentOutlined,
   EditOutlined, // [NEW]
+  FileExcelOutlined,
 } from "@ant-design/icons";
 import { SnippetsOutlined } from "@ant-design/icons"; // [NEW]
 import {
@@ -112,6 +115,78 @@ const B2BOrderDetailPage = () => {
     });
   };
 
+  const handleExportExcel = () => {
+    if (!order) return;
+
+    // --- PHẦN 1: HEADER (Thông tin chung) ---
+    // Sử dụng mảng 2 chiều (Array of Arrays) để tự do thiết kế layout
+    const excelData: any[][] = [];
+    
+    excelData.push(["CHI TIẾT ĐƠN HÀNG", order.code]);
+    excelData.push(["Trạng thái", B2B_STATUS_LABEL[order.status as keyof typeof B2B_STATUS_LABEL]]);
+    excelData.push(["Khách hàng", order.customer_name]);
+    excelData.push(["Số điện thoại", order.customer_phone || ""]);
+    excelData.push(["Địa chỉ giao", order.delivery_address || ""]);
+    excelData.push(["Ghi chú", order.note || ""]);
+    excelData.push(["Tạm tính", order.sub_total]);
+    excelData.push(["Chiết khấu", order.discount_amount]);
+    excelData.push(["Phí vận chuyển", order.shipping_fee]);
+    excelData.push(["Tổng cộng (Khách cần trả)", order.final_amount]);
+    
+    // Dòng trống phân cách
+    excelData.push([]); 
+    excelData.push([]); 
+
+    // --- PHẦN 2: TABLE (Danh sách sản phẩm) ---
+    // Dòng tiêu đề cột
+    excelData.push([
+      "STT", 
+      "SKU", 
+      "Tên Sản Phẩm", 
+      "ĐVT", 
+      "Số Lượng", 
+      "Đơn Giá", 
+      "Thành Tiền", 
+      "Lô", 
+      "HSD"
+    ]);
+
+    // Đổ dữ liệu sản phẩm
+    order.items.forEach((item: any, index: number) => {
+      excelData.push([
+        index + 1,
+        item.product?.sku || item.sku || "", // Lấy SKU từ object product lồng bên trong
+        item.product_name,
+        item.unit_name || item.wholesale_unit || "",
+        item.quantity,
+        item.unit_price,
+        item.total_price,
+        item.batch_no || "",
+        item.expiry_date ? dayjs(item.expiry_date).format("DD/MM/YYYY") : ""
+      ]);
+    });
+
+    // --- BƯỚC 3: TẠO SHEET & STYLE CƠ BẢN ---
+    const ws = XLSX.utils.aoa_to_sheet(excelData);
+
+    // Căn chỉnh độ rộng cột (Auto-width cơ bản)
+    ws['!cols'] = [
+      { wch: 15 }, // Cột A: Tên trường / STT
+      { wch: 15 }, // Cột B: Giá trị / SKU
+      { wch: 40 }, // Cột C: Tên SP
+      { wch: 10 }, // Cột D: ĐVT
+      { wch: 10 }, // Cột E: SL
+      { wch: 15 }, // Cột F: Đơn giá
+      { wch: 15 }, // Cột G: Thành tiền
+      { wch: 15 }, // Cột H: Lô
+      { wch: 15 }, // Cột I: HSD
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Chi Tiết Đơn Hàng");
+    XLSX.writeFile(wb, `Don_Hang_${order.code}.xlsx`);
+  };
+
   if (!order && !loading) return <div>Không tìm thấy đơn hàng</div>;
 
   // Columns for Desktop Table
@@ -143,6 +218,25 @@ const B2BOrderDetailPage = () => {
       dataIndex: "unit_name",
       key: "unit_name",
       width: 80,
+    },
+    {
+      title: "Lô / HSD",
+      key: "batch_info",
+      width: 140,
+      render: (_: any, record: any) => (
+        <div>
+          {record.batch_no ? (
+             <Tag color="blue" style={{ fontWeight: 'bold', margin: 0 }}>{record.batch_no}</Tag>
+          ) : (
+             <Tag color="default" style={{ margin: 0 }}>Chưa xuất</Tag>
+          )}
+          {record.expiry_date && (
+            <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+              HSD: {dayjs(record.expiry_date).format('DD/MM/YYYY')}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       title: "SL",
@@ -333,6 +427,18 @@ const B2BOrderDetailPage = () => {
                           >
                             {item.product_name}
                           </Text>
+                          <div style={{ marginBottom: 4 }}>
+                            {item.batch_no ? (
+                              <Tag color="blue" style={{ fontSize: 10, lineHeight: '14px' }}>Lô: {item.batch_no}</Tag>
+                            ) : (
+                              <Tag color="default" style={{ fontSize: 10, lineHeight: '14px' }}>Chưa xuất kho</Tag>
+                            )}
+                            {item.expiry_date && (
+                              <span style={{ fontSize: 11, color: '#888' }}>
+                                HSD: {dayjs(item.expiry_date).format('DD/MM/YYYY')}
+                              </span>
+                            )}
+                          </div>
                           <div
                             style={{
                               display: "flex",
@@ -422,6 +528,10 @@ const B2BOrderDetailPage = () => {
           {/* 2. CÁC NÚT IN ẤN (LUÔN HIỆN TRỪ KHI ĐÃ HỦY) */}
           {order?.status !== "CANCELLED" && (
             <>
+              <Button icon={<FileExcelOutlined />} onClick={handleExportExcel} style={{ color: '#52c41a', borderColor: '#52c41a' }}>
+                Xuất Excel
+              </Button>
+
               <Button
                 icon={<SnippetsOutlined />}
                 onClick={() => order && printPicking(order.id)}

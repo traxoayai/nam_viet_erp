@@ -568,6 +568,7 @@ export type Database = {
           imaging_result: string | null
           medical_visit_id: string | null
           patient_id: number | null
+          payment_order_id: string | null
           results_json: Json | null
           service_name_snapshot: string | null
           service_package_id: number | null
@@ -583,6 +584,7 @@ export type Database = {
           imaging_result?: string | null
           medical_visit_id?: string | null
           patient_id?: number | null
+          payment_order_id?: string | null
           results_json?: Json | null
           service_name_snapshot?: string | null
           service_package_id?: number | null
@@ -598,6 +600,7 @@ export type Database = {
           imaging_result?: string | null
           medical_visit_id?: string | null
           patient_id?: number | null
+          payment_order_id?: string | null
           results_json?: Json | null
           service_name_snapshot?: string | null
           service_package_id?: number | null
@@ -617,6 +620,13 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinical_service_requests_payment_order_id_fkey"
+            columns: ["payment_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
           {
@@ -837,6 +847,13 @@ export type Database = {
             foreignKeyName: "customer_b2b_contacts_customer_b2b_id_fkey"
             columns: ["customer_b2b_id"]
             isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_b2b_contacts_customer_b2b_id_fkey"
+            columns: ["customer_b2b_id"]
+            isOneToOne: false
             referencedRelation: "customers_b2b"
             referencedColumns: ["id"]
           },
@@ -946,6 +963,177 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      customer_service_wallets: {
+        Row: {
+          created_at: string | null
+          customer_id: number
+          expiry_date: string | null
+          id: number
+          order_id: string | null
+          package_id: number | null
+          product_id: number
+          status: string | null
+          total_quantity: number
+          updated_at: string | null
+          used_quantity: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_id: number
+          expiry_date?: string | null
+          id?: number
+          order_id?: string | null
+          package_id?: number | null
+          product_id: number
+          status?: string | null
+          total_quantity: number
+          updated_at?: string | null
+          used_quantity?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_id?: number
+          expiry_date?: string | null
+          id?: number
+          order_id?: string | null
+          package_id?: number | null
+          product_id?: number
+          status?: string | null
+          total_quantity?: number
+          updated_at?: string | null
+          used_quantity?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_service_wallets_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_service_wallets_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_service_wallets_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "service_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_service_wallets_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_vaccination_records: {
+        Row: {
+          actual_date: string | null
+          administered_by: string | null
+          appointment_id: string | null
+          consulted_by: string | null
+          created_at: string | null
+          customer_id: number
+          dose_number: number
+          expected_date: string
+          id: number
+          medical_visit_id: string | null
+          order_id: string | null
+          package_id: number | null
+          product_id: number
+          status: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          actual_date?: string | null
+          administered_by?: string | null
+          appointment_id?: string | null
+          consulted_by?: string | null
+          created_at?: string | null
+          customer_id: number
+          dose_number?: number
+          expected_date: string
+          id?: number
+          medical_visit_id?: string | null
+          order_id?: string | null
+          package_id?: number | null
+          product_id: number
+          status?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          actual_date?: string | null
+          administered_by?: string | null
+          appointment_id?: string | null
+          consulted_by?: string | null
+          created_at?: string | null
+          customer_id?: number
+          dose_number?: number
+          expected_date?: string
+          id?: number
+          medical_visit_id?: string | null
+          order_id?: string | null
+          package_id?: number | null
+          product_id?: number
+          status?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_vaccination_records_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_vaccination_records_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_vaccination_records_medical_visit_id_fkey"
+            columns: ["medical_visit_id"]
+            isOneToOne: false
+            referencedRelation: "medical_visits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_vaccination_records_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_vaccination_records_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "service_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_vaccination_records_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       customer_vouchers: {
         Row: {
@@ -2036,6 +2224,77 @@ export type Database = {
           },
         ]
       }
+      lab_indicators_config: {
+        Row: {
+          absurd_max: number | null
+          absurd_min: number | null
+          age_max_days: number | null
+          age_min_days: number | null
+          created_at: string | null
+          display_order: number | null
+          gender_apply: string | null
+          id: number
+          indicator_code: string
+          indicator_name: string
+          max_normal: number | null
+          min_normal: number | null
+          qualitative_normal_value: string | null
+          service_package_id: number | null
+          status: string | null
+          unit: string | null
+          updated_at: string | null
+          value_type: string | null
+        }
+        Insert: {
+          absurd_max?: number | null
+          absurd_min?: number | null
+          age_max_days?: number | null
+          age_min_days?: number | null
+          created_at?: string | null
+          display_order?: number | null
+          gender_apply?: string | null
+          id?: number
+          indicator_code: string
+          indicator_name: string
+          max_normal?: number | null
+          min_normal?: number | null
+          qualitative_normal_value?: string | null
+          service_package_id?: number | null
+          status?: string | null
+          unit?: string | null
+          updated_at?: string | null
+          value_type?: string | null
+        }
+        Update: {
+          absurd_max?: number | null
+          absurd_min?: number | null
+          age_max_days?: number | null
+          age_min_days?: number | null
+          created_at?: string | null
+          display_order?: number | null
+          gender_apply?: string | null
+          id?: number
+          indicator_code?: string
+          indicator_name?: string
+          max_normal?: number | null
+          min_normal?: number | null
+          qualitative_normal_value?: string | null
+          service_package_id?: number | null
+          status?: string | null
+          unit?: string | null
+          updated_at?: string | null
+          value_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lab_indicators_config_service_package_id_fkey"
+            columns: ["service_package_id"]
+            isOneToOne: false
+            referencedRelation: "service_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       medical_visits: {
         Row: {
           appointment_id: string | null
@@ -2397,6 +2656,13 @@ export type Database = {
             foreignKeyName: "orders_customer_b2b_fkey"
             columns: ["customer_id"]
             isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "orders_customer_b2b_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
             referencedRelation: "customers_b2b"
             referencedColumns: ["id"]
           },
@@ -2426,6 +2692,56 @@ export type Database = {
             columns: ["warehouse_id"]
             isOneToOne: false
             referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paraclinical_templates: {
+        Row: {
+          category: string
+          conclusion: string | null
+          created_at: string | null
+          created_by: string | null
+          description_html: string | null
+          id: number
+          name: string
+          recommendation: string | null
+          service_package_id: number | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          conclusion?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description_html?: string | null
+          id?: number
+          name: string
+          recommendation?: string | null
+          service_package_id?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          conclusion?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description_html?: string | null
+          id?: number
+          name?: string
+          recommendation?: string | null
+          service_package_id?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paraclinical_templates_service_package_id_fkey"
+            columns: ["service_package_id"]
+            isOneToOne: false
+            referencedRelation: "service_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -3374,6 +3690,13 @@ export type Database = {
             foreignKeyName: "sales_invoices_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "sales_invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
             referencedRelation: "customers_b2b"
             referencedColumns: ["id"]
           },
@@ -3471,6 +3794,7 @@ export type Database = {
         Row: {
           applicable_branches: number[] | null
           applicable_channels: string
+          clinical_category: string | null
           created_at: string | null
           id: number
           name: string
@@ -3489,6 +3813,7 @@ export type Database = {
         Insert: {
           applicable_branches?: number[] | null
           applicable_channels?: string
+          clinical_category?: string | null
           created_at?: string | null
           id?: number
           name: string
@@ -3507,6 +3832,7 @@ export type Database = {
         Update: {
           applicable_branches?: number[] | null
           applicable_channels?: string
+          clinical_category?: string | null
           created_at?: string | null
           id?: number
           name?: string
@@ -4270,7 +4596,18 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      b2b_customer_debt_view: {
+        Row: {
+          actual_current_debt: number | null
+          customer_code: string | null
+          customer_id: number | null
+          customer_name: string | null
+          customer_phone: string | null
+          total_invoiced: number | null
+          total_paid: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       add_item_to_check_session: {
@@ -4329,6 +4666,8 @@ export type Database = {
           p_doctor_id?: string
           p_notes?: string
           p_priority?: string
+          p_service_ids?: number[]
+          p_service_type?: string
           p_symptoms?: Json
         }
         Returns: Json
@@ -4349,6 +4688,24 @@ export type Database = {
         }
         Returns: boolean
       }
+      checkout_clinical_services:
+        | {
+            Args: {
+              p_appointment_id: string
+              p_customer_id: number
+              p_services: Json
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_customer_id: number
+              p_fund_account_id?: number
+              p_request_ids: number[]
+              p_visit_id: string
+            }
+            Returns: Json
+          }
       complete_inventory_check: {
         Args: { p_check_id: number; p_user_id: string }
         Returns: undefined
@@ -4365,7 +4722,9 @@ export type Database = {
             Args: { p_fund_account_id: number; p_order_ids: string[] }
             Returns: Json
           }
-      confirm_outbound_packing: { Args: { p_order_id: string }; Returns: Json }
+      confirm_outbound_packing:
+        | { Args: { p_order_id: string }; Returns: Json }
+        | { Args: { p_order_id: string; p_user_id?: string }; Returns: Json }
       confirm_post_read: { Args: { p_post_id: number }; Returns: undefined }
       confirm_purchase_costing: {
         Args: {
@@ -4691,6 +5050,24 @@ export type Database = {
         Args: { p_promotion_id: string; p_segment_id: number }
         Returns: number
       }
+      doctor_approve_vaccination: {
+        Args: {
+          p_doctor_id?: string
+          p_medical_visit_id: string
+          p_notes?: string
+        }
+        Returns: Json
+      }
+      execute_vaccination_combo: {
+        Args: {
+          p_appointment_id: string
+          p_customer_id: number
+          p_nurse_id?: string
+          p_scanned_product_ids: number[]
+          p_warehouse_id: number
+        }
+        Returns: Json
+      }
       export_customers_b2b_list: {
         Args: {
           sales_staff_filter: string
@@ -4783,6 +5160,17 @@ export type Database = {
           status: string
           total_count: number
         }[]
+      }
+      generate_vaccine_timeline: {
+        Args: {
+          p_consulted_by?: string
+          p_customer_id: number
+          p_order_id?: string
+          p_package_id?: number
+          p_product_id?: number
+          p_start_date: string
+        }
+        Returns: Json
       }
       get_active_shipping_partners: {
         Args: never
@@ -5031,6 +5419,7 @@ export type Database = {
           actual_cost: number
           conversion_rate: number
           current_stock: number
+          distributor_id: number
           image_url: string
           max_stock: number
           min_stock: number
@@ -5053,6 +5442,7 @@ export type Database = {
         }[]
       }
       get_my_permissions: { Args: never; Returns: string[] }
+      get_nurse_execution_queue: { Args: { p_date?: string }; Returns: Json }
       get_outbound_order_detail: { Args: { p_order_id: string }; Returns: Json }
       get_outbound_stats: { Args: { p_warehouse_id: number }; Returns: Json }
       get_partner_debt_live: {
@@ -5263,6 +5653,7 @@ export type Database = {
           room_name: string
           service_ids: number[]
           service_names: string[]
+          service_type: string
           status: string
         }[]
       }
@@ -5335,6 +5726,7 @@ export type Database = {
           p_type_filter: string
         }
         Returns: {
+          clinical_category: string
           id: number
           key: string
           name: string
@@ -5559,7 +5951,7 @@ export type Database = {
           p_shipping_partner_id?: number
           p_status?: string
           p_type?: string
-          p_warehouse_id: number
+          p_warehouse_id?: number
         }
         Returns: {
           code: string
@@ -5647,6 +6039,16 @@ export type Database = {
         Args: { p_amount: number; p_po_id: number }
         Returns: Json
       }
+      process_bulk_payment: {
+        Args: {
+          p_allocations: Json
+          p_customer_id: number
+          p_description?: string
+          p_fund_account_id?: number
+          p_total_amount: number
+        }
+        Returns: Json
+      }
       process_inbound_receipt: {
         Args: { p_items: Json; p_po_id: number; p_warehouse_id: number }
         Returns: Json
@@ -5672,6 +6074,10 @@ export type Database = {
       refresh_segment_members: {
         Args: { p_segment_id: number }
         Returns: undefined
+      }
+      reschedule_vaccine_timeline: {
+        Args: { p_new_expected_date: string; p_record_id: number }
+        Returns: Json
       }
       reverse_vat_invoice_entry: {
         Args: { p_invoice_id: number }
@@ -5737,6 +6143,10 @@ export type Database = {
           uom: string
           uom_wholesale: string
         }[]
+      }
+      search_prescription_templates: {
+        Args: { p_keyword?: string }
+        Returns: Json
       }
       search_product_batches: {
         Args: { p_product_id: number; p_warehouse_id: number }
@@ -5829,6 +6239,14 @@ export type Database = {
         }
         Returns: Json
       }
+      sell_medical_packages: {
+        Args: {
+          p_customer_id: number
+          p_fund_account_id?: number
+          p_packages: Json
+        }
+        Returns: Json
+      }
       send_notification: {
         Args: {
           p_message: string
@@ -5838,10 +6256,28 @@ export type Database = {
         }
         Returns: undefined
       }
+      send_prescription_to_pos: {
+        Args: {
+          p_appointment_id: string
+          p_customer_id: number
+          p_items: Json
+          p_pharmacy_warehouse_id: number
+        }
+        Returns: Json
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       submit_cash_remittance: {
         Args: { p_order_ids: string[]; p_user_id: string }
+        Returns: Json
+      }
+      submit_paraclinical_result: {
+        Args: {
+          p_imaging_result?: string
+          p_request_id: number
+          p_results_json?: Json
+          p_status?: string
+        }
         Returns: Json
       }
       submit_transfer_shipping: {
@@ -5882,12 +6318,6 @@ export type Database = {
         Args: { p_actual_quantity: number; p_item_id: number }
         Returns: Json
       }
-      update_medical_visit:
-        | { Args: { p_data: Json; p_visit_id: string }; Returns: undefined }
-        | {
-            Args: { p_data: Json; p_doctor_id?: string; p_visit_id: string }
-            Returns: undefined
-          }
       update_outbound_package_count: {
         Args: { p_count: number; p_order_id: string }
         Returns: Json
@@ -6056,6 +6486,9 @@ export type Database = {
         | "checked_in"
         | "waiting"
         | "examining"
+        | "waiting_vaccination"
+        | "waiting_procedure"
+        | "observing"
       asset_status: "active" | "storage" | "repair" | "disposed"
       business_type:
         | "trade"
@@ -6082,7 +6515,14 @@ export type Database = {
         | "DELIVERED"
         | "CANCELLED"
       queue_priority: "normal" | "high"
-      queue_status: "waiting" | "examining" | "completed" | "skipped"
+      queue_status:
+        | "waiting"
+        | "examining"
+        | "completed"
+        | "skipped"
+        | "waiting_vaccination"
+        | "waiting_procedure"
+        | "observing"
       service_package_type: "service" | "bundle"
       shipping_partner_type: "app" | "coach" | "internal"
       stock_management_type: "lot_date" | "lot_only" | "serial" | "simple"
@@ -6248,6 +6688,9 @@ export const Constants = {
         "checked_in",
         "waiting",
         "examining",
+        "waiting_vaccination",
+        "waiting_procedure",
+        "observing",
       ],
       asset_status: ["active", "storage", "repair", "disposed"],
       business_type: [
@@ -6277,7 +6720,15 @@ export const Constants = {
         "CANCELLED",
       ],
       queue_priority: ["normal", "high"],
-      queue_status: ["waiting", "examining", "completed", "skipped"],
+      queue_status: [
+        "waiting",
+        "examining",
+        "completed",
+        "skipped",
+        "waiting_vaccination",
+        "waiting_procedure",
+        "observing",
+      ],
       service_package_type: ["service", "bundle"],
       shipping_partner_type: ["app", "coach", "internal"],
       stock_management_type: ["lot_date", "lot_only", "serial", "simple"],

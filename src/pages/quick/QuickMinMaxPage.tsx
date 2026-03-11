@@ -23,6 +23,7 @@ import {
 import React, { useState, useEffect, useRef } from "react";
 
 import { getWarehouses } from "@/features/inventory/api/warehouseService";
+import { getSuppliers } from "@/features/purchasing/api/supplierService";
 import { upsertProduct } from "@/features/product/api/productService";
 import { getProductDetails } from "@/features/product/api/productService"; // Ensure this is imported for handleSaveRow
 import { useDebounce } from "@/shared/hooks/useDebounce";
@@ -48,6 +49,7 @@ declare global {
 const QuickMinMaxPage: React.FC = () => {
   // State
   const [products, setProducts] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [listening, setListening] = useState(false);
@@ -95,6 +97,14 @@ const QuickMinMaxPage: React.FC = () => {
   useEffect(() => {
     loadWarehouses();
     setupSpeechRecognition();
+    
+    // [NEW] Load nhà cung cấp
+    const fetchSuppliers = async () => {
+      const data = await getSuppliers();
+      setSuppliers(data);
+    };
+    fetchSuppliers();
+
     return () => {
       if (recognitionRef.current) recognitionRef.current.stop();
     };
@@ -165,6 +175,7 @@ const QuickMinMaxPage: React.FC = () => {
         // Min/Max trong DB lưu theo Base Unit -> Chia tỷ lệ để ra đơn vị hiển thị
         min_stock: (p.min_stock || 0) / p.conversion_rate,
         max_stock: (p.max_stock || 0) / p.conversion_rate,
+        distributor_id: p.distributor_id || null, // [NEW] Hứng ID Nhà cung cấp
 
         is_dirty: false,
       }));
@@ -385,6 +396,34 @@ const QuickMinMaxPage: React.FC = () => {
     }
   };
 
+  const handleUpdateDistributor = async (productId: number, supplierId: number) => {
+    setSavingId(productId);
+    try {
+      // 1. Lấy chi tiết sản phẩm cũ để không làm mất data
+      const currentDetail = await getProductDetails(productId);
+
+      // 2. Chèn supplierId mới vào (upsertProduct đang dùng biến formValues.distributor)
+      const payload = {
+        ...currentDetail,
+        distributor: supplierId 
+      };
+
+      // 3. Đẩy lên server
+      await upsertProduct(payload);
+
+      // 4. Cập nhật UI ngay lập tức
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, distributor_id: supplierId, is_dirty: false } : p))
+      );
+      message.success("Đã lưu Nhà cung cấp!");
+    } catch (err) {
+      console.error(err);
+      message.error("Lỗi cập nhật Nhà cung cấp");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   // UI Helpers
   const handleCellChange = (key: number, field: string, val: any) => {
     setProducts((prev) =>
@@ -406,6 +445,32 @@ const QuickMinMaxPage: React.FC = () => {
       dataIndex: "wholesale_unit",
       width: 80,
       render: (t: string) => <Tag color="blue">{t}</Tag>,
+    },
+    {
+      title: "Nhà Cung Cấp",
+      dataIndex: "distributor_id",
+      width: 550,
+      render: (val: any, record: any) => (
+        <Select
+          showSearch
+          style={{ width: "100%" }}
+          placeholder="Chọn NCC..."
+          optionFilterProp="children"
+          value={val}
+          onChange={(newId) => handleUpdateDistributor(record.id, newId)}
+          disabled={savingId === record.id} // Khóa khi đang lưu
+          loading={savingId === record.id}
+          filterOption={(input, option) =>
+            (option?.children as unknown as string)
+              ?.toLowerCase()
+              .includes(input.toLowerCase())
+          }
+        >
+          {suppliers.map(s => (
+            <Option key={s.id} value={s.id}>{s.name}</Option>
+          ))}
+        </Select>
+      )
     },
     {
       title: "Min (Tồn dự trữ)",
