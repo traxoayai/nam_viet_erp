@@ -65,6 +65,7 @@ export interface TransferCartItem {
 
   // Tồn kho & Gợi ý (Read-only)
   current_stock: number; // Tồn thực tế (Base Unit)
+  stock_display?: string;
   shelf_location: string;
   lot_hint: string; // Gợi ý lô (FEFO)
   expiry_hint: string; // HSD lô gợi ý

@@ -1,4 +1,4 @@
-//src/pages/inventory/transfer/components/TransferProductSearch.tsx
+// src/pages/inventory/transfer/components/TransferProductSearch.tsx
 import { SearchOutlined } from "@ant-design/icons";
 import { Select, Avatar, Tag, Space, Empty, message } from "antd";
 import { debounce } from "lodash";
@@ -6,7 +6,6 @@ import React, { useState } from "react";
 
 import { searchProductsForTransfer } from "@/features/product/api/productService";
 
-// Style constants from B2B requirement
 const { Option } = Select;
 
 interface TransferProductSearchProps {
@@ -22,9 +21,9 @@ const TransferProductSearch: React.FC<TransferProductSearchProps> = ({
 }) => {
   const [data, setData] = useState<any[]>([]);
   const [fetching, setFetching] = useState(false);
-  const [value, setValue] = useState<string>();
+  const [value, setValue] = useState<string | undefined>(undefined);
+  const [searchValue, setSearchValue] = useState<string>(""); // [FIX UX]: Thêm state quản lý text đang gõ
 
-  // Use debounce for search API call
   const loadOptions = debounce(async (keyword: string) => {
     if (!keyword || !sourceWarehouseId) {
       setData([]);
@@ -51,21 +50,23 @@ const TransferProductSearch: React.FC<TransferProductSearchProps> = ({
   };
 
   const handleSelect = (val: string, _option: any) => {
-    // Find the full product object from data
-    // Use option.productData if we attached it, or find in data
     const selected = data.find((d) => d.id === val);
     if (selected) {
       onSelect(selected);
-      setValue(undefined); // Clear search after select
+      // [FIX UX]: Reset toàn bộ trạng thái sau khi chọn
+      setValue(undefined);
+      setSearchValue(""); 
+      setData([]); 
     }
   };
 
   const onSearch = (val: string) => {
-    if (!val) return;
-    if (!sourceWarehouseId) {
-      // Warning displayed by UI state (placeholder) but good to block
+    setSearchValue(val); // [FIX UX]: Lưu lại từ khóa đang gõ
+    if (!val) {
+      setData([]);
       return;
     }
+    if (!sourceWarehouseId) return;
     loadOptions(val);
   };
 
@@ -73,6 +74,7 @@ const TransferProductSearch: React.FC<TransferProductSearchProps> = ({
     <Select
       showSearch
       value={value}
+      searchValue={searchValue} // [FIX UX]: Ép UI hiển thị text từ state này
       placeholder={
         sourceWarehouseId
           ? "Tìm tên, mã SKU sản phẩm..."
@@ -86,6 +88,11 @@ const TransferProductSearch: React.FC<TransferProductSearchProps> = ({
       onSearch={onSearch}
       onChange={handleChange}
       onSelect={handleSelect}
+      onBlur={() => {
+        // [FIX UX]: Khi click ra ngoài (Blur), tự động xóa text đang gõ dang dở
+        setSearchValue("");
+        setData([]);
+      }}
       disabled={disabled || !sourceWarehouseId}
       notFoundContent={
         fetching ? null : <Empty description="Không tìm thấy sản phẩm" />
@@ -109,7 +116,6 @@ const TransferProductSearch: React.FC<TransferProductSearchProps> = ({
               gap: 12,
             }}
           >
-            {/* 1. Avatar */}
             <Avatar
               shape="square"
               size="large"
@@ -119,7 +125,6 @@ const TransferProductSearch: React.FC<TransferProductSearchProps> = ({
               {item.sku?.substring(0, 2)?.toUpperCase()}
             </Avatar>
 
-            {/* 2. Info Content */}
             <div style={{ flex: 1 }}>
               <div
                 style={{
@@ -132,7 +137,8 @@ const TransferProductSearch: React.FC<TransferProductSearchProps> = ({
                   {item.name}
                 </span>
                 <Tag color={item.current_stock > 0 ? "green" : "red"}>
-                  Tồn: {Number(item.current_stock || 0).toLocaleString()}
+                  {/* [CORE UPDATE]: Sử dụng stock_display thay vì tự nối chuỗi */}
+                  Tồn: {item.stock_display || item.current_stock}
                 </Tag>
               </div>
 
@@ -151,10 +157,6 @@ const TransferProductSearch: React.FC<TransferProductSearchProps> = ({
                     </Tag>
                   ) : null}
                 </Space>
-
-                <span style={{ color: "#888", fontSize: 12 }}>
-                  Đơn vị: {item.unit}
-                </span>
               </div>
             </div>
           </div>

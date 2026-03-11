@@ -92,11 +92,14 @@ const TransferProductTable: React.FC<TransferProductTableProps> = ({
         ),
     },
     {
-      title: "Tồn kho (ĐVCB)",
-      dataIndex: "current_stock",
+      title: "Tồn tại kho xuất",
       key: "stock",
-      width: 120,
-      render: (val: number) => <Text>{Number(val).toLocaleString()}</Text>,
+      width: 150,
+      render: (_: any, record: TransferCartItem) => (
+        <Text strong style={{ color: record.current_stock > 0 ? '#13c2c2' : '#cf1322' }}>
+          {record.stock_display || record.current_stock}
+        </Text>
+      ),
     },
     {
       title: "Đơn vị chuyển",

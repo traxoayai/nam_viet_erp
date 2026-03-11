@@ -83,6 +83,7 @@ const TransferCreatePage: React.FC = () => {
 
       // Data from Core
       current_stock: product.current_stock || 0,
+      stock_display: product.stock_display, // <--- THÊM DÒNG NÀY ĐỂ LẤY DATA TỪ API
       shelf_location: product.shelf_location,
       lot_hint: product.lot_number,
       expiry_hint: product.expiry_date,
