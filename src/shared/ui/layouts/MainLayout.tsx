@@ -573,6 +573,11 @@ const finalMenuItems: MenuItem[] = [
           <Link to="/reports/admin/tasks">Báo cáo Tiến độ Công việc</Link>,
           "/reports/admin/tasks"
         ),
+        // [THÊM MỚI] Menu Nhật ký hệ thống
+        getItem(
+          <Link to="/reports/admin/audit-logs">Nhật ký Hệ thống</Link>,
+          "/reports/admin/audit-logs"
+        ),
       ]),
       getItem("Báo cáo Tài chính", "report-finance", <BankOutlined />, [
         getItem(

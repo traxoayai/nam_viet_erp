@@ -6205,6 +6205,7 @@ export type Database = {
           name: string
           shelf_location: string
           sku: string
+          stock_display: string
           unit: string
         }[]
       }

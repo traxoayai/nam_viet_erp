@@ -75,6 +75,7 @@ import QuickMinMaxPage from "@/pages/quick/QuickMinMaxPage";
 import QuickPricePage from "@/pages/quick/QuickPricePage";
 import QuickBarcodePage from "@/pages/quick/QuickBarcodePage";
 import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
+import SystemAuditLogPage from "@/pages/reports/SystemAuditLogPage"; // [NEW]
 
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
@@ -603,6 +604,10 @@ const routes: RouteObject[] = [
           {
             path: "reports/admin/tasks",
             element: <PagePlaceholder title="Báo cáo Tiến độ Công việc" />,
+          },
+          {
+            path: "reports/admin/audit-logs",
+            element: <SystemAuditLogPage />,
           },
           {
             path: "reports/finance/cashflow",
