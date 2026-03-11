@@ -1,3 +1,4 @@
+// src/pages/inventory/outbound/WarehouseOutboundDetailPage.tsx
 import {
   Affix,
   Button,
@@ -53,6 +54,7 @@ const WarehouseOutboundDetailPage = () => {
   const [items, setItems] = useState<OutboundPickItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [inputPackageCount, setInputPackageCount] = useState<number>(1);
 
   // Print State
   const [printMode, setPrintMode] = useState<"picking" | "label" | null>(null);
@@ -70,6 +72,7 @@ const WarehouseOutboundDetailPage = () => {
     try {
       const data = await outboundService.getOrderDetail(orderId);
       setOrderInfo(data.order_info);
+      setInputPackageCount(data.order_info.package_count || 1);
       setItems(
         data.items.map((item) => ({
           ...item,
@@ -383,7 +386,7 @@ const WarehouseOutboundDetailPage = () => {
         <PickingListTemplate orderInfo={orderInfo} items={items} />
       )}
       {printMode === "label" && (
-        <ShippingLabelTemplate orderInfo={orderInfo} packageCount={1} />
+        <ShippingLabelTemplate orderInfo={orderInfo} packageCount={inputPackageCount} />
       )}
 
       {/* HEADER */}
@@ -463,9 +466,18 @@ const WarehouseOutboundDetailPage = () => {
             <Button icon={<Printer size={16} />} onClick={handlePrintPicking}>
               In phiếu nhặt
             </Button>
-            <Button icon={<Package size={16} />} onClick={handlePrintLabel}>
-              In Vận Đơn
-            </Button>
+            <Space.Compact>
+              <InputNumber 
+                min={1} 
+                value={inputPackageCount} 
+                onChange={(val) => setInputPackageCount(val || 1)} 
+                addonBefore="Số kiện"
+                style={{ width: 140 }}
+              />
+              <Button type="default" icon={<Package size={16}/>} onClick={handlePrintLabel}>
+                In Vận Đơn
+              </Button>
+            </Space.Compact>
           </Space>
 
           <Space>

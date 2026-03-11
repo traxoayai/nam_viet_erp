@@ -83,6 +83,7 @@ const WarehouseOutboundPage = () => {
   const [printMode, setPrintMode] = useState<
     "picking" | "label" | "b2b" | null
   >(null);
+  const [printPackageCount, setPrintPackageCount] = useState<number>(1);
 
   const { printOrder } = useOrderPrint(); // [NEW]
 
@@ -127,6 +128,11 @@ const WarehouseOutboundPage = () => {
     mode: "picking" | "label" | "b2b"
   ) => {
     setPrintingTaskId(taskId);
+    
+    // Tìm task hiện tại để lấy số kiện mới nhất đã sửa trên UI
+    const task = tasks.find((t) => t.task_id === taskId);
+    setPrintPackageCount(task?.package_count || 1);
+
     try {
       const detail = await outboundService.getOrderDetail(taskId);
 
@@ -341,7 +347,7 @@ const WarehouseOutboundPage = () => {
       {printMode === "label" && (
         <ShippingLabelTemplate
           orderInfo={printData?.order_info || null}
-          packageCount={printData?.order_info?.package_count || 1} // Fetch from order info if available, else 1
+          packageCount={printPackageCount}
         />
       )}
 
