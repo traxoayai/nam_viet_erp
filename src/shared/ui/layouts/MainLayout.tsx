@@ -253,7 +253,7 @@ const finalMenuItems: MenuItem[] = [
     <Package size={20} color="#4b5563" strokeWidth={1.5} />,
     [
       getItem(
-        <Link to="/inventory/products">Danh sách Sản Phẩm</Link>,
+        <Link to="/inventory/products">Sản Phẩm & Tồn Kho</Link>,
         "/inventory/products",
         <ProductOutlined />
       ),

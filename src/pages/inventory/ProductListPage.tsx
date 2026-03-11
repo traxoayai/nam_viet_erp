@@ -326,11 +326,19 @@ const ProductListPage = () => {
       title: "Tên Sản Phẩm",
       dataIndex: "name",
       key: "name",
+      width: 350, // [SENKO FIX]: Cố định độ rộng cột (Nên dùng số pixel thay vì % đối với bảng có scroll ngang)
       render: (text: string, record: Product) => (
-        <div>
+        <div style={{ maxWidth: '100%', overflow: 'hidden' }}>
           <Text
             strong
-            style={{ color: "#1890ff", cursor: "pointer" }}
+            style={{ 
+              color: "#1890ff", 
+              cursor: "pointer",
+              /* Nếu tên SP cũng quá dài, có thể mở comment 3 dòng dưới để cắt chữ */
+              // display: "block",
+              // overflow: "hidden",
+              // textOverflow: "ellipsis"
+            }}
             onClick={() => navigate(`/inventory/edit/${record.id}`)}
           >
             {text}
@@ -338,9 +346,25 @@ const ProductListPage = () => {
           <br />
           <Text type="secondary">SKU: {record.sku}</Text>
           <br />
-          <Tag color="cyan" style={{ fontSize: 10, marginTop: 4 }}>
-            {record.active_ingredient || record.category_name}
-          </Tag>
+          
+          {/* [SENKO FIX]: Bọc Tooltip để khi di chuột vào sẽ thấy toàn bộ nội dung */}
+          <Tooltip title={record.active_ingredient || record.category_name}>
+            <Tag 
+              color="cyan" 
+              style={{ 
+                fontSize: 10, 
+                marginTop: 4, 
+                maxWidth: '100%', // Ép Tag không được phình to hơn cột
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis', // Thêm dấu ... ở cuối
+                whiteSpace: 'nowrap', // Ép chữ trên 1 dòng
+                display: 'inline-block',
+                verticalAlign: 'bottom'
+              }}
+            >
+              {record.active_ingredient || record.category_name}
+            </Tag>
+          </Tooltip>
         </div>
       ),
     },
@@ -396,6 +420,36 @@ const ProductListPage = () => {
         // Tạm thời hiển thị sum nếu RPC chưa update
         // let sum = 0; if(record.inventory_b2b) sum+=record.inventory_b2b; ...
         return "-";
+      },
+    },
+    // [CỘT MỚI CHÈN VÀO SAU TỔNG HỆ THỐNG]
+    {
+      title: "Tồn theo kho (Chi tiết)",
+      dataIndex: "warehouse_stocks",
+      key: "warehouse_stocks",
+      width: 220,
+      render: (stocks: Record<string, string> | undefined) => {
+        if (!stocks || Object.keys(stocks).length === 0) {
+          return <Tag color="default">Hết hàng</Tag>;
+        }
+        return (
+          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+            {Object.entries(stocks).map(([warehouseName, qtyString]) => (
+              <div 
+                key={warehouseName} 
+                style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  borderBottom: '1px dashed #f0f0f0',
+                  paddingBottom: 2
+                }}
+              >
+                <Text type="secondary" style={{ fontSize: 12 }}>{warehouseName}:</Text>
+                <Text strong style={{ fontSize: 12, color: '#0958d9' }}>{qtyString}</Text>
+              </div>
+            ))}
+          </Space>
+        );
       },
     },
     {
