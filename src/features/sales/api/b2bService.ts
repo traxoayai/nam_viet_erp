@@ -14,15 +14,8 @@ export const b2bService = {
       .select(
         `
         *,
-        customer:customer_id (
-          id,
-          name,              
-          phone,             
-          phone,             
-          shipping_address,
-          tax_code,
-          email
-        ),
+        customer_b2b:customers_b2b(*),
+        customer_b2c:customers(*),
         order_items (
           id,
           quantity,
@@ -52,6 +45,7 @@ export const b2bService = {
     }
 
     const orderData = data as any;
+    const customerData = orderData.customer_b2b || orderData.customer_b2c;
 
     // Transform response to match B2BOrderDetail interface
     return {
@@ -63,13 +57,13 @@ export const b2bService = {
       payment_method: orderData.payment_method || "COD", // Fallback nếu null
 
       // Map Customer Info (Fix cột name, phone, shipping_address)
-      customer_id: orderData.customer?.id,
-      customer_name: orderData.customer?.name || "Khách lẻ",
-      customer_phone: orderData.customer?.phone,
+      customer_id: customerData?.id,
+      customer_name: customerData?.name || "Khách lẻ",
+      customer_phone: customerData?.phone,
       delivery_address:
-        orderData.delivery_address || orderData.customer?.shipping_address,
-      tax_code: orderData.customer?.tax_code,
-      customer_email: orderData.customer?.email,
+        orderData.delivery_address || customerData?.shipping_address || customerData?.address,
+      tax_code: customerData?.tax_code,
+      customer_email: customerData?.email,
 
       // Map Financials (Fix cột final_amount khớp DB)
       sub_total: orderData.total_amount || 0, // DB: total_amount là tổng tiền hàng
@@ -102,6 +96,33 @@ export const b2bService = {
       .update({ status })
       .eq("id", id);
     if (error) throw error;
+  },
+
+  cancelOrderSafe: async (orderId: string, reason: string) => {
+    const { data, error } = await supabase.rpc("cancel_order", {
+      p_order_id: orderId,
+      p_reason: reason,
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  // Gọi RPC Nhân bản Đơn hàng
+  async cloneOrder(oldOrderId: string) {
+    const { data, error } = await supabase.rpc("clone_sales_order", {
+      p_old_order_id: oldOrderId,
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  // Gọi RPC Xử lý Trả Hàng Bán
+  async processSalesReturn(payload: any) {
+    const { data, error } = await supabase.rpc("process_sales_return", {
+      p_payload: payload,
+    });
+    if (error) throw error;
+    return data;
   },
 
   getOrders: async (params: B2BOrderFilters): Promise<B2BOrderViewResponse> => {

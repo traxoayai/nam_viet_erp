@@ -41,8 +41,9 @@ export const CustomerInfoCard = ({
   isOverLimit,
 }: Props) => {
   // Lấy người liên hệ chính (hoặc người đầu tiên)
+  const contacts = customer.contacts || [];
   const primaryContact =
-    customer.contacts.find((c) => c.is_primary) || customer.contacts[0];
+    contacts.find((c) => c.is_primary) || contacts[0];
 
   return (
     <Card

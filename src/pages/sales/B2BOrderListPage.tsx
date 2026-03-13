@@ -12,7 +12,9 @@ import {
   ShopOutlined,
   UserOutlined,
   PrinterOutlined,
-  DeleteOutlined, // [NEW]
+  CloseCircleOutlined,
+  RollbackOutlined, // [NEW]
+  CopyOutlined, // [NEW]
 } from "@ant-design/icons";
 import {
   Button,
@@ -25,12 +27,17 @@ import {
   Avatar,
   Space,
   Input,
+  Table as AntTable, // [NEW]
+  InputNumber, // [NEW]
+  Tooltip, // [NEW]
+  Row, // [NEW]
+  Col, // [NEW]
 } from "antd";
 import dayjs from "dayjs";
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
+// [NEW]
 import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate";
 import { VatActionButton } from "@/features/pos/components/VatActionButton";
 import { b2bService } from "@/features/sales/api/b2bService";
@@ -40,7 +47,6 @@ import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders";
 
 // import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders"; // Duplicate removed
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
-import { Access } from "@/shared/components/auth/Access"; // [NEW]
 import { supabase } from "@/shared/lib/supabaseClient";
 import { FilterAction } from "@/shared/ui/listing/FilterAction";
 import { SmartTable } from "@/shared/ui/listing/SmartTable";
@@ -83,6 +89,20 @@ const B2BOrderListPage = () => {
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // State Hủy Đơn Hàng
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [selectedOrderToCancel, setSelectedOrderToCancel] = useState<any>(null);
+
+  // --- STATE TRẢ HÀNG (SALES RETURN) ---
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [orderToReturn, setOrderToReturn] = useState<any>(null);
+  const [returnItemsState, setReturnItemsState] = useState<any[]>([]);
+  const [returnNote, setReturnNote] = useState("");
+  const [returnFundId, setReturnFundId] = useState<number | null>(null);
+  const [isReturning, setIsReturning] = useState(false);
+
   // State Users (Sales Staff)
   const [creators, setCreators] = useState<any[]>([]);
 
@@ -95,8 +115,16 @@ const B2BOrderListPage = () => {
       .eq("status", "active")
       .then(({ data }) => {
         setFundAccounts(data || []);
-        if (data && data.length > 0) setSelectedFundId(data[0].id);
+        if (data && data.length > 0) {
+          setSelectedFundId(data[0].id);
+          setReturnFundId(data[0].id);
+        }
       });
+
+    // Load Warehouses cho việc Trả Hàng
+    supabase.from("warehouses").select("id, name").eq("type", "real").then(({ data }) => {
+      setWarehouses(data || []);
+    });
 
     // Load Sales Staff (Creators)
     supabase
@@ -228,7 +256,8 @@ const B2BOrderListPage = () => {
     });
   };
 
-  // [NEW] Xóa đơn
+  // [NEW] Xóa đơn (ĐÃ ẨN THEO YÊU CẦU)
+  /*
   const handleDelete = (order: any) => {
     Modal.confirm({
       title: "Xác nhận xóa đơn hàng",
@@ -244,6 +273,109 @@ const B2BOrderListPage = () => {
         }
       },
     });
+  };
+  */
+
+  const handleConfirmCancel = async () => {
+    if (!selectedOrderToCancel || !cancelReason.trim()) {
+      message.warning("Vui lòng nhập lý do hủy đơn!");
+      return;
+    }
+    
+    try {
+      setIsSubmitting(true);
+      const res = await b2bService.cancelOrderSafe(selectedOrderToCancel.id, cancelReason);
+      message.success(res.message || `Đã hủy đơn hàng ${selectedOrderToCancel.code}`);
+      setCancelModalVisible(false);
+      setCancelReason("");
+      setSelectedOrderToCancel(null);
+      refresh(); // Load lại bảng
+    } catch (e: any) {
+      message.error("Lỗi hủy đơn: " + e.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCloneOrder = (order: any) => {
+    Modal.confirm({
+      title: "Xác nhận Nhân bản Đơn hàng",
+      content: `Hệ thống sẽ tạo một bản sao mới từ đơn ${order.code}. Đơn mới sẽ ở trạng thái NHÁP và reset toàn bộ thanh toán. Bạn có muốn tiếp tục?`,
+      okText: "Tạo bản sao",
+      cancelText: "Hủy",
+      onOk: async () => {
+        try {
+          message.loading({ content: "Đang tạo bản sao...", key: "cloneOrder" });
+          const res = await b2bService.cloneOrder(order.id);
+          
+          if (res.success) {
+            message.success({ content: `Đã nhân bản thành công mã: ${res.new_code}`, key: "cloneOrder" });
+            // Chuyển hướng thẳng vào trang Sửa Đơn của đơn mới tạo
+            navigate(`/b2b/orders/edit/${res.new_order_id}`);
+          }
+        } catch (e: any) {
+          message.error({ content: "Lỗi nhân bản: " + e.message, key: "cloneOrder" });
+        }
+      },
+    });
+  };
+
+  const handleOpenReturnModal = (order: any) => {
+    setOrderToReturn(order);
+    // Khởi tạo state cho các mặt hàng (Tính số lượng có thể trả)
+    const initialItems = (order.order_items || [])
+      .map((item: any) => {
+        const maxReturnable = item.quantity - (item.quantity_returned || 0);
+        return {
+          ...item,
+          maxReturnable,
+          returnQty: 0, // Mặc định trả 0
+          refundPrice: item.unit_price, // Mặc định giá hoàn = giá gốc
+          returnWarehouseId: warehouses.length > 0 ? warehouses[0].id : null,
+        };
+      })
+      .filter((i: any) => i.maxReturnable > 0); // Chỉ lấy món nào còn có thể trả
+
+    if (initialItems.length === 0) {
+      message.warning("Đơn hàng này không còn sản phẩm nào để trả!");
+      return;
+    }
+
+    setReturnItemsState(initialItems);
+    setReturnNote("");
+    setIsReturnModalOpen(true);
+  };
+
+  const handleSubmitReturn = async () => {
+    if (!returnFundId) return message.error("Vui lòng chọn Quỹ hoàn tiền!");
+    
+    const itemsToReturn = returnItemsState.filter(i => i.returnQty > 0);
+    if (itemsToReturn.length === 0) return message.error("Vui lòng nhập số lượng trả cho ít nhất 1 sản phẩm!");
+
+    const payload = {
+      order_id: orderToReturn.id,
+      fund_account_id: returnFundId,
+      note: returnNote,
+      items: itemsToReturn.map(i => ({
+        order_item_id: i.id,
+        product_id: i.product_id,
+        quantity: i.returnQty,
+        refund_price: i.refundPrice,
+        warehouse_id: i.returnWarehouseId
+      }))
+    };
+
+    try {
+      setIsReturning(true);
+      const res = await b2bService.processSalesReturn(payload);
+      message.success(res.message);
+      setIsReturnModalOpen(false);
+      refresh();
+    } catch (error: any) {
+      message.error("Lỗi trả hàng: " + error.message);
+    } finally {
+      setIsReturning(false);
+    }
   };
 
   // --- 4. CẤU HÌNH CỘT (COLUMNS DEFINITION) ---
@@ -272,6 +404,19 @@ const B2BOrderListPage = () => {
               }}
             />
 
+            {/* NÚT NHÂN BẢN (Luôn hiển thị cho mọi trạng thái) */}
+            <Tooltip title="Nhân bản đơn hàng (Tạo bản sao)">
+              <Button
+                type="text"
+                style={{ color: "#1677ff" }}
+                icon={<CopyOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCloneOrder(record);
+                }}
+              />
+            </Tooltip>
+
             {/* [NEW] Nút In Phiếu Nhặt
                 <Button 
                     type="text" 
@@ -298,7 +443,39 @@ const B2BOrderListPage = () => {
                 />
               )}
 
-            {/* [NEW] Nút Xóa (Phân quyền) */}
+            {/* NÚT HỦY ĐƠN (Chỉ hiện khi đơn chưa Hủy và chưa Hoàn tất) */}
+            {!["CANCELLED", "DELIVERED", "COMPLETED"].includes(record.status) && (
+              <Button
+                type="text"
+                danger
+                title="Hủy đơn hàng"
+                icon={<CloseCircleOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedOrderToCancel(record);
+                  setCancelReason("");
+                  setCancelModalVisible(true);
+                }}
+              />
+            )}
+
+            {/* NÚT TRẢ HÀNG (Chỉ hiện khi đơn đã Giao hoặc Hoàn Tất) */}
+            {["DELIVERED", "COMPLETED"].includes(record.status) && (
+              <Tooltip title="Khách trả hàng">
+                <Button
+                  type="text"
+                  style={{ color: "#fa8c16" }}
+                  icon={<RollbackOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenReturnModal(record);
+                  }}
+                />
+              </Tooltip>
+            )}
+
+            {/* [NEW] Nút Xóa (Phân quyền) - ĐÃ ẨN THEO YÊU CẦU */}
+            {/* 
             <Access
               permission={PERMISSIONS.ORDER.DELETE_COMPLETED}
               fallback={
@@ -318,7 +495,6 @@ const B2BOrderListPage = () => {
                 ) : null
               }
             >
-              {/* Nếu có quyền -> Hiện nút xóa cho mọi trạng thái */}
               <Button
                 type="text"
                 danger
@@ -329,6 +505,7 @@ const B2BOrderListPage = () => {
                 }}
               />
             </Access>
+            */}
           </Space>
         ),
       },
@@ -392,8 +569,8 @@ const B2BOrderListPage = () => {
       {
         title: "TT Đơn",
         dataIndex: "status",
-        width: 120,
-        render: (status: string) => {
+        width: 140,
+        render: (status: string, record: any) => {
           const map: any = {
             DRAFT: { color: "default", text: "Nháp" },
             QUOTE: { color: "purple", text: "Báo giá" },
@@ -403,7 +580,18 @@ const B2BOrderListPage = () => {
             CANCELLED: { color: "red", text: "Đã hủy" },
           };
           const s = map[status] || { color: "default", text: status };
-          return <Tag color={s.color}>{s.text}</Tag>;
+          
+          // Kiểm tra xem đơn này có mặt hàng nào bị trả lại không
+          const hasReturns = record.order_items?.some((item: any) => (item.quantity_returned || 0) > 0);
+
+          return (
+            <Space direction="vertical" size={2}>
+              <Tag color={s.color}>{s.text}</Tag>
+              {hasReturns && (
+                <Tag color="volcano" style={{ fontSize: 10 }}>Có hàng trả lại</Tag>
+              )}
+            </Space>
+          );
         },
       },
       // 7. Vận chuyển
@@ -796,6 +984,145 @@ const B2BOrderListPage = () => {
             : undefined
         }
       />
+
+      {/* CANCEL MODAL */}
+      <Modal
+        title={`Hủy đơn hàng ${selectedOrderToCancel?.code}`}
+        open={cancelModalVisible}
+        onOk={handleConfirmCancel}
+        onCancel={() => {
+          setCancelModalVisible(false);
+          setSelectedOrderToCancel(null);
+        }}
+        confirmLoading={isSubmitting}
+        okText="Xác nhận Hủy"
+        okButtonProps={{ danger: true }}
+        cancelText="Đóng"
+      >
+        <Text>Vui lòng nhập lý do hủy đơn hàng này. (Hệ thống sẽ tự động hoàn trả tồn kho và trừ công nợ nếu có).</Text>
+        <Input.TextArea
+          rows={3}
+          style={{ marginTop: 12 }}
+          placeholder="Nhập lý do hủy (Khách đổi ý, Sai đơn giá...)"
+          value={cancelReason}
+          onChange={(e) => setCancelReason(e.target.value)}
+        />
+      </Modal>
+
+      {/* MODAL TRẢ HÀNG */}
+      <Modal
+        title={`Trả Hàng - Đơn ${orderToReturn?.code}`}
+        open={isReturnModalOpen}
+        width={900}
+        onCancel={() => setIsReturnModalOpen(false)}
+        onOk={handleSubmitReturn}
+        confirmLoading={isReturning}
+        okText="Xác nhận Trả hàng & Hoàn tiền"
+        okButtonProps={{ danger: true }}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <Row gutter={16}>
+            <Col span={12}>
+              <Text strong>Quỹ hoàn tiền (Nguồn chi):</Text>
+              <Select 
+                style={{ width: '100%', marginTop: 8 }}
+                value={returnFundId}
+                onChange={setReturnFundId}
+                options={fundAccounts.map(f => ({ label: f.name, value: f.id }))}
+              />
+            </Col>
+            <Col span={12}>
+              <Text strong>Lý do trả hàng:</Text>
+              <Input.TextArea 
+                rows={2} 
+                style={{ marginTop: 8 }}
+                placeholder="Ghi rõ lý do (Móp méo, Cận date...)"
+                value={returnNote}
+                onChange={e => setReturnNote(e.target.value)}
+              />
+            </Col>
+          </Row>
+
+          <AntTable 
+            dataSource={returnItemsState}
+            pagination={false}
+            rowKey="id"
+            size="small"
+            columns={[
+              {
+                title: "Sản phẩm",
+                dataIndex: "product_name",
+                render: (val, record: any) => <Text strong>{record.product?.name || val}</Text>
+              },
+              {
+                title: "Số lượng có thể trả",
+                dataIndex: "maxReturnable",
+                align: 'center',
+                width: 150,
+                render: (val, record: any) => <Tag color="blue">{val} {record.uom || record.product?.unit || 'ĐV'}</Tag>
+              },
+              {
+                title: "Số lượng trả",
+                width: 120,
+                render: (_, record: any, index) => (
+                  <InputNumber 
+                    min={0} 
+                    max={record.maxReturnable} 
+                    value={record.returnQty}
+                    onChange={(val) => {
+                      const newItems = [...returnItemsState];
+                      newItems[index].returnQty = val || 0;
+                      setReturnItemsState(newItems);
+                    }}
+                  />
+                )
+              },
+              {
+                title: "Đơn giá hoàn lại",
+                width: 150,
+                render: (_, record: any, index) => (
+                  <InputNumber 
+                    min={0}
+                    style={{ width: '100%' }}
+                    formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={value => value!.replace(/\$\s?|(,*)/g, '') as any}
+                    value={record.refundPrice}
+                    onChange={(val) => {
+                      const newItems = [...returnItemsState];
+                      newItems[index].refundPrice = val || 0;
+                      setReturnItemsState(newItems);
+                    }}
+                  />
+                )
+              },
+              {
+                title: "Nhập về Kho",
+                width: 150,
+                render: (_, record: any, index) => (
+                  <Select
+                    style={{ width: '100%' }}
+                    value={record.returnWarehouseId}
+                    onChange={(val) => {
+                      const newItems = [...returnItemsState];
+                      newItems[index].returnWarehouseId = val;
+                      setReturnItemsState(newItems);
+                    }}
+                    options={warehouses.map(w => ({ label: w.name, value: w.id }))}
+                  />
+                )
+              }
+            ]}
+          />
+          <div style={{ textAlign: 'right', marginTop: 16 }}>
+            <Text style={{ fontSize: 16 }}>Tổng tiền hoàn lại: </Text>
+            <Text strong style={{ fontSize: 24, color: '#cf1322' }}>
+              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                returnItemsState.reduce((sum, item) => sum + (item.returnQty * item.refundPrice), 0)
+              )}
+            </Text>
+          </div>
+        </Space>
+      </Modal>
 
       {/* [NEW] HIDDEN PICKING PRINT */}
       {pickingData ? (

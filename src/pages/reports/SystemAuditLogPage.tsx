@@ -1,5 +1,5 @@
 // src/pages/reports/SystemAuditLogPage.tsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Table, Card, Typography, Space, Tag, Modal, Button, Row, Col, DatePicker, Select, Input } from 'antd';
 import { EyeOutlined, SearchOutlined, LinkOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';

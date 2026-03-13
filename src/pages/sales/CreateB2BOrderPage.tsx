@@ -85,7 +85,8 @@ const CreateB2BOrderPage = () => {
           .select(
             `
                     *,
-                    customer:customers(*), 
+                    customer_b2b:customers_b2b(*), 
+                    customer_b2c:customers(*), 
                     items:order_items(
                         *,
                         product:products(
@@ -111,13 +112,14 @@ const CreateB2BOrderPage = () => {
         }
 
         // 2. HYDRATION KHÁCH HÀNG
-        if (orderData.customer) {
-          // [NEW] Không dùng orderData.customer.current_debt cũ nữa.
-          const actualDebt = await financeService.getB2BDebt(orderData.customer.id);
+        const customerData = orderData.customer_b2b || orderData.customer_b2c;
+        if (customerData) {
+          // [NEW] Không dùng customerData.current_debt cũ nữa.
+          const actualDebt = await financeService.getB2BDebt(customerData.id);
           const mappedCustomer = {
-            ...orderData.customer,
+            ...customerData,
             shipping_address:
-              orderData.delivery_address || orderData.customer.address || "",
+              orderData.delivery_address || customerData.shipping_address || customerData.address || "",
             current_debt: actualDebt,
           };
           setCustomer(mappedCustomer);

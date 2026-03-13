@@ -244,6 +244,19 @@ const B2BOrderDetailPage = () => {
       key: "quantity",
       align: "center" as const,
       width: 80,
+      render: (qty: number, record: any) => {
+        const returned = record.quantity_returned || 0;
+        return (
+          <div style={{ textAlign: 'center' }}>
+            <Text strong>{qty}</Text>
+            {returned > 0 && (
+              <div style={{ fontSize: 12, color: '#cf1322', marginTop: 4 }}>
+                (Đã trả: {returned})
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: "Đơn giá",

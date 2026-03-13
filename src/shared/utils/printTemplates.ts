@@ -193,7 +193,10 @@ export const generateB2BOrderHTML = (order: any) => {
         ${item.note ? `<div style="font-style: italic; font-size: 10px;">(${item.note})</div>` : ""}
       </td>
       <td style="text-align: center;">${item.uom || item.unit}</td>
-      <td style="text-align: center; font-weight: bold;">${item.quantity}</td>
+      <td style="text-align: center; font-weight: bold;">
+        ${item.quantity}
+        ${(item.quantity_returned || 0) > 0 ? `<div style="font-size: 10px; font-style: italic; color: #cf1322; margin-top: 2px;">- Trả: ${item.quantity_returned}</div>` : ""}
+      </td>
       <td style="text-align: right;">${Number(item.unit_price).toLocaleString()}</td>
       <td style="text-align: right;">${Number(item.total_line).toLocaleString()}</td>
     </tr>
