@@ -556,7 +556,7 @@ const B2BOrderDetailPage = () => {
                 icon={<PrinterOutlined />}
                 onClick={() => order && printOrder(order)}
               >
-                In Hóa Đơn
+                In Đơn
               </Button>
             </>
           )}

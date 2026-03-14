@@ -18,6 +18,7 @@ export const b2bService = {
         customer_b2c:customers(*),
         order_items (
           id,
+          uom,
           quantity,
           unit_price,
           total_line,
@@ -84,7 +85,9 @@ export const b2bService = {
         unit_price: item.unit_price,
         // Lưu ý: total_line trong DB là cột generated, hoặc tính tay
         total_price: item.total_line || item.quantity * item.unit_price,
-        unit_name: item.product?.wholesale_unit, // Dùng đơn vị buôn
+        // [FIX] Ưu tiên lấy uom của đơn hàng, nếu không có mới fallback về wholesale_unit
+        unit_name: item.uom || item.product?.wholesale_unit || "ĐV", 
+        uom: item.uom || item.product?.wholesale_unit || "ĐV", // Cung cấp biến uom cho printTemplates
       })),
       sales_invoices: orderData.sales_invoices?.[0] || null, // Map invoice info
     };
