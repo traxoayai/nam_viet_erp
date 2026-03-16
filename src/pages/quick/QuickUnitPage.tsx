@@ -111,18 +111,19 @@ const QuickUnitPage: React.FC = () => {
       const rows = data.map((p: any) => {
         const units = p.product_units || [];
 
-        // A. Tìm Đơn vị Lẻ (Base)
-        const baseUnitObj =
-          units.find((u: any) => u.is_base || u.unit_type === "base") ||
-          units.find((u: any) => u.conversion_rate === 1);
+        // A. Ưu tiên 1: Lấy đúng Unit trong bảng con. Nếu không có mới lấy cột cũ
+        const baseUnitObj = units.find((u: any) => u.is_base || u.unit_type === "base" || u.conversion_rate === 1);
+        const retailUnitObj = units.find((u: any) => !u.is_base && u.unit_type === "retail");
+        const wholesaleUnitObj = units.find((u: any) => !u.is_base && (u.unit_type === "wholesale" || u.conversion_rate > 1));
 
+        // Logic Tên Đơn Vị Lẻ: (Base) -> (Retail Cũ) -> Viên
         const baseUnitName = baseUnitObj?.unit_name || p.retail_unit || "Viên";
+        
+        // Logic Tên Đơn Vị Sỉ: (Wholesale) -> (Wholesale Cũ) -> Hộp
+        const wholesaleUnitName = wholesaleUnitObj?.unit_name || retailUnitObj?.unit_name || p.wholesale_unit || "Hộp";
 
-        // B. Tìm Đơn vị Sỉ (Wholesale)
-        const bigUnitObj = units.find(
-          (u: any) =>
-            !u.is_base && (u.unit_type === "wholesale" || u.conversion_rate > 1)
-        );
+        // Logic Hệ số: Lấy của Sỉ -> (items_per_carton cũ) -> 1
+        const conversionRate = wholesaleUnitObj?.conversion_rate || retailUnitObj?.conversion_rate || p.items_per_carton || 1;
 
         return {
           key: p.id,
@@ -131,12 +132,9 @@ const QuickUnitPage: React.FC = () => {
           sku: p.sku,
           imageUrl: p.image_url,
           actual_cost: p.actual_cost || 0,
-
           retail_unit: baseUnitName,
-          wholesale_unit: bigUnitObj?.unit_name || p.wholesale_unit || "Hộp",
-          conversion_rate:
-            bigUnitObj?.conversion_rate || p.items_per_carton || 10,
-
+          wholesale_unit: wholesaleUnitName,
+          conversion_rate: conversionRate,
           is_dirty: false,
         };
       });
@@ -599,8 +597,7 @@ const QuickUnitPage: React.FC = () => {
         <Row gutter={[16, 16]} align="middle" style={{ marginBottom: 16 }}>
           <Col xs={24} md={8}>
             <Title level={4} style={{ margin: 0 }}>
-              <ThunderboltOutlined style={{ color: "#faad14" }} /> Cài đặt Quy
-              Cách Nhanh
+              <ThunderboltOutlined style={{ color: "#faad14" }} /> Cài đặt Quy Cách Nhanh
             </Title>
           </Col>
           <Col xs={24} md={8}>
