@@ -275,7 +275,7 @@ const WarehouseInboundPage = () => {
             </div>
             <div>
               <Title level={4} style={{ margin: 0 }}>
-                Nhập Kho (Inbound)
+                Danh sách đơn Nhập Kho (B2B)
               </Title>
               <Text type="secondary">Quản lý nhận hàng & PO</Text>
             </div>

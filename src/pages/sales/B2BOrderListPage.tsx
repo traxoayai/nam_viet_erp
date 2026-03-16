@@ -122,9 +122,14 @@ const B2BOrderListPage = () => {
       });
 
     // Load Warehouses cho việc Trả Hàng
-    supabase.from("warehouses").select("id, name").eq("type", "real").then(({ data }) => {
-      setWarehouses(data || []);
-    });
+    supabase
+      .from("warehouses")
+      .select("id, name")
+      .eq("status", "active")
+      .order("id", { ascending: true }) // ID 1 (b2b) sẽ lên đầu
+      .then(({ data }) => {
+        setWarehouses(data || []);
+      });
 
     // Load Sales Staff (Creators)
     supabase
@@ -331,7 +336,8 @@ const B2BOrderListPage = () => {
           maxReturnable,
           returnQty: 0, // Mặc định trả 0
           refundPrice: item.unit_price, // Mặc định giá hoàn = giá gốc
-          returnWarehouseId: warehouses.length > 0 ? warehouses[0].id : null,
+          // [FIX]: Ưu tiên kho xuất hàng của đơn, nếu không có mới lấy kho đầu tiên
+          returnWarehouseId: order.warehouse_id || (warehouses.length > 0 ? warehouses[0].id : null),
         };
       })
       .filter((i: any) => i.maxReturnable > 0); // Chỉ lấy món nào còn có thể trả
@@ -346,11 +352,26 @@ const B2BOrderListPage = () => {
     setIsReturnModalOpen(true);
   };
 
+  const handleReturnAll = () => {
+    setReturnItemsState((prev) => 
+      prev.map((item) => ({
+        ...item,
+        returnQty: item.maxReturnable, // Set max số lượng
+      }))
+    );
+  };
+
   const handleSubmitReturn = async () => {
     if (!returnFundId) return message.error("Vui lòng chọn Quỹ hoàn tiền!");
     
     const itemsToReturn = returnItemsState.filter(i => i.returnQty > 0);
     if (itemsToReturn.length === 0) return message.error("Vui lòng nhập số lượng trả cho ít nhất 1 sản phẩm!");
+
+    // [FIX]: Chặn lỗi 23502 (Not null constraint)
+    const missingWarehouse = itemsToReturn.some(i => !i.returnWarehouseId);
+    if (missingWarehouse) {
+      return message.error("Vui lòng chọn kho nhập về cho tất cả các sản phẩm được trả lại!");
+    }
 
     const payload = {
       order_id: orderToReturn.id,
@@ -1043,6 +1064,17 @@ const B2BOrderListPage = () => {
             </Col>
           </Row>
 
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: -8 }}>
+            <Text strong>Chi tiết mặt hàng trả lại:</Text>
+            <Button 
+              type="dashed" 
+              onClick={handleReturnAll}
+              style={{ borderColor: '#fa8c16', color: '#fa8c16' }}
+            >
+              Chọn Trả Toàn Bộ
+            </Button>
+          </div>
+          
           <AntTable 
             dataSource={returnItemsState}
             pagination={false}
@@ -1097,7 +1129,7 @@ const B2BOrderListPage = () => {
               },
               {
                 title: "Nhập về Kho",
-                width: 150,
+                width: 200,
                 render: (_, record: any, index) => (
                   <Select
                     style={{ width: '100%' }}

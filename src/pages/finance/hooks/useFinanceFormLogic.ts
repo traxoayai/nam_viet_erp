@@ -16,7 +16,7 @@ export const useFinanceFormLogic = (
   open: boolean,
   onCancel: () => void,
   initialFlow: "in" | "out",
-  initialValues?: any // [NEW] Support pre-fill
+  initialValues?: any
 ) => {
   const { message } = App.useApp();
   const [form] = Form.useForm();

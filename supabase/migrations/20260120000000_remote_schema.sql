@@ -1564,6 +1564,56 @@ CREATE OR REPLACE FUNCTION "public"."cancel_inventory_check"("p_check_id" bigint
 ALTER FUNCTION "public"."cancel_inventory_check"("p_check_id" bigint, "p_user_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."cancel_order"("p_order_id" "uuid", "p_reason" "text" DEFAULT 'Hủy theo yêu cầu'::"text", "p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_order RECORD;
+    v_user_name TEXT;
+BEGIN
+    -- 1. Lấy và khóa đơn hàng
+    SELECT * INTO v_order FROM public.orders WHERE id = p_order_id FOR UPDATE;
+
+    IF v_order IS NULL THEN
+        RAISE EXCEPTION 'Không tìm thấy đơn hàng.';
+    END IF;
+
+    -- 2. Validate trạng thái
+    IF v_order.status = 'CANCELLED' THEN
+        RAISE EXCEPTION 'Đơn hàng này đã bị hủy từ trước.';
+    END IF;
+
+    -- KHÔNG cho phép hủy ngang đơn đã giao/hoàn tất. (Nghiệp vụ kế toán: Đã giao thì phải làm Phiếu Trả Hàng)
+    IF v_order.status IN ('DELIVERED', 'COMPLETED') THEN
+        RAISE EXCEPTION 'Đơn hàng đã giao thành công. Vui lòng sử dụng tính năng Trả Hàng thay vì Hủy Đơn.';
+    END IF;
+
+    -- 3. Lấy tên người hủy để ghi vào note
+    SELECT COALESCE(full_name, email, 'Hệ thống') INTO v_user_name 
+    FROM public.users WHERE id = COALESCE(p_user_id, auth.uid());
+
+    -- 4. THỰC THI HỦY (PHÉP MÀU NẰM Ở ĐÂY)
+    -- Khi update thành 'CANCELLED', PostgreSQL sẽ tự động đánh thức:
+    -- + trigger_order_cancel_restore_stock: Tìm lại lịch sử trừ Lô (Batch) và cộng trả kho nguyên vẹn.
+    -- + trg_update_debt_from_orders: Trừ lại phần nợ đã ghi nhận cho khách.
+    UPDATE public.orders
+    SET status = 'CANCELLED',
+        note = COALESCE(note, '') || E'\n--- \n[HỦY ĐƠN ' || TO_CHAR(NOW(), 'DD/MM/YYYY HH24:MI') || '] - Người hủy: ' || v_user_name || ' - Lý do: ' || p_reason,
+        updated_at = NOW()
+    WHERE id = p_order_id;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'message', 'Đã hủy đơn hàng thành công! Hệ thống đã tự động hoàn trả kho và công nợ (nếu có).'
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."cancel_order"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1593,6 +1643,36 @@ CREATE OR REPLACE FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", 
 
 
 ALTER FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."cancel_return_request"("p_return_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_return RECORD; 
+    v_item RECORD;
+BEGIN
+    SELECT * INTO v_return FROM public.sales_returns WHERE id = p_return_id FOR UPDATE;
+    -- Chỉ cho phép hủy khi CHƯA nhập kho
+    IF v_return.status != 'PENDING_INVENTORY' THEN 
+        RAISE EXCEPTION 'Không thể hủy. Phiếu này đã được Kho hoặc Kế toán xử lý.'; 
+    END IF;
+
+    -- Hoàn trả lại số lượng "giữ chỗ" trong đơn hàng gốc
+    FOR v_item IN SELECT order_item_id, quantity FROM public.sales_return_items WHERE return_id = p_return_id LOOP
+        UPDATE public.order_items 
+        SET quantity_returned = quantity_returned - v_item.quantity 
+        WHERE id = v_item.order_item_id;
+    END LOOP;
+
+    UPDATE public.sales_returns SET status = 'CANCELLED', updated_at = NOW() WHERE id = p_return_id;
+    RETURN jsonb_build_object('success', true, 'message', 'Đã hủy Yêu cầu trả hàng.');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."cancel_return_request"("p_return_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."check_in_patient"("p_customer_id" bigint, "p_doctor_id" "uuid" DEFAULT NULL::"uuid", "p_priority" "text" DEFAULT 'normal'::"text", "p_symptoms" "jsonb" DEFAULT '[]'::"jsonb", "p_notes" "text" DEFAULT NULL::"text", "p_service_ids" bigint[] DEFAULT '{}'::bigint[], "p_service_type" "text" DEFAULT 'examination'::"text") RETURNS "jsonb"
@@ -1878,6 +1958,74 @@ $$;
 
 
 ALTER FUNCTION "public"."checkout_clinical_services"("p_visit_id" "uuid", "p_customer_id" bigint, "p_request_ids" bigint[], "p_fund_account_id" bigint) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."clone_sales_order"("p_old_order_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_old_order RECORD;
+    v_new_order_id UUID;
+    v_new_code TEXT;
+    v_prefix TEXT;
+BEGIN
+    -- 1. Lấy thông tin đơn cũ
+    SELECT * INTO v_old_order FROM public.orders WHERE id = p_old_order_id;
+    IF v_old_order IS NULL THEN
+        RAISE EXCEPTION 'Không tìm thấy đơn hàng gốc để nhân bản.';
+    END IF;
+
+    -- 2. Sinh mã Đơn hàng mới (Phân biệt B2B và POS)
+    IF v_old_order.order_type = 'POS' THEN 
+        v_prefix := 'POS-'; 
+    ELSE 
+        v_prefix := 'SO-'; 
+    END IF;
+    v_new_code := v_prefix || to_char(now(), 'YYMMDD') || '-' || LPAD(floor(random() * 10000)::text, 4, '0');
+
+    -- 3. Insert Đơn hàng mới (Reset trạng thái, tiền đã trả, người tạo)
+    -- [CORE FIX]: Dùng đúng tên cột creator_id
+    INSERT INTO public.orders (
+        code, order_type, customer_id, customer_b2c_id, warehouse_id, 
+        delivery_address, delivery_time, delivery_method, shipping_partner_id,
+        shipping_fee, discount_amount, total_amount, final_amount,
+        status, payment_status, payment_method, remittance_status, paid_amount, 
+        note, creator_id, created_at, updated_at
+    ) VALUES (
+        v_new_code, v_old_order.order_type, v_old_order.customer_id, v_old_order.customer_b2c_id, v_old_order.warehouse_id,
+        v_old_order.delivery_address, v_old_order.delivery_time, v_old_order.delivery_method, v_old_order.shipping_partner_id,
+        v_old_order.shipping_fee, v_old_order.discount_amount, v_old_order.total_amount, v_old_order.final_amount,
+        'DRAFT', 'unpaid', v_old_order.payment_method, 
+        CASE WHEN v_old_order.payment_method = 'cash' THEN 'pending' ELSE 'skipped' END, 
+        0, -- Tiền trả về 0
+        COALESCE(v_old_order.note, '') || E'\n(Nhân bản từ đơn: ' || v_old_order.code || ')', 
+        auth.uid(), NOW(), NOW()
+    ) RETURNING id INTO v_new_order_id;
+
+    -- 4. Copy Chi tiết Đơn hàng 
+    -- [CORE FIX]: Bỏ cột Generated (total_line), sửa tên discount, reset quantity_picked, quantity_returned
+    INSERT INTO public.order_items (
+        order_id, product_id, uom, conversion_factor, quantity, unit_price, 
+        discount, is_gift, note, quantity_picked, quantity_returned
+    )
+    SELECT 
+        v_new_order_id, product_id, uom, conversion_factor, quantity, unit_price, 
+        discount, is_gift, note, 0, 0
+    FROM public.order_items
+    WHERE order_id = p_old_order_id;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'message', 'Đã tạo bản sao thành công!', 
+        'new_order_id', v_new_order_id,
+        'new_code', v_new_code
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."clone_sales_order"("p_old_order_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."complete_inventory_check"("p_check_id" bigint, "p_user_id" "uuid") RETURNS "void"
@@ -2797,6 +2945,84 @@ $$;
 
 
 ALTER FUNCTION "public"."confirm_purchase_payment"("p_order_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_payment_method" "text", "p_note" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."confirm_return_finance"("p_return_id" "uuid", "p_fund_account_id" bigint) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_return RECORD; 
+    v_order RECORD; 
+    v_trans_code TEXT;
+BEGIN
+    SELECT * INTO v_return FROM public.sales_returns WHERE id = p_return_id FOR UPDATE;
+    IF v_return.status != 'PENDING_REFUND' THEN RAISE EXCEPTION 'Phiếu trả này chưa nhập kho xong hoặc đã hoàn tiền.'; END IF;
+
+    SELECT * INTO v_order FROM public.orders WHERE id = v_return.order_id;
+
+    IF v_return.total_refund_amount > 0 THEN
+        v_trans_code := 'PC-' || to_char(NOW(), 'YYMMDD') || '-' || floor(random() * 10000)::text;
+        INSERT INTO public.finance_transactions (
+            code, flow, business_type, amount, fund_account_id, partner_type, partner_id, partner_name_cache, ref_type, ref_id, description, status, created_by
+        ) VALUES (
+            v_trans_code, 'out', 'other', v_return.total_refund_amount, p_fund_account_id, 
+            CASE WHEN v_order.customer_id IS NOT NULL THEN 'customer_b2b' ELSE 'customer' END, 
+            COALESCE(v_order.customer_id, v_order.customer_b2c_id)::TEXT, 'Khách hàng trả hàng', 'sales_return', v_return.code, 
+            'Hoàn tiền trả hàng (Đơn ' || v_order.code || ')', 'completed', auth.uid()
+        );
+    END IF;
+
+    UPDATE public.sales_returns SET status = 'COMPLETED', updated_at = NOW() WHERE id = p_return_id;
+    RETURN jsonb_build_object('success', true, 'message', 'Đã hoàn tiền và khép kín quy trình!');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."confirm_return_finance"("p_return_id" "uuid", "p_fund_account_id" bigint) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."confirm_return_inventory"("p_return_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_return RECORD; 
+    v_item RECORD; 
+    v_order RECORD; 
+    v_batch_id BIGINT; 
+    v_qty_base INTEGER;
+BEGIN
+    SELECT * INTO v_return FROM public.sales_returns WHERE id = p_return_id FOR UPDATE;
+    IF v_return.status != 'PENDING_INVENTORY' THEN RAISE EXCEPTION 'Phiếu trả này không ở trạng thái Chờ nhập kho.'; END IF;
+    
+    SELECT * INTO v_order FROM public.orders WHERE id = v_return.order_id;
+
+    FOR v_item IN SELECT * FROM public.sales_return_items WHERE return_id = p_return_id LOOP
+        -- Lấy tỷ lệ quy đổi từ đơn gốc để nhập đúng Base Unit
+        v_qty_base := v_item.quantity * COALESCE((SELECT conversion_factor FROM public.order_items WHERE id = v_item.order_item_id), 1);
+
+        -- Sinh lô ảo
+        INSERT INTO public.batches (product_id, batch_code, expiry_date, inbound_price, created_at)
+        VALUES (v_item.product_id, 'RET-' || v_return.code, '2099-12-31'::DATE, 0, NOW()) RETURNING id INTO v_batch_id;
+
+        -- Nhập kho (Trigger tổng sẽ tự chạy)
+        INSERT INTO public.inventory_batches (warehouse_id, product_id, batch_id, quantity, updated_at)
+        VALUES (v_item.warehouse_id, v_item.product_id, v_batch_id, v_qty_base, NOW());
+
+        -- Ghi thẻ kho
+        INSERT INTO public.inventory_transactions (warehouse_id, product_id, batch_id, type, action_group, quantity, unit_price, ref_id, description, created_by) 
+        VALUES (v_item.warehouse_id, v_item.product_id, v_batch_id, 'return_in', 'RETURN', v_qty_base, 0, v_return.code, 'Nhập kho hàng trả (Đơn ' || v_order.code || ')', auth.uid());
+    END LOOP;
+
+    UPDATE public.sales_returns SET status = 'PENDING_REFUND', updated_at = NOW() WHERE id = p_return_id;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Đã nhập kho thành công. Chờ Kế toán hoàn tiền.');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."confirm_return_inventory"("p_return_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."confirm_transaction"("p_id" bigint) RETURNS boolean
@@ -4301,6 +4527,59 @@ $$;
 
 
 ALTER FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_items" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."create_return_request"("p_payload" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_order_id UUID; 
+    v_order RECORD; 
+    v_return_id UUID; 
+    v_return_code TEXT;
+    v_item JSONB; 
+    v_order_item RECORD; 
+    v_total_refund NUMERIC := 0; 
+    v_qty_return INTEGER;
+BEGIN
+    v_order_id := (p_payload->>'order_id')::UUID;
+    SELECT * INTO v_order FROM public.orders WHERE id = v_order_id FOR UPDATE;
+    IF v_order IS NULL THEN RAISE EXCEPTION 'Không tìm thấy đơn hàng.'; END IF;
+
+    v_return_code := 'RET-' || to_char(now(), 'YYMMDD') || '-' || floor(random() * 10000)::text;
+
+    -- Tạo Header ở trạng thái CHỜ KHO
+    INSERT INTO public.sales_returns (code, order_id, customer_id, customer_b2c_id, status, note, created_by)
+    VALUES (v_return_code, v_order_id, v_order.customer_id, v_order.customer_b2c_id, 'PENDING_INVENTORY', p_payload->>'note', auth.uid())
+    RETURNING id INTO v_return_id;
+
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_payload->'items') LOOP
+        v_qty_return := (v_item->>'quantity')::INTEGER;
+        IF v_qty_return <= 0 THEN CONTINUE; END IF;
+
+        SELECT * INTO v_order_item FROM public.order_items WHERE id = (v_item->>'order_item_id')::UUID FOR UPDATE;
+        IF (COALESCE(v_order_item.quantity_returned, 0) + v_qty_return) > v_order_item.quantity THEN
+            RAISE EXCEPTION 'Số lượng trả của sản phẩm ID % vượt quá số lượng mua.', v_order_item.product_id;
+        END IF;
+
+        -- Khóa số lượng trả trong đơn gốc (giữ chỗ)
+        UPDATE public.order_items SET quantity_returned = COALESCE(quantity_returned, 0) + v_qty_return WHERE id = v_order_item.id;
+
+        INSERT INTO public.sales_return_items (return_id, order_item_id, product_id, quantity, refund_price, warehouse_id)
+        VALUES (v_return_id, v_order_item.id, v_order_item.product_id, v_qty_return, (v_item->>'refund_price')::NUMERIC, (v_item->>'warehouse_id')::BIGINT);
+
+        v_total_refund := v_total_refund + (v_qty_return * (v_item->>'refund_price')::NUMERIC);
+    END LOOP;
+
+    UPDATE public.sales_returns SET total_refund_amount = v_total_refund WHERE id = v_return_id;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Đã tạo Yêu cầu trả hàng. Chờ Thủ kho xác nhận!', 'return_id', v_return_id);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."create_return_request"("p_payload" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."create_sales_order"("p_customer_b2b_id" bigint DEFAULT NULL::bigint, "p_customer_b2c_id" bigint DEFAULT NULL::bigint, "p_customer_id" bigint DEFAULT NULL::bigint, "p_delivery_address" "text" DEFAULT NULL::"text", "p_delivery_method" "text" DEFAULT NULL::"text", "p_delivery_time" "text" DEFAULT NULL::"text", "p_discount_amount" numeric DEFAULT NULL::numeric, "p_items" "jsonb" DEFAULT NULL::"jsonb", "p_note" "text" DEFAULT NULL::"text", "p_order_type" "text" DEFAULT NULL::"text", "p_payment_method" "text" DEFAULT NULL::"text", "p_shipping_fee" numeric DEFAULT NULL::numeric, "p_shipping_partner_id" bigint DEFAULT NULL::bigint, "p_status" "text" DEFAULT NULL::"text", "p_warehouse_id" bigint DEFAULT NULL::bigint) RETURNS "uuid"
@@ -5839,46 +6118,21 @@ ALTER FUNCTION "public"."get_customer_b2c_details"("p_id" bigint) OWNER TO "post
 
 
 CREATE OR REPLACE FUNCTION "public"."get_customer_debt_info"("p_customer_id" bigint) RETURNS TABLE("customer_id" bigint, "customer_name" "text", "debt_limit" numeric, "current_debt" numeric, "available_credit" numeric, "is_bad_debt" boolean)
-    LANGUAGE "plpgsql" SECURITY DEFINER
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
-DECLARE
-    v_limit NUMERIC;
-    v_debt NUMERIC;
-    v_name TEXT;
-BEGIN
-    -- 1. Lấy thông tin cơ bản
-    SELECT name, debt_limit INTO v_name, v_limit 
-    FROM public.customers_b2b 
-    WHERE id = p_customer_id;
-
-    IF v_name IS NULL THEN RETURN; END IF;
-
-    -- 2. TÍNH NỢ THEO NGUỒN CHÂN LÝ: TỔNG DƯ NỢ CÁC ĐƠN HÀNG
-    -- (Đây chính là Logic Path 3 Sếp yêu cầu)
-    SELECT COALESCE(SUM(final_amount - COALESCE(paid_amount, 0)), 0)
-    INTO v_debt
-    FROM public.orders
-    WHERE customer_id = p_customer_id
-      -- Loại bỏ đơn nháp, đơn hủy, báo giá
-      AND status NOT IN ('DRAFT', 'CANCELLED', 'QUOTE', 'QUOTE_EXPIRED')
-      -- Chỉ lấy đơn chưa trả hết tiền
-      AND payment_status != 'paid';
-
-    -- 3. CẬP NHẬT NGƯỢC LẠI VÀO BẢNG KHÁCH HÀNG (CACHE)
-    -- Để lần sau danh sách bên ngoài hiển thị đúng luôn mà không cần tính toán lại
-    UPDATE public.customers_b2b 
-    SET current_debt = v_debt 
-    WHERE id = p_customer_id;
-
-    -- 4. Trả về kết quả
-    RETURN QUERY SELECT 
-        p_customer_id,
-        v_name,
-        COALESCE(v_limit, 0),
-        v_debt,
-        (COALESCE(v_limit, 0) - v_debt), -- Hạn mức khả dụng
-        (v_debt > COALESCE(v_limit, 0)); -- Cảnh báo nợ xấu nếu vượt hạn mức
-END;
+    -- Query thẳng vào bảng customers_b2b và join với View công nợ
+    SELECT 
+        c.id AS customer_id,
+        c.name AS customer_name,
+        COALESCE(c.debt_limit, 0) AS debt_limit,
+        COALESCE(v.actual_current_debt, 0) AS current_debt,
+        (COALESCE(c.debt_limit, 0) - COALESCE(v.actual_current_debt, 0)) AS available_credit,
+        (COALESCE(v.actual_current_debt, 0) > COALESCE(c.debt_limit, 0)) AS is_bad_debt
+    FROM public.customers_b2b c
+    -- Tận dụng Nguồn Chân Lý (View) đã có sẵn
+    LEFT JOIN public.b2b_customer_debt_view v ON c.id = v.customer_id
+    WHERE c.id = p_customer_id;
 $$;
 
 
@@ -7833,6 +8087,67 @@ $$;
 ALTER FUNCTION "public"."get_suppliers_list"("search_query" "text", "status_filter" "text", "page_num" integer, "page_size" integer) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_system_logs"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 20, "p_module" "text" DEFAULT NULL::"text", "p_action" "text" DEFAULT NULL::"text", "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_sql_data TEXT;
+    v_sql_count TEXT;
+    v_where_clauses TEXT[] := ARRAY['1=1'];
+    v_where_str TEXT;
+    v_data JSONB;
+    v_total_count INT;
+BEGIN
+    -- Lắp ghép điều kiện Động (Tư duy Senko)
+    IF p_module IS NOT NULL AND p_module <> '' THEN
+        v_where_clauses := array_append(v_where_clauses, format('module = %L', p_module));
+    END IF;
+    
+    IF p_action IS NOT NULL AND p_action <> '' THEN
+        v_where_clauses := array_append(v_where_clauses, format('action = %L', p_action));
+    END IF;
+
+    IF p_date_from IS NOT NULL THEN
+        v_where_clauses := array_append(v_where_clauses, format('created_at >= %L', p_date_from));
+    END IF;
+
+    IF p_date_to IS NOT NULL THEN
+        v_where_clauses := array_append(v_where_clauses, format('created_at <= %L', p_date_to));
+    END IF;
+
+    v_where_str := array_to_string(v_where_clauses, ' AND ');
+
+    -- Đếm tổng số dòng (Siêu tốc)
+    v_sql_count := 'SELECT COUNT(*) FROM public.system_logs WHERE ' || v_where_str;
+    EXECUTE v_sql_count INTO v_total_count;
+
+    -- Lấy dữ liệu phân trang (Ép dùng Index created_at)
+    v_sql_data := format(
+        'SELECT COALESCE(jsonb_agg(t.*), ''[]''::jsonb)
+         FROM (
+             SELECT id, action, module, record_id, old_data, new_data, created_at, user_id, user_name
+             FROM public.system_logs
+             WHERE %s
+             ORDER BY created_at DESC
+             LIMIT %s OFFSET %s
+         ) t',
+        v_where_str, p_page_size, (p_page - 1) * p_page_size
+    );
+    
+    EXECUTE v_sql_data INTO v_data;
+
+    RETURN jsonb_build_object(
+        'data', COALESCE(v_data, '[]'::jsonb),
+        'total_count', COALESCE(v_total_count, 0)
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_system_logs"("p_page" integer, "p_page_size" integer, "p_module" "text", "p_action" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow" DEFAULT NULL::"public"."transaction_flow", "p_fund_id" bigint DEFAULT NULL::bigint, "p_date_from" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_date_to" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_limit" integer DEFAULT 20, "p_offset" integer DEFAULT 0, "p_search" "text" DEFAULT NULL::"text", "p_created_by" "uuid" DEFAULT NULL::"uuid", "p_status" "public"."transaction_status" DEFAULT NULL::"public"."transaction_status") RETURNS TABLE("id" bigint, "code" "text", "transaction_date" timestamp with time zone, "flow" "public"."transaction_flow", "amount" numeric, "fund_name" "text", "partner_name" "text", "category_name" "text", "description" "text", "business_type" "public"."business_type", "created_by_name" "text", "status" "public"."transaction_status", "ref_advance_id" bigint, "ref_advance_code" "text", "target_bank_info" "jsonb", "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -9311,6 +9626,49 @@ $$;
 
 
 ALTER FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."log_system_action"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_user_id UUID;
+    v_user_name TEXT := 'Hệ thống';
+    v_record_id TEXT;
+    v_old_data JSONB := NULL;
+    v_new_data JSONB := NULL;
+BEGIN
+    v_user_id := auth.uid();
+    
+    -- Lấy tên User ngay tại thời điểm thực hiện thao tác (Snapshot)
+    IF v_user_id IS NOT NULL THEN
+        SELECT COALESCE(full_name, email, 'Chưa cập nhật tên') INTO v_user_name 
+        FROM public.users WHERE id = v_user_id;
+    END IF;
+
+    IF TG_OP = 'INSERT' THEN
+        v_record_id := NEW.id::TEXT;
+        v_new_data := to_jsonb(NEW);
+    ELSIF TG_OP = 'UPDATE' THEN
+        v_record_id := NEW.id::TEXT;
+        v_old_data := to_jsonb(OLD);
+        v_new_data := to_jsonb(NEW);
+        IF v_old_data = v_new_data THEN RETURN NEW; END IF;
+    ELSIF TG_OP = 'DELETE' THEN
+        v_record_id := OLD.id::TEXT;
+        v_old_data := to_jsonb(OLD);
+    END IF;
+
+    INSERT INTO public.system_logs (user_id, user_name, module, action, record_id, old_data, new_data)
+    VALUES (v_user_id, v_user_name, TG_TABLE_NAME, TG_OP, v_record_id, v_old_data, v_new_data);
+
+    IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."log_system_action"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."mark_notification_read"("p_noti_id" "uuid") RETURNS "void"
@@ -14685,6 +15043,7 @@ CREATE TABLE IF NOT EXISTS "public"."order_items" (
     "total_line" numeric GENERATED ALWAYS AS (((("quantity")::numeric * "unit_price") - "discount")) STORED,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "quantity_picked" integer DEFAULT 0,
+    "quantity_returned" integer DEFAULT 0,
     CONSTRAINT "order_items_quantity_check" CHECK (("quantity" > 0)),
     CONSTRAINT "order_items_unit_price_check" CHECK (("unit_price" >= (0)::numeric))
 );
@@ -15216,6 +15575,51 @@ ALTER TABLE "public"."sales_invoices" ALTER COLUMN "id" ADD GENERATED BY DEFAULT
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."sales_return_items" (
+    "id" bigint NOT NULL,
+    "return_id" "uuid",
+    "order_item_id" "uuid",
+    "product_id" bigint,
+    "warehouse_id" bigint,
+    "quantity" integer NOT NULL,
+    "refund_price" numeric DEFAULT 0,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "sales_return_items_quantity_check" CHECK (("quantity" > 0))
+);
+
+
+ALTER TABLE "public"."sales_return_items" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."sales_return_items" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."sales_return_items_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."sales_returns" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "code" "text" NOT NULL,
+    "order_id" "uuid",
+    "customer_id" bigint,
+    "customer_b2c_id" bigint,
+    "status" "text" DEFAULT 'COMPLETED'::"text",
+    "total_refund_amount" numeric DEFAULT 0,
+    "note" "text",
+    "created_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."sales_returns" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."service_consumables" (
     "id" bigint NOT NULL,
     "service_product_id" bigint,
@@ -15511,6 +15915,33 @@ ALTER SEQUENCE "public"."suppliers_id_seq" OWNER TO "postgres";
 
 
 ALTER SEQUENCE "public"."suppliers_id_seq" OWNED BY "public"."suppliers"."id";
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."system_logs" (
+    "id" bigint NOT NULL,
+    "user_id" "uuid",
+    "module" "text" NOT NULL,
+    "action" "text" NOT NULL,
+    "record_id" "text",
+    "old_data" "jsonb",
+    "new_data" "jsonb",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "user_name" "text"
+);
+
+
+ALTER TABLE "public"."system_logs" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."system_logs" ALTER COLUMN "id" ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME "public"."system_logs_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
 
 
 
@@ -16264,6 +16695,21 @@ ALTER TABLE ONLY "public"."sales_invoices"
 
 
 
+ALTER TABLE ONLY "public"."sales_return_items"
+    ADD CONSTRAINT "sales_return_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."sales_returns"
+    ADD CONSTRAINT "sales_returns_code_key" UNIQUE ("code");
+
+
+
+ALTER TABLE ONLY "public"."sales_returns"
+    ADD CONSTRAINT "sales_returns_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."service_consumables"
     ADD CONSTRAINT "service_consumables_pkey" PRIMARY KEY ("id");
 
@@ -16331,6 +16777,11 @@ ALTER TABLE ONLY "public"."suppliers"
 
 ALTER TABLE ONLY "public"."suppliers"
     ADD CONSTRAINT "suppliers_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."system_logs"
+    ADD CONSTRAINT "system_logs_pkey" PRIMARY KEY ("id");
 
 
 
@@ -16794,6 +17245,14 @@ CREATE INDEX "idx_sales_invoices_status" ON "public"."sales_invoices" USING "btr
 
 
 
+CREATE INDEX "idx_sales_return_items_return_id" ON "public"."sales_return_items" USING "btree" ("return_id");
+
+
+
+CREATE INDEX "idx_sales_returns_order_id" ON "public"."sales_returns" USING "btree" ("order_id");
+
+
+
 CREATE INDEX "idx_service_package_items_item_id" ON "public"."service_package_items" USING "btree" ("item_id");
 
 
@@ -16823,6 +17282,22 @@ CREATE INDEX "idx_sp_clinical_cat" ON "public"."service_packages" USING "btree" 
 
 
 CREATE INDEX "idx_svc_wallet_customer" ON "public"."customer_service_wallets" USING "btree" ("customer_id");
+
+
+
+CREATE INDEX "idx_system_logs_composite_optimization" ON "public"."system_logs" USING "btree" ("created_at" DESC, "module", "action");
+
+
+
+CREATE INDEX "idx_system_logs_created_at" ON "public"."system_logs" USING "btree" ("created_at" DESC);
+
+
+
+CREATE INDEX "idx_system_logs_module" ON "public"."system_logs" USING "btree" ("module");
+
+
+
+CREATE INDEX "idx_system_logs_user_id" ON "public"."system_logs" USING "btree" ("user_id");
 
 
 
@@ -17019,6 +17494,50 @@ CREATE OR REPLACE TRIGGER "trg_auto_refresh_segment" AFTER UPDATE ON "public"."c
 
 
 CREATE OR REPLACE TRIGGER "trg_auto_sync_order_payment" AFTER INSERT OR UPDATE ON "public"."finance_transactions" FOR EACH ROW EXECUTE FUNCTION "public"."trigger_sync_order_payment"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_customers" AFTER INSERT OR DELETE OR UPDATE ON "public"."customers" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_customers_b2b" AFTER INSERT OR DELETE OR UPDATE ON "public"."customers_b2b" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_finance_transactions" AFTER INSERT OR DELETE OR UPDATE ON "public"."finance_transactions" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_inventory_transfers" AFTER INSERT OR DELETE OR UPDATE ON "public"."inventory_transfers" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_orders" AFTER INSERT OR DELETE OR UPDATE ON "public"."orders" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_products" AFTER INSERT OR DELETE OR UPDATE ON "public"."products" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_purchase_orders" AFTER INSERT OR DELETE OR UPDATE ON "public"."purchase_orders" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_service_packages" AFTER INSERT OR DELETE OR UPDATE ON "public"."service_packages" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_suppliers" AFTER INSERT OR DELETE OR UPDATE ON "public"."suppliers" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_system_settings" AFTER INSERT OR DELETE OR UPDATE ON "public"."system_settings" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_log_user_roles" AFTER INSERT OR DELETE OR UPDATE ON "public"."user_roles" FOR EACH ROW EXECUTE FUNCTION "public"."log_system_action"();
 
 
 
@@ -17721,6 +18240,36 @@ ALTER TABLE ONLY "public"."sales_invoices"
 
 
 
+ALTER TABLE ONLY "public"."sales_return_items"
+    ADD CONSTRAINT "sales_return_items_order_item_id_fkey" FOREIGN KEY ("order_item_id") REFERENCES "public"."order_items"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."sales_return_items"
+    ADD CONSTRAINT "sales_return_items_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id");
+
+
+
+ALTER TABLE ONLY "public"."sales_return_items"
+    ADD CONSTRAINT "sales_return_items_return_id_fkey" FOREIGN KEY ("return_id") REFERENCES "public"."sales_returns"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."sales_return_items"
+    ADD CONSTRAINT "sales_return_items_warehouse_id_fkey" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouses"("id");
+
+
+
+ALTER TABLE ONLY "public"."sales_returns"
+    ADD CONSTRAINT "sales_returns_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."sales_returns"
+    ADD CONSTRAINT "sales_returns_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."service_consumables"
     ADD CONSTRAINT "service_consumables_consumable_product_id_fkey" FOREIGN KEY ("consumable_product_id") REFERENCES "public"."products"("id");
 
@@ -17778,6 +18327,11 @@ ALTER TABLE ONLY "public"."supplier_wallet_transactions"
 
 ALTER TABLE ONLY "public"."supplier_wallets"
     ADD CONSTRAINT "supplier_wallets_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."system_logs"
+    ADD CONSTRAINT "system_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 
 
@@ -18348,6 +18902,12 @@ ALTER TABLE "public"."roles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."sales_invoices" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."sales_return_items" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."sales_returns" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."service_consumables" ENABLE ROW LEVEL SECURITY;
 
 
@@ -18361,6 +18921,9 @@ ALTER TABLE "public"."shipping_partners" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."shipping_rules" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."system_logs" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."system_settings" ENABLE ROW LEVEL SECURITY;
@@ -18721,9 +19284,21 @@ GRANT ALL ON FUNCTION "public"."cancel_inventory_check"("p_check_id" bigint, "p_
 
 
 
+GRANT ALL ON FUNCTION "public"."cancel_order"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."cancel_order"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."cancel_order"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."cancel_outbound_task"("p_order_id" "uuid", "p_reason" "text", "p_user_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."cancel_return_request"("p_return_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."cancel_return_request"("p_return_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."cancel_return_request"("p_return_id" "uuid") TO "service_role";
 
 
 
@@ -18760,6 +19335,12 @@ GRANT ALL ON FUNCTION "public"."checkout_clinical_services"("p_appointment_id" "
 GRANT ALL ON FUNCTION "public"."checkout_clinical_services"("p_visit_id" "uuid", "p_customer_id" bigint, "p_request_ids" bigint[], "p_fund_account_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."checkout_clinical_services"("p_visit_id" "uuid", "p_customer_id" bigint, "p_request_ids" bigint[], "p_fund_account_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."checkout_clinical_services"("p_visit_id" "uuid", "p_customer_id" bigint, "p_request_ids" bigint[], "p_fund_account_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."clone_sales_order"("p_old_order_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."clone_sales_order"("p_old_order_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."clone_sales_order"("p_old_order_id" "uuid") TO "service_role";
 
 
 
@@ -18832,6 +19413,18 @@ GRANT ALL ON FUNCTION "public"."confirm_purchase_order_financials"("p_po_id" big
 GRANT ALL ON FUNCTION "public"."confirm_purchase_payment"("p_order_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_payment_method" "text", "p_note" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."confirm_purchase_payment"("p_order_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_payment_method" "text", "p_note" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."confirm_purchase_payment"("p_order_id" bigint, "p_amount" numeric, "p_fund_account_id" bigint, "p_payment_method" "text", "p_note" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."confirm_return_finance"("p_return_id" "uuid", "p_fund_account_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."confirm_return_finance"("p_return_id" "uuid", "p_fund_account_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."confirm_return_finance"("p_return_id" "uuid", "p_fund_account_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."confirm_return_inventory"("p_return_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."confirm_return_inventory"("p_return_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."confirm_return_inventory"("p_return_id" "uuid") TO "service_role";
 
 
 
@@ -18964,6 +19557,12 @@ GRANT ALL ON FUNCTION "public"."create_product"("p_name" "text", "p_sku" "text",
 GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_purchase_order"("p_supplier_id" bigint, "p_expected_date" timestamp with time zone, "p_note" "text", "p_delivery_method" "text", "p_shipping_partner_id" bigint, "p_shipping_fee" numeric, "p_status" "text", "p_items" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."create_return_request"("p_payload" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_return_request"("p_payload" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_return_request"("p_payload" "jsonb") TO "service_role";
 
 
 
@@ -19435,6 +20034,12 @@ GRANT ALL ON FUNCTION "public"."get_suppliers_list"("search_query" "text", "stat
 
 
 
+GRANT ALL ON FUNCTION "public"."get_system_logs"("p_page" integer, "p_page_size" integer, "p_module" "text", "p_action" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_system_logs"("p_page" integer, "p_page_size" integer, "p_module" "text", "p_action" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_system_logs"("p_page" integer, "p_page_size" integer, "p_module" "text", "p_action" "text", "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_transaction_history"("p_flow" "public"."transaction_flow", "p_fund_id" bigint, "p_date_from" timestamp with time zone, "p_date_to" timestamp with time zone, "p_limit" integer, "p_offset" integer, "p_search" "text", "p_created_by" "uuid", "p_status" "public"."transaction_status") TO "service_role";
@@ -19667,6 +20272,12 @@ GRANT ALL ON FUNCTION "public"."import_suppliers_bulk"("p_suppliers" "jsonb") TO
 GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."invite_new_user"("p_email" "text", "p_full_name" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."log_system_action"() TO "anon";
+GRANT ALL ON FUNCTION "public"."log_system_action"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."log_system_action"() TO "service_role";
 
 
 
@@ -20929,6 +21540,24 @@ GRANT ALL ON SEQUENCE "public"."sales_invoices_id_seq" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."sales_return_items" TO "anon";
+GRANT ALL ON TABLE "public"."sales_return_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."sales_return_items" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."sales_return_items_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."sales_return_items_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."sales_return_items_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."sales_returns" TO "anon";
+GRANT ALL ON TABLE "public"."sales_returns" TO "authenticated";
+GRANT ALL ON TABLE "public"."sales_returns" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."service_consumables" TO "anon";
 GRANT ALL ON TABLE "public"."service_consumables" TO "authenticated";
 GRANT ALL ON TABLE "public"."service_consumables" TO "service_role";
@@ -21046,6 +21675,18 @@ GRANT ALL ON TABLE "public"."suppliers" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."suppliers_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."suppliers_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."suppliers_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."system_logs" TO "anon";
+GRANT ALL ON TABLE "public"."system_logs" TO "authenticated";
+GRANT ALL ON TABLE "public"."system_logs" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."system_logs_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."system_logs_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."system_logs_id_seq" TO "service_role";
 
 
 

@@ -70,7 +70,7 @@ const ProductMasterDataPage = () => {
     }
   };
 
-  // --- IMPORT HANDLER ---
+  // --- IMPORT HANDLER WITH CHUNKING ---
   const handleImport = async (file: File) => {
     setImportLoading(true);
     setProgress(0);
@@ -82,7 +82,6 @@ const ProductMasterDataPage = () => {
         const wb = XLSX.read(binaryStr, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
 
-        // Read raw data
         const rawData = XLSX.utils.sheet_to_json(ws);
         if (rawData.length === 0) {
           message.error("File trống!");
@@ -90,26 +89,40 @@ const ProductMasterDataPage = () => {
           return;
         }
 
-        // 2. Parse Data
         const payload = parseExcelToPayload(rawData);
+        if (payload.length === 0) {
+           message.warning("Không có dữ liệu hợp lệ (Thiếu cột SKU).");
+           setImportLoading(false);
+           return;
+        }
+        
         message.info(`Tìm thấy ${payload.length} dòng hợp lệ. Đang xử lý...`);
 
-        // 3. Call API Chunked
-        await productMasterService.importMasterData(payload);
+        // CHUNKING LOGIC (500 dòng / lần)
+        const CHUNK_SIZE = 500;
+        const totalChunks = Math.ceil(payload.length / CHUNK_SIZE);
+
+        for (let i = 0; i < totalChunks; i++) {
+          const chunk = payload.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+          await productMasterService.importMasterData(chunk);
+          
+          // Cập nhật thanh %
+          const currentProgress = Math.round(((i + 1) / totalChunks) * 100);
+          setProgress(currentProgress);
+        }
 
         message.success("Import thành công toàn bộ dữ liệu!");
-        setProgress(100);
+        setTimeout(() => setProgress(0), 2000); // Reset UI sau 2s
+        setImportLoading(false);
       };
 
       reader.readAsBinaryString(file);
     } catch (error: any) {
       console.error(error);
       message.error("Lỗi Import: " + error.message);
-    } finally {
       setImportLoading(false);
     }
-
-    return false; // Prevent auto upload
+    return false; // Prevent auto upload của Antd
   };
 
   return (
