@@ -282,35 +282,56 @@ const WarehouseReceiptPage = () => {
           );
       }
     },
-    // SPLIT COLUMNS LOGIC
+    // THAY THẾ CỘT SỐ LÔ BẰNG LOGIC RENDER MỚI:
     {
-        title: "Số Lô",
-        width: 100,
-        render: (_: any, record: InboundDetailItem) => {
-             if (record.stock_management_type !== 'lot_date') return <Text disabled>--</Text>;
-             
-             // [NEW] Lấy từ State (input_lot) HOẶC DB (lot_number/lot)
-             const displayLot = record.input_lot || (record as any).lot_number || (record as any).lot || "";
+        title: "Số Lô đã nhập",
+        width: 220,
+        render: (_: any, record: any) => {
+            if (record.stock_management_type !== 'lot_date') return <Text disabled>--</Text>;
 
-             return (
-                 <Input 
+            const hasReceivedBatches = record.received_batches && record.received_batches.length > 0;
+
+            // 1. Chế độ Xem (Khi đơn đã có lịch sử nhập lô)
+            if (hasReceivedBatches) {
+                return (
+                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                        {record.received_batches.map((batch: any, idx: number) => (
+                            <Tag color="geekblue" key={idx} style={{ margin: 0, display: 'block', whiteSpace: 'normal' }}>
+                                <b>Lô:</b> {batch.lot_number} <br/>
+                                <span style={{ fontSize: 11 }}>
+                                  <b>HSD:</b> {batch.expiry_date ? dayjs(batch.expiry_date).format("DD/MM/YY") : "N/A"} - ({batch.quantity} {record.unit})
+                                </span>
+                            </Tag>
+                        ))}
+                    </Space>
+                );
+            }
+
+            // 2. Chế độ Nhập (Khi đang thực hiện nhập kho)
+            const displayLot = record.input_lot || "";
+            return (
+                <Input 
                     placeholder="Nhập số lô"
                     value={displayLot}
                     onChange={(e) => updateWorkingItem(record.product_id, { input_lot: e.target.value })}
                     disabled={isDone} 
-                 />
-             )
+                />
+            );
         }
     },
+    // THAY THẾ CỘT HẠN SỬ DỤNG BẰNG LOGIC MỚI:
     {
         title: "Hạn Sử Dụng",
-        width: 100,
-        render: (_: any, record: InboundDetailItem) => {
+        width: 140,
+        render: (_: any, record: any) => {
              if (record.stock_management_type !== 'lot_date') return <Text disabled>--</Text>;
+             
+             // Nếu đã có mảng lô thì ẩn ô chọn ngày (vì đã hiển thị gộp ở cột Lô)
+             if (record.received_batches && record.received_batches.length > 0) {
+                 return <Text type="secondary" italic style={{ fontSize: 12 }}>Đã lưu theo lô</Text>;
+             }
 
-             // [NEW] Lấy từ State (input_expiry) HOẶC DB (expiry_date/exp_date)
-             const displayExpiry = record.input_expiry || (record as any).expiry_date || (record as any).exp_date;
-
+             const displayExpiry = record.input_expiry;
              return (
                  <DatePicker 
                     placeholder="Chọn ngày"
@@ -320,7 +341,7 @@ const WarehouseReceiptPage = () => {
                     onChange={(date) => updateWorkingItem(record.product_id, { input_expiry: date ? date.toISOString() : undefined })}
                     disabled={isDone} 
                  />
-             )
+             );
         }
     },
   ];

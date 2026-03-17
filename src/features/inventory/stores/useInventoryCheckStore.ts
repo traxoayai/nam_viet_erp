@@ -20,8 +20,12 @@ interface InventoryCheckState {
   // Actions
   fetchSessionDetails: (checkId: number) => Promise<void>;
 
-  // Hàm update đặc biệt: Tự tính Hộp/Lẻ -> Tổng
-  updateItemQuantity: (itemId: number, boxQty: number, unitQty: number) => void;
+  // Hàm update 3 tiers + tracking
+  updateItemQuantity: (
+    itemId: number,
+    quantities: { wholesale_qty?: number; retail_qty?: number; base_qty?: number },
+    tracking?: { lot_number?: string; expiry_date?: string }
+  ) => void;
 
   // Điều hướng
   setActiveItem: (id: number) => void;
@@ -30,10 +34,11 @@ interface InventoryCheckState {
   completeSession: (userId: string) => Promise<void>;
 
   // [NEW ACTIONS]
-  // [NEW ACTIONS]
   saveCheckInfo: (note: string) => Promise<void>;
   cancelSession: () => Promise<void>;
   addItemToCheck: (productId: number) => Promise<void>;
+  removeItem: (itemId: number) => Promise<void>;
+  splitCheckItem: (originItemId: number, productId: number) => Promise<void>;
 }
 
 export const useInventoryCheckStore = create<InventoryCheckState>(
@@ -62,39 +67,56 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
       }
     },
 
-    updateItemQuantity: (itemId, boxQty, unitQty) => {
+    updateItemQuantity: (itemId, quantities, tracking) => {
       const { items } = get();
 
       const updatedItems = items.map((item) => {
         if (item.id !== itemId) return item;
 
-        // [FIX] Đảm bảo rate luôn >= 1 để tránh lỗi chia cho 0
-        const rate =
-          item.retail_unit_rate && item.retail_unit_rate > 0
-            ? item.retail_unit_rate
-            : 1;
+        const wQty = quantities.wholesale_qty ?? item.input_wholesale_qty ?? 0;
+        const rQty = quantities.retail_qty ?? item.input_retail_qty ?? 0;
+        const bQty = quantities.base_qty ?? item.input_base_qty ?? 0;
 
-        // Tính tổng
-        const newActualTotal =
-          Number(boxQty || 0) * rate + Number(unitQty || 0);
+        const wRate = item.wholesale_unit_rate || 1;
+        const rRate = item.retail_unit_rate || 1;
+
+        let total = 0;
+        if (item.wholesale_unit_name && item.retail_unit_name && wRate !== rRate) {
+          total = wQty * wRate + rQty * rRate + bQty;
+        } else if (item.wholesale_unit_name && !item.retail_unit_name && wRate > 1) {
+          total = wQty * wRate + bQty;
+        } else if (!item.wholesale_unit_name && item.retail_unit_name && rRate > 1) {
+          total = rQty * rRate + bQty; // If fallback to only 2 tiers
+        } else if (wRate > 1) {
+          total = wQty * wRate + bQty;
+        } else {
+          total = bQty;
+        }
 
         return {
           ...item,
-          actual_quantity: newActualTotal,
-          // [FIX] Đảm bảo system_quantity có giá trị
-          diff_quantity: newActualTotal - (item.system_quantity || 0),
+          input_wholesale_qty: wQty,
+          input_retail_qty: rQty,
+          input_base_qty: bQty,
+          batch_code: tracking?.lot_number ?? item.batch_code,
+          expiry_date: tracking?.expiry_date ?? item.expiry_date,
+          actual_quantity: total,
+          diff_quantity: total - (item.system_quantity || 0),
         };
       });
 
       set({ items: updatedItems });
 
-      // Debounce gọi API (Giữ nguyên)
-      const currentRate =
-        items.find((i) => i.id === itemId)?.retail_unit_rate || 1;
-      saveToDbDebounced(
-        itemId,
-        Number(boxQty || 0) * currentRate + Number(unitQty || 0)
-      );
+      const item = updatedItems.find((i) => i.id === itemId);
+      if (item) {
+        saveToDbDebounced(itemId, {
+          wholesale_qty: item.input_wholesale_qty,
+          retail_qty: item.input_retail_qty,
+          base_qty: item.input_base_qty,
+          lot_number: item.batch_code,
+          expiry_date: item.expiry_date,
+        });
+      }
     },
 
     setActiveItem: (id) => set({ activeItemId: id }),
@@ -190,12 +212,43 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
         set({ loading: false });
       }
     },
+
+    removeItem: async (itemId: number) => {
+      set({ loading: true });
+      try {
+        await inventoryService.removeCheckItem(itemId);
+        // Xóa khỏi state local
+        set((state) => ({ items: state.items.filter((i) => i.id !== itemId) }));
+        message.success("Đã xóa sản phẩm khỏi phiếu");
+      } catch (err: any) {
+        message.error("Lỗi xóa sản phẩm: " + err.message);
+      } finally {
+        set({ loading: false });
+      }
+    },
+
+    splitCheckItem: async (_originItemId, productId) => {
+      const { activeSession } = get();
+      if (!activeSession) return;
+      set({ loading: true });
+      try {
+        const data = await inventoryService.splitCheckItem(activeSession.id, productId);
+        
+        message.success("Đã tách dòng để nhập Lô mới!");
+        await get().fetchSessionDetails(activeSession.id);
+        set({ activeItemId: data.id });
+      } catch (err: any) {
+        message.error("Lỗi tách lô: " + err.message);
+      } finally {
+        set({ loading: false });
+      }
+    },
   })
 );
 
 // Helper debounce save
-const saveToDbDebounced = debounce((itemId: number, qty: number) => {
+const saveToDbDebounced = debounce((itemId: number, payload: any) => {
   inventoryService
-    .updateCheckItemQty(itemId, qty)
+    .updateCheckItemQuantity(itemId, payload)
     .catch((err) => console.error(err));
 }, 500);

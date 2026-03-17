@@ -6164,7 +6164,7 @@ export type Database = {
         Returns: Json
       }
       import_product_from_ai: { Args: { p_data: Json }; Returns: number }
-      import_product_master_v2: { Args: { p_data: Json }; Returns: undefined }
+      import_product_master_v2: { Args: { p_data: Json }; Returns: Json }
       import_suppliers_bulk: { Args: { p_suppliers: Json }; Returns: Json }
       invite_new_user: {
         Args: { p_email: string; p_full_name: string }
@@ -6490,7 +6490,7 @@ export type Database = {
         Returns: undefined
       }
       update_inventory_check_item_quantity: {
-        Args: { p_actual_quantity: number; p_item_id: number }
+        Args: { p_item_id: number; p_payload: Json }
         Returns: Json
       }
       update_outbound_package_count: {

@@ -275,6 +275,37 @@ export const inventoryService = {
     if (error) throw error;
   },
 
+  // Xóa item khỏi phiếu kiểm kê
+  async removeCheckItem(itemId: number) {
+    const { error } = await supabase
+      .from("inventory_check_items")
+      .delete()
+      .eq("id", itemId);
+    if (error) throw error;
+  },
+
+  // Tách lô mới (Tạo dòng zero quantity trùng product_id)
+  async splitCheckItem(checkId: number, productId: number) {
+    const { data: user } = await supabase.auth.getUser();
+    
+    // Tạo record mới toanh với số lượng bằng 0
+    const { data, error } = await supabase
+      .from("inventory_check_items")
+      .insert({
+        check_id: checkId,
+        product_id: productId,
+        system_quantity: 0,
+        actual_quantity: 0,
+        location_snapshot: "Tách lô",
+        created_by: user.user?.id || null,
+      })
+      .select("id")
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   // 12. Lấy chi tiết phiếu (Header + Items với Join phức tạp)
   async getCheckSession(checkId: number) {
     const { data: session, error: sessError } = await supabase
@@ -291,7 +322,7 @@ export const inventoryService = {
         *,
         product:products (
             name, sku, image_url,
-            units:product_units (unit_name, conversion_rate, is_base, is_direct_sale)
+            units:product_units (unit_name, conversion_rate, is_base, is_direct_sale, unit_type)
         )
       `
       )
@@ -299,15 +330,50 @@ export const inventoryService = {
       .order("location_snapshot", { ascending: true });
     if (itemError) throw itemError;
 
-    // Map dữ liệu Hộp/Lẻ
+    // Map dữ liệu Hộp/Lẻ/Viên
     const formattedItems: InventoryCheckItem[] = items.map((i: any) => {
       const units = i.product?.units || [];
-      const baseUnitObj =
-        units.find((u: any) => u.is_base) ||
-        units.find((u: any) => u.conversion_rate === 1);
-      const largeUnitObj = units
-        .filter((u: any) => u.conversion_rate > 1)
-        .sort((a: any, b: any) => b.conversion_rate - a.conversion_rate)[0];
+      
+      // 1. Tìm Base Unit
+      const baseUnitObj = units.find((u: any) => u.is_base || u.unit_type === "base" || u.conversion_rate === 1);
+      
+      // 2. Lọc bỏ các Unit trùng tên với Base Unit (để tránh lặp)
+      const nonBaseUnits = units.filter((u: any) => u.unit_name !== baseUnitObj?.unit_name);
+
+      // 3. Tìm Retail và Wholesale trong danh sách còn lại
+      let retailUnitObj = nonBaseUnits.find((u: any) => u.unit_type === "retail");
+      let wholesaleUnitObj = nonBaseUnits.find((u: any) => u.unit_type === "wholesale");
+
+      // Nếu ko có wholesale/retail mà có các unit khác > 1, tự map vào
+      if (!wholesaleUnitObj && !retailUnitObj && nonBaseUnits.length > 0) {
+          const sorted = nonBaseUnits.sort((a:any, b:any) => b.conversion_rate - a.conversion_rate);
+          if (sorted.length >= 2) {
+              wholesaleUnitObj = sorted[0];
+              retailUnitObj = sorted[1];
+          } else if (sorted.length === 1) {
+              wholesaleUnitObj = sorted[0];
+          }
+      }
+
+      const retailRate = retailUnitObj?.conversion_rate || 1;
+      const wholesaleRate = wholesaleUnitObj?.conversion_rate || retailRate;
+
+      // Bóc tách số lượng
+      let remaining = i.counted_at ? i.actual_quantity : (i.system_quantity || 0);
+      let inputWholesale = 0;
+      let inputRetail = 0;
+
+      if (wholesaleUnitObj && wholesaleRate > 1) {
+        inputWholesale = Math.floor(remaining / wholesaleRate);
+        remaining -= inputWholesale * wholesaleRate;
+      }
+      
+      if (retailUnitObj && retailRate > 1 && retailRate !== wholesaleRate) {
+        inputRetail = Math.floor(remaining / retailRate);
+        remaining -= inputRetail * retailRate;
+      }
+
+      const inputBase = remaining;
 
       return {
         id: i.id,
@@ -316,28 +382,51 @@ export const inventoryService = {
         product_name: i.product?.name || "Sản phẩm ẩn",
         sku: i.product?.sku || "",
         image_url: i.product?.image_url,
-        unit: baseUnitObj?.unit_name || "Đv",
-        large_unit: largeUnitObj?.unit_name || "Hộp",
-        retail_unit_rate: largeUnitObj?.conversion_rate || 1,
+        
+        product_units: units,
+        base_unit_name: baseUnitObj?.unit_name || "Viên",
+        retail_unit_name: retailUnitObj?.unit_name,
+        retail_unit_rate: retailRate,
+        wholesale_unit_name: wholesaleUnitObj?.unit_name,
+        wholesale_unit_rate: wholesaleRate,
+
+        input_wholesale_qty: inputWholesale,
+        input_retail_qty: inputRetail,
+        input_base_qty: inputBase,
+
         batch_code: i.batch_code,
         expiry_date: i.expiry_date,
         system_quantity: i.system_quantity,
         actual_quantity: i.actual_quantity,
+        counted_at: i.counted_at, // Map trường này để check
         cost_price: i.cost_price,
         location_snapshot: i.location_snapshot,
-        diff_quantity: i.actual_quantity - i.system_quantity,
+        diff_quantity: (i.counted_at ? i.actual_quantity : (i.system_quantity || 0)) - (i.system_quantity || 0),
       };
     });
     return { session, items: formattedItems };
   },
 
   // 13. Cập nhật số lượng kiểm kê
-  async updateCheckItemQty(itemId: number, actualQty: number) {
-    const { error } = await supabase
-      .from("inventory_check_items")
-      .update({ actual_quantity: actualQty })
-      .eq("id", itemId);
+  async updateCheckItemQuantity(
+    itemId: number,
+    payload: {
+      wholesale_qty?: number;
+      retail_qty?: number;
+      base_qty?: number;
+      lot_number?: string;
+      expiry_date?: string;
+    }
+  ) {
+    const { data, error } = await supabase.rpc(
+      "update_inventory_check_item_quantity",
+      {
+        p_item_id: itemId,
+        p_payload: payload,
+      }
+    );
     if (error) throw error;
+    return data;
   },
 
   // 14. Hoàn tất kiểm kho

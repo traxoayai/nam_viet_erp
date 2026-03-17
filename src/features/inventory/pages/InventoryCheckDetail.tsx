@@ -23,6 +23,7 @@ import {
   Modal,
   Avatar,
   Grid,
+  Input,
 } from "antd";
 import { useEffect, useRef, useState, memo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -59,6 +60,7 @@ export const InventoryCheckDetail = () => {
     saveCheckInfo,
     cancelSession,
     addItemToCheck, // [NEW] Lấy action mới
+    removeItem,
   } = useInventoryCheckStore();
 
   // Ref để quản lý Auto-Scroll
@@ -142,15 +144,13 @@ export const InventoryCheckDetail = () => {
         // Lấy item hiện tại để biết số cũ
         const currentItem = items.find((i) => i.id === activeItemId);
         if (currentItem) {
-          const rate = currentItem.retail_unit_rate || 1;
-          const currentBox = Math.floor(currentItem.actual_quantity / rate);
-          const currentUnit = currentItem.actual_quantity % rate;
+          const newBox = cmd.box != null ? cmd.box : currentItem.input_wholesale_qty;
+          const newUnit = cmd.unit != null ? cmd.unit : currentItem.input_base_qty;
 
-          // [FIX 2]: Dùng biến 'cmd' thay vì 'command' & Logic check null chuẩn
-          const newBox = cmd.box != null ? cmd.box : currentBox;
-          const newUnit = cmd.unit != null ? cmd.unit : currentUnit;
-
-          updateItemQuantity(activeItemId, newBox, newUnit);
+          updateItemQuantity(activeItemId, {
+             wholesale_qty: newBox,
+             base_qty: newUnit,
+          });
           message.success(`Đã nhập: ${newBox} chẵn, ${newUnit} lẻ`);
 
           resetTranscript();
@@ -201,8 +201,8 @@ export const InventoryCheckDetail = () => {
             icon={<MinusOutlined />}
             onClick={() => onChange(Math.max(0, (value || 0) - 1))} // Nút +/- vẫn gọi trực tiếp để update ngay (props change -> useEffect sync local)
             style={{
-              height: 44,
-              width: 44,
+              height: 52,
+              width: 52,
               background: "#f5f5f5",
               borderRadius: 0,
               borderRight: "1px solid #eee",
@@ -227,10 +227,10 @@ export const InventoryCheckDetail = () => {
               textAlign: "center",
               border: "none",
               boxShadow: "none",
-              fontSize: 20,
+              fontSize: 24,
               fontWeight: "bold",
-              height: 44,
-              paddingTop: 6,
+              height: 52,
+              paddingTop: 10,
             }}
             onFocus={(e) => e.target.select()}
           />
@@ -240,8 +240,8 @@ export const InventoryCheckDetail = () => {
             icon={<PlusOutlined />}
             onClick={() => onChange((value || 0) + 1)}
             style={{
-              height: 44,
-              width: 44,
+              height: 52,
+              width: 52,
               background: "#f5f5f5",
               borderRadius: 0,
               borderLeft: "1px solid #eee",
@@ -252,25 +252,59 @@ export const InventoryCheckDetail = () => {
     );
   };
 
+  const TrackingInput = ({ label, value, type, onChange, disabled }: any) => {
+    const [localValue, setLocalValue] = useState<string | null>(value);
+
+    // Sync from props
+    useEffect(() => { setLocalValue(value); }, [value]);
+
+    const handleBlur = () => {
+      if (localValue !== value) onChange(localValue);
+    };
+
+    return (
+      <div style={{ marginBottom: 12 }}>
+         <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>{label}</div>
+         <Input
+            size="large"
+            type={type}
+            value={localValue || ""}
+            onChange={(e) => setLocalValue(e.target.value)}
+            onBlur={handleBlur}
+            onPressEnter={(e) => { handleBlur(); (e.target as HTMLInputElement).blur(); }}
+            disabled={disabled}
+         />
+      </div>
+    );
+  };
+
   // --- SUB-COMPONENT: CARD SẢN PHẨM (Memoized) ---
   const ItemCard = memo(
     ({
       item,
       isActive,
+      canDelete,
       onActivate,
       onUpdateQuantity,
+      onRemoveItem,
       listening,
       transcript,
       itemRef,
     }: any) => {
-      // Tính toán hiển thị Hộp/Lẻ từ tổng actual_quantity
-      const rate = item.retail_unit_rate || 1;
-      const boxQty = Math.floor(item.actual_quantity / rate);
-      const unitQty = item.actual_quantity % rate;
-
-      // Tính tồn máy để hiển thị tham khảo
-      const sysBox = Math.floor(item.system_quantity / rate);
-      const sysUnit = item.system_quantity % rate;
+      // Tính EXIST SYSTEM QTY để xem tham khảo
+      const sysQty = item.system_quantity || 0;
+      let sysDisplay = `${sysQty} ${item.base_unit_name || item.unit}`;
+      
+      // Auto-calculate sys display summary if large units exist
+      if (item.wholesale_unit_rate > 1) {
+        const sysBox = Math.floor(sysQty / item.wholesale_unit_rate);
+        const sysUnit = sysQty % item.wholesale_unit_rate;
+        sysDisplay = `${sysBox} ${item.wholesale_unit_name} ${sysUnit > 0 ? `- ${sysUnit} ${item.base_unit_name || item.unit}` : ""}`;
+      } else if (item.retail_unit_rate > 1) {
+        const sysBox = Math.floor(sysQty / item.retail_unit_rate);
+        const sysUnit = sysQty % item.retail_unit_rate;
+        sysDisplay = `${sysBox} ${item.retail_unit_name} ${sysUnit > 0 ? `- ${sysUnit} ${item.base_unit_name || item.unit}` : ""}`;
+      }
 
       return (
         <div
@@ -315,9 +349,21 @@ export const InventoryCheckDetail = () => {
                 {item.product_name}
               </Title>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                Lô: {item.batch_code} | HSD: {item.expiry_date}
+                Mã: {item.sku}
               </Text>
             </div>
+            {/* Nút xóa */}
+            {canDelete && (
+              <Button
+                type="text"
+                danger
+                icon={<CloseCircleOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveItem(item.id);
+                }}
+              />
+            )}
           </div>
 
           {/* Phần so sánh & Nhập liệu */}
@@ -334,34 +380,83 @@ export const InventoryCheckDetail = () => {
             >
               <span>Tồn máy:</span>
               <span>
-                <b>{sysBox}</b> {item.large_unit}{" "}
-                {sysUnit > 0 && ` - ${sysUnit} ${item.unit}`}
+                <b>{sysDisplay}</b>
               </span>
             </div>
 
             {/* Dòng Input (Nhập liệu kép) */}
             <Row gutter={12}>
-              <Col span={12}>
+              {item.wholesale_unit_name && item.wholesale_unit_rate > 1 && (
+                <Col span={item.retail_unit_name && item.retail_unit_name !== item.wholesale_unit_name ? 8 : 12}>
+                  <QuantityInput
+                    label={`SL ${item.wholesale_unit_name}`}
+                    value={item.input_wholesale_qty}
+                    onChange={(val: number) => onUpdateQuantity(item.id, { wholesale_qty: val })}
+                    max={99999}
+                  />
+                </Col>
+              )}
+              
+              {item.retail_unit_name && item.retail_unit_rate > 1 && item.retail_unit_name !== item.wholesale_unit_name && (
+                <Col span={item.wholesale_unit_name ? 8 : 12}>
+                  <QuantityInput
+                    label={`SL ${item.retail_unit_name}`}
+                    value={item.input_retail_qty}
+                    onChange={(val: number) => onUpdateQuantity(item.id, { retail_qty: val })}
+                    max={
+                      item.wholesale_unit_rate > item.retail_unit_rate 
+                        ? Math.floor(item.wholesale_unit_rate / item.retail_unit_rate) - 1 
+                        : 99999
+                    }
+                  />
+                </Col>
+              )}
+              
+              <Col span={
+                (item.wholesale_unit_name && item.retail_unit_name && item.retail_unit_name !== item.wholesale_unit_name) ? 8 : 
+                (item.wholesale_unit_name || item.retail_unit_name) ? 12 : 24
+              }>
                 <QuantityInput
-                  label={`SL ${item.large_unit} (Chẵn)`}
-                  value={boxQty}
-                  onChange={(val: number) =>
-                    onUpdateQuantity(item.id, val, unitQty)
-                  }
-                  max={99999}
-                />
-              </Col>
-              <Col span={12}>
-                <QuantityInput
-                  label={`SL ${item.unit} (Lẻ)`}
-                  value={unitQty}
-                  onChange={(val: number) =>
-                    onUpdateQuantity(item.id, boxQty, val)
-                  }
-                  max={rate - 1}
+                  label={`SL ${item.base_unit_name || item.unit}`}
+                  value={item.input_base_qty}
+                  onChange={(val: number) => onUpdateQuantity(item.id, { base_qty: val })}
+                  max={item.retail_unit_rate > 1 ? item.retail_unit_rate - 1 : 99999}
                 />
               </Col>
             </Row>
+
+            {/* Lô / Hạn Sử Dụng - Dùng TrackingInput */}
+            <div style={{ marginTop: 12, padding: "12px", background: "#f0f5ff", borderRadius: 8, border: "1px solid #adc6ff" }}>
+              <Row gutter={12}>
+                <Col xs={24} sm={12}>
+                   <TrackingInput 
+                      label="Số Lô (Gõ để sửa)" 
+                      type="text" 
+                      value={item.batch_code} 
+                      onChange={(val: string) => onUpdateQuantity(item.id, {}, { lot_number: val })}
+                      disabled={!canDelete}
+                   />
+                </Col>
+                <Col xs={24} sm={12}>
+                   <TrackingInput 
+                      label="Hạn SD" 
+                      type="date" 
+                      value={item.expiry_date ? item.expiry_date.slice(0, 10) : ""} 
+                      onChange={(val: string) => onUpdateQuantity(item.id, {}, { expiry_date: val ? new Date(val).toISOString() : null })}
+                      disabled={!canDelete}
+                   />
+                </Col>
+              </Row>
+              
+              {/* NÚT TÁCH LÔ MỚI */}
+              {canDelete && (
+                  <div style={{ textAlign: 'right' }}>
+                      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); useInventoryCheckStore.getState().splitCheckItem(item.id, item.product_id); }}>
+                         Tách thêm Lô khác
+                      </Button>
+                  </div>
+              )}
+            </div>
 
             {/* Dòng Chênh lệch (Feedback Real-time) */}
             <div style={{ marginTop: 8, textAlign: "right", height: 20 }}>
@@ -704,8 +799,10 @@ export const InventoryCheckDetail = () => {
             key={item.id}
             item={item}
             isActive={item.id === activeItemId}
+            canDelete={activeSession?.status === "DRAFT"}
             onActivate={setActiveItem}
             onUpdateQuantity={updateItemQuantity}
+            onRemoveItem={removeItem}
             listening={listening}
             transcript={transcript}
             itemRef={(el: any) => {

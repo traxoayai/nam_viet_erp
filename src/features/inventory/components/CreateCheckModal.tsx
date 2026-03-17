@@ -156,38 +156,23 @@ export const CreateCheckModal = ({ open, onCancel }: any) => {
         </Form.Item>
 
         {/* 2. PHẠM VI */}
-        <Form.Item name="scope" label="2. Phạm vi kiểm kê" initialValue="ALL">
-          <Radio.Group
-            buttonStyle="solid"
-            size="middle"
-            style={{ width: "100%", display: "flex" }}
-          >
-            <Radio.Button value="ALL" style={{ flex: 1, textAlign: "center" }}>
-              Toàn bộ
-            </Radio.Button>
-            <Radio.Button
-              value="CATEGORY"
-              style={{ flex: 1, textAlign: "center" }}
-            >
-              Nhóm hàng
-            </Radio.Button>
-            <Radio.Button
-              value="CABINET"
-              style={{ flex: 1, textAlign: "center" }}
-            >
-              Tủ / Kệ
-            </Radio.Button>
-            <Radio.Button
-              value="MANUFACTURER"
-              style={{ flex: 1, textAlign: "center" }}
-            >
-              Hãng SX
-            </Radio.Button>
+        <Form.Item name="scope" label="2. Phạm vi kiểm kê" initialValue="BLANK">
+          <Radio.Group buttonStyle="solid" size="middle" style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <Radio.Button value="BLANK" style={{ flex: "1 1 30%", textAlign: "center" }}>Đơn lẻ (Trống)</Radio.Button>
+            <Radio.Button value="CABINET" style={{ flex: "1 1 30%", textAlign: "center" }}>Tủ / Kệ</Radio.Button>
+            <Radio.Button value="CATEGORY" style={{ flex: "1 1 30%", textAlign: "center" }}>Nhóm hàng</Radio.Button>
+            <Radio.Button value="MANUFACTURER" style={{ flex: "1 1 30%", textAlign: "center" }}>Hãng SX</Radio.Button>
+            <Radio.Button value="ALL" style={{ flex: "1 1 30%", textAlign: "center", color: "#ff4d4f" }}>Toàn bộ</Radio.Button>
           </Radio.Group>
         </Form.Item>
 
         {/* 3. INPUT ĐỘNG */}
         <div style={{ minHeight: 80 }}>
+          {scope === "BLANK" && (
+            <div style={{ padding: "10px 0", color: "#1890ff", fontStyle: "italic" }}>
+              * Hệ thống sẽ tạo một phiếu trống. Bạn có thể sử dụng máy quét mã vạch để thêm từng sản phẩm vào phiếu.
+            </div>
+          )}
           {scope === "CATEGORY" && (
             <Form.Item
               name="category_name"

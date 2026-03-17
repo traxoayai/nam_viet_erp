@@ -32,9 +32,18 @@ export interface InventoryCheckItem {
   product_name: string;
   sku: string;
   image_url?: string;
-  unit: string; // Đơn vị cơ bản (Viên/Ống...)
-  large_unit?: string; // Đơn vị lớn (Hộp/Vỉ...) - Nếu có
-  retail_unit_rate: number; // Tỷ lệ quy đổi (VD: 10 viên/vỉ). Mặc định là 1.
+  
+  // Product units
+  product_units?: any[]; // For dynamic rendering of 3 inputs
+  base_unit_name?: string;
+  retail_unit_name?: string;
+  retail_unit_rate?: number;
+  wholesale_unit_name?: string;
+  wholesale_unit_rate?: number;
+
+  input_wholesale_qty?: number;
+  input_retail_qty?: number;
+  input_base_qty?: number;
 
   // Batch Info
   batch_code: string;
@@ -50,4 +59,5 @@ export interface InventoryCheckItem {
   // Logic tính toán
   diff_quantity?: number; // actual - system
   cost_price: number;
+  counted_at?: string | null;
 }

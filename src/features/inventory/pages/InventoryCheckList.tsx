@@ -1,17 +1,9 @@
-// src/features/inventory/pages/InventoryCheckList.tsx
-import { PlusOutlined, AuditOutlined, SearchOutlined } from "@ant-design/icons";
+import { PlusOutlined, AuditOutlined, ShopOutlined } from "@ant-design/icons";
 import {
-  Layout,
-  Table,
   Button,
   Tag,
   Typography,
-  Select,
-  Input,
   DatePicker,
-  Card,
-  Row,
-  Col,
 } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
@@ -20,10 +12,12 @@ import { useNavigate } from "react-router-dom";
 import { inventoryService } from "../api/inventoryService";
 import { CreateCheckModal } from "../components/CreateCheckModal";
 
+import { FilterAction } from "@/shared/ui/listing/FilterAction";
+import { SmartTable } from "@/shared/ui/listing/SmartTable";
+import { StatHeader } from "@/shared/ui/listing/StatHeader";
 import { posService } from "@/features/pos/api/posService";
 
-const { Content } = Layout;
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
 export const InventoryCheckList = () => {
@@ -112,11 +106,6 @@ export const InventoryCheckList = () => {
     }
   };
 
-  // Xử lý khi bấm nút Lọc/Tìm kiếm -> Reset về trang 1
-  const handleSearch = () => {
-    setPagination((prev) => ({ ...prev, current: 1 }));
-    fetchData();
-  };
 
   // Xử lý khi đổi trang trên Table
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -144,6 +133,11 @@ export const InventoryCheckList = () => {
           {text}
         </a>
       ),
+    },
+    {
+      title: "Kho kiểm",
+      dataIndex: "warehouse_name",
+      key: "warehouse_name",
     },
     {
       title: "Ngày tạo",
@@ -224,156 +218,90 @@ export const InventoryCheckList = () => {
     },
   ];
 
+  const statItems = [
+    {
+      title: "Tổng số phiếu",
+      value: pagination.total.toString(),
+      color: "#1890ff",
+      icon: <AuditOutlined />,
+    },
+    {
+      title: "Kho đang kiểm",
+      value: warehouses.find((w) => w.id === filters.warehouseId)?.name || "Chưa chọn kho",
+      color: "#faad14",
+      icon: <ShopOutlined />,
+    },
+  ];
+
   return (
-    <Layout
-      style={{ padding: "24px", background: "#f0f2f5", minHeight: "100vh" }}
-    >
-      {/* Header giữ nguyên */}
-      <div
-        style={{
-          marginBottom: 20,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+    <div style={{ padding: 8, background: "#e1e1dfff", minHeight: "100vh" }}>
+      <StatHeader items={statItems} loading={loading} />
+
+      <FilterAction
+        searchPlaceholder="Mã phiếu, người tạo..."
+        initialSearch={filters.search}
+        onSearch={(val) => {
+          setFilters((prev) => ({ ...prev, search: val }));
+          setPagination((prev) => ({ ...prev, current: 1 }));
         }}
-      >
-        <div>
-          <Title level={3} style={{ margin: 0 }}>
-            Lịch Sử Kiểm Kê
-          </Title>
-          <Text type="secondary">
-            Theo dõi các đợt kiểm kho và xử lý chênh lệch
-          </Text>
-        </div>
-        <Button
-          type="primary"
-          size="large"
-          icon={<PlusOutlined />}
-          onClick={() => setIsCreateModalOpen(true)}
-        >
-          Tạo Phiếu Mới
-        </Button>
-      </div>
+        filterValues={filters}
+        onFilterChange={(key, val) => {
+          setFilters((prev) => ({ ...prev, [key]: val }));
+          setPagination((prev) => ({ ...prev, current: 1 }));
+        }}
+        filters={[
+          {
+            key: "warehouseId",
+            placeholder: "Kho kiểm kê",
+            options: warehouses.map((w) => ({ label: w.name, value: w.id })),
+          },
+          {
+            key: "status",
+            placeholder: "Trạng thái",
+            options: [
+              { label: "Đang kiểm", value: "DRAFT" },
+              { label: "Đã hoàn tất", value: "COMPLETED" },
+              { label: "Đã hủy", value: "CANCELLED" },
+            ],
+          },
+        ]}
+        actions={[
+          {
+            render: (
+              <RangePicker
+                format="DD/MM/YYYY"
+                onChange={(dates) => {
+                  setFilters((prev) => ({ ...prev, dateRange: dates }));
+                  setPagination((prev) => ({ ...prev, current: 1 }));
+                }}
+              />
+            ),
+          },
+          {
+            label: "Tạo Phiếu Mới",
+            icon: <PlusOutlined />,
+            onClick: () => setIsCreateModalOpen(true),
+            type: "primary",
+          },
+        ]}
+        onRefresh={fetchData}
+      />
 
-      {/* Filter Bar */}
-      <Card
-        styles={{ body: { padding: 16 } }}
-        style={{ marginBottom: 16, borderRadius: 8 }}
-      >
-        <Row gutter={[16, 16]} align="middle">
-          {/* Chọn Kho */}
-          <Col xs={24} sm={12} md={6} lg={5}>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>
-              Kho kiểm kê:
-            </div>
-            <Select
-              style={{ width: "100%" }}
-              value={filters.warehouseId}
-              onChange={(val) => {
-                setFilters({ ...filters, warehouseId: val });
-                setPagination((prev) => ({ ...prev, current: 1 })); // Reset trang
-              }}
-              options={warehouses.map((w) => ({ label: w.name, value: w.id }))}
-              placeholder="Chọn kho..."
-            />
-          </Col>
-
-          {/* Tìm kiếm */}
-          <Col xs={24} sm={12} md={6} lg={6}>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>
-              Tìm kiếm:
-            </div>
-            <Input
-              placeholder="Mã phiếu, người tạo, người kiểm..."
-              prefix={<SearchOutlined style={{ color: "#ccc" }} />}
-              value={filters.search}
-              onChange={(e) =>
-                setFilters({ ...filters, search: e.target.value })
-              }
-              onPressEnter={handleSearch}
-              allowClear
-            />
-          </Col>
-
-          {/* Trạng thái & Ngày - Giữ nguyên logic */}
-          <Col xs={12} sm={8} md={4} lg={4}>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>
-              Trạng thái:
-            </div>
-            <Select
-              style={{ width: "100%" }}
-              allowClear
-              placeholder="Tất cả"
-              value={filters.status}
-              onChange={(val) => {
-                setFilters({ ...filters, status: val });
-                setPagination((prev) => ({ ...prev, current: 1 }));
-              }}
-            >
-              <Select.Option value="DRAFT">Đang kiểm</Select.Option>
-              <Select.Option value="COMPLETED">Đã hoàn tất</Select.Option>
-              <Select.Option value="CANCELLED">Đã hủy</Select.Option>
-            </Select>
-          </Col>
-
-          <Col xs={12} sm={16} md={6} lg={6}>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>
-              Thời gian:
-            </div>
-            <RangePicker
-              style={{ width: "100%" }}
-              format="DD/MM/YYYY"
-              onChange={(dates) => {
-                setFilters({ ...filters, dateRange: dates });
-                setPagination((prev) => ({ ...prev, current: 1 }));
-              }}
-            />
-          </Col>
-
-          <Col
-            xs={24}
-            sm={24}
-            md={2}
-            lg={3}
-            style={{ display: "flex", alignItems: "end" }}
-          >
-            <Button
-              type="primary"
-              ghost
-              icon={<SearchOutlined />}
-              onClick={handleSearch}
-              block
-            >
-              Lọc
-            </Button>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* Table với Pagination */}
-      <Content>
-        <Table
-          columns={columns}
-          dataSource={data}
-          rowKey="id"
-          loading={loading}
-          // [NEW] Cấu hình phân trang
-          pagination={{
-            current: pagination.current,
-            pageSize: pagination.pageSize,
-            total: pagination.total,
-            showSizeChanger: true,
-            showTotal: (total) => `Tổng ${total} phiếu`,
-          }}
-          onChange={handleTableChange} // Hứng sự kiện đổi trang
-          style={{
-            background: "#fff",
-            borderRadius: 8,
-            padding: 0,
-            overflow: "hidden",
-          }}
-        />
-      </Content>
+      <SmartTable
+        columns={columns}
+        dataSource={data}
+        rowKey="id"
+        loading={loading}
+        pagination={{
+          current: pagination.current,
+          pageSize: pagination.pageSize,
+          total: pagination.total,
+          showSizeChanger: true,
+          showTotal: (total) => `Tổng ${total} phiếu`,
+        }}
+        onChange={handleTableChange}
+        emptyText="Chưa có phiếu kiểm kê nào"
+      />
 
       <CreateCheckModal
         open={isCreateModalOpen}
@@ -382,7 +310,7 @@ export const InventoryCheckList = () => {
           fetchData();
         }}
       />
-    </Layout>
+    </div>
   );
 };
 

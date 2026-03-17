@@ -1,8 +1,10 @@
 // src/features/inventory/hooks/useInboundDetail.ts
 import { message, Modal } from "antd";
+import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { inboundService } from "@/features/inventory/api/inboundService";
 import { useInboundStore } from "../stores/useInboundStore";
 
 export const useInboundDetail = (id?: string) => {
@@ -14,7 +16,6 @@ export const useInboundDetail = (id?: string) => {
     workingItems,
     fetchDetail,
     updateWorkingItem,
-    submitReceipt,
     resetDetail,
   } = useInboundStore();
 
@@ -31,30 +32,25 @@ export const useInboundDetail = (id?: string) => {
   }, [id]);
 
   const handleSubmit = async () => {
-    // 1. Validation
-    const hasInput = workingItems.some((i) => (i.input_quantity || 0) > 0);
-    if (!hasInput) {
-      message.error("Vui lòng nhập số lượng cho ít nhất 1 sản phẩm!");
+    // 1. Lọc và Validate (Ví dụ: check thiếu Lô/Date)
+    const errors = workingItems.filter(
+      (i) => i.stock_management_type === "lot_date" && (i.input_quantity || 0) > 0 && (!i.input_lot || !i.input_expiry)
+    );
+    
+    if (errors.length > 0) {
+      message.error(`Thiếu Lô/Hạn sử dụng của ${errors.length} sản phẩm đang nhập!`);
       return;
     }
 
-    const invalidItems = workingItems.filter((i) => {
-      if ((i.input_quantity || 0) > 0) {
-        if (i.stock_management_type === "lot_date") {
-          if (!i.input_lot || !i.input_expiry) return true;
-        }
-      }
-      return false;
-    });
-
-    if (invalidItems.length > 0) {
-      message.error(
-        `Sản phẩm "${invalidItems[0].product_name}" yêu cầu nhập Lô & Hạn sử dụng!`
-      );
-      return;
+    // 2. Lọc chỉ lấy những món có nhập số lượng > 0
+    const itemsToReceive = workingItems.filter((i) => (i.input_quantity || 0) > 0);
+    
+    if (itemsToReceive.length === 0) {
+       message.warning("Vui lòng nhập số lượng cho ít nhất 1 sản phẩm.");
+       return;
     }
 
-    // 2. Submit
+    // 3. Submit
     Modal.confirm({
       title: "Xác nhận Nhập Kho",
       content: "Bạn có chắc chắn muốn xác nhận phiếu nhập này?",
@@ -62,11 +58,31 @@ export const useInboundDetail = (id?: string) => {
         if (!id) return;
         setIsSubmitting(true);
         try {
-          await submitReceipt(parseInt(id), 1);
-          message.success("Nhập kho thành công!");
+          // 4. Map Payload chuẩn cho process_inbound_receipt
+          const payload = {
+            p_po_id: Number(id),
+            p_warehouse_id: 1, // Default hoặc lấy từ context
+            p_items: itemsToReceive.map((item) => {
+              const i = item as any;
+              return {
+                product_id: i.product_id,
+                quantity: i.input_quantity || 0,
+                unit: i.uom || i.unit || "Hộp", // Quan trọng: Truyền đúng Đơn vị để DB tính quy đổi
+                unit_price: i.unit_price || i.final_unit_cost || 0,
+                lot_number: i.input_lot || "DEFAULT", // Tránh null lỗi DB
+                expiry_date: i.input_expiry ? dayjs(i.input_expiry).format("YYYY-MM-DD") : "2099-12-31",
+              };
+            }),
+          };
+
+          // 5. GỌI ĐÚNG SERVICE MỚI
+          await inboundService.submitReceipt(payload);
+
+          message.success("Nhập kho thành công! Hệ thống đã tự động tính quy đổi và cộng Tồn kho.");
           navigate("/inventory/inbound");
         } catch (error: any) {
-          message.error(error.message || "Lỗi nhập kho");
+          console.error(error);
+          message.error("Lỗi nhập kho: " + error.message);
         } finally {
           setIsSubmitting(false);
         }
