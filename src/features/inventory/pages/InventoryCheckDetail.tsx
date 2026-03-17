@@ -15,8 +15,8 @@ import {
   Button,
   Typography,
   InputNumber,
-  Row,
-  Col,
+  //Row,
+  //Col,
   Tag,
   Space,
   message,
@@ -165,12 +165,10 @@ export const InventoryCheckDetail = () => {
   }, [transcript, activeItemId, items]);
   // --- VOICE LOGIC END ---
 
-  // [FIXED FINAL] QuantityInput Optimized (Local State + No Bubble)
+  // [FIXED] QuantityInput Optimized for Mobile
   const QuantityInput = ({ label, value, onChange, max }: any) => {
-    // [NEW] Local State để gõ mượt
     const [localValue, setLocalValue] = useState<number | null>(value);
 
-    // Sync khi props value thay đổi từ bên ngoài (VD: bấm nút + - hoặc store update)
     useEffect(() => {
       setLocalValue(value);
     }, [value]);
@@ -182,37 +180,22 @@ export const InventoryCheckDetail = () => {
     };
 
     return (
-      <div style={{ marginBottom: 12 }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 500 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#555', flex: 1 }}>
           {label}
         </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            border: "1px solid #d9d9d9",
-            borderRadius: 8,
-            overflow: "hidden",
-            background: "#fff",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", border: "1px solid #d9d9d9", borderRadius: 4, overflow: "hidden", background: "#fff", height: 36 }}>
           <Button
             type="text"
             icon={<MinusOutlined />}
-            onClick={() => onChange(Math.max(0, (value || 0) - 1))} // Nút +/- vẫn gọi trực tiếp để update ngay (props change -> useEffect sync local)
-            style={{
-              height: 52,
-              width: 52,
-              background: "#f5f5f5",
-              borderRadius: 0,
-              borderRight: "1px solid #eee",
-            }}
+            onClick={() => onChange(Math.max(0, (value || 0) - 1))}
+            style={{ height: 36, width: 36, background: "#f5f5f5", borderRadius: 0, borderRight: "1px solid #eee", padding: 0 }}
           />
 
           <InputNumber
             value={localValue}
-            onChange={(val) => setLocalValue(val)} // Chỉ update local state -> KHÔNG GÂY RENDER CHA
-            onBlur={commitChange} // Rời chuột mới update Store -> Render cha
+            onChange={(val) => setLocalValue(val)}
+            onBlur={commitChange}
             onPressEnter={(e) => {
               commitChange();
               (e.target as HTMLInputElement).blur();
@@ -222,16 +205,7 @@ export const InventoryCheckDetail = () => {
             controls={false}
             inputMode="numeric"
             type="number"
-            style={{
-              flex: 1,
-              textAlign: "center",
-              border: "none",
-              boxShadow: "none",
-              fontSize: 24,
-              fontWeight: "bold",
-              height: 52,
-              paddingTop: 10,
-            }}
+            style={{ width: 55, textAlign: "center", border: "none", boxShadow: "none", fontSize: 16, fontWeight: "bold", paddingTop: 2 }}
             onFocus={(e) => e.target.select()}
           />
 
@@ -239,19 +213,14 @@ export const InventoryCheckDetail = () => {
             type="text"
             icon={<PlusOutlined />}
             onClick={() => onChange((value || 0) + 1)}
-            style={{
-              height: 52,
-              width: 52,
-              background: "#f5f5f5",
-              borderRadius: 0,
-              borderLeft: "1px solid #eee",
-            }}
+            style={{ height: 36, width: 36, background: "#f5f5f5", borderRadius: 0, borderLeft: "1px solid #eee", padding: 0 }}
           />
         </div>
       </div>
     );
   };
 
+  // [FIXED] TrackingInput with stopPropagation
   const TrackingInput = ({ label, value, type, onChange, disabled }: any) => {
     const [localValue, setLocalValue] = useState<string | null>(value);
 
@@ -263,10 +232,10 @@ export const InventoryCheckDetail = () => {
     };
 
     return (
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12 }} onClick={(e) => e.stopPropagation()}> 
          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>{label}</div>
          <Input
-            size="large"
+            size="middle" // Đổi từ large sang middle cho gọn
             type={type}
             value={localValue || ""}
             onChange={(e) => setLocalValue(e.target.value)}
@@ -384,60 +353,29 @@ export const InventoryCheckDetail = () => {
               </span>
             </div>
 
-            {/* Dòng Input (Nhập liệu kép) */}
-            <Row gutter={12}>
+            {/* Vùng Nhập liệu (List View Dàn ngang siêu gọn) */}
+            <div style={{ borderTop: "1px dashed #e8e8e8", margin: "8px -10px 0 -10px", padding: "10px 10px 0 10px" }}>
               {item.wholesale_unit_name && item.wholesale_unit_rate > 1 && (
-                <Col span={item.retail_unit_name && item.retail_unit_name !== item.wholesale_unit_name ? 8 : 12}>
-                  <QuantityInput
-                    label={`SL ${item.wholesale_unit_name}`}
-                    value={item.input_wholesale_qty}
-                    onChange={(val: number) => onUpdateQuantity(item.id, { wholesale_qty: val })}
-                    max={99999}
-                  />
-                </Col>
+                 <QuantityInput label={`Hộp/Thùng (${item.wholesale_unit_name})`} value={item.input_wholesale_qty} onChange={(val: number) => onUpdateQuantity(item.id, { wholesale_qty: val })} max={99999} />
               )}
-              
               {item.retail_unit_name && item.retail_unit_rate > 1 && item.retail_unit_name !== item.wholesale_unit_name && (
-                <Col span={item.wholesale_unit_name ? 8 : 12}>
-                  <QuantityInput
-                    label={`SL ${item.retail_unit_name}`}
-                    value={item.input_retail_qty}
-                    onChange={(val: number) => onUpdateQuantity(item.id, { retail_qty: val })}
-                    max={
-                      item.wholesale_unit_rate > item.retail_unit_rate 
-                        ? Math.floor(item.wholesale_unit_rate / item.retail_unit_rate) - 1 
-                        : 99999
-                    }
-                  />
-                </Col>
+                 <QuantityInput label={`Vỉ/Bịch (${item.retail_unit_name})`} value={item.input_retail_qty} onChange={(val: number) => onUpdateQuantity(item.id, { retail_qty: val })} max={item.wholesale_unit_rate > item.retail_unit_rate ? Math.floor(item.wholesale_unit_rate / item.retail_unit_rate) - 1 : 99999} />
               )}
-              
-              <Col span={
-                (item.wholesale_unit_name && item.retail_unit_name && item.retail_unit_name !== item.wholesale_unit_name) ? 8 : 
-                (item.wholesale_unit_name || item.retail_unit_name) ? 12 : 24
-              }>
-                <QuantityInput
-                  label={`SL ${item.base_unit_name || item.unit}`}
-                  value={item.input_base_qty}
-                  onChange={(val: number) => onUpdateQuantity(item.id, { base_qty: val })}
-                  max={item.retail_unit_rate > 1 ? item.retail_unit_rate - 1 : 99999}
-                />
-              </Col>
-            </Row>
+              <QuantityInput label={`Lẻ (${item.base_unit_name || item.unit})`} value={item.input_base_qty} onChange={(val: number) => onUpdateQuantity(item.id, { base_qty: val })} max={item.retail_unit_rate > 1 ? item.retail_unit_rate - 1 : 99999} />
+            </div>
 
-            {/* Lô / Hạn Sử Dụng - Dùng TrackingInput */}
-            <div style={{ marginTop: 12, padding: "12px", background: "#f0f5ff", borderRadius: 8, border: "1px solid #adc6ff" }}>
-              <Row gutter={12}>
-                <Col xs={24} sm={12}>
+            {/* Lô / Hạn Sử Dụng - Dàn trên 1 hàng ngang */}
+            <div style={{ background: "#f0f5ff", borderRadius: 6, padding: 8, marginTop: 4, display: 'flex', gap: 12, alignItems: 'center' }}>
+               <div style={{ flex: 1 }}>
                    <TrackingInput 
-                      label="Số Lô (Gõ để sửa)" 
+                      label="Số Lô" 
                       type="text" 
                       value={item.batch_code} 
                       onChange={(val: string) => onUpdateQuantity(item.id, {}, { lot_number: val })}
                       disabled={!canDelete}
                    />
-                </Col>
-                <Col xs={24} sm={12}>
+               </div>
+               <div style={{ flex: 1 }}>
                    <TrackingInput 
                       label="Hạn SD" 
                       type="date" 
@@ -445,18 +383,17 @@ export const InventoryCheckDetail = () => {
                       onChange={(val: string) => onUpdateQuantity(item.id, {}, { expiry_date: val ? new Date(val).toISOString() : null })}
                       disabled={!canDelete}
                    />
-                </Col>
-              </Row>
-              
-              {/* NÚT TÁCH LÔ MỚI */}
-              {canDelete && (
-                  <div style={{ textAlign: 'right' }}>
-                      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); useInventoryCheckStore.getState().splitCheckItem(item.id, item.product_id); }}>
-                         Tách thêm Lô khác
-                      </Button>
-                  </div>
-              )}
+               </div>
             </div>
+            
+            {/* NÚT TÁCH LÔ MỚI */}
+            {canDelete && (
+                <div style={{ textAlign: 'right', marginTop: 8 }}>
+                    <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); useInventoryCheckStore.getState().splitCheckItem(item.id, item.product_id); }}>
+                       Tách thêm Lô khác
+                    </Button>
+                </div>
+            )}
 
             {/* Dòng Chênh lệch (Feedback Real-time) */}
             <div style={{ marginTop: 8, textAlign: "right", height: 20 }}>
