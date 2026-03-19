@@ -4,6 +4,8 @@ import {
   SaveOutlined,
   SendOutlined,
   DollarCircleOutlined,
+  PrinterOutlined,
+  CloseCircleOutlined,
 } from "@ant-design/icons";
 import { Affix, Card, Row, Col, Space, Button, Typography, Tag } from "antd";
 import React from "react";
@@ -19,6 +21,8 @@ interface Props {
   loading: boolean;
   onSave: () => void;
   onSubmit: () => void;
+  onCancelOrder: () => void; // [NEW] Hàm hủy đơn
+  onPrint: () => void; // [NEW] Hàm in
   onRequestPayment: () => void; // Hàm mới
   onCalculateInbound: () => void; // [NEW] V34
 }
@@ -30,11 +34,13 @@ const POHeaderAction: React.FC<Props> = ({
   loading,
   onSave,
   onSubmit,
+  onCancelOrder,
+  onPrint,
   onRequestPayment,
   onCalculateInbound,
 }) => {
   const navigate = useNavigate();
-
+const canCancel = poStatus === 'DRAFT' || poStatus === 'PENDING';
   const getStatusTag = (status?: string) => {
     switch (status) {
       case "DRAFT":
@@ -55,26 +61,63 @@ const POHeaderAction: React.FC<Props> = ({
       <Card
         styles={{ body: { padding: "12px 24px" } }}
         variant="borderless"
-        style={{ marginBottom: 16, borderRadius: 0 }}
+        style={{ marginBottom: 16, borderRadius: 0, zIndex: 99 }}
       >
         <Row justify="space-between" align="middle">
+          {/* CỘT TRÁI: Các nút điều hướng và thông tin cơ bản */}
           <Col>
-            <Space>
+            <Space size="middle" align="center">
               <Button
                 icon={<ArrowLeftOutlined />}
                 onClick={() => navigate("/purchase-orders")}
               >
                 Quay lại
               </Button>
+              
               <Title level={5} style={{ margin: 0 }}>
                 {isEditMode ? `Đơn hàng: ${poCode}` : "Tạo Đơn Mua Hàng Mới"}
               </Title>
+              
               {getStatusTag(poStatus)}
+
+              {/* [FIX]: Nút In chỉ hiện khi Đã tạo đơn (isEditMode). Bỏ viền đỏ. */}
+              {/* {isEditMode && (
+                 <Button icon={<PrinterOutlined />} onClick={onPrint}>
+                   In đơn
+                 </Button>
+              )} */}
             </Space>
           </Col>
+
+          {/* CỘT PHẢI: Các nút Thao tác (Action) chính */}
           <Col>
-            <Space>
-              {/* Chỉ hiện nút Lưu/Đặt hàng khi ở trạng thái Nháp */}
+            <Space size="small">
+              {isEditMode && (
+                 <Button icon={<PrinterOutlined />} onClick={onPrint}
+                  style={{ 
+                      boxShadow: '0 0 8px rgba(101, 194, 248, 0.4)', // Viền phát sáng màu đỏ mờ
+                      borderColor: '#4db5ffff' 
+                   }}
+                 >
+                   In đơn
+                 </Button>
+              )}
+              {/* Nút Hủy: Chỉ hiện khi đang sửa đơn VÀ đơn ở trạng thái cho phép hủy */}
+              {isEditMode && canCancel && (
+                <Button 
+                   danger 
+                   icon={<CloseCircleOutlined />} 
+                   onClick={onCancelOrder} 
+                   style={{ 
+                      boxShadow: '0 0 8px rgba(255, 77, 79, 0.4)', // Viền phát sáng màu đỏ mờ
+                      borderColor: '#ff4d4f' 
+                   }}
+                >
+                   Hủy đơn
+                </Button>
+              )}
+
+              {/* Nút Lưu Nháp và Đặt Hàng: Hiện khi tạo mới hoặc khi đơn đang là Nháp */}
               {(poStatus === "DRAFT" || !isEditMode) && (
                 <>
                   <Button
@@ -84,12 +127,12 @@ const POHeaderAction: React.FC<Props> = ({
                   >
                     Lưu Nháp
                   </Button>
+                  
                   <Button
                     type="primary"
                     icon={<SendOutlined />}
                     onClick={onSubmit}
                     loading={loading}
-                    //disabled={!isEditMode}
                   >
                     Đặt Hàng
                   </Button>
@@ -108,7 +151,7 @@ const POHeaderAction: React.FC<Props> = ({
                 </Button>
               )}
 
-              {/* [NEW] Nút Tính toán & Nhập kho (V34) - Hiện khi Pending hoặc Shipping - ENABLED for V35 */}
+              {/* Nút Tính toán & Nhập kho (V34) - Hiện khi Pending hoặc Shipping */}
               {(poStatus === "PENDING" || poStatus === "SHIPPING") && (
                 <Button
                   type="primary"
@@ -116,7 +159,7 @@ const POHeaderAction: React.FC<Props> = ({
                   icon={<DollarCircleOutlined />}
                   onClick={onCalculateInbound}
                 >
-                  Tính Giá vốn
+                  Tính Giá vốn & Nhập kho
                 </Button>
               )}
             </Space>

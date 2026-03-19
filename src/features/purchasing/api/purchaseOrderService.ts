@@ -145,6 +145,17 @@ export const purchaseOrderService = {
     return true;
   },
 
+  // 6b. [NEW] Hủy PO (Chuyển trạng thái về CANCELLED)
+  async cancelPO(id: number) {
+    const { error } = await supabase
+      .from("purchase_orders")
+      .update({ status: "CANCELLED" })
+      .eq("id", id);
+
+    if (error) throw error;
+    return true;
+  },
+
   // 7. Xóa Hàng Loạt
   async bulkDeleteOrders(ids: React.Key[]) {
     const { error } = await supabase

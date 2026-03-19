@@ -1,5 +1,5 @@
 // src/pages/purchasing/hooks/usePurchaseOrderLogic.ts
-import { Form, App } from "antd";
+import { Form, App, Modal } from "antd";
 import dayjs from "dayjs";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -488,6 +488,31 @@ export const usePurchaseOrderLogic = () => {
       setLoading(false);
     }
   };
+  // Thêm vào bên trong usePurchaseOrderLogic
+  const cancelOrder = async () => {
+    if (!id) return;
+    Modal.confirm({
+      title: "Xác nhận hủy đơn hàng?",
+      content: "Đơn hàng sẽ chuyển sang trạng thái Đã Hủy và không thể phục hồi. Bạn có chắc chắn muốn hủy?",
+      okText: "Đồng ý Hủy",
+      okType: "danger",
+      cancelText: "Thoát",
+      onOk: async () => {
+        try {
+          await purchaseOrderService.cancelPO(Number(id));
+          message.success("Đã hủy đơn hàng!");
+          
+          // Gọi lại hàm fetch dữ liệu chi tiết của bạn (VD: initData() hoặc fetchDetail())
+          // Thay 'initData' bằng tên hàm load dữ liệu chi tiết thực tế trong hook của bạn
+          window.location.reload(); // Tạm thời dùng reload nếu không chắc chắn tên hàm fetch data
+        } catch (error: any) {
+          message.error("Lỗi hủy đơn: " + error.message);
+        }
+      }
+    });
+  };
+
+  // Đừng quên return cancelOrder ở cuối hook
 
   return {
     form,
@@ -518,5 +543,6 @@ export const usePurchaseOrderLogic = () => {
     handleConfirmFinancials,
     handleShippingFeeChange,
     handlePartnerChange,
+    cancelOrder,
   };
 };

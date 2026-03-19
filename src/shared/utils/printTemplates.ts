@@ -700,3 +700,127 @@ export const printLabResult = (data: any) => {
     win.print();
   }, 500);
 };
+
+// 9. IN ĐƠN MUA HÀNG (PURCHASE ORDER - A4)
+export const printPurchaseOrder = (order: any) => {
+  const companyInfo = {
+    name: "CÔNG TY TNHH DƯỢC - TBYT NAM VIỆT",
+    address: "Số 17, Đường Bắc Sơn, Xã Hữu Lũng, Lạng Sơn",
+    website: "www.DuocNamViet.com",
+    phone: "0585.123.888",
+  };
+
+  const rows = order.items
+    ?.map(
+      (item: any, index: number) => `
+    <tr>
+      <td style="text-align: center;">${index + 1}</td>
+      <td>
+        <div style="font-weight: bold;">${item.product_name || item.name || item.product?.name || "Tên sản phẩm"}</div>
+        ${item.is_bonus ? '<div style="font-size: 11px; color: #cf1322;">(Hàng tặng/KM)</div>' : ''}
+      </td>
+      <td style="text-align: center;">${item.uom || item.unit || item.uom_ordered || "-"}</td>
+      <td style="text-align: center; font-weight: bold;">${item.quantity_ordered || item.quantity || 0}</td>
+      <td style="text-align: right;">${Number(item.unit_price || 0).toLocaleString()}</td>
+      <td style="text-align: right;">${Number((item.unit_price || 0) * (item.quantity_ordered || item.quantity || 0)).toLocaleString()}</td>
+    </tr>
+  `
+    )
+    .join("") || "";
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="vi">
+      <head>
+        <meta charset="UTF-8">
+        <title>In Đơn Đặt Hàng ${order.code}</title>
+        <style>
+          body { font-family: 'Times New Roman', serif; font-size: 14px; line-height: 1.4; padding: 20px; color: #000; }
+          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+          .company-name { font-size: 16px; font-weight: bold; text-transform: uppercase; }
+          .title { text-align: center; font-size: 22px; font-weight: bold; margin: 20px 0 10px 0; text-transform: uppercase; letter-spacing: 1px; }
+          .po-code { text-align: center; font-size: 14px; margin-bottom: 20px; font-style: italic; }
+          
+          .info-table { width: 100%; margin-bottom: 20px; }
+          .info-table td { padding: 4px 0; vertical-align: top; }
+          
+          .product-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          .product-table th, .product-table td { border: 1px solid #000; padding: 6px 8px; font-size: 14px; }
+          .product-table th { background-color: #f5f5f5; text-align: center; font-weight: bold; }
+          
+          .total-section { width: 40%; margin-left: auto; border-top: 2px solid #000; padding-top: 10px; }
+          .total-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+          .final-row { font-size: 16px; font-weight: bold; }
+          
+          .footer { margin-top: 50px; display: flex; justify-content: space-between; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="company-name">${companyInfo.name}</div>
+            <div><b>ĐC:</b> ${companyInfo.address}</div>
+            <div><b>Web:</b> ${companyInfo.website} | <b>SĐT:</b> ${companyInfo.phone}</div>
+          </div>
+        </div>
+
+        <div class="title">ĐƠN ĐẶT HÀNG</div>
+        <div class="po-code">Số: ${order.code}</div>
+
+        <table class="info-table">
+          <tr>
+            <td width="15%"><b>Nhà cung cấp:</b></td>
+            <td>${order.supplier_name || "..."}</td>
+            <td width="15%"><b>Điện thoại:</b></td>
+            <td>${order.supplier_phone || "..."}</td>
+          </tr>
+          <tr>
+            <td><b>Địa chỉ:</b></td>
+            <td colspan="3">${order.supplier_address || "..."}</td>
+          </tr>
+          <tr>
+            <td><b>Ghi chú:</b></td>
+            <td colspan="3">${order.note || "..."}</td>
+          </tr>
+        </table>
+
+        <table class="product-table" cellspacing="0">
+          <thead>
+            <tr>
+              <th width="5%">STT</th>
+              <th>Tên hàng hóa</th>
+              <th width="10%">ĐVT</th>
+              <th width="10%">SL</th>
+              <th width="15%">Đơn giá</th>
+              <th width="15%">Thành tiền</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+
+        <div class="total-section">
+           <div class="total-row"><span>Cộng tiền hàng:</span> <span>${Number(order.sub_total || 0).toLocaleString()} ₫</span></div>
+           <div class="total-row"><span>Chiết khấu:</span> <span>- ${Number(order.discount_amount || 0).toLocaleString()} ₫</span></div>
+           <div class="total-row"><span>Phí vận chuyển:</span> <span>+ ${Number(order.shipping_fee || 0).toLocaleString()} ₫</span></div>
+           <div class="total-row final-row" style="margin-top: 10px;">
+               <span>TỔNG CỘNG:</span> 
+               <span>${Number(order.final_amount || 0).toLocaleString()} ₫</span>
+           </div>
+        </div>
+        
+        <div class="footer">
+          <div style="width: 50%">
+            <b>Nhà Cung Cấp</b><br/>(Ký, họ tên, đóng dấu)
+          </div>
+          <div style="width: 50%">
+            <b>Người lập đơn</b><br/>(Ký, họ tên)<br/><br/><br/><br/>
+            ${order.created_by_name || ""}
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+  
+  // Gọi hàm triggerPrint có sẵn ở đầu file printTemplates.ts
+  triggerPrint(html);
+};

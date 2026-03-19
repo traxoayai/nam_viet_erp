@@ -117,11 +117,11 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
                 gap: 8,
               }}
             >
-              <Form.Item label="ĐVT" style={{ marginBottom: 0 }}>
+              <Form.Item label="ĐVT" style={{ width: 250, marginBottom: 0 }}>
                 {renderUnitSelect(item, idx)}
               </Form.Item>
 
-              <Form.Item label="SL" style={{ marginBottom: 0 }}>
+              <Form.Item label="SL" style={{ width: 250, marginBottom: 0 }}>
                 <InputNumber
                   value={item.quantity}
                   min={1}
@@ -191,7 +191,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
     },
     {
       title: "ĐVT",
-      width: 120,
+      width: 150,
       render: (_: any, r: POItem, idx: number) => renderUnitSelect(r, idx),
     },
     {

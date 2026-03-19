@@ -9,6 +9,7 @@ import POHeaderAction from "./components/POHeaderAction";
 import POPaymentSummary from "./components/POPaymentSummary";
 import POProductTable from "./components/POProductTable";
 import { usePurchaseOrderLogic } from "./hooks/usePurchaseOrderLogic";
+import { printPurchaseOrder } from "@/shared/utils/printTemplates";
 
 import { searchProductsForPurchase } from "@/features/product/api/productService";
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal";
@@ -20,9 +21,28 @@ const PurchaseOrderDetailContent = () => {
   const logic = usePurchaseOrderLogic();
   const navigate = useNavigate();
   const { id } = useParams();
+  const handlePrintPO = () => {
+    // Tổng hợp dữ liệu từ logic để đưa vào template in
+    const poDataForPrint = {
+      code: logic.poCode,
+      note: logic.form.getFieldValue("note"),
+      supplier_name: logic.supplierInfo?.name,
+      supplier_phone: logic.supplierInfo?.phone,
+      supplier_address: logic.supplierInfo?.address,
+      items: logic.itemsList,
+      
+      // [FIX ERROR TS2339 & TS2551]: Lấy đúng key từ financials và form
+      sub_total: logic.financials.subtotal, 
+      discount_amount: logic.form.getFieldValue("discount_amount") || 0,
+      shipping_fee: logic.form.getFieldValue("shipping_fee") || 0,
+      final_amount: logic.financials.final,
+    };
+    
+    printPurchaseOrder(poDataForPrint);
+  };
 
   return (
-    <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
+    <Layout style={{ minHeight: "100vh", background: "transparent" }}>
       <Form form={logic.form} layout="vertical" onFinish={logic.onFinish}>
         <POHeaderAction
           isEditMode={logic.isEditMode}
@@ -31,22 +51,26 @@ const PurchaseOrderDetailContent = () => {
           loading={logic.loading}
           onSave={() => logic.form.submit()}
           onSubmit={logic.confirmOrder}
+          onCancelOrder={logic.cancelOrder} 
+          onPrint={handlePrintPO} 
           onRequestPayment={logic.requestPayment}
           onCalculateInbound={() => {
             navigate(`/purchase-orders/costing/${id}`);
           }}
         />
 
+        {/* [FIXED] Mở rộng max-width từ 1400px thành 100% full màn hình */}
         <Content
           style={{
-            maxWidth: 1400,
+            maxWidth: "100%", 
             margin: "0 auto",
             width: "100%",
-            padding: "0 12px",
+            padding: "0 24px", // Tăng lề 2 bên lên một chút cho đẹp
           }}
         >
-          <Row gutter={[16, 16]}>
-            <Col xs={24} lg={17}>
+          <Row gutter={[24, 24]}>
+            {/* [FIXED] Tăng tỷ lệ cột Trái: lg={18} (màn thường), xl={19} (màn siêu to) */}
+            <Col xs={24} lg={18} xl={19}>
               <POGeneralInfo
                 suppliers={logic.suppliers}
                 supplierInfo={logic.supplierInfo}
@@ -94,7 +118,8 @@ const PurchaseOrderDetailContent = () => {
               </div>
             </Col>
 
-            <Col xs={24} lg={7}>
+            {/* [FIXED] Thu hẹp cột Phải (Thanh toán): lg={6} (màn thường), xl={5} (màn siêu to) */}
+            <Col xs={24} lg={6} xl={5}>
               <POPaymentSummary financials={logic.financials} />
             </Col>
           </Row>
