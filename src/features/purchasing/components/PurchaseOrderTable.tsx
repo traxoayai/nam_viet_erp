@@ -76,9 +76,8 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
       render: (text: string) => (
         <div
           style={{
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
+            whiteSpace: "normal",
+            wordWrap: "break-word",
           }}
         >
           {text}
