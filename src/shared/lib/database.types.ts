@@ -1506,6 +1506,7 @@ export type Database = {
       finance_transactions: {
         Row: {
           amount: number
+          bank_reference_id: string | null
           business_type: Database["public"]["Enums"]["business_type"]
           cash_tally: Json | null
           category_id: number | null
@@ -1530,6 +1531,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          bank_reference_id?: string | null
           business_type?: Database["public"]["Enums"]["business_type"]
           cash_tally?: Json | null
           category_id?: number | null
@@ -1554,6 +1556,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          bank_reference_id?: string | null
           business_type?: Database["public"]["Enums"]["business_type"]
           cash_tally?: Json | null
           category_id?: number | null
@@ -6225,6 +6228,10 @@ export type Database = {
       }
       process_inbound_receipt: {
         Args: { p_items: Json; p_po_id: number; p_warehouse_id: number }
+        Returns: Json
+      }
+      process_incoming_bank_transfer: {
+        Args: { p_amount: number; p_bank_ref_id: string; p_memo: string }
         Returns: Json
       }
       process_sales_invoice_deduction: {

@@ -1,9 +1,6 @@
 // src/pages/quick/QuickPricePage.tsx
 import {
-  UploadOutlined,
-  ThunderboltOutlined,
-  CheckCircleOutlined,
-  DownloadOutlined,
+
 } from "@ant-design/icons";
 import {
   Table,
@@ -21,14 +18,24 @@ import {
   Col,
   Select,
   Pagination,
+  Grid,
+  Avatar,
 } from "antd";
+import {
+  UploadOutlined,
+  ThunderboltOutlined,
+  CheckCircleOutlined,
+  DownloadOutlined,
+  FileImageOutlined,
+  SyncOutlined,
+} from "@ant-design/icons";
 import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { supabase } from "@/shared/lib/supabaseClient";
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { Search } = Input;
 const { Option } = Select;
 
@@ -66,7 +73,12 @@ const parseUnitType = (val: string): "amount" | "percent" => {
   return "amount";
 };
 
+const { useBreakpoint } = Grid;
+
 const QuickPricePage: React.FC = () => {
+  const screens = useBreakpoint();
+  const isMobile = screens.xs || (screens.sm && !screens.md);
+
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 20,
@@ -621,8 +633,92 @@ const QuickPricePage: React.FC = () => {
     },
   ];
 
+  const renderMobileCard = (item: ProductPriceRow) => (
+    <Card 
+      key={item.key} 
+      size="small" 
+      style={{ marginBottom: 12, borderRadius: 12, border: item.is_dirty ? '1px solid #1890ff' : '1px solid #f0f0f0' }}
+      styles={{ body: { padding: 12 } }}
+    >
+      {/* Header Card: Ảnh + Tên + Nút Save */}
+      <Row wrap={false} align="middle" justify="space-between" style={{ marginBottom: 12 }}>
+        <Col flex="auto">
+          <Space>
+            {item.imageUrl ? <Avatar shape="square" size={40} src={item.imageUrl} /> : <Avatar shape="square" size={40} icon={<FileImageOutlined />} />}
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.2 }}>{item.name}</div>
+              <div style={{ fontSize: 12, color: '#888' }}>SKU: {item.sku}</div>
+            </div>
+          </Space>
+        </Col>
+        <Col>
+          <Button 
+            type="primary" 
+            shape="circle" 
+            icon={savingId === item.id ? <SyncOutlined spin /> : <CheckCircleOutlined />} 
+            disabled={!item.is_dirty}
+            onClick={() => handleSaveRow(item)}
+          />
+        </Col>
+      </Row>
+
+      {/* Body Card: Các Input xếp dọc 100% width */}
+      <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8 }}>
+        <Row gutter={[8, 8]}>
+          <Col span={24}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Giá Vốn ({item.wholesale_unit || 'ĐV Buôn'})</Text>
+            <InputNumber 
+              style={{ width: '100%' }} 
+              value={item.actual_cost} 
+              formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+              parser={(value: any) => value?.replace(/\$\s?|(,*)/g, "")}
+              onChange={(val) => handleCellChange(item.key, "actual_cost", val)} 
+            />
+          </Col>
+
+          {/* Khối Bán Lẻ */}
+          <Col span={12}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Lãi Lẻ</Text>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber style={{ width: '50%' }} value={item.retail_margin} onChange={(val) => handleCellChange(item.key, "retail_margin", val)} />
+              <Select style={{ width: '50%' }} value={item.retail_margin_type} onChange={(val) => handleCellChange(item.key, "retail_margin_type", val)}>
+                <Option value="percent">%</Option><Option value="amount">VNĐ</Option>
+              </Select>
+            </Space.Compact>
+          </Col>
+          <Col span={12}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Giá Lẻ ({item.retail_unit_name || "ĐV Lẻ"})</Text>
+            <div style={{ fontWeight: "bold", color: "#1677ff", marginTop: 4, fontSize: 16 }}>
+              {new Intl.NumberFormat("vi-VN").format(item.retail_price)} ₫
+            </div>
+          </Col>
+
+          {/* Khối Bán Buôn */}
+          <Col span={12}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Lãi Buôn</Text>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber style={{ width: '50%' }} value={item.wholesale_margin} onChange={(val) => handleCellChange(item.key, "wholesale_margin", val)} />
+              <Select style={{ width: '50%' }} value={item.wholesale_margin_type} onChange={(val) => handleCellChange(item.key, "wholesale_margin_type", val)}>
+                <Option value="percent">%</Option><Option value="amount">VNĐ</Option>
+              </Select>
+            </Space.Compact>
+          </Col>
+          <Col span={12}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Giá Buôn ({item.wholesale_unit || "ĐV Buôn"})</Text>
+            <div style={{ fontWeight: "bold", color: "#52c41a", marginTop: 4, fontSize: 16 }}>
+              {new Intl.NumberFormat("vi-VN").format(item.wholesale_price)} ₫
+            </div>
+          </Col>
+        </Row>
+      </div>
+    </Card>
+  );
+
   return (
-    <Card>
+    <Card
+      style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}
+      styles={{ body: { display: 'flex', flexDirection: 'column', flex: 1, padding: '16px', overflow: 'hidden' } }}
+    >
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
           <Title level={4}>
@@ -657,18 +753,27 @@ const QuickPricePage: React.FC = () => {
         </Col>
       </Row>
 
-      <Table
-        dataSource={products}
-        columns={columns}
-        rowKey="key"
-        loading={loading}
-        pagination={false}
-        scroll={{ x: 1300, y: 600 }}
-        size="small"
-        bordered
-      />
+      {/* Khối Nội Dung */}
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        {isMobile ? (
+          <div style={{ paddingBottom: 60 }}>
+            {products.map(item => renderMobileCard(item))}
+          </div>
+        ) : (
+          <Table
+            dataSource={products}
+            columns={columns}
+            rowKey="key"
+            loading={loading}
+            pagination={false}
+            scroll={{ x: 1300, y: 'calc(100vh - 280px)' }}
+            size="small"
+            bordered
+          />
+        )}
+      </div>
       <Pagination
-        style={{ marginTop: 16, textAlign: "right" }}
+        style={{ paddingTop: 16, textAlign: "right" }}
         current={pagination.current}
         pageSize={pagination.pageSize}
         total={pagination.total}

@@ -24,6 +24,7 @@ import {
   Row,
   Col,
   Avatar,
+  Grid,
 } from "antd";
 import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
@@ -47,15 +48,26 @@ interface ProductRow {
   name: string;
   sku: string;
   imageUrl?: string;
-  retail_unit: string; // Đơn vị Lẻ (Base)
-  wholesale_unit: string; // Đơn vị Sỉ
-  conversion_rate: number; // Hệ số
   actual_cost: number;
-  is_dirty?: boolean; // Đã sửa chưa?
-  is_saving?: boolean; // Đang lưu?
+  
+  base_unit: string; // Đơn vị gốc (Rate luôn = 1)
+  
+  retail_unit: string; 
+  retail_rate: number; // 1 Lẻ = ? Base
+  
+  wholesale_unit: string;
+  wholesale_rate: number; // 1 Sỉ = ? Base
+
+  is_dirty?: boolean;
+  is_saving?: boolean;
 }
 
+const { useBreakpoint } = Grid;
+
 const QuickUnitPage: React.FC = () => {
+  const screens = useBreakpoint();
+  const isMobile = screens.xs || (screens.sm && !screens.md);
+
   // --- STATE ---
   // [UPDATE] Thêm state pagination
   const [pagination, setPagination] = useState({
@@ -111,19 +123,10 @@ const QuickUnitPage: React.FC = () => {
       const rows = data.map((p: any) => {
         const units = p.product_units || [];
 
-        // A. Ưu tiên 1: Lấy đúng Unit trong bảng con. Nếu không có mới lấy cột cũ
-        const baseUnitObj = units.find((u: any) => u.is_base || u.unit_type === "base" || u.conversion_rate === 1);
+        // Lấy đúng 3 unit từ DB
+        const baseUnitObj = units.find((u: any) => u.is_base || u.unit_type === "base");
         const retailUnitObj = units.find((u: any) => !u.is_base && u.unit_type === "retail");
-        const wholesaleUnitObj = units.find((u: any) => !u.is_base && (u.unit_type === "wholesale" || u.conversion_rate > 1));
-
-        // Logic Tên Đơn Vị Lẻ: (Base) -> (Retail Cũ) -> Viên
-        const baseUnitName = baseUnitObj?.unit_name || p.retail_unit || "Viên";
-        
-        // Logic Tên Đơn Vị Sỉ: (Wholesale) -> (Wholesale Cũ) -> Hộp
-        const wholesaleUnitName = wholesaleUnitObj?.unit_name || retailUnitObj?.unit_name || p.wholesale_unit || "Hộp";
-
-        // Logic Hệ số: Lấy của Sỉ -> (items_per_carton cũ) -> 1
-        const conversionRate = wholesaleUnitObj?.conversion_rate || retailUnitObj?.conversion_rate || p.items_per_carton || 1;
+        const wholesaleUnitObj = units.find((u: any) => !u.is_base && u.unit_type === "wholesale");
 
         return {
           key: p.id,
@@ -132,9 +135,15 @@ const QuickUnitPage: React.FC = () => {
           sku: p.sku,
           imageUrl: p.image_url,
           actual_cost: p.actual_cost || 0,
-          retail_unit: baseUnitName,
-          wholesale_unit: wholesaleUnitName,
-          conversion_rate: conversionRate,
+          
+          base_unit: baseUnitObj?.unit_name || p.retail_unit || "Viên",
+          
+          retail_unit: retailUnitObj?.unit_name || "",
+          retail_rate: retailUnitObj?.conversion_rate || 1,
+          
+          wholesale_unit: wholesaleUnitObj?.unit_name || p.wholesale_unit || "",
+          wholesale_rate: wholesaleUnitObj?.conversion_rate || p.items_per_carton || 1,
+          
           is_dirty: false,
         };
       });
@@ -166,58 +175,52 @@ const QuickUnitPage: React.FC = () => {
       const currentDetail = await getProductDetails(row.id);
       const currentUnits = currentDetail.units || [];
 
-      // 2. Tìm ID của Unit Retail cũ (nếu có)
-      // Logic: Tìm cái nào đang là retail, hoặc là base, hoặc có rate = 1
-      const oldRetailUnit = currentUnits.find(
-        (u: any) =>
-          u.unit_type === "retail" || u.is_base || u.conversion_rate === 1
-      );
+      // Tìm ID cũ để update (tránh mất ID)
+      const oldBaseUnit = currentUnits.find((u: any) => u.unit_type === "base" || u.is_base);
+      const oldRetailUnit = currentUnits.find((u: any) => u.unit_type === "retail" && !u.is_base);
+      const oldWholesaleUnit = currentUnits.find((u: any) => u.unit_type === "wholesale" && !u.is_base);
 
-      // 3. Tìm ID của Unit Wholesale cũ (nếu có)
-      const oldWholesaleUnit = currentUnits.find(
-        (u: any) =>
-          u.unit_type === "wholesale" || (!u.is_base && u.conversion_rate > 1)
-      );
-
-      // 4. Chuẩn bị Object Đơn vị Lẻ (Base/Retail gộp làm 1)
-      const retailUnitObj = {
-        id: oldRetailUnit?.id, // [QUAN TRỌNG] Gắn ID cũ để update
-        unit_name: row.retail_unit,
-        unit_type: "retail",
+      // Tạo Base Unit
+      const baseUnitObj = {
+        id: oldBaseUnit?.id,
+        unit_name: row.base_unit || "Viên",
+        unit_type: "base",
         conversion_rate: 1,
         is_base: true,
         is_direct_sale: true,
-        price: row.actual_cost, // Gợi ý giá vốn base
+        price: row.actual_cost,
         product_id: row.id,
       };
 
-      // 5. Chuẩn bị Object Đơn vị Sỉ (Quy đổi)
-      const wholesaleUnitObj = {
-        id: oldWholesaleUnit?.id, // [QUAN TRỌNG] Gắn ID cũ để update
-        unit_name: row.wholesale_unit,
-        unit_type: "wholesale",
-        conversion_rate: row.conversion_rate,
+      // Tạo Retail Unit (Nếu có nhập)
+      const retailUnitObj = row.retail_unit ? {
+        id: oldRetailUnit?.id,
+        unit_name: row.retail_unit,
+        unit_type: "retail",
+        conversion_rate: row.retail_rate || 1,
         is_base: false,
         is_direct_sale: true,
-        price: 0, // Để 0 để Backend tự tính giá theo Margin
+        price: 0, 
         product_id: row.id,
-      };
+      } : null;
 
-      // 6. Giữ lại các đơn vị khác (Ví dụ: Thùng, Lốc... nếu đã định nghĩa trước đó)
-      // Logic: Lọc bỏ 2 thằng cũ mà mình vừa replace
-      const otherUnits = currentUnits.filter(
-        (u: any) => u.id !== oldRetailUnit?.id && u.id !== oldWholesaleUnit?.id
-      );
+      // Tạo Wholesale Unit (Nếu có nhập)
+      const wholesaleUnitObj = row.wholesale_unit ? {
+        id: oldWholesaleUnit?.id,
+        unit_name: row.wholesale_unit,
+        unit_type: "wholesale",
+        conversion_rate: row.wholesale_rate || 1,
+        is_base: false,
+        is_direct_sale: true,
+        price: 0,
+        product_id: row.id,
+      } : null;
 
-      // 7. Gom mảng units mới
-      const newUnits = [retailUnitObj, wholesaleUnitObj, ...otherUnits];
-
-      // 8. Tạo Payload chuẩn form upsert_product_with_units
+      // Gom mảng và lọc bỏ null
+      const newUnits = [baseUnitObj, retailUnitObj, wholesaleUnitObj].filter(Boolean);
+      
       const payload = {
         ...currentDetail,
-        retailUnit: row.retail_unit, // Sync legacy column
-        wholesaleUnit: row.wholesale_unit, // Sync legacy column
-        items_per_carton: row.conversion_rate, // Sync legacy column
         units: newUnits,
       };
 
@@ -519,58 +522,72 @@ const QuickUnitPage: React.FC = () => {
       render: (text: string) => <Text strong>{text}</Text>,
     },
     {
-      title: "Đơn vị Lẻ (Base)",
+      title: "Đơn vị Cơ Sở (Kho)",
+      dataIndex: "base_unit",
+      width: 120,
+      render: (text: string, record: ProductRow) => (
+        <Input
+          value={text}
+          onChange={(e) => handleCellChange(record.key, "base_unit", e.target.value)}
+          onBlur={() => handleBlur(record)}
+          style={{ borderColor: record.is_dirty ? "#1890ff" : undefined }}
+          placeholder="Viên"
+        />
+      ),
+    },
+    {
+      title: "Đơn vị Lẻ",
       dataIndex: "retail_unit",
-      width: 160,
+      width: 120,
       render: (text: string, record: ProductRow) => (
         <Input
           value={text}
-          onChange={(e) =>
-            handleCellChange(record.key, "retail_unit", e.target.value)
-          }
+          onChange={(e) => handleCellChange(record.key, "retail_unit", e.target.value)}
           onBlur={() => handleBlur(record)}
-          style={{
-            borderColor: record.is_dirty ? "#1890ff" : undefined,
-            backgroundColor: record.is_dirty ? "#e6f7ff" : undefined,
-          }}
-          placeholder="Viên/Lọ"
+          style={{ borderColor: record.is_dirty ? "#1890ff" : undefined }}
+          placeholder="Vỉ"
         />
       ),
     },
     {
-      title: "Đơn vị Sỉ (Quy đổi)",
-      dataIndex: "wholesale_unit",
-      width: 160,
-      render: (text: string, record: ProductRow) => (
-        <Input
-          value={text}
-          onChange={(e) =>
-            handleCellChange(record.key, "wholesale_unit", e.target.value)
-          }
-          onBlur={() => handleBlur(record)}
-          style={{
-            borderColor: record.is_dirty ? "#1890ff" : undefined,
-            backgroundColor: record.is_dirty ? "#e6f7ff" : undefined,
-          }}
-          placeholder="Hộp/Thùng"
-        />
-      ),
-    },
-    {
-      title: "Hệ số (1 Sỉ = ? Lẻ)",
-      dataIndex: "conversion_rate",
-      width: 160,
+      title: "Rate Lẻ",
+      dataIndex: "retail_rate",
+      width: 100,
       render: (val: number, record: ProductRow) => (
         <InputNumber
           value={val}
           min={1}
-          onChange={(v) => handleCellChange(record.key, "conversion_rate", v)}
+          onChange={(v) => handleCellChange(record.key, "retail_rate", v)}
           onBlur={() => handleBlur(record)}
-          style={{
-            width: "100%",
-            borderColor: record.is_dirty ? "#1890ff" : undefined,
-            backgroundColor: record.is_dirty ? "#e6f7ff" : undefined,
-          }}
+          style={{ width: "100%", borderColor: record.is_dirty ? "#1890ff" : undefined }}
+        />
+      ),
+    },
+    {
+      title: "Đơn vị Sỉ",
+      dataIndex: "wholesale_unit",
+      width: 120,
+      render: (text: string, record: ProductRow) => (
+        <Input
+          value={text}
+          onChange={(e) => handleCellChange(record.key, "wholesale_unit", e.target.value)}
+          onBlur={() => handleBlur(record)}
+          style={{ borderColor: record.is_dirty ? "#1890ff" : undefined }}
+          placeholder="Hộp"
+        />
+      ),
+    },
+    {
+      title: "Rate Sỉ",
+      dataIndex: "wholesale_rate",
+      width: 100,
+      render: (val: number, record: ProductRow) => (
+        <InputNumber
+          value={val}
+          min={1}
+          onChange={(v) => handleCellChange(record.key, "wholesale_rate", v)}
+          onBlur={() => handleBlur(record)}
+          style={{ width: "100%", borderColor: record.is_dirty ? "#1890ff" : undefined }}
         />
       ),
     },
@@ -590,9 +607,97 @@ const QuickUnitPage: React.FC = () => {
     },
   ];
 
+  const renderMobileCard = (item: ProductRow) => (
+    <Card 
+      key={item.key} 
+      size="small" 
+      style={{ marginBottom: 12, borderRadius: 12, border: item.is_dirty ? '1px solid #1890ff' : 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+      styles={{ body: { padding: 12 } }}
+    >
+      <Row wrap={false} align="middle" justify="space-between" style={{ marginBottom: 12 }}>
+        <Col flex="auto">
+          <Space>
+            {item.imageUrl ? <Avatar shape="square" size={40} src={item.imageUrl} /> : <Avatar shape="square" size={40} icon={<FileImageOutlined />} style={{ backgroundColor: "#f0f0f0" }} />}
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.2 }}>{item.name}</div>
+              <div style={{ fontSize: 12, color: '#888' }}>SKU: {item.sku}</div>
+            </div>
+          </Space>
+        </Col>
+        <Col>
+          <Button 
+            type="primary" 
+            shape="circle" 
+            icon={savingId === item.id ? <SyncOutlined spin /> : <CheckCircleOutlined />} 
+            disabled={!item.is_dirty}
+            onClick={() => handleSaveRow(item)}
+          />
+        </Col>
+      </Row>
+
+      <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8 }}>
+        <Row gutter={[8, 12]}>
+          {/* Cấp 1: Base */}
+          <Col span={24}>
+            <Text strong style={{ fontSize: 13, color: '#1677ff' }}>1. Đơn vị Cơ Sở (Kho)</Text>
+            <Input
+              value={item.base_unit}
+              onChange={(e) => handleCellChange(item.key, "base_unit", e.target.value)}
+              placeholder="VD: Viên, Gói, Lọ"
+              style={{ marginTop: 4, borderColor: item.is_dirty ? "#1890ff" : undefined }}
+            />
+          </Col>
+
+          {/* Cấp 2: Retail */}
+          <Col span={24}>
+            <Text strong style={{ fontSize: 13, color: '#52c41a' }}>2. Đơn vị Lẻ (Bán Quầy)</Text>
+            <Space.Compact style={{ width: '100%', marginTop: 4 }}>
+              <Input
+                style={{ width: '50%', borderColor: item.is_dirty ? "#1890ff" : undefined }}
+                value={item.retail_unit}
+                onChange={(e) => handleCellChange(item.key, "retail_unit", e.target.value)}
+                placeholder="VD: Vỉ"
+              />
+              <InputNumber
+                style={{ width: '50%', borderColor: item.is_dirty ? "#1890ff" : undefined }}
+                value={item.retail_rate}
+                min={1}
+                onChange={(v) => handleCellChange(item.key, "retail_rate", v)}
+                addonBefore={`= ? ${item.base_unit || 'Cơ sở'}`}
+              />
+            </Space.Compact>
+          </Col>
+
+          {/* Cấp 3: Wholesale */}
+          <Col span={24}>
+            <Text strong style={{ fontSize: 13, color: '#fa8c16' }}>3. Đơn vị Sỉ (Nhập/Bán Buôn)</Text>
+            <Space.Compact style={{ width: '100%', marginTop: 4 }}>
+              <Input
+                style={{ width: '50%', borderColor: item.is_dirty ? "#1890ff" : undefined }}
+                value={item.wholesale_unit}
+                onChange={(e) => handleCellChange(item.key, "wholesale_unit", e.target.value)}
+                placeholder="VD: Hộp"
+              />
+              <InputNumber
+                style={{ width: '50%', borderColor: item.is_dirty ? "#1890ff" : undefined }}
+                value={item.wholesale_rate}
+                min={1}
+                onChange={(v) => handleCellChange(item.key, "wholesale_rate", v)}
+                addonBefore={`= ? ${item.base_unit || 'Cơ sở'}`}
+              />
+            </Space.Compact>
+          </Col>
+        </Row>
+      </div>
+    </Card>
+  );
+
   return (
-    <div style={{ padding: 24 }}>
-      <Card bodyStyle={{ padding: "16px" }}>
+    <div style={{ height: 'calc(100vh - 64px)', padding: isMobile ? 0 : '16px', backgroundColor: isMobile ? '#f5f5f5' : 'transparent' }}>
+      <Card 
+        style={{ height: '100%', display: 'flex', flexDirection: 'column', border: isMobile ? 'none' : undefined, borderRadius: isMobile ? 0 : 8 }}
+        bodyStyle={{ display: 'flex', flexDirection: 'column', flex: 1, padding: isMobile ? '8px' : '16px', overflow: 'hidden' }}
+      >
         {/* Header Toolbar */}
         <Row gutter={[16, 16]} align="middle" style={{ marginBottom: 16 }}>
           <Col xs={24} md={8}>
@@ -630,28 +735,36 @@ const QuickUnitPage: React.FC = () => {
           </Col>
         </Row>
 
-        {/* Table Chính */}
-        <Table
-          columns={columns}
-          dataSource={products}
-          loading={loading}
-          rowKey="key"
-          // Server-side Pagination Configuration
-          pagination={{
-            current: pagination.current,
-            pageSize: pagination.pageSize,
-            total: pagination.total,
-            position: ["bottomRight"],
-            pageSizeOptions: ["10", "20", "50", "100"],
-            showSizeChanger: true,
-            showTotal: (total, range) =>
-              `Hiển thị ${range[0]}-${range[1]} của ${total} sản phẩm`,
-          }}
-          onChange={handleTableChange} // [IMPORTANT] Trigger loading on change
-          size="middle"
-          scroll={{ y: 600 }}
-          bordered
-        />
+        {/* Khối Nội Dung */}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+          {isMobile ? (
+            <div style={{ paddingBottom: 60 }}>
+              {products.map(item => renderMobileCard(item))}
+            </div>
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={products}
+              loading={loading}
+              rowKey="key"
+              // Server-side Pagination Configuration
+              pagination={{
+                current: pagination.current,
+                pageSize: pagination.pageSize,
+                total: pagination.total,
+                position: ["bottomRight"],
+                pageSizeOptions: ["10", "20", "50", "100"],
+                showSizeChanger: true,
+                showTotal: (total, range) =>
+                  `Hiển thị ${range[0]}-${range[1]} của ${total} sản phẩm`,
+              }}
+              onChange={handleTableChange} // [IMPORTANT] Trigger loading on change
+              size="middle"
+              scroll={{ x: 1000, y: 'calc(100vh - 280px)' }}
+              bordered
+            />
+          )}
+        </div>
       </Card>
 
       {/* Modal Review Excel Match */}

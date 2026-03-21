@@ -10329,6 +10329,98 @@ COMMENT ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_ware
 
 
 
+CREATE OR REPLACE FUNCTION "public"."process_incoming_bank_transfer"("p_amount" numeric, "p_memo" "text", "p_bank_ref_id" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_order RECORD;
+    v_fund_id BIGINT;
+    v_trans_code TEXT;
+    
+    v_partner_type TEXT;
+    v_partner_id TEXT;
+    v_partner_name TEXT;
+BEGIN
+    -- 1. [IDEMPOTENCY] Chống ghi trùng mã giao dịch ngân hàng
+    IF p_bank_ref_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.finance_transactions WHERE bank_reference_id = p_bank_ref_id) THEN
+        RETURN jsonb_build_object('status', 'ignored', 'reason', 'transaction_already_processed');
+    END IF;
+
+    -- 2. Tìm ID Quỹ Ngân hàng (Mặc định lấy quỹ bank đầu tiên, nếu không có lấy quỹ ID 1)
+    SELECT id INTO v_fund_id FROM public.fund_accounts WHERE type = 'bank' LIMIT 1;
+    IF v_fund_id IS NULL THEN v_fund_id := 1; END IF;
+
+    -- 3. [TÌM KIẾM THÔNG MINH] Tìm đơn hàng, lột bỏ mọi dấu gạch ngang và khoảng trắng để so sánh
+    SELECT 
+        o.id, o.code, o.customer_id, o.customer_b2c_id, 
+        cb.name as b2b_name, cc.name as b2c_name
+    INTO v_order
+    FROM public.orders o
+    LEFT JOIN public.customers_b2b cb ON o.customer_id = cb.id
+    LEFT JOIN public.customers cc ON o.customer_b2c_id = cc.id
+    WHERE REPLACE(REPLACE(o.code, '-', ''), ' ', '') = REPLACE(REPLACE(p_memo, '-', ''), ' ', '')
+    LIMIT 1;
+
+    -- Sinh mã Phiếu thu nội bộ
+    v_trans_code := 'PT-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 10000)::TEXT, 4, '0');
+
+    -- 4A. NẾU KHÔNG TÌM THẤY ĐƠN: Vẫn lưu tiền vào quỹ nhưng để trạng thái 'pending' cho kế toán tra soát.
+    IF v_order.id IS NULL THEN
+        INSERT INTO public.finance_transactions (
+            code, amount, flow, business_type, fund_account_id, 
+            description, status, bank_reference_id
+        ) VALUES (
+            v_trans_code, p_amount, 'in', 'other', v_fund_id, 
+            'Tiền vào chưa rõ đơn. Nội dung gốc: ' || p_memo, 'pending', p_bank_ref_id
+        );
+        
+        RETURN jsonb_build_object('status', 'saved_unallocated', 'message', 'Tiền vào nhưng không khớp mã đơn.');
+    END IF;
+
+    -- 4B. NẾU TÌM THẤY ĐƠN: Bóc tách thông tin Khách hàng
+    IF v_order.customer_id IS NOT NULL THEN
+        v_partner_type := 'customer_b2b';
+        v_partner_id := v_order.customer_id::TEXT;
+        v_partner_name := v_order.b2b_name;
+    ELSE
+        v_partner_type := 'customer';
+        v_partner_id := v_order.customer_b2c_id::TEXT;
+        v_partner_name := v_order.b2c_name;
+    END IF;
+
+    -- 5. GHI NHẬN PHIẾU THU HOÀN HẢO (Trạng thái COMPLETED)
+    -- Khi dòng này được Insert, Trigger "trg_auto_sync_order_payment" sẽ thức giấc và tự động update bảng Orders!
+    INSERT INTO public.finance_transactions (
+        code, amount, flow, business_type, fund_account_id,
+        partner_type, partner_id, partner_name_cache,
+        ref_type, ref_id, 
+        description, status, bank_reference_id
+    ) VALUES (
+        v_trans_code, p_amount, 'in', 'trade', v_fund_id,
+        v_partner_type, v_partner_id, COALESCE(v_partner_name, 'Khách lẻ'),
+        'order', v_order.code, -- Chú ý: Dùng Order Code theo đúng design của Trigger hiện tại
+        'Hệ thống tự động gạch nợ (Timo). ND gốc: ' || p_memo, 'completed', p_bank_ref_id
+    );
+
+    -- 6. Cập nhật nhẹ phương thức thanh toán vào Order (Vì Trigger không làm việc này)
+    UPDATE public.orders 
+    SET payment_method = 'bank_transfer' 
+    WHERE id = v_order.id;
+
+    RETURN jsonb_build_object(
+        'status', 'success', 
+        'order_code', v_order.code,
+        'transaction_code', v_trans_code,
+        'message', 'Đã ghi nhận thanh toán và kích hoạt Trigger thành công!'
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."process_incoming_bank_transfer"("p_amount" numeric, "p_memo" "text", "p_bank_ref_id" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."process_sales_invoice_deduction"("p_invoice_id" bigint) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -13611,63 +13703,64 @@ DECLARE
     v_conversion_rate INT;
     v_anchor_rate NUMERIC := 1; 
     
-    -- Margin Config
     v_retail_margin_val NUMERIC;
     v_retail_margin_type TEXT;
     v_wholesale_margin_val NUMERIC;
     v_wholesale_margin_type TEXT;
-    
     v_selected_margin_val NUMERIC;
     v_selected_margin_type TEXT;
-    
     v_inv_data JSONB;
 BEGIN
-    -- [PHẦN 1: PRODUCT - UPSERT & LẤY MARGIN MỚI NHẤT]
+    -- [PHẦN 1: PRODUCT - UPSERT & BẢO VỆ DỮ LIỆU CŨ]
     IF (p_product_json->>'id') IS NOT NULL AND (p_product_json->>'id') <> '' AND (p_product_json->>'id') <> '0' THEN
         v_product_id := (p_product_json->>'id')::BIGINT;
         
         UPDATE public.products
         SET
-            sku = p_product_json->>'sku',
-            name = COALESCE(p_product_json->>'name', p_product_json->>'productName'),
-            barcode = p_product_json->>'barcode',
-            registration_number = COALESCE(p_product_json->>'registration_number', p_product_json->>'registrationNumber'),
-            manufacturer_name = COALESCE(p_product_json->>'manufacturer_name', p_product_json->>'manufacturer'),
+            -- [CORE FIX TỐI THƯỢNG]: Dùng NULLIF để loại bỏ chuỗi rỗng. Dùng COALESCE để lấy lại data cũ nếu payload thiếu.
+            sku = COALESCE(NULLIF(p_product_json->>'sku', ''), sku),
+            name = COALESCE(NULLIF(p_product_json->>'name', ''), NULLIF(p_product_json->>'productName', ''), name),
+            barcode = COALESCE(NULLIF(p_product_json->>'barcode', ''), barcode),
+            registration_number = COALESCE(NULLIF(p_product_json->>'registration_number', ''), NULLIF(p_product_json->>'registrationNumber', ''), registration_number),
+            manufacturer_name = COALESCE(NULLIF(p_product_json->>'manufacturer_name', ''), NULLIF(p_product_json->>'manufacturer', ''), manufacturer_name),
+            
             distributor_id = CASE 
-                WHEN COALESCE(p_product_json->>'distributor_id', p_product_json->>'distributor') IS NOT NULL 
-                 AND COALESCE(p_product_json->>'distributor_id', p_product_json->>'distributor') <> '' 
-                THEN COALESCE(p_product_json->>'distributor_id', p_product_json->>'distributor')::BIGINT 
-                ELSE NULL 
+                WHEN p_product_json ? 'distributor_id' OR p_product_json ? 'distributor' THEN 
+                    NULLIF(COALESCE(p_product_json->>'distributor_id', p_product_json->>'distributor'), '')::BIGINT
+                ELSE distributor_id 
             END,
-            category_name = COALESCE(p_product_json->>'category_name', p_product_json->>'category'),
-            packing_spec = COALESCE(p_product_json->>'packing_spec', p_product_json->>'packingSpec'),
-            active_ingredient = COALESCE(p_product_json->>'active_ingredient', p_product_json->>'tags'),
-            usage_instructions = COALESCE(p_product_json->'usage_instructions', p_product_json->'usageInstructions', '{}'::jsonb),
             
-            -- [CORE FIX]: Đọc cả 2 kiểu imageUrl và image_url để không bao giờ mất ảnh
-            image_url = COALESCE(p_product_json->>'image_url', p_product_json->>'imageUrl'),
+            category_name = COALESCE(NULLIF(p_product_json->>'category_name', ''), NULLIF(p_product_json->>'category', ''), category_name),
+            packing_spec = COALESCE(NULLIF(p_product_json->>'packing_spec', ''), NULLIF(p_product_json->>'packingSpec', ''), packing_spec),
+            active_ingredient = COALESCE(NULLIF(p_product_json->>'active_ingredient', ''), NULLIF(p_product_json->>'tags', ''), active_ingredient),
             
-            actual_cost = COALESCE((COALESCE(p_product_json->>'actual_cost', p_product_json->>'actualCost'))::NUMERIC, 0),
-            wholesale_margin_value = COALESCE((COALESCE(p_product_json->>'wholesale_margin_value', p_product_json->>'wholesaleMarginValue'))::NUMERIC, 0),
-            wholesale_margin_type = COALESCE(p_product_json->>'wholesale_margin_type', p_product_json->>'wholesaleMarginType', 'amount'),
-            retail_margin_value = COALESCE((COALESCE(p_product_json->>'retail_margin_value', p_product_json->>'retailMarginValue'))::NUMERIC, 0),
-            retail_margin_type = COALESCE(p_product_json->>'retail_margin_type', p_product_json->>'retailMarginType', 'amount'),
+            -- [ĐÂY LÀ CHỐT CHẶN CỦA LỖI MẤT ẢNH]
+            image_url = COALESCE(
+                NULLIF(p_product_json->>'image_url', ''), 
+                NULLIF(p_product_json->>'imageUrl', ''), 
+                image_url -- Lấy lại URL cũ trong Database
+            ),
             
-            items_per_carton = COALESCE((COALESCE(p_product_json->>'items_per_carton', p_product_json->>'itemsPerCarton'))::INTEGER, 1),
-            carton_weight = COALESCE((COALESCE(p_product_json->>'carton_weight', p_product_json->>'cartonWeight'))::NUMERIC, 0),
-            carton_dimensions = COALESCE(p_product_json->>'carton_dimensions', p_product_json->>'cartonDimensions'),
-            purchasing_policy = COALESCE(p_product_json->>'purchasing_policy', p_product_json->>'purchasingPolicy', 'ALLOW_LOOSE'),
+            actual_cost = COALESCE((COALESCE(p_product_json->>'actual_cost', p_product_json->>'actualCost'))::NUMERIC, actual_cost),
+            wholesale_margin_value = COALESCE((COALESCE(p_product_json->>'wholesale_margin_value', p_product_json->>'wholesaleMarginValue'))::NUMERIC, wholesale_margin_value),
+            wholesale_margin_type = COALESCE(NULLIF(p_product_json->>'wholesale_margin_type', ''), NULLIF(p_product_json->>'wholesaleMarginType', ''), wholesale_margin_type),
+            retail_margin_value = COALESCE((COALESCE(p_product_json->>'retail_margin_value', p_product_json->>'retailMarginValue'))::NUMERIC, retail_margin_value),
+            retail_margin_type = COALESCE(NULLIF(p_product_json->>'retail_margin_type', ''), NULLIF(p_product_json->>'retailMarginType', ''), retail_margin_type),
+            
+            items_per_carton = COALESCE((COALESCE(p_product_json->>'items_per_carton', p_product_json->>'itemsPerCarton'))::INTEGER, items_per_carton),
+            purchasing_policy = COALESCE(NULLIF(p_product_json->>'purchasing_policy', ''), NULLIF(p_product_json->>'purchasingPolicy', ''), purchasing_policy),
             
             updated_at = NOW()
         WHERE id = v_product_id
         RETURNING actual_cost, retail_margin_value, retail_margin_type, wholesale_margin_value, wholesale_margin_type
         INTO v_base_cost, v_retail_margin_val, v_retail_margin_type, v_wholesale_margin_val, v_wholesale_margin_type;
     ELSE
+        -- [PHẦN INSERT GIỮ NGUYÊN...]
         INSERT INTO public.products (
             sku, name, barcode, registration_number, manufacturer_name, distributor_id,
-            category_name, packing_spec, active_ingredient, usage_instructions, status,
+            category_name, packing_spec, active_ingredient, status,
             image_url, actual_cost, wholesale_margin_value, wholesale_margin_type,
-            retail_margin_value, retail_margin_type, items_per_carton, carton_weight, carton_dimensions, purchasing_policy,
+            retail_margin_value, retail_margin_type, items_per_carton, purchasing_policy,
             created_at, updated_at
         ) VALUES (
             COALESCE(p_product_json->>'sku', 'SP-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 1000)::TEXT, 3, '0')),
@@ -13684,9 +13777,8 @@ BEGIN
             COALESCE(p_product_json->>'category_name', p_product_json->>'category'), 
             COALESCE(p_product_json->>'packing_spec', p_product_json->>'packingSpec'), 
             COALESCE(p_product_json->>'active_ingredient', p_product_json->>'tags'),
-            COALESCE(p_product_json->'usage_instructions', p_product_json->'usageInstructions', '{}'::jsonb), 'active',
+            'active',
             
-            -- [CORE FIX]: Đọc cả 2 kiểu
             COALESCE(p_product_json->>'image_url', p_product_json->>'imageUrl'),
             
             COALESCE((COALESCE(p_product_json->>'actual_cost', p_product_json->>'actualCost'))::NUMERIC, 0),
@@ -13695,8 +13787,6 @@ BEGIN
             COALESCE((COALESCE(p_product_json->>'retail_margin_value', p_product_json->>'retailMarginValue'))::NUMERIC, 0),
             COALESCE(p_product_json->>'retail_margin_type', p_product_json->>'retailMarginType', 'amount'),
             COALESCE((COALESCE(p_product_json->>'items_per_carton', p_product_json->>'itemsPerCarton'))::INTEGER, 1),
-            COALESCE((COALESCE(p_product_json->>'carton_weight', p_product_json->>'cartonWeight'))::NUMERIC, 0),
-            COALESCE(p_product_json->>'carton_dimensions', p_product_json->>'cartonDimensions'),
             COALESCE(p_product_json->>'purchasing_policy', p_product_json->>'purchasingPolicy', 'ALLOW_LOOSE'),
             NOW(), NOW()
         ) 
@@ -13749,7 +13839,7 @@ BEGIN
                     price_cost = v_unit_cost, 
                     price_sell = v_unit_price, 
                     price = v_unit_price,      
-                    barcode = v_unit_data->>'barcode',
+                    barcode = COALESCE(NULLIF(v_unit_data->>'barcode', ''), barcode), -- Bảo vệ barcode
                     is_base = COALESCE((v_unit_data->>'is_base')::BOOLEAN, false),
                     is_direct_sale = COALESCE((v_unit_data->>'is_direct_sale')::BOOLEAN, true),
                     updated_at = NOW()
@@ -13779,9 +13869,9 @@ BEGIN
         FOR v_inv_data IN SELECT * FROM jsonb_array_elements(p_inventory_json)
         LOOP
             IF (v_inv_data->>'warehouse_id') IS NOT NULL THEN
-                INSERT INTO public.product_inventory (product_id, warehouse_id, min_stock, max_stock, shelf_location, location_cabinet, location_row, location_slot, stock_quantity, updated_at)
-                VALUES (v_product_id, (v_inv_data->>'warehouse_id')::BIGINT, (v_inv_data->>'min_stock')::NUMERIC, (v_inv_data->>'max_stock')::NUMERIC, v_inv_data->>'shelf_location', v_inv_data->>'location_cabinet', v_inv_data->>'location_row', v_inv_data->>'location_slot', 0, NOW())
-                ON CONFLICT (warehouse_id, product_id) DO UPDATE SET min_stock = EXCLUDED.min_stock, max_stock = EXCLUDED.max_stock, shelf_location = EXCLUDED.shelf_location, location_cabinet = EXCLUDED.location_cabinet, location_row = EXCLUDED.location_row, location_slot = EXCLUDED.location_slot, updated_at = NOW();
+                INSERT INTO public.product_inventory (product_id, warehouse_id, min_stock, max_stock, stock_quantity, updated_at)
+                VALUES (v_product_id, (v_inv_data->>'warehouse_id')::BIGINT, (v_inv_data->>'min_stock')::NUMERIC, (v_inv_data->>'max_stock')::NUMERIC, 0, NOW())
+                ON CONFLICT (warehouse_id, product_id) DO UPDATE SET min_stock = EXCLUDED.min_stock, max_stock = EXCLUDED.max_stock, updated_at = NOW();
             END IF;
         END LOOP;
     END IF;
@@ -14054,12 +14144,17 @@ CREATE TABLE IF NOT EXISTS "public"."finance_transactions" (
     "ref_advance_id" bigint,
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "target_bank_info" "jsonb",
+    "bank_reference_id" "text",
     CONSTRAINT "check_ref_id_required" CHECK (((("ref_type" = 'order'::"text") AND ("ref_id" IS NOT NULL) AND ("ref_id" <> ''::"text")) OR ("ref_type" <> 'order'::"text") OR ("ref_type" IS NULL))),
     CONSTRAINT "finance_transactions_amount_check" CHECK (("amount" > (0)::numeric))
 );
 
 
 ALTER TABLE "public"."finance_transactions" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."finance_transactions"."bank_reference_id" IS 'Mã giao dịch từ ngân hàng (VD: FT26079200907740) dùng để chống trùng lặp';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."orders" (
@@ -16623,6 +16718,11 @@ ALTER TABLE ONLY "public"."finance_invoice_allocations"
 
 ALTER TABLE ONLY "public"."finance_invoices"
     ADD CONSTRAINT "finance_invoices_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."finance_transactions"
+    ADD CONSTRAINT "finance_transactions_bank_reference_id_key" UNIQUE ("bank_reference_id");
 
 
 
@@ -20502,6 +20602,12 @@ GRANT ALL ON FUNCTION "public"."process_bulk_payment"("p_customer_id" bigint, "p
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."process_inbound_receipt"("p_po_id" bigint, "p_warehouse_id" bigint, "p_items" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."process_incoming_bank_transfer"("p_amount" numeric, "p_memo" "text", "p_bank_ref_id" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."process_incoming_bank_transfer"("p_amount" numeric, "p_memo" "text", "p_bank_ref_id" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."process_incoming_bank_transfer"("p_amount" numeric, "p_memo" "text", "p_bank_ref_id" "text") TO "service_role";
 
 
 
