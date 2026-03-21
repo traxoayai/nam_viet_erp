@@ -673,34 +673,52 @@ BEGIN
         RAISE EXCEPTION 'Hệ thống chưa có kho hàng nào.'; 
     END IF;
 
-    -- 2. TÍNH TOÁN NHU CẦU
+    -- Đảm bảo xóa bảng tạm cũ nếu còn sót lại
+    DROP TABLE IF EXISTS temp_products_to_buy;
+
+    -- 2. TÍNH TOÁN NHU CẦU THEO CHUẨN ĐỒNG NHẤT BASE UNIT
     CREATE TEMP TABLE temp_products_to_buy AS
     SELECT 
         p.id as product_id,
         p.distributor_id as supplier_id,
-        p.wholesale_unit as unit_name,
-        COALESCE(u.conversion_rate, 1) as conversion_factor,
+        u.unit_name as unit_name,
+        u.conversion_rate as conversion_factor,
         
-        -- [FIX GIÁ] Nếu chưa có giá vốn (null hoặc 0), mặc định là 0 để không lỗi phép tính
-        (COALESCE(p.actual_cost, 0) * COALESCE(u.conversion_rate, 1)) as unit_price,
+        -- Giá nhập = Giá vốn cơ bản * Hệ số quy đổi
+        (COALESCE(p.actual_cost, 0) * u.conversion_rate) as unit_price,
         
-        CEIL(
-            (inv.max_stock - inv.stock_quantity)::NUMERIC / COALESCE(NULLIF(u.conversion_rate, 0), 1)
-        )::INTEGER as quantity_needed
+        -- [CORE FIX V11]: Tính số lượng cần mua (Wholesale Unit)
+        -- Lấy (Max Viên - Tồn Viên) / Hệ số quy đổi -> Ra số Hộp cần mua
+        CEIL((inv.max_stock - inv.stock_quantity)::NUMERIC / u.conversion_rate)::INTEGER as quantity_needed
 
     FROM public.product_inventory inv
     JOIN public.products p ON inv.product_id = p.id
-    LEFT JOIN public.product_units u ON u.product_id = p.id AND u.unit_name = p.wholesale_unit
+    
+    -- Khóa mục tiêu lấy đúng Đơn vị Sỉ (Wholesale)
+    JOIN LATERAL (
+        SELECT unit_name, conversion_rate
+        FROM public.product_units pu
+        WHERE pu.product_id = p.id 
+          AND pu.unit_type = 'wholesale'
+        ORDER BY pu.conversion_rate DESC
+        LIMIT 1
+    ) u ON true
 
     WHERE inv.warehouse_id = v_b2b_warehouse_id
-      AND inv.stock_quantity < inv.min_stock
       AND p.status = 'active'
       AND p.distributor_id IS NOT NULL
-      AND (inv.max_stock - inv.stock_quantity) > 0
       
-      -- [ĐÃ GỠ BỎ ĐIỀU KIỆN p.actual_cost > 0] -> Cho phép sản phẩm giá 0 vẫn được tạo PO
+      -- Chỉ xét những sản phẩm có cài Min/Max hợp lệ
+      AND inv.min_stock > 0 
+      AND inv.max_stock > 0
       
-      -- Chặn trùng đơn (Vẫn giữ để tránh spam đơn)
+      -- [CORE FIX V11]: So sánh trực tiếp theo Base Unit (Viên)
+      AND inv.stock_quantity <= inv.min_stock
+      
+      -- Đảm bảo Max > Hiện tại thì mới mua bù
+      AND inv.max_stock > inv.stock_quantity
+      
+      -- Chặn trùng đơn (Không tạo thêm nếu đã có đơn nháp/đang giao chứa sản phẩm này)
       AND NOT EXISTS (
           SELECT 1 
           FROM public.purchase_order_items poi
@@ -709,7 +727,7 @@ BEGIN
             AND po.delivery_status IN ('draft', 'pending', 'ordered', 'shipping', 'partially_delivered')
       );
 
-    -- 3. LOOP TẠO PO
+    -- 3. LOOP TẠO PO (Gom theo Nhà Cung Cấp)
     FOR v_supplier_record IN SELECT DISTINCT supplier_id FROM temp_products_to_buy
     LOOP
         v_supplier_id := v_supplier_record.supplier_id;
@@ -722,16 +740,16 @@ BEGIN
             v_supplier_id, 
             'draft', 
             'unpaid',
-            'Đơn dự trù tự động (Min/Max)', 
+            'Đơn dự trù tự động (Dưới mức tồn Min)', 
             now(), now()
         ) RETURNING id INTO v_new_po_id;
 
-        -- Tạo Items
+        -- Tạo Items cho Đơn hàng
         INSERT INTO public.purchase_order_items (
-            po_id, product_id, quantity_ordered, unit_price, unit, conversion_factor, base_quantity
+            po_id, product_id, quantity_ordered, unit_price, unit, uom_ordered, conversion_factor, base_quantity
         )
         SELECT 
-            v_new_po_id, product_id, quantity_needed, unit_price, unit_name, conversion_factor,
+            v_new_po_id, product_id, quantity_needed, unit_price, unit_name, unit_name, conversion_factor,
             (quantity_needed * conversion_factor)
         FROM temp_products_to_buy
         WHERE supplier_id = v_supplier_id;
@@ -745,7 +763,9 @@ BEGIN
         v_po_count := v_po_count + 1;
     END LOOP;
 
-    DROP TABLE temp_products_to_buy;
+    -- Dọn dẹp bảng tạm
+    DROP TABLE IF EXISTS temp_products_to_buy;
+    
     RETURN v_po_count;
 END;
 $$;
@@ -2028,7 +2048,7 @@ $$;
 ALTER FUNCTION "public"."clone_sales_order"("p_old_order_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."complete_inventory_check"("p_check_id" bigint, "p_user_id" "uuid") RETURNS "void"
+CREATE OR REPLACE FUNCTION "public"."complete_inventory_check"("p_check_id" bigint, "p_user_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -2037,9 +2057,14 @@ DECLARE
     v_item RECORD;
     v_batch_id BIGINT;
     v_diff_qty INTEGER;
-    v_trans_type TEXT;
     v_final_batch_code TEXT;
     v_final_expiry DATE;
+    v_processed_count INT := 0;
+    
+    -- Biến dùng cho FEFO khi trừ kho
+    v_remaining_to_deduct INTEGER;
+    v_target_batch RECORD;
+    v_deduct_amount INTEGER;
 BEGIN
     -- A. Lấy thông tin phiếu và Khóa dòng
     SELECT * INTO v_check_record 
@@ -2054,68 +2079,96 @@ BEGIN
     -- B. Duyệt qua từng dòng kiểm kê
     FOR v_item IN SELECT * FROM public.inventory_check_items WHERE check_id = p_check_id
     LOOP
-        v_final_batch_code := COALESCE(NULLIF(TRIM(v_item.batch_code), ''), 'DEFAULT');
-        v_final_expiry := COALESCE(v_item.expiry_date, CURRENT_DATE + 365);
-
-        -- 1. Tìm hoặc tạo Batch (Lô)
-        SELECT id INTO v_batch_id 
-        FROM public.batches 
-        WHERE product_id = v_item.product_id AND batch_code = v_final_batch_code
-        LIMIT 1;
-
-        IF v_batch_id IS NULL THEN
-            INSERT INTO public.batches (product_id, batch_code, expiry_date, inbound_price, created_at)
-            -- [CORE FIX]: Lấy giá vốn từ phiếu kiểm kê (cost_price) thay vì set cứng bằng 0
-            VALUES (v_item.product_id, v_final_batch_code, v_final_expiry, COALESCE(v_item.cost_price, 0), NOW())
-            RETURNING id INTO v_batch_id;
-        END IF;
-
-        -- 2. Tính lệch & Ghi Transaction
         v_diff_qty := COALESCE(v_item.actual_quantity, 0) - COALESCE(v_item.system_quantity, 0);
 
-        IF v_diff_qty <> 0 THEN
-            v_trans_type := CASE WHEN v_diff_qty > 0 THEN 'in_adjust' ELSE 'out_adjust' END;
+        IF v_diff_qty > 0 THEN
+            -- [TRƯỜNG HỢP 1]: THỪA HÀNG -> CỘNG VÀO LÔ ĐƯỢC CHỈ ĐỊNH (Hoặc tạo lô mới)
+            v_final_batch_code := COALESCE(NULLIF(TRIM(v_item.batch_code), ''), 'DEFAULT-ADJ-' || to_char(now(), 'YYMMDD'));
+            v_final_expiry := COALESCE(v_item.expiry_date, CURRENT_DATE + 365);
+
+            -- Tìm/Tạo Batch
+            SELECT id INTO v_batch_id FROM public.batches WHERE product_id = v_item.product_id AND batch_code = v_final_batch_code LIMIT 1;
+            IF v_batch_id IS NULL THEN
+                INSERT INTO public.batches (product_id, batch_code, expiry_date, inbound_price, created_at)
+                VALUES (v_item.product_id, v_final_batch_code, v_final_expiry, COALESCE(v_item.cost_price, 0), NOW())
+                RETURNING id INTO v_batch_id;
+            END IF;
+
+            -- Cộng tồn kho Lô
+            INSERT INTO public.inventory_batches (warehouse_id, product_id, batch_id, quantity, updated_at)
+            VALUES (v_check_record.warehouse_id, v_item.product_id, v_batch_id, v_diff_qty, NOW())
+            ON CONFLICT (warehouse_id, product_id, batch_id) 
+            DO UPDATE SET quantity = inventory_batches.quantity + EXCLUDED.quantity, updated_at = NOW();
+
+            -- Ghi Thẻ kho (Dương)
+            INSERT INTO public.inventory_transactions (warehouse_id, product_id, batch_id, type, action_group, quantity, unit_price, ref_id, description, created_at, created_by)
+            VALUES (v_check_record.warehouse_id, v_item.product_id, v_batch_id, 'in_adjust', 'ADJUST', v_diff_qty, COALESCE(v_item.cost_price, 0), v_check_record.code, 'Kiểm kê phát sinh thừa', NOW(), p_user_id);
+
+        ELSIF v_diff_qty < 0 THEN
+            -- [TRƯỜNG HỢP 2]: THIẾU HÀNG -> TRỪ FEFO TỪ CÁC LÔ ĐANG CÓ (Giải quyết triệt để lỗi của Sếp)
+            v_remaining_to_deduct := ABS(v_diff_qty);
             
-            -- [CORE FIX]: Bỏ ABS() để giữ nguyên dấu (+/-), Thêm action_group và unit_price
-            INSERT INTO public.inventory_transactions (
-                warehouse_id, product_id, batch_id,
-                type, action_group, quantity, unit_price, ref_id,
-                description, created_at, created_by
-            )
-            VALUES (
-                v_check_record.warehouse_id, v_item.product_id, v_batch_id,
-                v_trans_type, 'ADJUST', v_diff_qty, COALESCE(v_item.cost_price, 0), v_check_record.code,
-                'Kiểm kê: ' || COALESCE(v_item.difference_reason, 'Điều chỉnh lệch kho'), NOW(), p_user_id
-            );
+            -- Ưu tiên 1: Trừ đúng lô được chỉ định trên màn hình (nếu có)
+            IF v_item.batch_code IS NOT NULL AND v_item.batch_code != '' THEN
+                SELECT ib.id, ib.batch_id, ib.quantity, b.inbound_price INTO v_target_batch
+                FROM public.inventory_batches ib
+                JOIN public.batches b ON ib.batch_id = b.id
+                WHERE ib.warehouse_id = v_check_record.warehouse_id AND ib.product_id = v_item.product_id AND b.batch_code = v_item.batch_code
+                LIMIT 1 FOR UPDATE;
+
+                IF v_target_batch IS NOT NULL AND v_target_batch.quantity > 0 THEN
+                    v_deduct_amount := LEAST(v_remaining_to_deduct, v_target_batch.quantity);
+                    
+                    UPDATE public.inventory_batches SET quantity = quantity - v_deduct_amount, updated_at = NOW() WHERE id = v_target_batch.id;
+                    
+                    INSERT INTO public.inventory_transactions (warehouse_id, product_id, batch_id, type, action_group, quantity, unit_price, ref_id, description, created_at, created_by)
+                    VALUES (v_check_record.warehouse_id, v_item.product_id, v_target_batch.batch_id, 'out_adjust', 'ADJUST', -v_deduct_amount, COALESCE(v_target_batch.inbound_price, v_item.cost_price, 0), v_check_record.code, 'Kiểm kê thất thoát', NOW(), p_user_id);
+                    
+                    v_remaining_to_deduct := v_remaining_to_deduct - v_deduct_amount;
+                END IF;
+            END IF;
+
+            -- Ưu tiên 2: Nếu vẫn còn thiếu (như trường hợp mất 564,660 viên của Sếp), quét sạch các lô khác theo FEFO
+            IF v_remaining_to_deduct > 0 THEN
+                FOR v_target_batch IN 
+                    SELECT ib.id, ib.batch_id, ib.quantity, b.inbound_price
+                    FROM public.inventory_batches ib
+                    JOIN public.batches b ON ib.batch_id = b.id
+                    WHERE ib.warehouse_id = v_check_record.warehouse_id AND ib.product_id = v_item.product_id AND ib.quantity > 0
+                    ORDER BY b.expiry_date ASC, b.created_at ASC
+                    FOR UPDATE
+                LOOP
+                    EXIT WHEN v_remaining_to_deduct <= 0;
+                    v_deduct_amount := LEAST(v_remaining_to_deduct, v_target_batch.quantity);
+                    
+                    UPDATE public.inventory_batches SET quantity = quantity - v_deduct_amount, updated_at = NOW() WHERE id = v_target_batch.id;
+                    
+                    INSERT INTO public.inventory_transactions (warehouse_id, product_id, batch_id, type, action_group, quantity, unit_price, ref_id, description, created_at, created_by)
+                    VALUES (v_check_record.warehouse_id, v_item.product_id, v_target_batch.batch_id, 'out_adjust', 'ADJUST', -v_deduct_amount, COALESCE(v_target_batch.inbound_price, v_item.cost_price, 0), v_check_record.code, 'Kiểm kê thất thoát (Bù trừ)', NOW(), p_user_id);
+                    
+                    v_remaining_to_deduct := v_remaining_to_deduct - v_deduct_amount;
+                END LOOP;
+            END IF;
         END IF;
 
-        -- 3. CẬP NHẬT TỒN KHO THẬT (Kích hoạt Trigger 'fn_sync_inventory_batch_to_total')
-        INSERT INTO public.inventory_batches (
-            warehouse_id, product_id, batch_id, quantity, updated_at
-        )
-        VALUES (
-            v_check_record.warehouse_id, v_item.product_id, v_batch_id, COALESCE(v_item.actual_quantity, 0), NOW()
-        )
-        ON CONFLICT (warehouse_id, product_id, batch_id)
-        DO UPDATE SET 
-            quantity = EXCLUDED.quantity,
-            updated_at = NOW();
-            
+        v_processed_count := v_processed_count + 1;
     END LOOP;
 
     -- C. Hoàn tất phiếu
     UPDATE public.inventory_checks
     SET status = 'COMPLETED', verified_by = p_user_id, completed_at = NOW(), updated_at = NOW()
     WHERE id = p_check_id;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'message', 'Đã chốt sổ kiểm kê thành công!',
+        'items_processed', v_processed_count
+    );
 END;
 $$;
 
 
 ALTER FUNCTION "public"."complete_inventory_check"("p_check_id" bigint, "p_user_id" "uuid") OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."complete_inventory_check"("p_check_id" bigint, "p_user_id" "uuid") IS 'Chốt kiểm kê: Cân bằng kho & Ghi log Transaction';
-
 
 
 CREATE OR REPLACE FUNCTION "public"."confirm_finance_transaction"("p_id" bigint) RETURNS "void"
@@ -12862,11 +12915,15 @@ BEGIN
     v_input_retail := COALESCE((p_payload->>'retail_qty')::NUMERIC, 0);
     v_input_base := COALESCE((p_payload->>'base_qty')::NUMERIC, 0);
 
-    -- B. TÍNH TOÁN BASE QUANITY DỰA VÀO TỶ LỆ TRONG DB
+    -- B. TÍNH TOÁN BASE QUANITY DỰA VÀO TỶ LỆ TRONG DB (Không tin tưởng Frontend)
     SELECT conversion_rate INTO v_wholesale_rate FROM public.product_units WHERE product_id = v_product_id AND unit_type = 'wholesale' LIMIT 1;
     SELECT conversion_rate INTO v_retail_rate FROM public.product_units WHERE product_id = v_product_id AND unit_type = 'retail' LIMIT 1;
     
-    v_total_base_qty := (v_input_wholesale * COALESCE(v_wholesale_rate, 1)) + (v_input_retail * COALESCE(v_retail_rate, 1)) + v_input_base;
+    v_wholesale_rate := COALESCE(v_wholesale_rate, 1);
+    v_retail_rate := COALESCE(v_retail_rate, 1);
+
+    -- Tính tổng số viên (Base Unit)
+    v_total_base_qty := (v_input_wholesale * v_wholesale_rate) + (v_input_retail * v_retail_rate) + v_input_base;
 
     -- C. XỬ LÝ LÔ VÀ HẠN SỬ DỤNG
     -- Chỉ cho phép ghi đè nếu Frontend cố tình gửi lên, nếu không thì giữ nguyên bản gốc snapshot
@@ -12899,7 +12956,8 @@ BEGIN
 
     RETURN jsonb_build_object(
         'status', 'success', 
-        'message', 'Đã lưu: ' || v_total_base_qty || ' ĐVCS (Lô: ' || COALESCE(v_lot_number, 'N/A') || ')'
+        'message', 'Đã lưu tự động quy đổi thành: ' || v_total_base_qty || ' ĐVCS (Lô: ' || COALESCE(v_lot_number, 'N/A') || ')',
+        'actual_quantity', v_total_base_qty
     );
 END;
 $$;
@@ -13539,7 +13597,7 @@ $$;
 ALTER FUNCTION "public"."update_vaccination_template"("p_id" bigint, "p_data" "jsonb", "p_items" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb" DEFAULT NULL::"jsonb", "p_contents_json" "jsonb" DEFAULT NULL::"jsonb", "p_inventory_json" "jsonb" DEFAULT NULL::"jsonb") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_contents_json" "jsonb" DEFAULT NULL::"jsonb", "p_inventory_json" "jsonb" DEFAULT NULL::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
@@ -13551,6 +13609,7 @@ DECLARE
     v_unit_cost NUMERIC;      
     v_unit_price NUMERIC;     
     v_conversion_rate INT;
+    v_anchor_rate NUMERIC := 1; 
     
     -- Margin Config
     v_retail_margin_val NUMERIC;
@@ -13563,42 +13622,47 @@ DECLARE
     
     v_inv_data JSONB;
 BEGIN
-    -- [PHẦN 1: PRODUCT - CẬP NHẬT & LẤY MARGIN MỚI NHẤT]
+    -- [PHẦN 1: PRODUCT - UPSERT & LẤY MARGIN MỚI NHẤT]
     IF (p_product_json->>'id') IS NOT NULL AND (p_product_json->>'id') <> '' AND (p_product_json->>'id') <> '0' THEN
-        -- UPDATE
         v_product_id := (p_product_json->>'id')::BIGINT;
         
         UPDATE public.products
         SET
             sku = p_product_json->>'sku',
-            name = p_product_json->>'name',
+            name = COALESCE(p_product_json->>'name', p_product_json->>'productName'),
             barcode = p_product_json->>'barcode',
-            registration_number = p_product_json->>'registration_number',
-            manufacturer_name = p_product_json->>'manufacturer_name',
-            distributor_id = CASE WHEN (p_product_json->>'distributor_id') IS NOT NULL AND (p_product_json->>'distributor_id') <> '' THEN (p_product_json->>'distributor_id')::BIGINT ELSE NULL END,
-            category_name = p_product_json->>'category_name',
-            packing_spec = p_product_json->>'packing_spec',
-            active_ingredient = p_product_json->>'active_ingredient',
-            usage_instructions = COALESCE(p_product_json->'usage_instructions', '{}'::jsonb),
-            image_url = p_product_json->>'image_url',
+            registration_number = COALESCE(p_product_json->>'registration_number', p_product_json->>'registrationNumber'),
+            manufacturer_name = COALESCE(p_product_json->>'manufacturer_name', p_product_json->>'manufacturer'),
+            distributor_id = CASE 
+                WHEN COALESCE(p_product_json->>'distributor_id', p_product_json->>'distributor') IS NOT NULL 
+                 AND COALESCE(p_product_json->>'distributor_id', p_product_json->>'distributor') <> '' 
+                THEN COALESCE(p_product_json->>'distributor_id', p_product_json->>'distributor')::BIGINT 
+                ELSE NULL 
+            END,
+            category_name = COALESCE(p_product_json->>'category_name', p_product_json->>'category'),
+            packing_spec = COALESCE(p_product_json->>'packing_spec', p_product_json->>'packingSpec'),
+            active_ingredient = COALESCE(p_product_json->>'active_ingredient', p_product_json->>'tags'),
+            usage_instructions = COALESCE(p_product_json->'usage_instructions', p_product_json->'usageInstructions', '{}'::jsonb),
             
-            actual_cost = COALESCE((p_product_json->>'actual_cost')::NUMERIC, 0),
-            wholesale_margin_value = COALESCE((p_product_json->>'wholesale_margin_value')::NUMERIC, 0),
-            wholesale_margin_type = COALESCE(p_product_json->>'wholesale_margin_type', 'amount'),
-            retail_margin_value = COALESCE((p_product_json->>'retail_margin_value')::NUMERIC, 0),
-            retail_margin_type = COALESCE(p_product_json->>'retail_margin_type', 'amount'),
+            -- [CORE FIX]: Đọc cả 2 kiểu imageUrl và image_url để không bao giờ mất ảnh
+            image_url = COALESCE(p_product_json->>'image_url', p_product_json->>'imageUrl'),
             
-            items_per_carton = COALESCE((p_product_json->>'items_per_carton')::INTEGER, 1),
-            carton_weight = COALESCE((p_product_json->>'carton_weight')::NUMERIC, 0),
-            carton_dimensions = p_product_json->>'carton_dimensions',
-            purchasing_policy = COALESCE(p_product_json->>'purchasing_policy', 'ALLOW_LOOSE'),
+            actual_cost = COALESCE((COALESCE(p_product_json->>'actual_cost', p_product_json->>'actualCost'))::NUMERIC, 0),
+            wholesale_margin_value = COALESCE((COALESCE(p_product_json->>'wholesale_margin_value', p_product_json->>'wholesaleMarginValue'))::NUMERIC, 0),
+            wholesale_margin_type = COALESCE(p_product_json->>'wholesale_margin_type', p_product_json->>'wholesaleMarginType', 'amount'),
+            retail_margin_value = COALESCE((COALESCE(p_product_json->>'retail_margin_value', p_product_json->>'retailMarginValue'))::NUMERIC, 0),
+            retail_margin_type = COALESCE(p_product_json->>'retail_margin_type', p_product_json->>'retailMarginType', 'amount'),
+            
+            items_per_carton = COALESCE((COALESCE(p_product_json->>'items_per_carton', p_product_json->>'itemsPerCarton'))::INTEGER, 1),
+            carton_weight = COALESCE((COALESCE(p_product_json->>'carton_weight', p_product_json->>'cartonWeight'))::NUMERIC, 0),
+            carton_dimensions = COALESCE(p_product_json->>'carton_dimensions', p_product_json->>'cartonDimensions'),
+            purchasing_policy = COALESCE(p_product_json->>'purchasing_policy', p_product_json->>'purchasingPolicy', 'ALLOW_LOOSE'),
             
             updated_at = NOW()
         WHERE id = v_product_id
         RETURNING actual_cost, retail_margin_value, retail_margin_type, wholesale_margin_value, wholesale_margin_type
         INTO v_base_cost, v_retail_margin_val, v_retail_margin_type, v_wholesale_margin_val, v_wholesale_margin_type;
     ELSE
-        -- INSERT
         INSERT INTO public.products (
             sku, name, barcode, registration_number, manufacturer_name, distributor_id,
             category_name, packing_spec, active_ingredient, usage_instructions, status,
@@ -13607,28 +13671,40 @@ BEGIN
             created_at, updated_at
         ) VALUES (
             COALESCE(p_product_json->>'sku', 'SP-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 1000)::TEXT, 3, '0')),
-            p_product_json->>'name', p_product_json->>'barcode', p_product_json->>'registration_number', p_product_json->>'manufacturer_name',
-            CASE WHEN (p_product_json->>'distributor_id') IS NOT NULL AND (p_product_json->>'distributor_id') <> '' THEN (p_product_json->>'distributor_id')::BIGINT ELSE NULL END,
-            p_product_json->>'category_name', p_product_json->>'packing_spec', p_product_json->>'active_ingredient',
-            COALESCE(p_product_json->'usage_instructions', '{}'::jsonb), 'active',
-            p_product_json->>'image_url',
-            COALESCE((p_product_json->>'actual_cost')::NUMERIC, 0),
-            COALESCE((p_product_json->>'wholesale_margin_value')::NUMERIC, 0),
-            COALESCE(p_product_json->>'wholesale_margin_type', 'amount'),
-            COALESCE((p_product_json->>'retail_margin_value')::NUMERIC, 0),
-            COALESCE(p_product_json->>'retail_margin_type', 'amount'),
-            COALESCE((p_product_json->>'items_per_carton')::INTEGER, 1),
-            COALESCE((p_product_json->>'carton_weight')::NUMERIC, 0),
-            p_product_json->>'carton_dimensions',
-            COALESCE(p_product_json->>'purchasing_policy', 'ALLOW_LOOSE'),
+            COALESCE(p_product_json->>'name', p_product_json->>'productName'), 
+            p_product_json->>'barcode', 
+            COALESCE(p_product_json->>'registration_number', p_product_json->>'registrationNumber'), 
+            COALESCE(p_product_json->>'manufacturer_name', p_product_json->>'manufacturer'),
+            CASE 
+                WHEN COALESCE(p_product_json->>'distributor_id', p_product_json->>'distributor') IS NOT NULL 
+                 AND COALESCE(p_product_json->>'distributor_id', p_product_json->>'distributor') <> '' 
+                THEN COALESCE(p_product_json->>'distributor_id', p_product_json->>'distributor')::BIGINT 
+                ELSE NULL 
+            END,
+            COALESCE(p_product_json->>'category_name', p_product_json->>'category'), 
+            COALESCE(p_product_json->>'packing_spec', p_product_json->>'packingSpec'), 
+            COALESCE(p_product_json->>'active_ingredient', p_product_json->>'tags'),
+            COALESCE(p_product_json->'usage_instructions', p_product_json->'usageInstructions', '{}'::jsonb), 'active',
+            
+            -- [CORE FIX]: Đọc cả 2 kiểu
+            COALESCE(p_product_json->>'image_url', p_product_json->>'imageUrl'),
+            
+            COALESCE((COALESCE(p_product_json->>'actual_cost', p_product_json->>'actualCost'))::NUMERIC, 0),
+            COALESCE((COALESCE(p_product_json->>'wholesale_margin_value', p_product_json->>'wholesaleMarginValue'))::NUMERIC, 0),
+            COALESCE(p_product_json->>'wholesale_margin_type', p_product_json->>'wholesaleMarginType', 'amount'),
+            COALESCE((COALESCE(p_product_json->>'retail_margin_value', p_product_json->>'retailMarginValue'))::NUMERIC, 0),
+            COALESCE(p_product_json->>'retail_margin_type', p_product_json->>'retailMarginType', 'amount'),
+            COALESCE((COALESCE(p_product_json->>'items_per_carton', p_product_json->>'itemsPerCarton'))::INTEGER, 1),
+            COALESCE((COALESCE(p_product_json->>'carton_weight', p_product_json->>'cartonWeight'))::NUMERIC, 0),
+            COALESCE(p_product_json->>'carton_dimensions', p_product_json->>'cartonDimensions'),
+            COALESCE(p_product_json->>'purchasing_policy', p_product_json->>'purchasingPolicy', 'ALLOW_LOOSE'),
             NOW(), NOW()
         ) 
         RETURNING id, actual_cost, retail_margin_value, retail_margin_type, wholesale_margin_value, wholesale_margin_type
         INTO v_product_id, v_base_cost, v_retail_margin_val, v_retail_margin_type, v_wholesale_margin_val, v_wholesale_margin_type;
     END IF;
 
-    -- [PHẦN 2: UNITS - AUTOMATIC PRICING LOGIC]
-    -- Filter Unit IDs để xóa các unit bị user xóa trên UI
+    -- [PHẦN 2: UNITS - ĐỒNG BỘ GIÁ TỪ FRONTEND XUỐNG]
     SELECT COALESCE(array_agg((x->>'id')::BIGINT), ARRAY[]::BIGINT[]) INTO v_kept_unit_ids
     FROM jsonb_array_elements(p_units_json) x
     WHERE (x->>'id') IS NOT NULL AND (x->>'id') <> '' AND (x->>'id') <> '0';
@@ -13636,12 +13712,14 @@ BEGIN
     DELETE FROM public.product_units WHERE product_id = v_product_id AND id <> ALL(v_kept_unit_ids);
 
     IF p_units_json IS NOT NULL THEN
+        SELECT COALESCE(MAX((x->>'conversion_rate')::NUMERIC), 1) INTO v_anchor_rate
+        FROM jsonb_array_elements(p_units_json) x;
+
         FOR v_unit_data IN SELECT * FROM jsonb_array_elements(p_units_json)
         LOOP
             v_conversion_rate := COALESCE((v_unit_data->>'conversion_rate')::INTEGER, 1);
             v_unit_cost := v_base_cost * v_conversion_rate; 
 
-            -- Tự động chọn Margin dựa trên loại Unit
             IF (v_unit_data->>'unit_type') = 'wholesale' OR (v_unit_data->>'unit_type') = 'logistics' THEN
                 v_selected_margin_val := v_wholesale_margin_val;
                 v_selected_margin_type := v_wholesale_margin_type;
@@ -13650,32 +13728,27 @@ BEGIN
                 v_selected_margin_type := v_retail_margin_type;
             END IF;
 
-            -- Tính toán Giá Bán (Price Sell)
-            IF v_selected_margin_type = 'percent' THEN
-                -- Giá bán = Giá vốn * (1 + %Lãi)
+            IF v_selected_margin_type IN ('percent', '%') THEN
                 v_unit_price := v_unit_cost * (1 + v_selected_margin_val / 100.0);
             ELSE
-                -- Giá bán = Giá vốn + Lãi tiền (Amount)
-                -- Lưu ý: Lãi Amount thường áp dụng cho đơn vị cơ bản. Nếu bán thùng, cần nhân lãi lên?
-                -- Core Logic: Lãi Amount là lãi trên 1 Đơn vị cơ bản (Base).
-                v_unit_price := v_unit_cost + (v_selected_margin_val * v_conversion_rate);
+                v_unit_price := v_unit_cost + ((v_selected_margin_val / v_anchor_rate) * v_conversion_rate);
             END IF;
             
-            -- Làm tròn 100đ
             v_unit_price := CEIL(v_unit_price / 100.0) * 100;
 
-            -- UPSERT UNIT
+            IF COALESCE((v_unit_data->>'price')::NUMERIC, 0) > 0 THEN
+                v_unit_price := (v_unit_data->>'price')::NUMERIC;
+            END IF;
+
             IF (v_unit_data->>'id') IS NOT NULL AND (v_unit_data->>'id') <> '' AND (v_unit_data->>'id') <> '0' THEN
                 UPDATE public.product_units
                 SET 
                     unit_name = v_unit_data->>'unit_name',
                     unit_type = COALESCE(v_unit_data->>'unit_type', 'retail'),
                     conversion_rate = v_conversion_rate,
-                    price_cost = v_unit_cost, -- Cập nhật giá vốn
-                    
-                    price_sell = v_unit_price, -- Cập nhật giá bán TỰ ĐỘNG
-                    price = v_unit_price,      -- Đồng bộ legacy
-                    
+                    price_cost = v_unit_cost, 
+                    price_sell = v_unit_price, 
+                    price = v_unit_price,      
                     barcode = v_unit_data->>'barcode',
                     is_base = COALESCE((v_unit_data->>'is_base')::BOOLEAN, false),
                     is_direct_sale = COALESCE((v_unit_data->>'is_direct_sale')::BOOLEAN, true),
@@ -13687,26 +13760,16 @@ BEGIN
                     price_cost, price_sell, price,
                     barcode, is_base, is_direct_sale, created_at, updated_at
                 ) VALUES (
-                    v_product_id,
-                    v_unit_data->>'unit_name',
-                    COALESCE(v_unit_data->>'unit_type', 'retail'),
-                    v_conversion_rate,
-                    v_unit_cost,
-                    v_unit_price, -- Giá tự tính
-                    v_unit_price,
-                    v_unit_data->>'barcode',
-                    COALESCE((v_unit_data->>'is_base')::BOOLEAN, false),
-                    COALESCE((v_unit_data->>'is_direct_sale')::BOOLEAN, true),
-                    NOW(), NOW()
+                    v_product_id, v_unit_data->>'unit_name', COALESCE(v_unit_data->>'unit_type', 'retail'), v_conversion_rate,
+                    v_unit_cost, v_unit_price, v_unit_price,
+                    v_unit_data->>'barcode', COALESCE((v_unit_data->>'is_base')::BOOLEAN, false), COALESCE((v_unit_data->>'is_direct_sale')::BOOLEAN, true), NOW(), NOW()
                 );
             END IF;
         END LOOP;
     END IF;
 
-    -- [PHẦN 3 & 4: CONTENT & INVENTORY - GIỮ NGUYÊN]
-    -- (Đoạn này copy y hệt RPC cũ, không đổi logic)
+    -- [PHẦN 3 & 4: CONTENT & INVENTORY - Giữ nguyên]
     IF p_contents_json IS NOT NULL THEN
-       -- ... (Logic Content giữ nguyên)
        INSERT INTO public.product_contents (product_id, channel, language_code, description_html, short_description, seo_title, seo_description, seo_keywords, is_published, updated_at)
        VALUES (v_product_id, 'website', 'vi', p_contents_json->>'description_html', p_contents_json->>'short_description', p_contents_json->>'seo_title', p_contents_json->>'seo_description', (SELECT ARRAY(SELECT jsonb_array_elements_text(COALESCE(p_contents_json->'seo_keywords', '[]'::jsonb)))), COALESCE((p_contents_json->>'is_published')::BOOLEAN, true), NOW())
        ON CONFLICT (product_id, channel) DO UPDATE SET description_html = EXCLUDED.description_html, short_description = EXCLUDED.short_description, seo_title = EXCLUDED.seo_title, seo_description = EXCLUDED.seo_description, seo_keywords = EXCLUDED.seo_keywords, updated_at = NOW();
@@ -13729,10 +13792,6 @@ $$;
 
 
 ALTER FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_contents_json" "jsonb", "p_inventory_json" "jsonb") OWNER TO "postgres";
-
-
-COMMENT ON FUNCTION "public"."upsert_product_with_units"("p_product_json" "jsonb", "p_units_json" "jsonb", "p_contents_json" "jsonb", "p_inventory_json" "jsonb") IS 'V6 Final: Full Financials & Logistics Support';
-
 
 
 CREATE OR REPLACE FUNCTION "public"."verify_promotion_code"("p_code" "text", "p_customer_id" bigint, "p_order_value" numeric) RETURNS json

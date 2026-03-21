@@ -156,7 +156,7 @@ export const upsertProduct = async (formValues: any) => {
     packing_spec: formValues.packingSpec,
     active_ingredient: formValues.tags,
     status: formValues.status || "active",
-    image_url: formValues.imageUrl,
+    image_url: formValues.image_url || formValues.imageUrl || null,
 
     // [FIX] Thêm distributor_id (Quan trọng)
     distributor_id: formValues.distributor || null,

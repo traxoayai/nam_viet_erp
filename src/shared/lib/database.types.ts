@@ -4865,7 +4865,7 @@ export type Database = {
       clone_sales_order: { Args: { p_old_order_id: string }; Returns: Json }
       complete_inventory_check: {
         Args: { p_check_id: number; p_user_id: string }
-        Returns: undefined
+        Returns: Json
       }
       confirm_finance_transaction:
         | { Args: { p_id: number }; Returns: undefined }
@@ -6634,7 +6634,7 @@ export type Database = {
           p_contents_json?: Json
           p_inventory_json?: Json
           p_product_json: Json
-          p_units_json?: Json
+          p_units_json: Json
         }
         Returns: Json
       }

@@ -14,7 +14,6 @@ import { useProductStore } from "@/features/product/stores/productStore";
 
 export const useProductFormLogic = () => {
   const [form] = Form.useForm();
-  // WATCH UNITS for Reactive Anchor Label
   const watchedUnits = Form.useWatch("units", form);
   const navigate = useNavigate();
   const { id } = useParams();
@@ -39,85 +38,63 @@ export const useProductFormLogic = () => {
   // --- ANCHOR UNIT LOGIC ---
   const findAnchorUnit = useCallback((units: any[]) => {
     if (!units || units.length === 0) return { conversion_rate: 1 };
-
-    // Priority 1: Wholesale
     const wholesale = units.find((u) => u.unit_type === "wholesale");
     if (wholesale) return wholesale;
-
-    // Priority 2: Logistics
     const logistics = units.find((u) => u.unit_type === "logistics");
     if (logistics) return logistics;
-
-    // Priority 3: Largest Rate
-    // Clone to sort safely
-    const sorted = [...units].sort(
-      (a, b) => (b.conversion_rate || 1) - (a.conversion_rate || 1)
-    );
+    const sorted = [...units].sort((a, b) => (b.conversion_rate || 1) - (a.conversion_rate || 1));
     return sorted[0];
   }, []);
 
-  // --- PRICING RE-CALCULATION ---
+  // --- PRICING RE-CALCULATION (CHUẨN HÓA SNAKE_CASE) ---
   const recalcPrices = useCallback(() => {
     const allValues = form.getFieldsValue();
-    const inputCost = parseFloat(allValues.actualCost) || 0; // This is WHOLESALE COST (Input)
+    
+    // [CORE FIX]: Đọc đúng trường actual_cost của Antd Form
+    const inputCost = parseFloat(allValues.actual_cost) || 0; 
     const units = allValues.units || [];
 
-    const wholesaleMarginValue =
-      parseFloat(allValues.wholesaleMarginValue) || 0;
-    const wholesaleMarginType = allValues.wholesaleMarginType || "amount";
+    const wholesaleMarginValue = parseFloat(allValues.wholesale_margin_value) || 0;
+    const wholesaleMarginType = (allValues.wholesale_margin_type === 'percent' || allValues.wholesale_margin_type === '%') ? 'percent' : 'amount';
 
-    const retailMarginValue = parseFloat(allValues.retailMarginValue) || 0;
-    const retailMarginType = allValues.retailMarginType || "amount";
+    const retailMarginValue = parseFloat(allValues.retail_margin_value) || 0;
+    const retailMarginType = (allValues.retail_margin_type === 'percent' || allValues.retail_margin_type === '%') ? 'percent' : 'amount';
 
-    // 1. Find Anchor
     const anchorUnit = findAnchorUnit(units);
     const anchorRate = parseFloat(anchorUnit.conversion_rate) || 1;
-
-    // 2. Base Metrics
+    
+    // Vốn cơ bản (1 Viên)
     const baseCost = inputCost / anchorRate;
 
-    // Profit per BASE UNIT
-    let profitBaseWs = 0;
-    if (wholesaleMarginType === "amount") {
-      // Margin Amount is entered PER ANCHOR UNIT
-      // So profit per base = Margin / AnchorRate
-      profitBaseWs = wholesaleMarginValue / anchorRate;
-    } else {
-      // Percent: Applied to cost
-      profitBaseWs = baseCost * (wholesaleMarginValue / 100);
-    }
-
-    let profitBaseRt = 0;
-    if (retailMarginType === "amount") {
-      profitBaseRt = retailMarginValue / anchorRate;
-    } else {
-      profitBaseRt = baseCost * (retailMarginValue / 100);
-    }
-
-    // 3. Update Units
     const updatedUnits = units.map((u: any) => {
       const uRate = parseFloat(u.conversion_rate) || 1;
       const uType = u.unit_type || "base";
+      let finalPrice = 0;
+      const unitCost = baseCost * uRate;
 
-      let selectedProfitBase = profitBaseRt;
       if (uType === "wholesale" || uType === "logistics") {
-        selectedProfitBase = profitBaseWs;
+        if (wholesaleMarginType === "amount") {
+           // Lãi tiền chia nhỏ ra cho từng viên, rồi nhân với số viên của đơn vị
+           const profitPerUnit = (wholesaleMarginValue / anchorRate) * uRate;
+           finalPrice = unitCost + profitPerUnit;
+        } else {
+           finalPrice = unitCost * (1 + wholesaleMarginValue / 100);
+        }
+      } else {
+        if (retailMarginType === "amount") {
+           const profitPerUnit = (retailMarginValue / anchorRate) * uRate;
+           finalPrice = unitCost + profitPerUnit;
+        } else {
+           finalPrice = unitCost * (1 + retailMarginValue / 100);
+        }
       }
-
-      // Final Price = (BaseCost + ProfitBase) * UnitRate
-      const finalPrice = (baseCost + selectedProfitBase) * uRate;
 
       return {
         ...u,
-        price: Math.round(finalPrice), // Round to integer (Unit Price < 100 is possible)
+        price: Math.round(finalPrice), 
       };
     });
 
-    // Update form carefully to avoid loops if needed, but here we just set 'units'
-    // form.setFieldValue('units', updatedUnits) triggers re-render
-    // We must ensure this doesn't cause infinite loop if called from useEffect.
-    // Ideally called only on blur or specific changes.
-    // For now, valid to setFieldsValue.
     form.setFieldsValue({ units: updatedUnits });
   }, [form, findAnchorUnit]);
 
@@ -132,94 +109,83 @@ export const useProductFormLogic = () => {
     }
   }, [isEditing, id, getProductDetails]);
 
-  // --- INITIALIZATION (FIXED FINAL) ---
+  // --- BIND DATA VÀO FORM (CHUẨN HÓA SNAKE_CASE) ---
   useEffect(() => {
     if (isEditing && currentProduct) {
-      // 1. Clone object
       const initData: any = { ...currentProduct };
-
-      // [CRITICAL FIX]: Hỗ trợ cả 2 định dạng API (REST vs RPC)
-      // REST API trả về: actual_cost, retail_margin_value...
-      // RPC trả về: actualCost, retailMarginValue...
-
-      const rawCost = currentProduct.actualCost ?? currentProduct.actual_cost;
-      const dbBaseCost = Number(rawCost) || 0;
-
-      const units = currentProduct.units || [];
+      
+      const units = currentProduct.units || currentProduct.product_units || [];
       const anchor = findAnchorUnit(units);
       const anchorRate = Number(anchor.conversion_rate) || 1;
 
-      // Quy đổi
-      const displayCost = dbBaseCost * anchorRate;
-      initData.actualCost = Math.round(displayCost);
+      // Quy đổi Giá vốn DB (Base) -> Giao diện (Anchor)
+      const rawCost = currentProduct.actual_cost ?? 0;
+      const displayCost = Math.round(Number(rawCost) * anchorRate);
 
-      // Map Margin (Hỗ trợ cả 2 case)
-      initData.retailMarginValue =
-        currentProduct.retailMarginValue ?? currentProduct.retail_margin_value;
-      initData.retailMarginType =
-        currentProduct.retailMarginType ?? currentProduct.retail_margin_type;
-      initData.wholesaleMarginValue =
-        currentProduct.wholesaleMarginValue ??
-        currentProduct.wholesale_margin_value;
-      initData.wholesaleMarginType =
-        currentProduct.wholesaleMarginType ??
-        currentProduct.wholesale_margin_type;
+      // Ép Type % hay Tiền để UI select đúng
+      const retailTypeDB = currentProduct.retail_margin_type;
+      initData.retail_margin_type = (retailTypeDB === '%' || retailTypeDB === 'percent') ? 'percent' : 'amount';
+      initData.retail_margin_value = currentProduct.retail_margin_value ?? 0;
 
-      // 4. Xử lý Inventory
+      const wholesaleTypeDB = currentProduct.wholesale_margin_type;
+      initData.wholesale_margin_type = (wholesaleTypeDB === '%' || wholesaleTypeDB === 'percent') ? 'percent' : 'amount';
+      initData.wholesale_margin_value = currentProduct.wholesale_margin_value ?? 0;
+
+      // Xử lý Inventory
       if (currentProduct.inventorySettings) {
         const newSettings: any = {};
         Object.keys(currentProduct.inventorySettings).forEach((whKey) => {
-          const setting = currentProduct.inventorySettings[whKey]; // whKey là 'b2b', 'pkdh'...
+          const setting = currentProduct.inventorySettings[whKey];
           if (setting) {
             newSettings[whKey] = {
-              min: setting.min
-                ? Math.floor(Number(setting.min) / anchorRate)
-                : 0,
-              max: setting.max
-                ? Math.floor(Number(setting.max) / anchorRate)
-                : 0,
+              min: setting.min ? Math.floor(Number(setting.min) / anchorRate) : 0,
+              max: setting.max ? Math.floor(Number(setting.max) / anchorRate) : 0,
             };
           }
         });
         initData.inventorySettings = newSettings;
-      } else if (currentProduct.inventory) {
-        // [Fallback] Nếu REST API trả về mảng 'inventory' thay vì object 'inventorySettings'
-        // Dev cần check xem productStore map inventory như thế nào.
-        // Tạm thời giữ nguyên logic cũ của Sếp.
       }
 
-      // 5. Reset & Set Form
-      form.resetFields();
-      form.setFieldsValue(initData);
+      if (currentProduct.product_units) {
+          initData.units = currentProduct.product_units;
+      }
 
-      // 6. Update Local UI State
-      // Distributor ID
-      const distId =
-        currentProduct.distributor ?? currentProduct.distributor_id;
+      form.resetFields();
+      
+      // [CORE FIX]: Ép tên biến chuẩn Snake Case
+      setTimeout(() => {
+          form.setFieldsValue({
+              ...initData,
+              actual_cost: displayCost,
+              name: currentProduct.name,
+              barcode: currentProduct.barcode,
+              sku: currentProduct.sku,
+              registration_number: currentProduct.registration_number,
+              packing_spec: currentProduct.packing_spec,
+              actualCost: displayCost,
+          });
+      }, 100);
+
+      const distId = currentProduct.distributor ?? currentProduct.distributor_id;
       if (distId) {
-        form.setFieldValue("distributor", distId);
+        form.setFieldValue("distributor_id", distId);
         const supplier = suppliers.find((s) => s.id === distId);
         if (supplier) setSelectedSupplierName(supplier.name);
       }
 
-      // Image URL
-      const img = currentProduct.imageUrl ?? currentProduct.image_url;
+      const img = currentProduct.image_url;
       if (img) {
         setImageUrl(img);
-        setFileList([
-          { uid: "-1", name: "image.png", status: "done", url: img },
-        ]);
+        setFileList([{ uid: "-1", name: "image.png", status: "done", url: img }]);
       }
 
-      // Tags
-      const tags = currentProduct.tags ?? currentProduct.active_ingredient;
-      if (tags && !form.getFieldValue("tags")) {
-        form.setFieldsValue({ tags: tags });
+      const tags = currentProduct.active_ingredient;
+      if (tags && !form.getFieldValue("active_ingredient")) {
+        form.setFieldsValue({ active_ingredient: tags });
       }
     }
   }, [isEditing, currentProduct, form, suppliers, findAnchorUnit]);
 
-  // --- HANDLERS ---
   const handleModifyCostOrMargin = () => {
     recalcPrices();
   };
@@ -228,15 +194,13 @@ export const useProductFormLogic = () => {
     if (onSuccess) onSuccess("ok");
   };
 
-  const onUploadChange: UploadProps["onChange"] = ({
-    fileList: newFileList,
-  }) => {
+  const onUploadChange: UploadProps["onChange"] = ({ fileList: newFileList }) => {
     setFileList(newFileList);
     if (newFileList.length === 0) setImageUrl("");
   };
 
   const handleImageSearch = () => {
-    const productName = form.getFieldValue("productName");
+    const productName = form.getFieldValue("name");
     if (!productName) {
       antMessage.warning("Vui lòng nhập Tên sản phẩm trước khi tìm ảnh.");
       return;
@@ -248,7 +212,6 @@ export const useProductFormLogic = () => {
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
-      // Image Upload
       let finalImageUrl = imageUrl;
       if (fileList.length > 0 && fileList[0].originFileObj) {
         antMessage.loading({ content: "Đang tải ảnh lên...", key: "upload" });
@@ -256,33 +219,34 @@ export const useProductFormLogic = () => {
         antMessage.success({ content: "Tải ảnh thành công!", key: "upload" });
       }
 
-      // PREPARE PAYLOAD
-      // Convert Display Cost (Wholesale) -> Base Cost
-      const inputCost = parseFloat(values.actualCost) || 0;
+      // Đưa Giá Hộp về lại Giá Viên trước khi lưu DB
+      const inputCost = parseFloat(values.actual_cost) || 0;
       const units = values.units || [];
       const anchor = findAnchorUnit(units);
       const anchorRate = anchor.conversion_rate || 1;
       const baseCost = inputCost / anchorRate;
 
-      // [FIX] Map units to set price = 0 (Signal for Backend Auto-Pricing)
       const fixedUnits = units.map((u: any) => ({
         ...u,
-        price: 0, // Backend will recalculate based on Margin
+        price: u.price || 0, 
       }));
 
       const finalValues = {
         ...values,
-        actualCost: baseCost, // Override with Base Cost for API
-        imageUrl: finalImageUrl,
-        units: fixedUnits, // Use fixed units
+        actual_cost: baseCost, 
+        image_url: finalImageUrl,
+        units: fixedUnits,
+        // Dịch Type sang chuỗi % cho DB dễ hiểu
+        retail_margin_type: values.retail_margin_type === 'percent' ? '%' : 'amount',
+        wholesale_margin_type: values.wholesale_margin_type === 'percent' ? '%' : 'amount',
       };
 
       const inventoryPayload = warehouses.map((wh) => {
         const settings = values.inventorySettings?.[wh.key] || {};
         return {
           warehouse_id: wh.id,
-          min_stock: (settings.min || 0) * anchorRate, // Wholesale -> Base
-          max_stock: (settings.max || 0) * anchorRate, // Wholesale -> Base
+          min_stock: (settings.min || 0) * anchorRate, 
+          max_stock: (settings.max || 0) * anchorRate, 
         };
       });
 
@@ -295,18 +259,13 @@ export const useProductFormLogic = () => {
         const res: any = await addProduct(finalValues, inventoryPayload);
         if (res?.product_id) {
           savedId = Number(res.product_id);
-          // Optional: Update URL to edit mode without reload if needed,
-          // but for now just fetching details is enough to update form
         }
         antMessage.success(`Tạo sản phẩm thành công!`);
       }
 
-      // [FIX] Reload data to update UI with Backend-calculated prices
       if (savedId) {
         await getProductDetails(savedId);
       }
-
-      // navigate("/inventory"); // [DISABLE] Stay on page to see updated prices
     } catch (error: any) {
       console.error(error);
       const msg = error.message || error.details || "Không thể lưu sản phẩm";
@@ -316,7 +275,6 @@ export const useProductFormLogic = () => {
     }
   };
 
-  // Derive Anchor Name for UI
   const currentAnchor = findAnchorUnit(watchedUnits || []);
   const anchorUnitName = currentAnchor?.unit_name || "Base Unit";
 
