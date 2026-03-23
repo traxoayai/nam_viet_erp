@@ -450,7 +450,7 @@ const QuickMinMaxPage: React.FC = () => {
       title: "Đơn vị",
       dataIndex: "wholesale_unit",
       width: 80,
-      render: (t: string) => <Tag color="blue">{t}</Tag>,
+      render: (t: string) => <Tag color="geekblue" className="rounded-md font-medium">{t}</Tag>,
     },
     {
       title: "Nhà Cung Cấp",
@@ -459,7 +459,7 @@ const QuickMinMaxPage: React.FC = () => {
       render: (val: any, record: any) => (
         <Select
           showSearch
-          style={{ width: "100%" }}
+          className={`w-full transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
           placeholder="Chọn NCC..."
           optionFilterProp="children"
           value={val}
@@ -484,10 +484,10 @@ const QuickMinMaxPage: React.FC = () => {
       width: 120,
       render: (val: number, record: any) => (
         <InputNumber
+          className={`w-full transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
           value={val}
           onChange={(v) => handleCellChange(record.key, "min_stock", v)}
           onBlur={() => handleSaveRow(record)}
-          style={{ width: "100%" }}
           onFocus={() => setActiveRowKey(record.id)}
         />
       ),
@@ -498,10 +498,10 @@ const QuickMinMaxPage: React.FC = () => {
       width: 120,
       render: (val: number, record: any) => (
         <InputNumber
+          className={`w-full transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
           value={val}
           onChange={(v) => handleCellChange(record.key, "max_stock", v)}
           onBlur={() => handleSaveRow(record)}
-          style={{ width: "100%" }}
           onFocus={() => setActiveRowKey(record.id)}
         />
       ),
@@ -543,22 +543,21 @@ const QuickMinMaxPage: React.FC = () => {
   const renderMobileCards = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
       {displayedProducts.map((record: any) => (
-        <Card 
-          key={record.id} 
-          style={{ borderRadius: 16, border: record.is_dirty ? '1px solid #1890ff' : 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }} 
-          bodyStyle={{ padding: 16 }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div key={record.id} className={`rounded-xl border ${record.is_dirty ? 'border-orange-400' : 'border-gray-200'} shadow-sm bg-white overflow-hidden`}>
+          {/* Header */}
+          <div className="bg-slate-50 p-3 border-b border-gray-100 flex justify-between items-start">
             <div>
-              <Text strong style={{ fontSize: 16 }}>{record.name}</Text>
-              <div style={{ color: '#888', fontSize: 12, marginTop: 4 }}>SKU: {record.sku} | {record.wholesale_unit}</div>
+              <Text strong className="text-base">{record.name}</Text>
+              <div className="text-gray-400 text-xs mt-1">SKU: {record.sku} | <Tag color="geekblue" className="rounded-md font-medium ml-1">{record.wholesale_unit}</Tag></div>
             </div>
-            {savingId === record.id ? <SyncOutlined spin style={{ color: '#1890ff', fontSize: 18 }} /> : (record.is_dirty === false ? <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18 }} /> : null)}
+            {savingId === record.id ? <SyncOutlined spin className="text-blue-500 text-lg" /> : (record.is_dirty === false ? <CheckCircleOutlined className="text-green-500 text-lg" /> : null)}
           </div>
 
+          {/* Body */}
+          <div className="p-4">
           <Select
             showSearch
-            style={{ width: "100%", marginBottom: 16 }}
+            className={`w-full mb-4 transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
             placeholder="Chọn nhà cung cấp..."
             optionFilterProp="children"
             value={record.distributor_id}
@@ -578,9 +577,9 @@ const QuickMinMaxPage: React.FC = () => {
 
           <Row gutter={12}>
             <Col span={12}>
-              <Text type="secondary" style={{ fontSize: 12 }}>Min (Dự trữ)</Text>
+              <Text type="secondary" className="text-xs">Min (Dự trữ)</Text>
               <InputNumber 
-                style={{ width: "100%", marginTop: 4, height: 40, borderRadius: 8, borderColor: record.is_dirty ? "#1890ff" : undefined }} 
+                className={`w-full mt-1 h-10 rounded-lg transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
                 value={record.min_stock} 
                 onChange={(v) => handleCellChange(record.key, "min_stock", v)}
                 onBlur={() => handleSaveRow(record)}
@@ -588,9 +587,9 @@ const QuickMinMaxPage: React.FC = () => {
               />
             </Col>
             <Col span={12}>
-              <Text type="secondary" style={{ fontSize: 12 }}>Max (Tối đa)</Text>
+              <Text type="secondary" className="text-xs">Max (Tối đa)</Text>
               <InputNumber 
-                style={{ width: "100%", marginTop: 4, height: 40, borderRadius: 8, borderColor: record.is_dirty ? "#1890ff" : undefined }} 
+                className={`w-full mt-1 h-10 rounded-lg transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
                 value={record.max_stock} 
                 onChange={(v) => handleCellChange(record.key, "max_stock", v)}
                 onBlur={() => handleSaveRow(record)}
@@ -598,7 +597,8 @@ const QuickMinMaxPage: React.FC = () => {
               />
             </Col>
           </Row>
-        </Card>
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -618,6 +618,7 @@ const QuickMinMaxPage: React.FC = () => {
           </Col>
           <Col xs={24} md={12} lg={6}>
             <Search
+              className={`transition-all ${listening ? 'animate-pulse text-red-500 border-red-500' : 'border-blue-500 text-blue-600 hover:bg-blue-50'} ${isMobile ? 'w-full' : ''}`}
               placeholder="Tìm tên thuốc..."
               allowClear
               onSearch={(val) => setSearchText(val)}
@@ -626,7 +627,7 @@ const QuickMinMaxPage: React.FC = () => {
           </Col>
           <Col xs={24} sm={12} lg={4}>
             <Select
-              style={{ width: "100%" }}
+              className={`transition-all ${listening ? 'animate-pulse text-red-500 border-red-500' : 'border-blue-500 text-blue-600 hover:bg-blue-50'} ${isMobile ? 'w-full' : ''}`}
               placeholder="Chọn kho..."
               value={selectedWarehouseId}
               onChange={(v) => setSelectedWarehouseId(v)}
@@ -648,11 +649,9 @@ const QuickMinMaxPage: React.FC = () => {
           </Col>
           <Col xs={24} lg={4} style={{ textAlign: isMobile ? "left" : "right" }}>
             <Button
-              type={listening ? "primary" : "default"}
-              danger={listening}
+              className={`transition-all ${listening ? 'animate-pulse text-red-500 border-red-500' : 'border-blue-500 text-blue-600 hover:bg-blue-50'} ${isMobile ? 'w-full' : ''}`}
               icon={<AudioOutlined spin={listening} />}
               onClick={toggleListening}
-              style={{ width: isMobile ? "100%" : undefined }}
             >
               {listening ? "Đang nghe..." : "Voice Control"}
             </Button>
@@ -663,16 +662,16 @@ const QuickMinMaxPage: React.FC = () => {
             <Statistic
               title="Tổng Vốn Min"
               value={totalMinValue}
-              valueStyle={{ fontSize: isMobile ? 16 : 24 }}
-              prefix={<DollarCircleOutlined />}
+              valueStyle={{ fontSize: isMobile ? 16 : 24, color: '#22c55e' }}
+              prefix={<DollarCircleOutlined className="text-green-500" />}
             />
           </Col>
           <Col xs={12} sm={12}>
             <Statistic
               title="Tổng Vốn Max"
               value={totalMaxValue}
-              valueStyle={{ fontSize: isMobile ? 16 : 24 }}
-              prefix={<DollarCircleOutlined />}
+              valueStyle={{ fontSize: isMobile ? 16 : 24, color: '#22c55e' }}
+              prefix={<DollarCircleOutlined className="text-green-500" />}
             />
           </Col>
         </Row>
