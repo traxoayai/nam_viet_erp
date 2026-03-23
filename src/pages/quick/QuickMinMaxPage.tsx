@@ -19,6 +19,7 @@ import {
   Tag,
   Input,
   Checkbox,
+  Grid,
 } from "antd";
 import React, { useState, useEffect, useRef } from "react";
 
@@ -46,7 +47,12 @@ declare global {
   }
 }
 
+const { useBreakpoint } = Grid;
+
 const QuickMinMaxPage: React.FC = () => {
+  const screens = useBreakpoint();
+  const isMobile = screens.xs || (screens.sm && !screens.md);
+
   // State
   const [products, setProducts] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -534,20 +540,83 @@ const QuickMinMaxPage: React.FC = () => {
   ];
 
   // Filter Logic
+  const renderMobileCards = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+      {displayedProducts.map((record: any) => (
+        <Card 
+          key={record.id} 
+          style={{ borderRadius: 16, border: record.is_dirty ? '1px solid #1890ff' : 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }} 
+          bodyStyle={{ padding: 16 }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <div>
+              <Text strong style={{ fontSize: 16 }}>{record.name}</Text>
+              <div style={{ color: '#888', fontSize: 12, marginTop: 4 }}>SKU: {record.sku} | {record.wholesale_unit}</div>
+            </div>
+            {savingId === record.id ? <SyncOutlined spin style={{ color: '#1890ff', fontSize: 18 }} /> : (record.is_dirty === false ? <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18 }} /> : null)}
+          </div>
+
+          <Select
+            showSearch
+            style={{ width: "100%", marginBottom: 16 }}
+            placeholder="Chọn nhà cung cấp..."
+            optionFilterProp="children"
+            value={record.distributor_id}
+            onChange={(newId) => handleUpdateDistributor(record.id, newId)}
+            disabled={savingId === record.id}
+            loading={savingId === record.id}
+            filterOption={(input, option) =>
+              (option?.children as unknown as string)
+                ?.toLowerCase()
+                .includes(input.toLowerCase())
+            }
+          >
+            {suppliers.map(s => (
+              <Option key={s.id} value={s.id}>{s.name}</Option>
+            ))}
+          </Select>
+
+          <Row gutter={12}>
+            <Col span={12}>
+              <Text type="secondary" style={{ fontSize: 12 }}>Min (Dự trữ)</Text>
+              <InputNumber 
+                style={{ width: "100%", marginTop: 4, height: 40, borderRadius: 8, borderColor: record.is_dirty ? "#1890ff" : undefined }} 
+                value={record.min_stock} 
+                onChange={(v) => handleCellChange(record.key, "min_stock", v)}
+                onBlur={() => handleSaveRow(record)}
+                size="large"
+              />
+            </Col>
+            <Col span={12}>
+              <Text type="secondary" style={{ fontSize: 12 }}>Max (Tối đa)</Text>
+              <InputNumber 
+                style={{ width: "100%", marginTop: 4, height: 40, borderRadius: 8, borderColor: record.is_dirty ? "#1890ff" : undefined }} 
+                value={record.max_stock} 
+                onChange={(v) => handleCellChange(record.key, "max_stock", v)}
+                onBlur={() => handleSaveRow(record)}
+                size="large"
+              />
+            </Col>
+          </Row>
+        </Card>
+      ))}
+    </div>
+  );
+
   // Filter Logic: Backend handles filtering via `p_has_setup_only` param
   const displayedProducts = products;
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: isMobile ? 8 : 24, paddingBottom: isMobile ? 80 : 24 }}>
       {/* TOOLBAR & STATISTICS */}
       <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: 16 }}>
-        <Row gutter={16} align="middle">
-          <Col span={6}>
+        <Row gutter={[16, 16]} align="middle">
+          <Col xs={24} md={12} lg={6}>
             <Title level={4} style={{ margin: 0 }}>
               Cài Min/Max & Tồn kho
             </Title>
           </Col>
-          <Col span={6}>
+          <Col xs={24} md={12} lg={6}>
             <Search
               placeholder="Tìm tên thuốc..."
               allowClear
@@ -555,7 +624,7 @@ const QuickMinMaxPage: React.FC = () => {
               onChange={(e) => setSearchText(e.target.value)}
             />
           </Col>
-          <Col span={4}>
+          <Col xs={24} sm={12} lg={4}>
             <Select
               style={{ width: "100%" }}
               placeholder="Chọn kho..."
@@ -569,7 +638,7 @@ const QuickMinMaxPage: React.FC = () => {
               ))}
             </Select>
           </Col>
-          <Col span={4}>
+          <Col xs={24} sm={12} lg={4}>
             <Checkbox
               checked={showHasStockOnly}
               onChange={(e) => setShowHasStockOnly(e.target.checked)}
@@ -577,62 +646,69 @@ const QuickMinMaxPage: React.FC = () => {
               Chỉ hiện SP đã cài Min/Max
             </Checkbox>
           </Col>
-          <Col span={4} style={{ textAlign: "right" }}>
+          <Col xs={24} lg={4} style={{ textAlign: isMobile ? "left" : "right" }}>
             <Button
               type={listening ? "primary" : "default"}
               danger={listening}
               icon={<AudioOutlined spin={listening} />}
               onClick={toggleListening}
+              style={{ width: isMobile ? "100%" : undefined }}
             >
               {listening ? "Đang nghe..." : "Voice Control"}
             </Button>
           </Col>
         </Row>
-        <Row gutter={16} style={{ marginTop: 16 }}>
-          <Col span={12}>
+        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+          <Col xs={12} sm={12}>
             <Statistic
               title="Tổng Vốn Min"
               value={totalMinValue}
+              valueStyle={{ fontSize: isMobile ? 16 : 24 }}
               prefix={<DollarCircleOutlined />}
             />
           </Col>
-          <Col span={12}>
+          <Col xs={12} sm={12}>
             <Statistic
               title="Tổng Vốn Max"
               value={totalMaxValue}
+              valueStyle={{ fontSize: isMobile ? 16 : 24 }}
               prefix={<DollarCircleOutlined />}
             />
           </Col>
         </Row>
       </Card>
 
-      <Card bodyStyle={{ padding: 0 }}>
-        <Table
-          columns={columns}
-          dataSource={displayedProducts}
-          loading={loading}
-          rowKey="id"
-          pagination={{
-            current: currentPage,
-            pageSize: pageSize,
-            total: total,
-            showSizeChanger: true,
-            onChange: (page, size) => {
-              setCurrentPage(page);
-              setPageSize(size);
-            },
-          }}
-          size="middle"
-          scroll={{ y: 600 }}
-          rowClassName={(record) =>
-            record.id === activeRowKey ? "highlight-row" : ""
-          }
-          onRow={(record) => ({
-            id: `row-${record.id}`, // Assign ID for scrolling
-            onClick: () => setActiveRowKey(record.id),
-          })}
-        />
-      </Card>
+      {isMobile ? (
+        renderMobileCards()
+      ) : (
+        <Card bodyStyle={{ padding: 0 }}>
+          <Table
+            columns={columns}
+            dataSource={displayedProducts}
+            loading={loading}
+            rowKey="id"
+            pagination={{
+              current: currentPage,
+              pageSize: pageSize,
+              total: total,
+              showSizeChanger: true,
+              onChange: (page, size) => {
+                setCurrentPage(page);
+                setPageSize(size);
+              },
+            }}
+            size="middle"
+            scroll={{ y: 600 }}
+            rowClassName={(record) =>
+              record.id === activeRowKey ? "highlight-row" : ""
+            }
+            onRow={(record) => ({
+              id: `row-${record.id}`, // Assign ID for scrolling
+              onClick: () => setActiveRowKey(record.id),
+            })}
+          />
+        </Card>
+      )}
       <style>{`
                 .highlight-row {
                     background-color: #fffbe6 !important; /* Light Yellow */
