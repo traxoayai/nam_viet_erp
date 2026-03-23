@@ -123,7 +123,7 @@ const QuickUnitPage: React.FC = () => {
       const rows = data.map((p: any) => {
         const units = p.product_units || [];
 
-        // Lấy đúng 3 unit từ DB
+        // Lấy dữ liệu từ Object con (Trường hợp gọi getAllProductsLite)
         const baseUnitObj = units.find((u: any) => u.is_base || u.unit_type === "base");
         const retailUnitObj = units.find((u: any) => !u.is_base && u.unit_type === "retail");
         const wholesaleUnitObj = units.find((u: any) => !u.is_base && u.unit_type === "wholesale");
@@ -136,13 +136,14 @@ const QuickUnitPage: React.FC = () => {
           imageUrl: p.image_url,
           actual_cost: p.actual_cost || 0,
           
-          base_unit: baseUnitObj?.unit_name || p.retail_unit || "Viên",
+          // [CORE FIX]: Lấy data linh hoạt. Ưu tiên Object con -> sau đó là trường Phẳng từ RPC
+          base_unit: baseUnitObj?.unit_name || p.base_unit || "Viên",
           
-          retail_unit: retailUnitObj?.unit_name || "",
-          retail_rate: retailUnitObj?.conversion_rate || 1,
+          retail_unit: retailUnitObj?.unit_name || p.retail_unit || "",
+          retail_rate: retailUnitObj?.conversion_rate || p.retail_conversion_rate || 1,
           
           wholesale_unit: wholesaleUnitObj?.unit_name || p.wholesale_unit || "",
-          wholesale_rate: wholesaleUnitObj?.conversion_rate || p.items_per_carton || 1,
+          wholesale_rate: wholesaleUnitObj?.conversion_rate || p.wholesale_conversion_rate || p.items_per_carton || 1,
           
           is_dirty: false,
         };
