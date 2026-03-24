@@ -367,9 +367,24 @@ const FinanceTransactionPage = () => {
                 enterButton
               />
               <Select
+                placeholder="Loại phiếu (Thu / Chi)"
+                allowClear
+                style={{ width: 160 }}
+                value={logic.filters.flow || undefined}
+                onChange={(val) => logic.setFilters({ flow: val })}
+              >
+                <Select.Option value="in">
+                  <Tag color="green" style={{ margin: 0 }}>Phiếu Thu (+)</Tag>
+                </Select.Option>
+                <Select.Option value="out">
+                  <Tag color="red" style={{ margin: 0 }}>Phiếu Chi (-)</Tag>
+                </Select.Option>
+              </Select>
+              <Select
                 placeholder="Trạng thái"
                 allowClear
                 style={{ width: 140 }}
+                value={logic.filters.status || undefined}
                 onChange={(val) => logic.setFilters({ status: val })}
               >
                 <Select.Option value="pending">Chờ duyệt</Select.Option>
