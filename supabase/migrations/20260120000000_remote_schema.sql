@@ -3578,6 +3578,34 @@ COMMENT ON FUNCTION "public"."create_auto_replenishment_request"("p_dest_warehou
 
 
 
+CREATE OR REPLACE FUNCTION "public"."create_automated_task"("p_title" "text", "p_description" "text", "p_priority" "text", "p_due_date" timestamp with time zone, "p_assignee_id" "uuid", "p_entity_type" "text" DEFAULT 'none'::"text", "p_entity_id" "text" DEFAULT NULL::"text", "p_ai_metadata" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+    v_task_id UUID;
+BEGIN
+    INSERT INTO public.tasks (
+        title, description, priority, due_date, 
+        assigner_id, assignee_id, entity_type, entity_id, ai_metadata
+    ) VALUES (
+        p_title, p_description, p_priority, p_due_date, 
+        NULL, -- NULL mang ý nghĩa: Hệ thống/AI tự động tạo
+        p_assignee_id, p_entity_type, p_entity_id, p_ai_metadata
+    ) RETURNING id INTO v_task_id;
+
+    RETURN jsonb_build_object(
+        'success', true, 
+        'task_id', v_task_id, 
+        'message', 'Task tự động đã được ghim vào sổ việc của nhân viên!'
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."create_automated_task"("p_title" "text", "p_description" "text", "p_priority" "text", "p_due_date" timestamp with time zone, "p_assignee_id" "uuid", "p_entity_type" "text", "p_entity_id" "text", "p_ai_metadata" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text" DEFAULT NULL::"text", "p_int_val" bigint DEFAULT NULL::bigint, "p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS bigint
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -5543,6 +5571,60 @@ $$;
 
 
 ALTER FUNCTION "public"."export_products_list"("search_query" "text", "category_filter" "text", "manufacturer_filter" "text", "status_filter" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_process_task_kpi"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    -- Chỉ kích hoạt khi trạng thái đổi thành 'done'
+    IF NEW.status = 'done' AND OLD.status <> 'done' THEN
+        NEW.completed_at = NOW();
+        
+        -- Gamification Logic
+        IF NEW.completed_at <= NEW.due_date THEN
+            NEW.kpi_points = 10; -- Hoàn thành đúng/sớm hạn: Thưởng tối đa
+        ELSE
+            NEW.kpi_points = 5;  -- Trễ hạn: Vẫn thưởng nhưng bị trừ nửa
+        END IF;
+    END IF;
+
+    -- Nếu hủy task, thu hồi điểm
+    IF NEW.status = 'cancelled' THEN
+        NEW.completed_at = NULL;
+        NEW.kpi_points = 0;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_process_task_kpi"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_protect_task_columns"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    -- Nếu người đang sửa là Người nhận việc (Và không đồng thời là người giao việc)
+    IF auth.uid() = NEW.assignee_id AND auth.uid() IS DISTINCT FROM OLD.assigner_id THEN
+        -- Cấm sửa Deadline, Priority, Entity
+        IF NEW.due_date IS DISTINCT FROM OLD.due_date 
+           OR NEW.priority IS DISTINCT FROM OLD.priority 
+           OR NEW.entity_type IS DISTINCT FROM OLD.entity_type THEN
+            RAISE EXCEPTION 'BẢO MẬT: Bạn không có quyền sửa Deadline, Độ ưu tiên hay Ngữ cảnh của Task này!';
+        END IF;
+    END IF;
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_protect_task_columns"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_sync_inventory_batch_to_total"() RETURNS "trigger"
@@ -11730,7 +11812,7 @@ ALTER FUNCTION "public"."search_products_pos"("p_keyword" "text", "p_warehouse_i
 
 
 CREATE OR REPLACE FUNCTION "public"."search_products_v2"("p_keyword" "text" DEFAULT ''::"text", "p_status" "text" DEFAULT ''::"text", "p_category" "text" DEFAULT ''::"text", "p_manufacturer" "text" DEFAULT ''::"text", "p_warehouse_id" integer DEFAULT NULL::integer, "p_limit" integer DEFAULT 20, "p_offset" integer DEFAULT 0) RETURNS "jsonb"
-    LANGUAGE "plpgsql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $_$
 DECLARE
@@ -11741,7 +11823,6 @@ DECLARE
     v_where_clauses TEXT[] := ARRAY['1=1']; 
     v_stock_cond TEXT := ''; 
 BEGIN
-    -- 1. XÂY DỰNG MỆNH ĐỀ WHERE ĐỘNG
     IF p_status IS NOT NULL AND p_status != '' THEN
         v_where_clauses := array_append(v_where_clauses, format('p.status = %L', p_status));
     ELSE
@@ -11773,56 +11854,49 @@ BEGIN
         v_stock_cond := format('AND warehouse_id = %s', p_warehouse_id);
     END IF;
 
-    -- 2. TỔNG HỢP SQL DYNAMIC
-    v_sql := format(
-        'SELECT jsonb_build_object(
-            ''data'', COALESCE(jsonb_agg(t.*), ''[]''),
-            ''total_count'', COALESCE(MAX(t.full_count), 0)
+    v_sql := format($q$
+        SELECT jsonb_build_object(
+            'data', COALESCE(jsonb_agg(t.*), '[]'::jsonb),
+            'total_count', COALESCE(MAX(t.full_count), 0)
         )
         FROM (
             SELECT 
-                p.id, 
-                p.name, 
-                p.sku, 
-                p.image_url, 
-                p.status, 
-                p.manufacturer_name AS manufacturer, 
-                p.active_ingredient,
-                %L::int as warehouse_id,
+                p.id, p.name, p.sku, p.barcode, p.image_url, p.status, 
+                p.manufacturer_name AS manufacturer, p.category_name AS category, p.active_ingredient,
+                COALESCE(p.actual_cost, 0) AS actual_cost,
                 
-                COALESCE((
-                    SELECT unit_name 
-                    FROM public.product_units 
-                    WHERE product_id = p.id AND unit_type = ''base'' 
-                    LIMIT 1
-                ), ''N/A'') as base_unit,
+                -- 1. Lấy Base Unit
+                COALESCE((SELECT unit_name FROM public.product_units WHERE product_id = p.id AND (unit_type = 'base' OR is_base = true) LIMIT 1), 'Viên') as base_unit,
                 
-                COALESCE((
-                    SELECT price 
-                    FROM public.product_units 
-                    WHERE product_id = p.id AND unit_type = ''retail'' 
-                    LIMIT 1
-                ), 0) as retail_price,
+                -- 2. Lấy Retail Unit + Rate + Price
+                COALESCE((SELECT unit_name FROM public.product_units WHERE product_id = p.id AND unit_type = 'retail' LIMIT 1), 'Vỉ') as retail_unit,
+                COALESCE((SELECT conversion_rate FROM public.product_units WHERE product_id = p.id AND unit_type = 'retail' LIMIT 1), 1) as retail_conversion_rate,
+                COALESCE((SELECT price_sell FROM public.product_units WHERE product_id = p.id AND unit_type = 'retail' LIMIT 1), 0) as retail_price,
+                
+                -- 3. Lấy Wholesale Unit + Rate + Price
+                COALESCE((SELECT unit_name FROM public.product_units WHERE product_id = p.id AND unit_type = 'wholesale' LIMIT 1), 'Hộp') as wholesale_unit,
+                COALESCE((SELECT conversion_rate FROM public.product_units WHERE product_id = p.id AND unit_type = 'wholesale' LIMIT 1), p.items_per_carton, 1) as wholesale_conversion_rate,
+                p.items_per_carton, -- Vẫn giữ lại để tương thích ngược
 
-                -- [CORE UPDATE]: Tồn kho chi tiết (Dùng Subquery "stock_data" để gom nhóm SUM trước)
+                %1$s::int as warehouse_id,
+
                 COALESCE((
                     SELECT jsonb_object_agg(
-                        COALESCE(w.name, ''Kho '' || stock_data.warehouse_id),
+                        COALESCE(w.name, 'Kho ' || stock_data.warehouse_id),
                         CASE 
                             WHEN max_u.rate > 1 THEN 
                                 CASE 
                                     WHEN stock_data.total_qty >= max_u.rate AND MOD(stock_data.total_qty::numeric, max_u.rate::numeric) > 0 THEN
-                                        FLOOR(stock_data.total_qty / max_u.rate)::int::text || '' '' || max_u.name || '' + '' || MOD(stock_data.total_qty::numeric, max_u.rate::numeric)::int::text || '' '' || COALESCE(base_u.name, ''ĐV'')
+                                        FLOOR(stock_data.total_qty / max_u.rate)::int::text || ' ' || max_u.name || ' + ' || MOD(stock_data.total_qty::numeric, max_u.rate::numeric)::int::text || ' ' || COALESCE(base_u.name, 'ĐV')
                                     WHEN stock_data.total_qty >= max_u.rate THEN
-                                        FLOOR(stock_data.total_qty / max_u.rate)::int::text || '' '' || max_u.name
+                                        FLOOR(stock_data.total_qty / max_u.rate)::int::text || ' ' || max_u.name
                                     ELSE
-                                        stock_data.total_qty::int::text || '' '' || COALESCE(base_u.name, ''ĐV'')
+                                        stock_data.total_qty::int::text || ' ' || COALESCE(base_u.name, 'ĐV')
                                 END
-                            ELSE stock_data.total_qty::int::text || '' '' || COALESCE(base_u.name, ''ĐV'')
+                            ELSE stock_data.total_qty::int::text || ' ' || COALESCE(base_u.name, 'ĐV')
                         END
                     )
                     FROM (
-                        -- Gom nhóm SUM an toàn tại đây để tránh lỗi 42803
                         SELECT warehouse_id, SUM(stock_quantity) as total_qty
                         FROM public.product_inventory
                         WHERE product_id = p.id
@@ -11831,37 +11905,33 @@ BEGIN
                     ) stock_data
                     LEFT JOIN public.warehouses w ON w.id = stock_data.warehouse_id
                     LEFT JOIN LATERAL (
-                        SELECT unit_name as name FROM public.product_units pu WHERE pu.product_id = p.id AND pu.unit_type = ''base'' LIMIT 1
+                        SELECT unit_name as name FROM public.product_units pu WHERE pu.product_id = p.id AND pu.unit_type = 'base' LIMIT 1
                     ) base_u ON true
                     LEFT JOIN LATERAL (
                         SELECT unit_name as name, conversion_rate as rate FROM public.product_units pu WHERE pu.product_id = p.id AND pu.conversion_rate > 1 ORDER BY pu.conversion_rate DESC LIMIT 1
                     ) max_u ON true
-                ), ''{}''::jsonb) AS warehouse_stocks,
+                ), '{}'::jsonb) AS warehouse_stocks,
 
-                -- [GIỮ NGUYÊN]: Tính tổng tồn hệ thống (có cộng kèm filter kho nếu có)
                 COALESCE((
-                    SELECT SUM(stock_quantity) 
-                    FROM public.product_inventory 
-                    WHERE product_id = p.id %s
+                    SELECT SUM(stock_quantity) FROM public.product_inventory WHERE product_id = p.id %2$s
                 ), 0)::INT as total_stock,
 
                 COUNT(*) OVER() as full_count
 
             FROM public.products p
-            WHERE %s
+            WHERE %3$s
             ORDER BY p.created_at DESC
-            LIMIT %s OFFSET %s
-        ) t',
-        p_warehouse_id,                             -- %L 
-        v_stock_cond,                               -- %s 
-        array_to_string(v_where_clauses, ' AND '),  -- %s 
-        p_limit,                                    -- %s 
-        p_offset                                    -- %s 
+            LIMIT %4$s OFFSET %5$s
+        ) t
+    $q$,
+    COALESCE(p_warehouse_id::text, 'NULL'),     
+    v_stock_cond,                               
+    array_to_string(v_where_clauses, ' AND '),  
+    p_limit,                                    
+    p_offset                                    
     );
 
-    -- 3. THỰC THI
     EXECUTE v_sql INTO v_result;
-
     RETURN COALESCE(v_result, '{"data": [], "total_count": 0}'::jsonb);
 END;
 $_$;
@@ -16226,6 +16296,43 @@ CREATE TABLE IF NOT EXISTS "public"."system_settings" (
 ALTER TABLE "public"."system_settings" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."tasks" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "title" "text" NOT NULL,
+    "description" "text",
+    "status" "text" DEFAULT 'todo'::"text",
+    "priority" "text" DEFAULT 'medium'::"text",
+    "assigner_id" "uuid",
+    "assignee_id" "uuid" NOT NULL,
+    "entity_type" "text" DEFAULT 'none'::"text",
+    "entity_id" "text",
+    "due_date" timestamp with time zone NOT NULL,
+    "completed_at" timestamp with time zone,
+    "kpi_points" integer DEFAULT 0,
+    "ai_metadata" "jsonb" DEFAULT '{}'::"jsonb",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "tasks_entity_type_check" CHECK (("entity_type" = ANY (ARRAY['order'::"text", 'customer'::"text", 'product'::"text", 'inventory_batch'::"text", 'none'::"text"]))),
+    CONSTRAINT "tasks_priority_check" CHECK (("priority" = ANY (ARRAY['low'::"text", 'medium'::"text", 'high'::"text", 'urgent'::"text"]))),
+    CONSTRAINT "tasks_status_check" CHECK (("status" = ANY (ARRAY['todo'::"text", 'doing'::"text", 'done'::"text", 'cancelled'::"text"])))
+);
+
+
+ALTER TABLE "public"."tasks" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."tasks" IS 'Trung tâm quản lý tác vụ và giao việc tự động (Task Hub)';
+
+
+
+COMMENT ON COLUMN "public"."tasks"."entity_type" IS 'Loại thực thể liên quan: order, customer, product, inventory_batch...';
+
+
+
+COMMENT ON COLUMN "public"."tasks"."kpi_points" IS 'Điểm thưởng Gamification: +10 (Sớm), +5 (Trễ hạn)';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."transaction_categories" (
     "id" bigint NOT NULL,
     "code" "text" NOT NULL,
@@ -17066,6 +17173,11 @@ ALTER TABLE ONLY "public"."system_settings"
 
 
 
+ALTER TABLE ONLY "public"."tasks"
+    ADD CONSTRAINT "tasks_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."transaction_categories"
     ADD CONSTRAINT "transaction_categories_code_key" UNIQUE ("code");
 
@@ -17577,6 +17689,14 @@ CREATE INDEX "idx_system_logs_user_id" ON "public"."system_logs" USING "btree" (
 
 
 
+CREATE INDEX "idx_tasks_assignee" ON "public"."tasks" USING "btree" ("assignee_id", "status");
+
+
+
+CREATE INDEX "idx_tasks_entity" ON "public"."tasks" USING "btree" ("entity_type", "entity_id");
+
+
+
 CREATE INDEX "idx_template_items_template_id" ON "public"."prescription_template_items" USING "btree" ("template_id");
 
 
@@ -17818,6 +17938,14 @@ CREATE OR REPLACE TRIGGER "trg_log_user_roles" AFTER INSERT OR DELETE OR UPDATE 
 
 
 CREATE OR REPLACE TRIGGER "trg_notify_payment" AFTER INSERT OR UPDATE ON "public"."finance_transactions" FOR EACH ROW EXECUTE FUNCTION "public"."notify_sales_on_payment"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_process_task_kpi" BEFORE UPDATE OF "status" ON "public"."tasks" FOR EACH ROW EXECUTE FUNCTION "public"."fn_process_task_kpi"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_protect_task_columns" BEFORE UPDATE ON "public"."tasks" FOR EACH ROW EXECUTE FUNCTION "public"."fn_protect_task_columns"();
 
 
 
@@ -18611,6 +18739,16 @@ ALTER TABLE ONLY "public"."system_logs"
 
 
 
+ALTER TABLE ONLY "public"."tasks"
+    ADD CONSTRAINT "tasks_assignee_id_fkey" FOREIGN KEY ("assignee_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."tasks"
+    ADD CONSTRAINT "tasks_assigner_id_fkey" FOREIGN KEY ("assigner_id") REFERENCES "auth"."users"("id");
+
+
+
 ALTER TABLE ONLY "public"."transaction_categories"
     ADD CONSTRAINT "transaction_categories_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "public"."chart_of_accounts"("account_code");
 
@@ -19011,6 +19149,18 @@ CREATE POLICY "Staff full access invoices" ON "public"."finance_invoices" TO "au
 
 
 
+CREATE POLICY "Task_Insert_Policy" ON "public"."tasks" FOR INSERT WITH CHECK ((("auth"."uid"() = "assigner_id") OR ("assigner_id" IS NULL)));
+
+
+
+CREATE POLICY "Task_Update_Policy" ON "public"."tasks" FOR UPDATE USING ((("auth"."uid"() = "assignee_id") OR ("auth"."uid"() = "assigner_id")));
+
+
+
+CREATE POLICY "Task_View_Policy" ON "public"."tasks" FOR SELECT USING ((("auth"."uid"() = "assignee_id") OR ("auth"."uid"() = "assigner_id")));
+
+
+
 CREATE POLICY "User manage own reads" ON "public"."connect_reads" USING (("auth"."uid"() = "user_id"));
 
 
@@ -19203,6 +19353,9 @@ ALTER TABLE "public"."system_logs" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."system_settings" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."tasks" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."transaction_categories" ENABLE ROW LEVEL SECURITY;
@@ -19740,6 +19893,12 @@ GRANT ALL ON FUNCTION "public"."create_auto_replenishment_request"("p_dest_wareh
 
 
 
+GRANT ALL ON FUNCTION "public"."create_automated_task"("p_title" "text", "p_description" "text", "p_priority" "text", "p_due_date" timestamp with time zone, "p_assignee_id" "uuid", "p_entity_type" "text", "p_entity_id" "text", "p_ai_metadata" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_automated_task"("p_title" "text", "p_description" "text", "p_priority" "text", "p_due_date" timestamp with time zone, "p_assignee_id" "uuid", "p_entity_type" "text", "p_entity_id" "text", "p_ai_metadata" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_automated_task"("p_title" "text", "p_description" "text", "p_priority" "text", "p_due_date" timestamp with time zone, "p_assignee_id" "uuid", "p_entity_type" "text", "p_entity_id" "text", "p_ai_metadata" "jsonb") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_check_session"("p_warehouse_id" bigint, "p_note" "text", "p_scope" "text", "p_text_val" "text", "p_int_val" bigint, "p_user_id" "uuid") TO "service_role";
@@ -19977,6 +20136,18 @@ GRANT ALL ON FUNCTION "public"."export_product_master_v2"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."export_products_list"("search_query" "text", "category_filter" "text", "manufacturer_filter" "text", "status_filter" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."export_products_list"("search_query" "text", "category_filter" "text", "manufacturer_filter" "text", "status_filter" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."export_products_list"("search_query" "text", "category_filter" "text", "manufacturer_filter" "text", "status_filter" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."fn_process_task_kpi"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_process_task_kpi"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_process_task_kpi"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."fn_protect_task_columns"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_protect_task_columns"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_protect_task_columns"() TO "service_role";
 
 
 
@@ -21975,6 +22146,12 @@ GRANT ALL ON SEQUENCE "public"."system_logs_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."system_settings" TO "anon";
 GRANT ALL ON TABLE "public"."system_settings" TO "authenticated";
 GRANT ALL ON TABLE "public"."system_settings" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."tasks" TO "anon";
+GRANT ALL ON TABLE "public"."tasks" TO "authenticated";
+GRANT ALL ON TABLE "public"."tasks" TO "service_role";
 
 
 

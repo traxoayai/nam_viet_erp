@@ -7,18 +7,20 @@ interface TextEditorProps {
   value?: string;
   onChange?: (value: string) => void; // Dùng onBlur cho AntD Form (hiệu năng)
   onRealtimeChange?: (value: string) => void; // Dùng onChange cho state (tức thì)
+  height?: number;
 }
 
 const TextEditor: React.FC<TextEditorProps> = ({
   value,
   onChange,
   onRealtimeChange,
+  height,
 }) => {
   // Cấu hình Jodit chung cho toàn hệ thống
   const config = useMemo(
     () => ({
       readonly: false,
-      height: 540,
+      height: height || 540,
       showRuler: true,
       placeholder: "Bắt đầu soạn thảo...",
       buttons: [
@@ -48,7 +50,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
         "preview",
       ],
     }),
-    []
+    [height]
   );
 
   return (

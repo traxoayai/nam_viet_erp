@@ -440,7 +440,7 @@ const QuickMinMaxPage: React.FC = () => {
   };
 
   const columns = [
-    { title: "SKU", dataIndex: "sku", width: 80 },
+    { title: "SKU", dataIndex: "sku", width: 130 },
     {
       title: "Sản phẩm",
       dataIndex: "name",
@@ -607,7 +607,7 @@ const QuickMinMaxPage: React.FC = () => {
   const displayedProducts = products;
 
   return (
-    <div style={{ padding: isMobile ? 8 : 24, paddingBottom: isMobile ? 80 : 24 }}>
+    <div style={{ padding: isMobile ? 8 : 10, paddingBottom: isMobile ? 60 : 10 }}>
       {/* TOOLBAR & STATISTICS */}
       <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: 16 }}>
         <Row gutter={[16, 16]} align="middle">

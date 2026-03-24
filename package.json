@@ -12,6 +12,9 @@
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@supabase/supabase-js": "^2.78.0",
     "@tanstack/react-query": "^5.90.20",
     "@tinymce/tinymce-react": "^6.3.0",

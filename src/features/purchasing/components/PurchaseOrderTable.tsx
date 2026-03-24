@@ -78,6 +78,8 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
           style={{
             whiteSpace: "normal",
             wordWrap: "break-word",
+            fontSize: 14,
+            fontWeight: "bold",
           }}
         >
           {text}
@@ -93,7 +95,7 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
         const { name, contact } = getLogisticsInfo(r);
         return (
           <Space direction="vertical" size={0}>
-            <div style={{ fontWeight: 500 }}>{name}</div>
+            <div style={{ fontWeight: "normal" }}>{name}</div>
             <div style={{ fontSize: 12, color: "#666" }}>
               {contact ? <>{contact} • </> : null}
               📦 {(r as any).total_packages || 1} kiện

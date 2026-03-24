@@ -4367,6 +4367,60 @@ export type Database = {
         }
         Relationships: []
       }
+      tasks: {
+        Row: {
+          ai_metadata: Json | null
+          assignee_id: string
+          assigner_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          description: string | null
+          due_date: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          kpi_points: number | null
+          priority: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          ai_metadata?: Json | null
+          assignee_id: string
+          assigner_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          description?: string | null
+          due_date: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          kpi_points?: number | null
+          priority?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          ai_metadata?: Json | null
+          assignee_id?: string
+          assigner_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          description?: string | null
+          due_date?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          kpi_points?: number | null
+          priority?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       transaction_categories: {
         Row: {
           account_id: string | null
@@ -4949,6 +5003,19 @@ export type Database = {
       }
       create_auto_replenishment_request: {
         Args: { p_dest_warehouse_id: number; p_note?: string }
+        Returns: Json
+      }
+      create_automated_task: {
+        Args: {
+          p_ai_metadata?: Json
+          p_assignee_id: string
+          p_description: string
+          p_due_date: string
+          p_entity_id?: string
+          p_entity_type?: string
+          p_priority: string
+          p_title: string
+        }
         Returns: Json
       }
       create_check_session: {

@@ -76,6 +76,7 @@ import QuickPricePage from "@/pages/quick/QuickPricePage";
 import QuickBarcodePage from "@/pages/quick/QuickBarcodePage";
 import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
 import SystemAuditLogPage from "@/pages/reports/SystemAuditLogPage"; // [NEW]
+import TaskKanbanPage from "@/pages/hr/TaskKanbanPage";
 
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
@@ -512,7 +513,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "hr/kpi",
-            element: <PagePlaceholder title="Giao việc & KPI" />,
+            element: <TaskKanbanPage />,
           },
           {
             path: "hr/payroll",
