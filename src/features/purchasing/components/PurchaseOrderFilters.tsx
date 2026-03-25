@@ -68,7 +68,7 @@ export const PurchaseOrderFilters: React.FC<PurchaseOrderFiltersProps> =
                 onChange={handleStatusChange}
                 value={filters.status}
               >
-                <Option value="new">Mới tạo</Option>
+                <Option value="draft">Nháp</Option>
                 <Option value="approved">Đã duyệt</Option>
                 <Option value="ordering">Đang đặt hàng</Option>
                 <Option value="partial">Giao một phần</Option>
