@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { inboundService } from "@/features/inventory/api/inboundService";
+import { supabase } from "@/shared/lib/supabaseClient";
 import { useInboundStore } from "../stores/useInboundStore";
 
 export const useInboundDetail = (id?: string) => {
@@ -90,6 +91,20 @@ export const useInboundDetail = (id?: string) => {
     });
   };
 
+  const handleSaveDraft = async () => {
+    if (!id) return;
+    try {
+      await supabase.rpc('save_inbound_draft', {
+        p_po_id: Number(id),
+        p_draft_data: workingItems 
+      });
+      message.success("Đã lưu nháp! Bạn có thể tắt máy và quét tiếp vào ngày mai.");
+    } catch (error: any) {
+      console.error(error);
+      message.error("Lỗi lưu nháp: " + error.message);
+    }
+  };
+
   // --- AI HANDLERS (STUBS) ---
   const handleVoiceCommand = () => {
     message.info("Đang bật Voice Listener... (Tính năng Demo)");
@@ -123,6 +138,7 @@ export const useInboundDetail = (id?: string) => {
     isSubmitting,
     updateWorkingItem,
     handleSubmit,
+    handleSaveDraft,
     // AI Tools
     handleVoiceCommand,
     handleCameraScan,

@@ -360,17 +360,18 @@ export const VatInvoiceModal: React.FC<Props> = ({
       dataIndex: "qty",
       align: "center" as const,
       render: (v: number) => <span className="text-gray-400">{v}</span>,
+      width: 100,
     },
     {
       title: "ĐVT",
       dataIndex: "unit",
       align: "center" as const,
-      width: 80,
+      width: 60,
       render: (u: string) => <Tag>{u || "Cái"}</Tag>,
     },
     {
       title: "SL Xuất VAT",
-      width: 140,
+      width: 100,
       render: (_: any, r: any, idx: number) => (
         <div>
           <InputNumber
@@ -383,7 +384,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
               setVatItems(newItems);
             }}
             status={r.vat_qty > r.max_vat_qty ? "error" : ""}
-            style={{ width: "100%" }}
+            style={{ width: "60%" }}
           />
           <div className="flex justify-between text-[10px] mt-1">
             <span className="text-gray-500">Kho: {r.max_vat_qty}</span>
@@ -449,7 +450,6 @@ export const VatInvoiceModal: React.FC<Props> = ({
       okText="Xác nhận & Tải file Excel"
     >
       <Form form={form} layout="vertical" className="mb-4">
-        {/* ... (Giữ nguyên form inputs) ... */}
         <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
           <Form.Item
             name="customer_name"

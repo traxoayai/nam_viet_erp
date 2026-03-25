@@ -2458,6 +2458,7 @@ export type Database = {
           id: string
           is_read: boolean | null
           message: string | null
+          reference_id: string | null
           title: string
           type: string | null
           user_id: string
@@ -2467,6 +2468,7 @@ export type Database = {
           id?: string
           is_read?: boolean | null
           message?: string | null
+          reference_id?: string | null
           title: string
           type?: string | null
           user_id: string
@@ -2476,6 +2478,7 @@ export type Database = {
           id?: string
           is_read?: boolean | null
           message?: string | null
+          reference_id?: string | null
           title?: string
           type?: string | null
           user_id?: string
@@ -4816,6 +4819,30 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_task_board: {
+        Row: {
+          ai_metadata: Json | null
+          assignee_avatar: string | null
+          assignee_id: string | null
+          assignee_name: string | null
+          assigner_avatar: string | null
+          assigner_id: string | null
+          assigner_name: string | null
+          completed_at: string | null
+          created_at: string | null
+          description: string | null
+          due_date: string | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string | null
+          kpi_points: number | null
+          priority: string | null
+          status: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       add_item_to_check_session: {
@@ -4936,9 +4963,7 @@ export type Database = {
             Args: { p_fund_account_id: number; p_order_ids: string[] }
             Returns: Json
           }
-      confirm_outbound_packing:
-        | { Args: { p_order_id: string }; Returns: Json }
-        | { Args: { p_order_id: string; p_user_id?: string }; Returns: Json }
+      confirm_outbound_packing: { Args: { p_order_id: string }; Returns: Json }
       confirm_post_read: { Args: { p_post_id: number }; Returns: undefined }
       confirm_purchase_costing: {
         Args: {
@@ -5303,13 +5328,14 @@ export type Database = {
       }
       export_customers_b2b_list: {
         Args: {
-          sales_staff_filter: string
-          search_query: string
-          status_filter: string
+          sales_staff_filter?: string
+          search_query?: string
+          status_filter?: string
         }
         Returns: {
           contact_person_name: string
           contact_person_phone: string
+          current_debt: number
           customer_code: string
           debt_limit: number
           email: string

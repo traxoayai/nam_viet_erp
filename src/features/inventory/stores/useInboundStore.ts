@@ -1,4 +1,5 @@
 // src/features/inventory/stores/useInboundStore.ts
+import { message } from "antd";
 import { create } from "zustand";
 
 import { inboundService } from "../api/inboundService";
@@ -101,13 +102,22 @@ export const useInboundStore = create<InboundState>((set, get) => ({
         );
       }
 
-      const workingItems = (data.items || []).map((item) => ({
-        ...item,
-        input_quantity:
-          item.quantity_remaining > 0 ? item.quantity_remaining : 0,
-        input_lot: "",
-        input_expiry: "",
-      }));
+      const draftItems = data.po_info?.draft_data;
+      const hasDraft = Array.isArray(draftItems) && draftItems.length > 0;
+
+      if (hasDraft) {
+        message.info("Đã phục hồi tiến độ làm việc lưu nháp.");
+      }
+
+      const workingItems = hasDraft 
+        ? draftItems 
+        : (data.items || []).map((item) => ({
+            ...item,
+            input_quantity:
+              item.quantity_remaining > 0 ? item.quantity_remaining : 0,
+            input_lot: "",
+            input_expiry: "",
+          }));
 
       set({ detail: data, workingItems, loading: false });
     } catch (error: any) {

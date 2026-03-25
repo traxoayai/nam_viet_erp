@@ -65,6 +65,7 @@ const WarehouseReceiptPage = () => {
     isSubmitting,
     updateWorkingItem,
     handleSubmit,
+    handleSaveDraft,
     handleVoiceCommand,
     handleCameraScan,
     handleDocUpload,
@@ -100,12 +101,35 @@ const WarehouseReceiptPage = () => {
     );
 
     if (existingItem) {
-      // [LOGIC] Tự động tăng số lượng
-      const newQty = (existingItem.input_quantity || 0) + 1;
-      updateWorkingItem(existingItem.product_id, { input_quantity: newQty });
+      const inputId = `qty-input-${existingItem.product_id}`;
+      const wrapperEl = document.getElementById(inputId);
+      const inputEl = wrapperEl?.querySelector('input');
 
-      message.success(`Đã nhập thêm: ${existingItem.product_name}`);
-      flash(existingItem.product_id); // [NEW] Flash UI
+      // [LOGIC MỚI]: Kiểm tra xem ô input này có đang được Focus không?
+      const isFocused = document.activeElement === inputEl;
+
+      if (!isFocused) {
+        // --- QUÉT LẦN 1: TÌM VỊ TRÍ, BÔI ĐEN, KHÔNG CỘNG SỐ LƯỢNG ---
+        message.info(`Đã chọn: ${existingItem.product_name}`);
+        flash(existingItem.product_id); 
+
+        setTimeout(() => {
+          if (wrapperEl && inputEl) {
+            wrapperEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            inputEl.focus();
+            inputEl.select(); // Bôi đen để sẵn sàng gõ số đè lên
+          }
+        }, 100);
+      } else {
+        // --- QUÉT LẦN 2 (Và các lần sau): CỘNG +1 SỐ LƯỢNG ---
+        const newQty = (existingItem.input_quantity || 0) + 1;
+        updateWorkingItem(existingItem.product_id, { input_quantity: newQty });
+        message.success(`+1 ${existingItem.product_name} (Tổng: ${newQty})`);
+        flash(existingItem.product_id);
+        
+        // Giữ bôi đen sau khi cộng để user vẫn có thể gõ đè nếu đổi ý
+        setTimeout(() => inputEl?.select(), 50);
+      }
       return;
     }
 
@@ -123,11 +147,31 @@ const WarehouseReceiptPage = () => {
         // Check again by ID in case barcode mismatch locally
         const item = workingItems.find((i) => i.product_id === product.id);
         if (item) {
-          updateWorkingItem(item.product_id, {
-            input_quantity: (item.input_quantity || 0) + 1,
-          });
-          message.success(`Đã +1: ${product.name}`);
-          flash(item.product_id);
+          const inputId = `qty-input-${item.product_id}`;
+          const wrapperEl = document.getElementById(inputId);
+          const inputEl = wrapperEl?.querySelector('input');
+
+          const isFocused = document.activeElement === inputEl;
+
+          if (!isFocused) {
+            // --- QUÉT LẦN 1: TÌM VỊ TRÍ, BÔI ĐEN, KHÔNG CỘNG SỐ LƯỢNG ---
+            message.info(`Đã chọn: ${product.name}`);
+            flash(item.product_id); 
+            setTimeout(() => {
+              if (wrapperEl && inputEl) {
+                wrapperEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                inputEl.focus();
+                inputEl.select(); 
+              }
+            }, 100);
+          } else {
+            // --- QUÉT LẦN 2: CỘNG +1 SỐ LƯỢNG ---
+            const newQty = (item.input_quantity || 0) + 1;
+            updateWorkingItem(item.product_id, { input_quantity: newQty });
+            message.success(`+1 ${product.name} (Tổng: ${newQty})`);
+            flash(item.product_id);
+            setTimeout(() => inputEl?.select(), 50);
+          }
         } else {
           message.warning(
             `Sản phẩm "${product.name}" không có trong phiếu nhập này!`
@@ -154,6 +198,18 @@ const WarehouseReceiptPage = () => {
       });
       message.success(`Đã gán mã & Nhập thêm: ${product.name}`);
       flash(item.product_id);
+      setTimeout(() => {
+        const wrapperId = `qty-input-${item.product_id}`;
+        const wrapperEl = document.getElementById(wrapperId);
+        if (wrapperEl) {
+          wrapperEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const inputEl = wrapperEl.querySelector('input');
+          if (inputEl) {
+            inputEl.focus();
+            inputEl.select();
+          }
+        }
+      }, 100);
     } else {
       message.warning(
         `Đã gán mã cho "${product.name}", nhưng sản phẩm này không nằm trong phiếu nhập!`
@@ -273,15 +329,17 @@ const WarehouseReceiptPage = () => {
           const displayQty = isDone ? record.quantity_received_prev : record.input_quantity;
 
           return (
-              <InputNumber 
-                  min={0}
-                  value={displayQty}
-                  onChange={(val) => updateWorkingItem(record.product_id, { input_quantity: val || 0 })}
-                  style={{ width: "100%" }}
-                  disabled={isDone} 
-                  placeholder="0"
-                  status={(!isDone && (record.input_quantity || 0) > 0) ? "warning" : ""}
-              />
+              <div id={`qty-input-${record.product_id}`}>
+                <InputNumber 
+                    min={0}
+                    value={displayQty}
+                    onChange={(val) => updateWorkingItem(record.product_id, { input_quantity: val || 0 })}
+                    style={{ width: "100%" }}
+                    disabled={isDone} 
+                    placeholder="0"
+                    status={(!isDone && (record.input_quantity || 0) > 0) ? "warning" : ""}
+                />
+              </div>
           );
       }
     },
@@ -497,6 +555,13 @@ const WarehouseReceiptPage = () => {
             <Button onClick={() => navigate("/inventory/inbound")}>
               Thoát
             </Button>
+            <Button 
+              onClick={handleSaveDraft} 
+              disabled={isDone}
+              style={{ borderColor: '#faad14', color: '#faad14' }}
+            >
+              Lưu Nháp (F3)
+            </Button>
             <Button
               type="primary"
               icon={<CheckCircle size={16} />}
@@ -536,6 +601,25 @@ const WarehouseReceiptPage = () => {
         onCancel={() => setAssignModalVisible(false)}
         onSuccess={handleAssignSuccess}
       />
+
+      <style>{`
+        /* Định nghĩa hiệu ứng chớp tắt */
+        @keyframes rowFlash {
+          0% { background-color: #b7eb8f !important; }  /* Xanh lá đậm lúc mới quét */
+          40% { background-color: #f6ffed !important; } /* Giữ xanh lá nhạt */
+          100% { background-color: transparent !important; }
+        }
+
+        /* Gắn animation vào class */
+        .flash-row {
+          animation: rowFlash 1.5s ease-out !important;
+        }
+        
+        /* Bắt buộc phải đè màu nền mặc định của Ant Design Table Cell */
+        .flash-row td {
+          background-color: transparent !important;
+        }
+      `}</style>
     </div>
   );
 };

@@ -51,6 +51,9 @@ export interface InboundDetailResponse {
     carrier_name?: string;
     carrier_contact?: string;
     expected_delivery_time?: string;
+    
+    // Draft Array Component
+    draft_data?: any[];
   };
   items: InboundDetailItem[];
 }
