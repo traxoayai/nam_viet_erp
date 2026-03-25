@@ -20,6 +20,9 @@ import {
   message,
 } from "antd";
 import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+
+dayjs.extend(customParseFormat);
 import {
   ArrowLeft,
   Camera,
@@ -264,7 +267,7 @@ const WarehouseReceiptPage = () => {
     },
     {
       title: "Số Lượng Nhập",
-      width: 50,
+      width: 60,
       render: (_: any, record: InboundDetailItem) => {
           // [NEW] Nếu đơn đã khóa, hiển thị số lượng ĐÃ NHẬP. Nếu chưa khóa, hiển thị số lượng ĐANG NHẬP.
           const displayQty = isDone ? record.quantity_received_prev : record.input_quantity;
@@ -285,7 +288,7 @@ const WarehouseReceiptPage = () => {
     // THAY THẾ CỘT SỐ LÔ BẰNG LOGIC RENDER MỚI:
     {
         title: "Số Lô đã nhập",
-        width: 220,
+        width: 150,
         render: (_: any, record: any) => {
             if (record.stock_management_type !== 'lot_date') return <Text disabled>--</Text>;
 
@@ -322,7 +325,7 @@ const WarehouseReceiptPage = () => {
     // THAY THẾ CỘT HẠN SỬ DỤNG BẰNG LOGIC MỚI:
     {
         title: "Hạn Sử Dụng",
-        width: 140,
+        width: 180,
         render: (_: any, record: any) => {
              if (record.stock_management_type !== 'lot_date') return <Text disabled>--</Text>;
              
@@ -334,9 +337,9 @@ const WarehouseReceiptPage = () => {
              const displayExpiry = record.input_expiry;
              return (
                  <DatePicker 
-                    placeholder="Chọn ngày"
+                    placeholder="VD: 140228"
                     style={{ width: "100%" }}
-                    format="DD/MM/YYYY"
+                    format={["DD/MM/YYYY", "DDMMYY", "DDMMYYYY", "D/M/YY", "D/M/YYYY"]}
                     value={displayExpiry ? dayjs(displayExpiry) : null}
                     onChange={(date) => updateWorkingItem(record.product_id, { input_expiry: date ? date.toISOString() : undefined })}
                     disabled={isDone} 
