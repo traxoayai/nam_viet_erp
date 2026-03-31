@@ -87,17 +87,17 @@ export const VatInvoiceModal: React.FC<Props> = ({
 
       const items = orderItems.map((item) => {
         const vatInfo = data?.find((v) => v.product_id === item.id);
-        const rate = vatInfo?.vat_rate ?? 10; // Fallback 10% (dược phẩm)
+        const rate = vatInfo?.vat_rate ?? 0;
         const balance = vatInfo?.quantity_balance ?? 0;
         const hasLedger = !!vatInfo;
 
         return {
           ...item,
-          max_vat_qty: hasLedger ? balance : item.qty, // Không có kho VAT → cho xuất hết
-          vat_qty: hasLedger ? Math.min(item.qty, balance) : item.qty,
+          max_vat_qty: balance,
+          vat_qty: hasLedger ? Math.min(item.qty, balance) : 0,
           vat_rate: rate,
           has_ledger: hasLedger,
-          status: hasLedger && item.qty > balance ? "shortage" : "enough",
+          status: !hasLedger ? "no_ledger" : item.qty > balance ? "shortage" : "enough",
         };
       });
       setVatItems(items);
@@ -300,6 +300,11 @@ export const VatInvoiceModal: React.FC<Props> = ({
   };
   // SEPAY E-Invoice Export
   const handleSepayExport = async () => {
+    const noLedgerItems = vatItems.filter((i) => !i.has_ledger);
+    if (noLedgerItems.length > 0) {
+      message.error(`${noLedgerItems.length} sản phẩm chưa nhập kho VAT (chưa có hóa đơn đầu vào). Không thể xuất hóa đơn.`);
+      return;
+    }
     const invalidItems = vatItems.filter((i) => i.vat_qty > i.max_vat_qty);
     if (invalidItems.length > 0) {
       message.error("Có sản phẩm vượt quá tồn kho VAT cho phép!");
@@ -428,7 +433,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
             {r.has_ledger ? (
               <>Kho: {r.max_vat_qty}{r.qty > r.max_vat_qty && <span style={{ color: "#ff4d4f", marginLeft: 4 }}>Thiếu</span>}</>
             ) : (
-              <span style={{ color: "#1677ff" }}>VAT {r.vat_rate}%</span>
+              <span style={{ color: "#ff4d4f" }}>Chưa nhập kho VAT</span>
             )}
           </div>
         </div>
