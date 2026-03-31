@@ -402,7 +402,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
     },
     {
       title: "SL Xuất VAT",
-      width: 100,
+      width: 120,
       render: (_: any, r: any, idx: number) => (
         <div>
           <InputNumber
@@ -416,14 +416,14 @@ export const VatInvoiceModal: React.FC<Props> = ({
               setVatItems(newItems);
             }}
             status={r.vat_qty > r.max_vat_qty ? "error" : ""}
-            style={{ width: "60%" }}
+            size="small"
+            style={{ width: 70 }}
           />
-          <div className="flex justify-between text-[10px] mt-1">
-            <span className="text-gray-500">Kho: {r.max_vat_qty}</span>
-            {r.qty > r.max_vat_qty && (
-              <Tag color="red" style={{ margin: 0 }}>
-                Thiếu hàng
-              </Tag>
+          <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>
+            {r.max_vat_qty > 0 ? (
+              <>Kho: {r.max_vat_qty}{r.qty > r.max_vat_qty && <span style={{ color: "#ff4d4f", marginLeft: 4 }}>Thiếu</span>}</>
+            ) : (
+              <span style={{ color: "#faad14" }}>Chưa có kho VAT</span>
             )}
           </div>
         </div>
