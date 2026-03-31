@@ -84,15 +84,17 @@ export const VatInvoiceModal: React.FC<Props> = ({
 
       const items = orderItems.map((item) => {
         const vatInfo = data?.find((v) => v.product_id === item.id);
-        const rate = vatInfo?.vat_rate ?? 0;
+        const rate = vatInfo?.vat_rate ?? 10; // Fallback 10% (dược phẩm)
         const balance = vatInfo?.quantity_balance ?? 0;
+        const hasLedger = !!vatInfo;
 
         return {
           ...item,
-          max_vat_qty: balance,
-          vat_qty: Math.min(item.qty, balance),
+          max_vat_qty: hasLedger ? balance : item.qty, // Không có kho VAT → cho xuất hết
+          vat_qty: hasLedger ? Math.min(item.qty, balance) : item.qty,
           vat_rate: rate,
-          status: item.qty > balance ? "shortage" : "enough",
+          has_ledger: hasLedger,
+          status: hasLedger && item.qty > balance ? "shortage" : "enough",
         };
       });
       setVatItems(items);
@@ -420,10 +422,10 @@ export const VatInvoiceModal: React.FC<Props> = ({
             style={{ width: 70 }}
           />
           <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>
-            {r.max_vat_qty > 0 ? (
+            {r.has_ledger ? (
               <>Kho: {r.max_vat_qty}{r.qty > r.max_vat_qty && <span style={{ color: "#ff4d4f", marginLeft: 4 }}>Thiếu</span>}</>
             ) : (
-              <span style={{ color: "#faad14" }}>Chưa có kho VAT</span>
+              <span style={{ color: "#1677ff" }}>VAT {r.vat_rate}%</span>
             )}
           </div>
         </div>
