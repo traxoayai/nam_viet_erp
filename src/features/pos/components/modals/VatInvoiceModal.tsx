@@ -32,20 +32,23 @@ export const VatInvoiceModal: React.FC<Props> = ({
 
   // 1. Auto-fill khi mở modal
   useEffect(() => {
-    if (visible && customer) {
-      form.setFieldsValue({
-        // Ưu tiên lấy buyer_name nếu có, không thì lấy name
-        customer_name: customer.buyer_name || customer.name || "",
-
-        // Map CCCD/MST vào chung 1 trường tax_code
-        tax_code: customer.tax_code || customer.id_card_number || "",
-
-        address: customer.address || "",
-        email: customer.email || "",
-      });
-      checkVatBalance();
-    } else if (!visible) {
+    if (visible) {
+      // Auto-fill customer info nếu có
+      if (customer) {
+        form.setFieldsValue({
+          customer_name: customer.buyer_name || customer.name || "",
+          tax_code: customer.tax_code || customer.id_card_number || "",
+          address: customer.address || "",
+          email: customer.email || "",
+        });
+      }
+      // Luôn load VAT data khi có sản phẩm
+      if (orderItems.length > 0) {
+        checkVatBalance();
+      }
+    } else {
       form.resetFields();
+      setVatItems([]);
     }
   }, [visible, customer, orderItems]);
 
