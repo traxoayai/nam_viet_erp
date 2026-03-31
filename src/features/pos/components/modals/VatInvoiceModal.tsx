@@ -56,7 +56,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
   const deductVatAfterExport = async (items: any[]) => {
     try {
       const deductItems = items
-        .filter((item) => item.vat_qty > 0)
+        .filter((item) => item.vat_qty > 0 && item.has_ledger)
         .map((item) => ({
           product_id: item.id,
           unit: item.unit || "Viên",
