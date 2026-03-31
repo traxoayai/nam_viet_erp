@@ -1,16 +1,36 @@
+// Permission keys — PHẢI KHỚP với giá trị trong bảng role_permissions.permission_key
+// DB hiện có 2 format: legacy (setting-view) và mới (crm.b2c.view)
+// Constants dưới đây map đúng DB values
+
 export const PERMISSIONS = {
   INVENTORY: {
-    VIEW_COST: "inventory.product.view_cost", // Xem Giá Vốn
-    MANAGE_SUPPLIER: "inventory.product.manage_supplier", // Xem/Sửa Nhà cung cấp
-    EDIT_INFO: "inventory.product.edit_info", // Sửa thông tin chung
-    VIEW_MARGIN_RETAIL: "inventory.product.view_margin_retail", // [NEW]
-    VIEW_MARGIN_WHOLESALE: "inventory.product.view_margin_wholesale", // [NEW]
+    VIEW: "inv-product-view",
+    VIEW_COST: "inventory.product.view_cost",
+    MANAGE_SUPPLIER: "inventory.product.manage_supplier",
+    EDIT_INFO: "inventory.product.edit_info",
+    VIEW_MARGIN_RETAIL: "inventory.product.view_margin_retail",
+    VIEW_MARGIN_WHOLESALE: "inventory.product.view_margin_wholesale",
+  },
+  PURCHASING: {
+    VIEW: "inv-po-create",         // Legacy key — ai có quyền tạo PO cũng xem được
+    CREATE: "inv-po-create",
+    EDIT: "inv-po-create",
+    COSTING: "inv-po-approve",     // Approve = được tính giá vốn
+  },
+  MEDICAL: {
+    VIEW: "clinic",
+    EXAMINE: "clinic-prescribe",
+    RECEPTION: "clinic-inbox",
   },
   MARKETING: {
-    EDIT_CONTENT: "marketing.content.edit", // Sửa bài viết Marketing
+    EDIT_CONTENT: "marketing.content.edit",
   },
   ORDER: {
-    DELETE_COMPLETED: "order.delete_completed", // Xóa đơn đã chốt
+    DELETE_COMPLETED: "order.delete_completed",
+  },
+  SETTINGS: {
+    VIEW: "setting-view",          // Legacy key
+    PERMISSIONS: "setting-users",  // Legacy key
   },
   QUICK: {
     UNIT_SETUP: "quick.unit_setup",
@@ -22,7 +42,6 @@ export const PERMISSIONS = {
     PRESCRIPTION: "quick.prescription_template",
     VACCINATION: "quick.vaccination_template",
   },
-  // [NEW PHASE 2]
   PARTNER: {
     SUPPLIER: {
       VIEW: "partner.supplier.view",
@@ -54,9 +73,9 @@ export const PERMISSIONS = {
   FINANCE: {
     VIEW_BALANCE: "finance.view_balance",
   },
+  POS: {
+    VIEW: "pos",
+    CREATE: "pos-create",
+    LIST: "pos-list",
+  },
 };
-
-// Append to INVENTORY
-// Note: Can't easily append to nested object with replace_file_content unless we replace the whole block or regex.
-// I'll assume the user wants me to merge it into the existing structure.
-// Let's retry the replacement strategy. I will replace the INVENTORY block first.

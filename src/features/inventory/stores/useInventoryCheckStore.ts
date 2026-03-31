@@ -3,6 +3,7 @@ import { message } from "antd";
 import { debounce } from "lodash";
 import { create } from "zustand";
 
+import { moneyMul, moneyAdd, moneySub } from "@/shared/utils/money";
 import { inventoryService } from "../api/inventoryService";
 import {
   InventoryCheckItem,
@@ -81,14 +82,15 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
         const rRate = item.retail_unit_rate || 1;
 
         let total = 0;
-        if (item.wholesale_unit_name && item.retail_unit_name && wRate !== rRate) {
-          total = wQty * wRate + rQty * rRate + bQty;
+        if (item.wholesale_unit_name && item.retail_unit_name) {
+          // Always sum all 3 tiers when both units exist
+          total = moneyAdd(moneyAdd(moneyMul(wQty, wRate), moneyMul(rQty, rRate)), bQty);
         } else if (item.wholesale_unit_name && !item.retail_unit_name && wRate > 1) {
-          total = wQty * wRate + bQty;
+          total = moneyAdd(moneyMul(wQty, wRate), bQty);
         } else if (!item.wholesale_unit_name && item.retail_unit_name && rRate > 1) {
-          total = rQty * rRate + bQty; // If fallback to only 2 tiers
+          total = moneyAdd(moneyMul(rQty, rRate), bQty);
         } else if (wRate > 1) {
-          total = wQty * wRate + bQty;
+          total = moneyAdd(moneyMul(wQty, wRate), bQty);
         } else {
           total = bQty;
         }
@@ -101,7 +103,7 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
           batch_code: tracking?.lot_number ?? item.batch_code,
           expiry_date: tracking?.expiry_date ?? item.expiry_date,
           actual_quantity: total,
-          diff_quantity: total - (item.system_quantity || 0),
+          diff_quantity: moneySub(total, item.system_quantity || 0),
         };
       });
 

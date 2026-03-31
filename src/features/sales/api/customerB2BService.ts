@@ -8,6 +8,7 @@ import {
   CustomerB2BContact,
 } from "@/features/sales/types/customerB2B";
 import { uploadFile } from "@/shared/api/storageService";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 // --- BUCKET LƯU TRỮ CHO KHÁCH HÀNG B2B ---
@@ -23,7 +24,7 @@ export const fetchCustomers = async (
   pageSize: number,
   sortByDebt: "asc" | "desc" | null = null // [NEW] Thêm tham số
 ): Promise<{ data: CustomerB2BListRecord[]; totalCount: number }> => {
-  const { data, error } = await supabase.rpc("get_customers_b2b_list", {
+  const { data } = await safeRpc("get_customers_b2b_list", {
     search_query: filters.search_query || null,
     sales_staff_filter: filters.sales_staff_filter || null,
     status_filter: filters.status_filter || null,
@@ -31,8 +32,6 @@ export const fetchCustomers = async (
     page_size: pageSize,
     sort_by_debt: sortByDebt, // [NEW] Truyền xuống RPC
   });
-
-  if (error) throw error;
 
   const rawData = data || [];
   
@@ -65,10 +64,9 @@ export const fetchCustomers = async (
  * 2. Tải chi tiết 1 Khách hàng B2B (Form Sửa)
  */
 export const fetchCustomerDetails = async (id: number): Promise<any> => {
-  const { data, error } = await supabase.rpc("get_customer_b2b_details", {
+  const { data } = await safeRpc("get_customer_b2b_details", {
     p_id: id,
   });
-  if (error) throw error;
   
   // [NEW] Cập nhật Nợ từ View thay vì bảng cũ
   if (data && data.customer) {
@@ -95,11 +93,10 @@ export const createCustomer = async (
   customerData: Partial<CustomerB2BFormData>,
   contacts: Omit<CustomerB2BContact, "id">[]
 ): Promise<number | null> => {
-  const { data, error } = await supabase.rpc("create_customer_b2b", {
+  const { data } = await safeRpc("create_customer_b2b", {
     p_customer_data: customerData,
     p_contacts: contacts,
   });
-  if (error) throw error;
   return data as number;
 };
 
@@ -111,12 +108,11 @@ export const updateCustomer = async (
   customerData: Partial<CustomerB2BFormData>,
   contacts: Omit<CustomerB2BContact, "id">[]
 ): Promise<boolean> => {
-  const { error } = await supabase.rpc("update_customer_b2b", {
+  await safeRpc("update_customer_b2b", {
     p_id: id,
     p_customer_data: customerData,
     p_contacts: contacts,
   });
-  if (error) throw error;
   return true;
 };
 
@@ -124,8 +120,7 @@ export const updateCustomer = async (
  * 5. Xóa Khách hàng B2B (Xóa mềm)
  */
 export const deleteCustomer = async (id: number): Promise<boolean> => {
-  const { error } = await supabase.rpc("delete_customer_b2b", { p_id: id });
-  if (error) throw error;
+  await safeRpc("delete_customer_b2b", { p_id: id });
   return true;
 };
 
@@ -133,8 +128,7 @@ export const deleteCustomer = async (id: number): Promise<boolean> => {
  * 6. Kích hoạt Khách hàng B2B
  */
 export const reactivateCustomer = async (id: number): Promise<boolean> => {
-  const { error } = await supabase.rpc("reactivate_customer_b2b", { p_id: id });
-  if (error) throw error;
+  await safeRpc("reactivate_customer_b2b", { p_id: id });
   return true;
 };
 
@@ -257,11 +251,9 @@ export const importCustomers = async (file: File): Promise<number> => {
 
       console.log("Valid Data B2B to Upload:", validArray); // Log để kiểm tra
 
-      const { error } = await supabase.rpc("bulk_upsert_customers_b2b", {
+      await safeRpc("bulk_upsert_customers_b2b", {
         p_customers_array: validArray,
       });
-
-      if (error) throw error;
       resolve(validArray.length);
     } catch (error) {
       console.error("Import B2B Error:", error);
@@ -274,13 +266,12 @@ export const importCustomers = async (file: File): Promise<number> => {
  * 8. Xuất Excel (Lấy tất cả)
  */
 export const exportCustomers = async (filters: any): Promise<any[]> => {
-  const { data, error } = await supabase.rpc("export_customers_b2b_list", {
+  const { data } = await safeRpc("export_customers_b2b_list", {
     search_query: filters.search_query || null,
     sales_staff_filter: filters.sales_staff_filter || null,
     status_filter: filters.status_filter || null,
   });
 
-  if (error) throw error;
   return data || [];
 };
 

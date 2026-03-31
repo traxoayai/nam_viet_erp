@@ -32,6 +32,7 @@ import * as XLSX from "xlsx";
 
 import { useAuth } from "@/app/contexts/AuthProvider";
 import { VerifyProductModal } from "@/features/finance/components/invoices/VerifyProductModal";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 dayjs.extend(customParseFormat);
@@ -161,7 +162,7 @@ export const OpeningStockImport = () => {
             (i + 1) * BATCH_SIZE
           );
 
-          const { data, error } = await supabase.rpc(
+          const { data } = await safeRpc(
             "match_products_from_excel",
             {
               p_data: batchItems.map((item) => ({
@@ -170,8 +171,6 @@ export const OpeningStockImport = () => {
               })),
             }
           );
-
-          if (error) throw error;
           if (data) allServerMatches = [...allServerMatches, ...data];
         }
 
@@ -273,7 +272,6 @@ export const OpeningStockImport = () => {
         setCurrentStep(1);
         message.success("Đã đối chiếu xong!");
       } catch (err: any) {
-        console.error(err);
         message.error("Lỗi đối chiếu: " + err.message);
       } finally {
         hideLoading();
@@ -373,7 +371,7 @@ export const OpeningStockImport = () => {
         };
       });
 
-      const { data: res, error } = await supabase.rpc(
+      const { data: res } = await safeRpc(
         "import_opening_stock_v3_by_id",
         {
           p_stock_array: payload,
@@ -381,15 +379,12 @@ export const OpeningStockImport = () => {
           p_warehouse_id: selectedWarehouseId,
         }
       );
-
-      if (error) throw error;
       message.success(
         `Đã nhập kho và ghi nhận giá trị cho ${res.imported_count} dòng!`
       );
       setSuccessResult({ code: res.receipt_code, count: res.imported_count });
       setCurrentStep(2);
     } catch (error: any) {
-      console.error(error);
       message.error("Lỗi: " + error.message);
     } finally {
       setUploading(false);

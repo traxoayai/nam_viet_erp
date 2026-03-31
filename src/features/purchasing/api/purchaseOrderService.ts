@@ -2,11 +2,12 @@
 import dayjs from "dayjs";
 
 import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/api/safeRpc";
 
 export const purchaseOrderService = {
   // 1. Lấy danh sách PO
   async getPOs(filters: any, page: number, pageSize: number) {
-    const { data, error } = await supabase.rpc("get_purchase_orders_master", {
+    const { data } = await safeRpc("get_purchase_orders_master", {
       p_page: page,
       p_page_size: pageSize,
       p_search: filters.search || null,
@@ -16,18 +17,15 @@ export const purchaseOrderService = {
       p_date_from: filters.date_from || null,
       p_date_to: filters.date_to || null,
     });
-
-    if (error) throw error;
     const totalCount = data && data.length > 0 ? data[0].full_count : 0;
     return { data: data || [], totalCount };
   },
 
   // 2. Lấy chi tiết PO
   async getPODetail(id: number) {
-    const { data, error } = await supabase.rpc("get_purchase_order_detail", {
+    const { data } = await safeRpc("get_purchase_order_detail", {
       p_po_id: id,
     });
-    if (error) throw error;
     return data;
   },
 
@@ -63,20 +61,14 @@ export const purchaseOrderService = {
         unit: i.unit || i.uom,
         // [QUAN TRỌNG] Hàng tặng/Khuyến mãi (Core V20)
         is_bonus: i.is_bonus || false,
+        bonus_quantity: i.bonus_quantity || 0,
       })),
     };
 
-    console.log("📤 Creating PO with Payload:", rpcPayload);
-
-    const { data, error } = await supabase.rpc(
+    const { data } = await safeRpc(
       "create_purchase_order",
       rpcPayload
     );
-
-    if (error) {
-      console.error("RPC Error:", error);
-      throw error;
-    }
     return data; // Trả về { id, code, status, message }
   },
 
@@ -104,6 +96,7 @@ export const purchaseOrderService = {
         uom_ordered: item.uom,
         unit_price: item.unit_price || 0,
         is_bonus: item.is_bonus || false, // [FIX] Add bonus flag
+        bonus_quantity: item.bonus_quantity || 0,
       })),
 
       p_supplier_id: payload.supplier_id,
@@ -114,7 +107,8 @@ export const purchaseOrderService = {
       p_delivery_method: payload.delivery_method,
       p_shipping_partner_id: payload.shipping_partner_id || null,
       p_shipping_fee: payload.shipping_fee || 0,
-      p_status: "DRAFT",
+      // p_status: PHẢI có giá trị — nếu không sẽ reset về DRAFT
+      p_status: payload.status,
 
       // [UPDATE V35.9] Logistics Fields
       p_carrier_name: payload.carrier_name || null,
@@ -123,56 +117,69 @@ export const purchaseOrderService = {
       p_total_packages: payload.total_packages || 0,
     };
 
-    const { error } = await supabase.rpc("update_purchase_order", params);
-    if (error) throw error;
+    await safeRpc("update_purchase_order", params);
     return true;
   },
 
   // 5. Xác nhận Đặt Hàng
   async confirmPO(id: number) {
-    const { error } = await supabase.rpc("confirm_purchase_order", {
+    await safeRpc("confirm_purchase_order", {
       p_po_id: id,
       p_status: "PENDING",
     });
-    if (error) throw error;
     return true;
   },
 
   // 6. Xóa PO
   async deletePO(id: number) {
-    const { error } = await supabase.rpc("delete_purchase_order", { p_id: id });
-    if (error) throw error;
+    await safeRpc("delete_purchase_order", { p_id: id });
     return true;
   },
 
-  // 6b. [NEW] Hủy PO (Chuyển trạng thái về CANCELLED)
+  // 6b. Hủy PO (qua RPC — check quyền + status + audit log)
   async cancelPO(id: number) {
-    const { error } = await supabase
-      .from("purchase_orders")
-      .update({ status: "CANCELLED" })
-      .eq("id", id);
+    await safeRpc("cancel_purchase_order", {
+      p_po_id: id,
+    });
+    return true;
+  },
 
-    if (error) throw error;
+  // 6c. Cập nhật vận chuyển (KHÔNG đụng items)
+  async updateLogistics(id: number, payload: {
+    delivery_method?: string;
+    shipping_partner_id?: number;
+    shipping_fee?: number;
+    total_packages?: number;
+    expected_delivery_date?: string;
+    note?: string;
+  }) {
+    await safeRpc("update_purchase_order_logistics", {
+      p_po_id: id,
+      p_delivery_method: payload.delivery_method || null,
+      p_shipping_partner_id: payload.shipping_partner_id || null,
+      p_shipping_fee: payload.shipping_fee ?? null,
+      p_total_packages: payload.total_packages ?? null,
+      p_expected_delivery_date: payload.expected_delivery_date || null,
+      p_note: payload.note ?? "",
+    });
     return true;
   },
 
   // 7. Xóa Hàng Loạt
   async bulkDeleteOrders(ids: React.Key[]) {
-    const { error } = await supabase
+    await supabase
       .from("purchase_orders")
       .delete()
-      .in("id", ids);
-    if (error) throw error;
+      .in("id", ids as number[]);
     return true;
   },
 
   // 8. Cập nhật Vận chuyển Hàng Loạt
   async bulkUpdateLogistics(ids: React.Key[], method: string) {
-    const { error } = await supabase
+    await supabase
       .from("purchase_orders")
       .update({ delivery_method: method })
-      .in("id", ids);
-    if (error) throw error;
+      .in("id", ids as number[]);
     return true;
   },
 
@@ -203,7 +210,7 @@ export const purchaseOrderService = {
       const { data: groups, error: errGroups } = await supabase
         .from("supplier_program_groups")
         .select("*")
-        .eq("program_id", programId);
+        .eq("program_id", Number(programId));
 
       if (errGroups) throw errGroups;
       if (!groups || groups.length === 0) return { groups: [], items: [] };
@@ -228,14 +235,13 @@ export const purchaseOrderService = {
 
   // 10. Chốt nhập kho & Tính giá vốn (V34)
   async confirmPOFinancials(poId: number, itemsData: any[]) {
-    const { data, error } = await supabase.rpc(
+    const { data } = await safeRpc(
       "confirm_purchase_order_financials",
       {
         p_po_id: poId,
         p_items_data: itemsData,
       }
     );
-    if (error) throw error;
     return data;
   },
 
@@ -261,22 +267,19 @@ export const purchaseOrderService = {
       unit_name: string;
     }[];
   }) {
-    console.log("🚀 Submitting Costing V35:", payload);
-    const { data, error } = await supabase.rpc(
+    const { data } = await safeRpc(
       "confirm_purchase_costing",
       payload
     );
-    if (error) throw error;
     return data;
   },
 
   // 12. [NEW] Snapshot Price before Update (Fix Costing V35.8)
   async getProductCostsSnapshot(productIds: number[]) {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("products")
       .select("id, actual_cost") // Chỉ cần lấy actual_cost hiện tại
       .in("id", productIds);
-    if (error) throw error;
     return data;
   },
 };

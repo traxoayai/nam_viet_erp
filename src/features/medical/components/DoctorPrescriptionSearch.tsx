@@ -4,7 +4,7 @@ import { Select, Avatar, Tag, Typography, Empty, Spin } from "antd";
 import React, { useEffect, useState } from "react";
 
 import { PosProductSearchResult } from "@/features/pos/types/pos.types";
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -37,15 +37,14 @@ export const DoctorPrescriptionSearch: React.FC<Props> = ({
   const handleSearch = async (term: string) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("search_products_pos", {
+      const { data } = await safeRpc("search_products_pos", {
         p_keyword: term,
         p_limit: 20,
         p_warehouse_id: warehouseId,
       });
-      if (error) throw error;
       setResults(data || []);
     } catch (err) {
-      console.error(err);
+      // safeRpc handles logging
     } finally {
       setLoading(false);
     }
@@ -57,7 +56,7 @@ export const DoctorPrescriptionSearch: React.FC<Props> = ({
       if (!term) return;
 
       // Force search 1 item if enter pressed
-      const { data } = await supabase.rpc("search_products_pos", {
+      const { data } = await safeRpc("search_products_pos", {
         p_keyword: term,
         p_limit: 1,
         p_warehouse_id: warehouseId,

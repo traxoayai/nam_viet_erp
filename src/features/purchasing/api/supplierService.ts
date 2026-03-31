@@ -1,4 +1,5 @@
 // src/services/supplierService.ts
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const getSuppliers = async () => {
@@ -19,20 +20,18 @@ export const getSuppliers = async () => {
 
 export const supplierService = {
   getQuickInfo: async (id: number) => {
-    const { data, error } = await supabase.rpc("get_supplier_quick_info", {
+    const { data } = await safeRpc("get_supplier_quick_info", {
       p_supplier_id: id,
     });
-    if (error) throw error;
     return data;
   },
 
   // [NEW] Import Excel (V33.2)
   importSuppliersBulk: async (suppliers: any[]) => {
     // Backend V33.2 expects 'p_suppliers'
-    const { data, error } = await supabase.rpc("import_suppliers_bulk", {
+    const { data } = await safeRpc("import_suppliers_bulk", {
       p_suppliers: suppliers,
     });
-    if (error) throw error;
     return data;
   },
 };

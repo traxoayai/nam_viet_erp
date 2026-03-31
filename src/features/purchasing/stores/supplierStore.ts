@@ -7,6 +7,7 @@ import {
   Supplier,
 } from "@/features/purchasing/types/supplier";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
   suppliers: [],
@@ -24,14 +25,12 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
       const { filters, page, pageSize } = get();
 
       // [CORE UPDATE]: Gọi RPC mới có trả về cột 'debt'
-      const { data, error } = await supabase.rpc("get_suppliers_list", {
+      const { data } = await safeRpc("get_suppliers_list", {
         search_query: filters.search_query || null,
         status_filter: filters.status_filter || null,
         page_num: page,
         page_size: pageSize,
       });
-
-      if (error) throw error;
 
       // Map dữ liệu từ RPC vào State
       // Lưu ý: data trả về từ RPC đã khớp với interface Supplier mở rộng (có thêm cột debt)
@@ -79,7 +78,7 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
   addSupplier: async (values: any) => {
     set({ loading: true });
     try {
-      const { data, error } = await supabase.rpc("create_supplier", {
+      const { data } = await safeRpc("create_supplier", {
         p_name: values.name,
         p_tax_code: values.tax_code || null,
         p_contact_person: values.contact_person || null,
@@ -96,8 +95,6 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
         p_notes: values.notes || null,
       });
 
-      if (error) throw error;
-
       await get().fetchSuppliers();
       set({ loading: false });
       return data; // Trả về ID mới tạo
@@ -111,7 +108,7 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
   updateSupplier: async (id: number, values: any) => {
     set({ loadingDetails: true });
     try {
-      const { error } = await supabase.rpc("update_supplier", {
+      await safeRpc("update_supplier", {
         p_id: id,
         p_name: values.name,
         p_tax_code: values.tax_code || null,
@@ -129,8 +126,6 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
         p_notes: values.notes || null,
       });
 
-      if (error) throw error;
-
       set({ loadingDetails: false });
       await get().fetchSuppliers();
       return true;
@@ -144,8 +139,7 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
   deleteSupplier: async (id: number) => {
     set({ loading: true });
     try {
-      const { error } = await supabase.rpc("delete_supplier", { p_id: id });
-      if (error) throw error;
+      await safeRpc("delete_supplier", { p_id: id });
       await get().fetchSuppliers();
       set({ loading: false });
       return true;

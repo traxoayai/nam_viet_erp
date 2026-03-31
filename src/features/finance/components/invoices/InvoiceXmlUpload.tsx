@@ -10,9 +10,18 @@ const { Dragger } = Upload;
 interface Props {
   open: boolean;
   onCancel: () => void;
+  returnTo?: string;
+  poId?: number | string;
+  direction?: "inbound" | "outbound";
 }
 
-export const InvoiceXmlUpload: React.FC<Props> = ({ open, onCancel }) => {
+export const InvoiceXmlUpload: React.FC<Props> = ({
+  open,
+  onCancel,
+  returnTo,
+  poId,
+  direction = "inbound",
+}) => {
   const navigate = useNavigate();
   const { processXmlFile, isProcessing } = useXmlInvoice();
 
@@ -21,21 +30,27 @@ export const InvoiceXmlUpload: React.FC<Props> = ({ open, onCancel }) => {
     const result = await processXmlFile(file);
 
     if (result) {
-      onCancel();
-      // Chuyển sang trang đối chiếu, truyền dữ liệu đã parse qua State
-      navigate("/finance/invoices/verify/new-xml", {
+      const params = new URLSearchParams();
+      if (returnTo) params.set("returnTo", returnTo);
+      if (poId) params.set("poId", String(poId));
+      const qs = params.toString();
+      const url = `/finance/invoices/verify/new-xml${qs ? `?${qs}` : ""}`;
+      navigate(url, {
         state: {
           source: "xml",
           xmlData: result,
+          direction,
+          returnTo: returnTo,
         },
       });
+      onCancel();
     }
     return false; // Prevent default upload
   };
 
   return (
     <Modal
-      title="Nhập Hóa Đơn Điện Tử (XML)"
+      title={direction === "outbound" ? "Nhập XML HĐ VAT đã xuất (Trừ kho)" : "Nhập Hóa Đơn Điện Tử (XML)"}
       open={open}
       onCancel={onCancel}
       footer={null}

@@ -5,6 +5,7 @@ import {
   TransferStatus,
 } from "../types/transfer";
 
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const transferService = {
@@ -13,15 +14,13 @@ export const transferService = {
    * Calls RPC: create_auto_replenishment_request
    */
   createAutoReplenishment: async (destWarehouseId: number, note?: string) => {
-    const { data, error } = await supabase.rpc(
+    const { data } = await safeRpc(
       "create_auto_replenishment_request",
       {
         p_dest_warehouse_id: destWarehouseId,
         p_note: note || "",
       }
     );
-
-    if (error) throw error;
     return data; // Returns request_id
   },
 
@@ -42,7 +41,7 @@ export const transferService = {
     const pageSize = filters.pageSize || 10;
 
     // [UPDATE] Use RPC get_transfers (V32.7)
-    const { data, error } = await supabase.rpc("get_transfers", {
+    const { data } = await safeRpc("get_transfers", {
       p_page: page,
       p_page_size: pageSize,
       p_search: filters.search || null,
@@ -52,8 +51,6 @@ export const transferService = {
       p_creator_id: filters.creatorId || null,
       p_receiver_id: filters.receiverId || null,
     });
-
-    if (error) throw error;
 
     // RPC returns { data: [...], total_count: numbers } OR just array?
     // Usually our RPCs return a JSON object with data & total.
@@ -242,12 +239,10 @@ export const transferService = {
    * Returns batches available in source warehouse for specific product
    */
   fetchSourceBatches: async (productId: number, warehouseId: number) => {
-    const { data, error } = await supabase.rpc("search_product_batches", {
+    const { data } = await safeRpc("search_product_batches", {
       p_product_id: productId,
       p_warehouse_id: warehouseId,
     });
-
-    if (error) throw error;
     return data; // Returns array of batches with quantity
   },
 
@@ -261,15 +256,13 @@ export const transferService = {
     // Since we don't have a bulk RPC yet, we'll use Promise.all for V1
     // This is acceptable for typical transfer sizes (< 50 items)
     const promises = items.map((item) =>
-      supabase
-        .rpc("search_product_batches", {
-          p_product_id: item.product_id,
-          p_warehouse_id: warehouseId,
-        })
-        .then((res) => ({
-          productId: item.product_id,
-          batches: res.data || [],
-        }))
+      safeRpc("search_product_batches", {
+        p_product_id: item.product_id,
+        p_warehouse_id: warehouseId,
+      }).then((res) => ({
+        productId: item.product_id,
+        batches: res.data || [],
+      }))
     );
 
     const results = await Promise.all(promises);
@@ -290,12 +283,10 @@ export const transferService = {
     transferId: number,
     items: { transfer_item_id: number; batch_id: number; quantity: number }[]
   ) => {
-    const { error } = await supabase.rpc("submit_transfer_shipping", {
+    await safeRpc("submit_transfer_shipping", {
       p_transfer_id: transferId,
       p_batch_items: items,
     });
-
-    if (error) throw error;
   },
 
   /**
@@ -303,11 +294,10 @@ export const transferService = {
    * Calls RPC: search_product_batches
    */
   checkAvailability: async (productId: number, warehouseId: number) => {
-    const { data, error } = await supabase.rpc("search_product_batches", {
+    const { data } = await safeRpc("search_product_batches", {
       p_product_id: productId,
       p_warehouse_id: warehouseId,
     });
-    if (error) throw error;
     // Trả về tổng tồn kho (Base Unit) của tất cả các lô cộng lại
     const totalStock =
       data?.reduce((sum: number, b: any) => sum + b.quantity, 0) || 0;
@@ -329,11 +319,10 @@ export const transferService = {
       conversion_factor: number; // Hệ số quy đổi
     }>;
   }) => {
-    const { data, error } = await supabase.rpc(
+    const { data } = await safeRpc(
       "create_manual_transfer",
       payload
     );
-    if (error) throw error;
     return data; // { success: true, transfer_id: ... }
   },
 };

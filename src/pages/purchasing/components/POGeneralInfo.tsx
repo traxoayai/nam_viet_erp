@@ -10,9 +10,8 @@ import {
   Form,
   Select,
   DatePicker,
-  TimePicker, // [UNCOMMENT] [QUAN TRỌNG] Nhớ import cái này
   Input,
-  InputNumber, // [UNCOMMENT] [QUAN TRỌNG] Nhớ import cái này
+  InputNumber,
   Row,
   Col,
   Typography,
@@ -26,15 +25,13 @@ const { TextArea } = Input;
 const { Text } = Typography;
 
 interface Props {
-  suppliers: any[]; // Danh sách NCC để đổ vào Select
-  supplierInfo: any; // Thông tin chi tiết NCC đang chọn
-  onSupplierChange: (id: number) => void; // Hàm xử lý khi chọn
-  onShippingFeeChange: (val: number | null) => void; // [NEW] Callback khi sửa phí ship
-
-  // [NEW] Props from logic for Logistics
+  suppliers: any[];
+  supplierInfo: any;
+  onSupplierChange: (id: number) => void;
+  onShippingFeeChange: (val: number | null) => void;
   shippingPartners?: any[];
   onPartnerChange?: (partnerId: number) => void;
-  form?: any; // To get values for filtering
+  form?: any;
 }
 
 const POGeneralInfo: React.FC<Props> = ({
@@ -47,123 +44,80 @@ const POGeneralInfo: React.FC<Props> = ({
   form,
 }) => {
   return (
-    <Card
-      title="Thông tin chung"
-      style={{ marginBottom: 16 }}
-      styles={{ body: { padding: 16 } }}
-    >
-      <Row gutter={16}>
-        <Col xs={24} md={12}>
-          <Form.Item
-            name="supplier_id"
-            label="Nhà Cung Cấp"
-            rules={[{ required: true, message: "Chọn NCC" }]}
-          >
-            <Select
-              placeholder="Tìm và chọn NCC..."
-              showSearch
-              optionFilterProp="children"
-              onChange={onSupplierChange} // Gọi hàm khi chọn
-              allowClear
+    <div style={{ marginBottom: 16 }}>
+      {/* --- Thông tin NCC (fullwidth) --- */}
+      <Card
+        title={<span><UserOutlined /> Thông tin NCC</span>}
+        size="small"
+        styles={{ body: { padding: 12 } }}
+        style={{ marginBottom: 12 }}
+        id="section-supplier"
+      >
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name="supplier_id"
+              label="Nhà Cung Cấp"
+              rules={[{ required: true, message: "Chọn NCC" }]}
+              style={{ marginBottom: 0 }}
             >
-              {suppliers.map((s) => (
-                <Option key={s.id} value={s.id}>
-                  {s.name} - {s.phone}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
+              <Select
+                placeholder="Tìm và chọn NCC..."
+                showSearch
+                optionFilterProp="children"
+                onChange={onSupplierChange}
+                allowClear
+              >
+                {suppliers.map((s) => (
+                  <Option key={s.id} value={s.id}>
+                    {s.name} - {s.phone}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            {supplierInfo && (
+              <div style={{ padding: 8, background: "#f9f9f9", borderRadius: 6, border: "1px solid #f0f0f0", fontSize: 13, height: "100%" }}>
+                <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <Text strong><UserOutlined /> {supplierInfo.contact_person || "Chưa có tên LH"}</Text>
+                    <Text><PhoneOutlined /> {supplierInfo.phone}</Text>
+                  </div>
+                  <div>
+                    <EnvironmentOutlined /> <Text type="secondary">{supplierInfo.address || "Chưa cập nhật"}</Text>
+                  </div>
+                  <div style={{ marginTop: 4, borderTop: "1px dashed #ddd", paddingTop: 4 }}>
+                    <Space>
+                      <Tag color="blue">Công nợ:</Tag>
+                      <Text type="danger" strong>{supplierInfo.current_debt ? Number(supplierInfo.current_debt).toLocaleString() : 0} ₫</Text>
+                    </Space>
+                  </div>
+                </Space>
+              </div>
+            )}
+          </Col>
+        </Row>
+      </Card>
 
-          {/* --- PHẦN HIỂN THỊ THÔNG TIN CHI TIẾT NCC --- */}
-          {supplierInfo ? (
-            <div
-              style={{
-                marginTop: -12,
-                marginBottom: 16,
-                padding: 12,
-                background: "#f9f9f9",
-                borderRadius: 6,
-                border: "1px solid #f0f0f0",
-                fontSize: 13,
-              }}
-            >
-              <Space direction="vertical" size={4} style={{ width: "100%" }}>
-                <div
-                  style={{ display: "flex", justifyContent: "space-between" }}
-                >
-                  <Text strong>
-                    <UserOutlined />{" "}
-                    {supplierInfo.contact_person || "Chưa có tên LH"}
-                  </Text>
-                  <Text>
-                    <PhoneOutlined /> {supplierInfo.phone}
-                  </Text>
-                </div>
-                <div>
-                  <EnvironmentOutlined />{" "}
-                  <Text type="secondary">
-                    {supplierInfo.address || "Chưa cập nhật địa chỉ"}
-                  </Text>
-                </div>
-                <div
-                  style={{
-                    marginTop: 4,
-                    borderTop: "1px dashed #ddd",
-                    paddingTop: 4,
-                  }}
-                >
-                  <Space>
-                    <Tag color="blue">Công nợ hiện tại:</Tag>
-                    <Text type="danger" strong>
-                      {supplierInfo.current_debt
-                        ? Number(supplierInfo.current_debt).toLocaleString()
-                        : 0}{" "}
-                      ₫
-                    </Text>
-                  </Space>
-                </div>
-              </Space>
-            </div>
-          ) : null}
-        </Col>
-
-        <Col xs={24} md={12}>
-          <Form.Item name="expected_delivery_date" label="Ngày giao dự kiến">
-            <DatePicker
-              style={{ width: "100%" }}
-              format="DD/MM/YYYY"
-              placeholder="Chọn ngày..."
-            />
-          </Form.Item>
-        </Col>
-
-        {/* --- [NEW] LOGISTICS INFO (ĐÃ UNCOMMENT & CHỈNH SỬA) --- */}
-        <Col span={24}>
-          <div
-            style={{
-              marginBottom: 16,
-              borderTop: "1px dashed #eee",
-              paddingTop: 16,
-            }}
-          >
-            <Typography.Text
-              strong
-              style={{ display: "block", marginBottom: 12, color: "#1677ff" }}
-            >
-              <CarOutlined /> Thông tin Vận chuyển (Logistics)
-            </Typography.Text>
-
-            <Row gutter={16}>
+      {/* --- Vận chuyển + Ghi chú (fullwidth, 70/30 split) --- */}
+      <Card
+        title={<span><CarOutlined /> Vận chuyển</span>}
+        size="small"
+        styles={{ body: { padding: 12 } }}
+        id="section-shipping"
+      >
+        <Row gutter={16}>
+          {/* Bên trái 70%: các trường vận chuyển */}
+          <Col xs={24} md={17}>
+            <Row gutter={12}>
               <Col xs={24} md={8}>
-                {/* [UPGRADE] Select Method */}
-                <Form.Item name="delivery_method" label="Hình thức giao">
+                <Form.Item name="delivery_method" label="Hình thức giao" style={{ marginBottom: 8 }}>
                   <Select
                     placeholder="Chọn hình thức"
-                    onChange={() => {
-                      // Reset partner when method changes if needed
-                      form?.setFieldsValue({ shipping_partner_id: undefined });
-                    }}
+                    onChange={() => form?.setFieldsValue({ shipping_partner_id: undefined })}
                   >
+                    <Select.Option value="self_shipping">Tự giao / Xe cá nhân</Select.Option>
                     <Select.Option value="internal">Xe nội bộ</Select.Option>
                     <Select.Option value="app">App Công nghệ</Select.Option>
                     <Select.Option value="coach">Nhà xe / Chành</Select.Option>
@@ -171,41 +125,17 @@ const POGeneralInfo: React.FC<Props> = ({
                   </Select>
                 </Form.Item>
               </Col>
-
               <Col xs={24} md={8}>
-                {/* [UPGRADE] Select Partner based on Method */}
-                <Form.Item
-                  noStyle
-                  shouldUpdate={(prev, curr) =>
-                    prev.delivery_method !== curr.delivery_method
-                  }
-                >
+                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.delivery_method !== curr.delivery_method}>
                   {({ getFieldValue }) => {
                     const method = getFieldValue("delivery_method");
-                    const filtered = shippingPartners.filter(
-                      (p) => p.type === method
-                    );
-                    const isDisabled =
-                      method === "internal" || method === "supplier"; // Tùy logic
-
+                    const filtered = shippingPartners.filter((p) => p.type === method);
+                    const isDisabled = method === "internal" || method === "supplier";
                     return (
-                      <Form.Item
-                        name="shipping_partner_id"
-                        label="Đối tác vận chuyển"
-                      >
-                        <Select
-                          placeholder="Chọn đối tác..."
-                          allowClear
-                          disabled={isDisabled}
-                          onChange={onPartnerChange} // Auto-fill info
-                        >
+                      <Form.Item name="shipping_partner_id" label="Đối tác VC" style={{ marginBottom: 8 }}>
+                        <Select placeholder="Chọn đối tác..." allowClear disabled={isDisabled} onChange={onPartnerChange}>
                           {filtered.map((p) => (
-                            <Select.Option key={p.id} value={p.id}>
-                              {p.name}{" "}
-                              {p.cut_off_time
-                                ? `(Cut-off: ${p.cut_off_time})`
-                                : ""}
-                            </Select.Option>
+                            <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
                           ))}
                         </Select>
                       </Form.Item>
@@ -213,81 +143,42 @@ const POGeneralInfo: React.FC<Props> = ({
                   }}
                 </Form.Item>
               </Col>
-
               <Col xs={24} md={8}>
-                <Form.Item name="carrier_name" label="Tên Shipper / Nhà xe">
-                  <Input
-                    placeholder="Tự động điền hoặc nhập tay..."
-                    prefix={
-                      <EnvironmentOutlined style={{ color: "#bfbfbf" }} />
-                    }
-                  />
+                <Form.Item name="expected_delivery_date" label="Ngày giao dự kiến" style={{ marginBottom: 8 }}>
+                  <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" placeholder="Chọn ngày..." />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
-                <Form.Item name="carrier_phone" label="SĐT Liên hệ">
-                  <Input
-                    placeholder="Số điện thoại..."
-                    prefix={<PhoneOutlined style={{ color: "#bfbfbf" }} />}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={12} md={4}>
-                <Form.Item name="total_packages" label="Số kiện hàng">
-                  <InputNumber
-                    placeholder="SL"
-                    style={{ width: "100%" }}
-                    min={0}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={12} md={4}>
-                <Form.Item name="expected_delivery_time" label="Giờ dự kiến">
-                  <TimePicker
-                    format="HH:mm"
-                    style={{ width: "100%" }}
-                    placeholder="HH:mm"
-                  />
-                </Form.Item>
-              </Col>
-
-              {/* [NEW] Move Shipping Fee Here */}
+            </Row>
+            <Row gutter={12}>
               <Col xs={12} md={8}>
-                <Form.Item
-                  name="shipping_fee"
-                  label="Phí vận chuyển"
-                  initialValue={0}
-                >
+                <Form.Item name="total_packages" label="Số kiện" style={{ marginBottom: 0 }}>
+                  <InputNumber placeholder="SL" style={{ width: "100%" }} min={0} />
+                </Form.Item>
+              </Col>
+              <Col xs={12} md={8}>
+                <Form.Item name="shipping_fee" label="Phí VC dự kiến" initialValue={0} style={{ marginBottom: 0 }}>
                   <InputNumber<number>
                     style={{ width: "100%" }}
-                    // formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                    formatter={(value) =>
-                      `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                    }
-                    parser={(value) =>
-                      value!.replace(/\$\s?|(,*)/g, "") as unknown as number
-                    }
+                    formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    parser={(v) => v!.replace(/\$\s?|(,*)/g, "") as unknown as number}
                     addonAfter="₫"
                     min={0}
-                    // [QUAN TRỌNG] Khi sửa ship -> Gọi callback tính lại tiền ngay
                     onChange={onShippingFeeChange}
                   />
                 </Form.Item>
               </Col>
             </Row>
-          </div>
-        </Col>
+          </Col>
 
-        <Col span={24}>
-          <Form.Item name="note" label="Ghi chú">
-            <TextArea
-              rows={2}
-              placeholder="Nhập ghi chú cho đơn hàng (VD: Giao trong giờ hành chính)..."
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-    </Card>
+          {/* Bên phải 30%: Ghi chú */}
+          <Col xs={24} md={7}>
+            <Form.Item name="note" label="Ghi chú" style={{ marginBottom: 0, height: "100%" }}>
+              <TextArea style={{ height: "100%", minHeight: 100 }} placeholder="Nhập ghi chú cho đơn hàng..." />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Card>
+    </div>
   );
 };
 

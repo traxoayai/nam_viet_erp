@@ -1,10 +1,11 @@
 // src/features/purchasing/hooks/usePurchaseOrderMaster.ts
 import { message } from "antd";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import { PurchaseOrderMaster, PoLogisticsStat } from "../types/purchase";
 
 import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 export const usePurchaseOrderMaster = () => {
   // --- STATE ---
@@ -16,59 +17,47 @@ export const usePurchaseOrderMaster = () => {
     pageSize: 12,
     total: 0,
   }); // Default pageSize 12 for grid
-  const [filters, setFilters] = useState<{
+  const [filters, setFiltersRaw] = useState<{
     search?: string;
     status?: string;
     dateRange?: [string, string];
   }>({});
 
-  // --- HELPERS ---
-  // Kiểm tra xem trạng thái lọc có phải là trạng thái thanh toán không
-  const isPaymentStatus = (status: string) =>
-    ["unpaid", "partial", "paid", "overpaid"].includes(status);
-  // Kiểm tra xem trạng thái lọc có phải là trạng thái giao hàng không
-  const isDeliveryStatus = (status: string) =>
-    ["pending", "partial", "delivered", "shipping", "cancelled"].includes(
-      status
-    );
+  // Wrapper: reset về page 1 mỗi khi filter thay đổi
+  const setFilters = (newFilters: typeof filters) => {
+    setFiltersRaw(newFilters);
+    setPagination((prev) => ({ ...prev, page: 1 }));
+  };
 
   // --- ACTIONS ---
 
-  /**
-   * Lấy danh sách đơn mua hàng từ RPC get_purchase_orders_master
-   * Mapping tham số lọc thông minh dựa trên keyword
-   */
   const fetchOrders = async () => {
     setLoading(true);
     try {
       const statusFilter = filters.status || "";
 
-      // Logic mapping params
-      const p_status_delivery = isDeliveryStatus(statusFilter)
-        ? statusFilter
-        : null;
-      const p_status_payment = isPaymentStatus(statusFilter)
-        ? statusFilter
-        : null;
+      let p_status: string | null = null;
+      let p_status_delivery: string | null = null;
+      let p_status_payment: string | null = null;
 
-      // Nếu statusFilter không thuộc 2 nhóm trên (vd: 'new', 'ordering'), RPC hiện tại chưa hỗ trợ p_status.
-      // Tạm thời gửi null nếu không khớp logic, hoặc cần backend update thêm p_status.
-      // Ở đây tuân thủ strict requirement: map status string matches keywords.
+      if (statusFilter.startsWith("delivery:")) {
+        p_status_delivery = statusFilter.replace("delivery:", "");
+      } else if (statusFilter.startsWith("payment:")) {
+        p_status_payment = statusFilter.replace("payment:", "");
+      } else if (statusFilter) {
+        p_status = statusFilter;
+      }
 
-      const { data: rpcData, error: rpcError } = await supabase.rpc(
-        "get_purchase_orders_master",
-        {
-          p_page: pagination.page,
-          p_page_size: pagination.pageSize,
-          p_search: filters.search || null,
-          p_status_delivery: p_status_delivery,
-          p_status_payment: p_status_payment,
-          p_date_from: filters.dateRange?.[0] || null,
-          p_date_to: filters.dateRange?.[1] || null,
-        }
-      );
-
-      if (rpcError) throw rpcError;
+      const { data: rpcData } = await safeRpc("get_purchase_orders_master", {
+        p_page: pagination.page,
+        p_page_size: pagination.pageSize,
+        p_search: filters.search || null,
+        p_status_delivery: p_status_delivery,
+        p_status_payment: p_status_payment,
+        p_status: p_status,
+        p_date_from: filters.dateRange?.[0] || null,
+        p_date_to: filters.dateRange?.[1] || null,
+      });
 
       // Map dữ liệu & Total count
       // Giả sử item đầu tiên chứa full_count (kỹ thuật thường dùng trong Supabase RPC phân trang)
@@ -91,16 +80,24 @@ export const usePurchaseOrderMaster = () => {
    */
   const fetchStats = async () => {
     try {
-      const { data, error } = await supabase.rpc("get_po_logistics_stats", {
+      const statusFilter = filters.status || "";
+      let statsDelivery: string | null = null;
+      let statsPayment: string | null = null;
+      if (statusFilter.startsWith("delivery:")) {
+        statsDelivery = statusFilter.replace("delivery:", "");
+      } else if (statusFilter.startsWith("payment:")) {
+        statsPayment = statusFilter.replace("payment:", "");
+      } else if (statusFilter) {
+        statsDelivery = statusFilter;
+      }
+
+      const { data } = await safeRpc("get_po_logistics_stats", {
+        p_search: filters.search || null,
+        p_status_delivery: statsDelivery,
+        p_status_payment: statsPayment,
         p_date_from: filters.dateRange?.[0] || null,
         p_date_to: filters.dateRange?.[1] || null,
-        p_search: filters.search || null,
       });
-
-      if (error) {
-        console.error("Fetch Stats Error:", error);
-        return;
-      }
 
       if (data) setLogisticsStats(data as PoLogisticsStat[]);
     } catch (err) {
@@ -116,7 +113,10 @@ export const usePurchaseOrderMaster = () => {
     fetchStats();
   }, [pagination.page, pagination.pageSize, filters]);
 
-  // Realtime Subscription (Tự động refresh khi có thay đổi)
+  // Realtime Subscription — stable, không phụ thuộc filters/pagination
+  const fetchRef = useRef({ fetchOrders, fetchStats });
+  fetchRef.current = { fetchOrders, fetchStats };
+
   useEffect(() => {
     const channel = supabase
       .channel("po_master_changes_v2")
@@ -124,8 +124,8 @@ export const usePurchaseOrderMaster = () => {
         "postgres_changes",
         { event: "*", schema: "public", table: "purchase_orders" },
         () => {
-          fetchOrders();
-          fetchStats();
+          fetchRef.current.fetchOrders();
+          fetchRef.current.fetchStats();
         }
       )
       .subscribe();
@@ -133,7 +133,7 @@ export const usePurchaseOrderMaster = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [filters, pagination.page]); // Depend on filters to refresh current view context correctly
+  }, []); // Subscribe 1 lần, dùng ref để luôn gọi phiên bản mới nhất
 
   // --- CRUD OPERATORS ---
 
@@ -148,16 +148,12 @@ export const usePurchaseOrderMaster = () => {
       // Refresh list locally
       fetchOrders();
       fetchStats();
-    } catch (err) {
+    } catch {
       message.error("Không thể xóa đơn hàng");
     }
   };
 
-  const updateLogistics = async (
-    id: number,
-    _carrier: string,
-    _tracking: string
-  ) => {
+  const updateLogistics = async (id: number) => {
     message.info(`TODO: Cập nhật vận chuyển cho ID ${id}`);
   };
 
@@ -167,16 +163,15 @@ export const usePurchaseOrderMaster = () => {
         content: "Đang tính toán dự trù...",
         key: "auto_create",
       });
-      const { data, error } = await supabase.rpc(
+      const { data } = await safeRpc(
         "auto_create_purchase_orders_min_max"
       );
-      if (error) throw error;
       message.success({
         content: `Đã tạo ${data} đơn hàng dự trù!`,
         key: "auto_create",
       });
       fetchOrders();
-    } catch (err) {
+    } catch {
       message.error({ content: "Lỗi tạo đơn tự động", key: "auto_create" });
     }
   };

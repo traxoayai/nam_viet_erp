@@ -1,16 +1,16 @@
 // src/features/medical/api/receptionService.ts
 import { CreateAppointmentPayload } from "../types/reception.types";
 
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const receptionService = {
   // 1. Lấy danh sách (Gọi RPC mới)
   getQueue: async (date: string, search: string) => {
-    const { data, error } = await supabase.rpc("get_reception_queue", {
+    const { data } = await safeRpc("get_reception_queue", {
       p_date: date,
       p_search: search,
     });
-    if (error) throw error;
     return data || [];
   },
 
@@ -54,10 +54,9 @@ export const receptionService = {
 
   // 5. Tìm kiếm khách hàng (RPC POS) [NEW]
   searchCustomers: async (keyword: string) => {
-    const { data, error } = await supabase.rpc("search_customers_pos", {
+    const { data } = await safeRpc("search_customers_pos", {
       p_keyword: keyword,
     });
-    if (error) throw error;
     return data || [];
   },
 

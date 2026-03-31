@@ -43,7 +43,6 @@ import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
 import SupplierPolicyFormPage from "@/pages/partners/policies/SupplierPolicyFormPage"; // [NEW]
 import PurchaseCostingPage from "@/pages/purchasing/PurchaseCostingPage"; // [NEW]
-import PurchaseOrderWorkbench from "@/pages/purchasing/PurchaseOrderWorkbench"; // [MỚI THÊM]
 import PurchaseOrderDetail from "@/pages/purchasing/PurchaseOrderDetail";
 import PurchaseOrderMasterPage from "@/pages/purchasing/PurchaseOrderMasterPage";
 import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
@@ -218,8 +217,22 @@ const routes: RouteObject[] = [
             element: <Navigate to="/inventory/products" replace />,
           },
           { path: "inventory/products", element: <ProductListPage /> },
-          { path: "inventory/new", element: <ProductFormPage /> },
-          { path: "inventory/edit/:id", element: <ProductFormPage /> },
+          {
+            path: "inventory/new",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.INVENTORY.EDIT_INFO}>
+                <ProductFormPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "inventory/edit/:id",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.INVENTORY.EDIT_INFO}>
+                <ProductFormPage />
+              </PermissionGuard>
+            ),
+          },
           {
             path: "inventory/purchase",
             element: <Navigate to="/purchase-orders" replace />,
@@ -275,26 +288,28 @@ const routes: RouteObject[] = [
               },
               {
                 path: "new",
-                element: <PurchaseOrderDetail />,
+                element: (
+                  <PermissionGuard permission={PERMISSIONS.PURCHASING.CREATE}>
+                    <PurchaseOrderDetail />
+                  </PermissionGuard>
+                ),
               },
               {
                 path: ":id",
-                element: <PurchaseOrderDetail />,
+                element: (
+                  <PermissionGuard permission={PERMISSIONS.PURCHASING.VIEW}>
+                    <PurchaseOrderDetail />
+                  </PermissionGuard>
+                ),
               },
               {
                 path: "costing/:id",
-                element: <PurchaseCostingPage />, // [NEW] V35 Costing
+                element: (
+                  <PermissionGuard permission={PERMISSIONS.PURCHASING.COSTING}>
+                    <PurchaseCostingPage />
+                  </PermissionGuard>
+                ), // [NEW] V35 Costing
               },
-              // -------- ĐOẠN CHÈN THÊM VÀO ĐỂ TEST --------
-              {
-                path: "workbench-test/new",
-                element: <PurchaseOrderWorkbench />,
-              },
-              {
-                path: "workbench-test/:id",
-                element: <PurchaseOrderWorkbench />,
-              },
-              // --------------------------------------------
             ],
           },
 
@@ -561,11 +576,19 @@ const routes: RouteObject[] = [
           // --- CẬP NHẬT: KHO HÓA ĐƠN SỐ & SCAN AI ---
           {
             path: "finance/invoices",
-            element: <InvoiceListPage />,
+            element: (
+              <PermissionGuard permission={PERMISSIONS.FINANCE.VIEW_BALANCE}>
+                <InvoiceListPage />
+              </PermissionGuard>
+            ),
           },
           {
             path: "finance/invoices/verify/:id",
-            element: <InvoiceVerifyPage />, // Trang đối chiếu AI
+            element: (
+              <PermissionGuard permission={PERMISSIONS.FINANCE.VIEW_BALANCE}>
+                <InvoiceVerifyPage />
+              </PermissionGuard>
+            ), // Trang đối chiếu AI
           },
           // ------------------------------------------
 
@@ -617,7 +640,7 @@ const routes: RouteObject[] = [
           // [PROTECTED] Settings Group
           {
             element: (
-              <PermissionGuard permission="settings">
+              <PermissionGuard permission={PERMISSIONS.SETTINGS.VIEW}>
                 <Outlet />
               </PermissionGuard>
             ),
@@ -634,7 +657,11 @@ const routes: RouteObject[] = [
               { path: "settings/warehouses", element: <WarehouseListPage /> },
               {
                 path: "settings/users-roles",
-                element: <PermissionPage />,
+                element: (
+                  <PermissionGuard permission={PERMISSIONS.SETTINGS.PERMISSIONS}>
+                    <PermissionPage />
+                  </PermissionGuard>
+                ),
               },
               {
                 path: "settings/business/general",

@@ -28,7 +28,7 @@ import * as XLSX from "xlsx";
 
 import { ExcelPreviewModal } from "./ExcelPreviewModal";
 
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 interface Props {
   field: any; // Form List Field
@@ -90,14 +90,12 @@ export const PolicyGroupCard: React.FC<Props> = ({
       message.loading({ content: "Đang xử lý match...", key: "import_excel" });
 
       // Call RPC
-      const { data: matchedResults, error } = await supabase.rpc(
+      const { data: matchedResults } = await safeRpc(
         "match_products_from_excel",
         {
           p_data: formattedData,
         }
       );
-
-      if (error) throw error;
 
       message.success({
         content: "Đã đọc xong file! Vui lòng kiểm tra lại.",
@@ -108,7 +106,6 @@ export const PolicyGroupCard: React.FC<Props> = ({
       setPreviewData(matchedResults || []);
       setPreviewOpen(true);
     } catch (error: any) {
-      console.error(error);
       message.error({
         content: "Lỗi import: " + error.message,
         key: "import_excel",

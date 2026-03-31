@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Drawer, Button, Select, Collapse, message } from "antd";
 import { AppstoreAddOutlined } from "@ant-design/icons";
 import { ShoppingCart, User, Plus } from "lucide-react";
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { CustomerSearchSelect } from "@/features/medical/components/CustomerSearchSelect";
 import { getMedicalPackages } from "@/features/medical/api/receptionService"; 
 
@@ -46,11 +46,10 @@ export const SellPackageDrawer: React.FC<SellPackageDrawerProps> = ({ open, onCl
     if (!localCustomerId || cartItems.length === 0) return;
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.rpc("sell_medical_packages", {
+      await safeRpc("sell_medical_packages", {
         p_customer_id: localCustomerId,
         p_packages: cartItems, // Truyền nguyên mảng JSON xuống
       });
-      if (error) throw error;
       
       message.success("Đã thu tiền và khởi tạo Ví Dịch Vụ thành công!");
       setCartItems([]); setTotalPrice(0);

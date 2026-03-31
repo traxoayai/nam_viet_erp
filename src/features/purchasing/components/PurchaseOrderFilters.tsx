@@ -18,7 +18,7 @@ interface PurchaseOrderFiltersProps {
 }
 
 export const PurchaseOrderFilters: React.FC<PurchaseOrderFiltersProps> =
-  React.memo(({ filters, setFilters, onAutoCreate }) => {
+  React.memo(function PurchaseOrderFilters({ filters, setFilters, onAutoCreate }) {
     const navigate = useNavigate();
     const [localSearch, setLocalSearch] = useState(filters.search || "");
 
@@ -30,8 +30,8 @@ export const PurchaseOrderFilters: React.FC<PurchaseOrderFiltersProps> =
       setFilters({ ...filters, dateRange: dates ? dateStrings : undefined });
     };
 
-    const handleStatusChange = (value: string) => {
-      setFilters({ ...filters, status: value });
+    const handleStatusChange = (value: string | undefined) => {
+      setFilters({ ...filters, status: value || undefined });
     };
 
     return (
@@ -52,7 +52,10 @@ export const PurchaseOrderFilters: React.FC<PurchaseOrderFiltersProps> =
                 prefix={<SearchOutlined />}
                 style={{ width: 550 }}
                 value={localSearch}
-                onChange={(e) => setLocalSearch(e.target.value)}
+                onChange={(e) => {
+                  setLocalSearch(e.target.value);
+                  if (!e.target.value) setFilters({ ...filters, search: undefined });
+                }}
                 onPressEnter={handleSearch}
                 allowClear
               />
@@ -68,14 +71,14 @@ export const PurchaseOrderFilters: React.FC<PurchaseOrderFiltersProps> =
                 onChange={handleStatusChange}
                 value={filters.status}
               >
-                <Option value="draft">Nháp</Option>
-                <Option value="approved">Đã duyệt</Option>
-                <Option value="ordering">Đang đặt hàng</Option>
-                <Option value="partial">Giao một phần</Option>
-                <Option value="delivered">Đã giao đủ</Option>
-                <Option value="unpaid">Chưa thanh toán</Option>
-                <Option value="paid">Đã thanh toán</Option>
-                <Option value="cancelled">Đã hủy</Option>
+                <Option value="DRAFT">Nháp</Option>
+                <Option value="PENDING">Đã duyệt</Option>
+                <Option value="ORDERING">Đang đặt hàng</Option>
+                <Option value="delivery:partial">Giao một phần</Option>
+                <Option value="delivery:delivered">Đã giao đủ</Option>
+                <Option value="payment:unpaid">Chưa thanh toán</Option>
+                <Option value="payment:paid">Đã thanh toán</Option>
+                <Option value="CANCELLED">Đã hủy</Option>
               </Select>
             </Space>
           </Col>

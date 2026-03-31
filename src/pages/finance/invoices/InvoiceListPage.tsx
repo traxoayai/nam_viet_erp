@@ -11,6 +11,7 @@ import {
   DollarCircleOutlined,
   DownloadOutlined,
   FileTextOutlined,
+  MinusCircleOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -36,10 +37,12 @@ import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx"; // Nhớ cài: npm install xlsx
 
 import { InvoiceXmlUpload } from "../../../features/finance/components/invoices/InvoiceXmlUpload";
+import VatExportEntryModal from "../../../features/finance/components/invoices/VatExportEntryModal";
 
 import InvoiceUploadModal from "./InvoiceUploadModal";
 
 import { invoiceService } from "@/features/finance/api/invoiceService";
+import { moneySum, fmtMoney } from "@/shared/utils/money";
 
 const { Content } = Layout;
 const { Text } = Typography;
@@ -54,6 +57,11 @@ const statusMap: any = {
   verified: {
     color: "green",
     text: "Đã nhập kho",
+    icon: <CheckCircleOutlined />,
+  },
+  verified_outbound: {
+    color: "red",
+    text: "Đã xuất kho (VAT)",
     icon: <CheckCircleOutlined />,
   },
   rejected: { color: "red", text: "Từ chối", icon: <DeleteOutlined /> },
@@ -72,6 +80,8 @@ const InvoiceListPage = () => {
   const [filters, setFilters] = useState<any>({});
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isXmlUploadOpen, setIsXmlUploadOpen] = useState(false);
+  const [isVatExportOpen, setIsVatExportOpen] = useState(false);
+  const [isXmlOutboundOpen, setIsXmlOutboundOpen] = useState(false);
   const [stats, setStats] = useState({ total: 0, pending: 0, amount: 0 });
 
   useEffect(() => {
@@ -90,10 +100,7 @@ const InvoiceListPage = () => {
       setPagination((prev) => ({ ...prev, total }));
 
       const pendingCount = data.filter((i) => i.status === "draft").length;
-      const totalAmt = data.reduce(
-        (sum, i) => sum + (i.total_amount_post_tax || 0),
-        0
-      );
+      const totalAmt = moneySum(data.map((i) => i.total_amount_post_tax || 0));
       setStats({ total, pending: pendingCount, amount: totalAmt });
     } catch (error) {
       console.error(error);
@@ -107,7 +114,7 @@ const InvoiceListPage = () => {
       await invoiceService.deleteInvoice(id);
       message.success("Đã xóa hóa đơn");
       fetchData();
-    } catch (error) {
+    } catch {
       message.error(
         "Xóa thất bại - Có thể không đủ số lượng để xóa - Vui lòng liên hệ ADMIN để biết thêm chi tiết"
       );
@@ -165,12 +172,18 @@ const InvoiceListPage = () => {
       dataIndex: "invoice_date",
       render: (d: string) => (d ? dayjs(d).format("DD/MM/YYYY") : "--"),
     },
-    { title: "Nhà Cung Cấp", dataIndex: "supplier_name_raw", ellipsis: true },
+    {
+      title: "Nhà Cung Cấp",
+      dataIndex: "supplier_name_raw",
+      ellipsis: true,
+      render: (text: string, record: any) =>
+        text || record.suppliers?.name || "--",
+    },
     {
       title: "Tổng Tiền",
       dataIndex: "total_amount_post_tax",
       align: "right" as const,
-      render: (v: number) => <Text strong>{v?.toLocaleString()} ₫</Text>,
+      render: (v: number) => <Text strong>{fmtMoney(v)} ₫</Text>,
     },
     {
       title: "Hành động",
@@ -247,6 +260,20 @@ const InvoiceListPage = () => {
             >
               Nhập XML (Chuẩn Thuế)
             </Button>
+            <Button
+              icon={<MinusCircleOutlined />}
+              style={{ width: "100%", marginTop: 8, fontSize: 14, borderColor: "#ff4d4f", color: "#ff4d4f" }}
+              onClick={() => setIsXmlOutboundOpen(true)}
+            >
+              Trừ kho VAT (XML)
+            </Button>
+            <Button
+              icon={<MinusCircleOutlined />}
+              style={{ width: "100%", marginTop: 4, fontSize: 14, borderColor: "#ff4d4f", color: "#ff4d4f" }}
+              onClick={() => setIsVatExportOpen(true)}
+            >
+              Trừ kho VAT (Nhập tay)
+            </Button>
           </Col>
         </Row>
 
@@ -283,6 +310,7 @@ const InvoiceListPage = () => {
                 >
                   <Select.Option value="draft">Chờ đối chiếu</Select.Option>
                   <Select.Option value="verified">Đã nhập kho</Select.Option>
+                  <Select.Option value="verified_outbound">Đã xuất kho (VAT)</Select.Option>
                 </Select>
               </Col>
               <Col span={6}>
@@ -327,6 +355,16 @@ const InvoiceListPage = () => {
         <InvoiceXmlUpload
           open={isXmlUploadOpen}
           onCancel={() => setIsXmlUploadOpen(false)}
+        />
+        <InvoiceXmlUpload
+          open={isXmlOutboundOpen}
+          onCancel={() => { setIsXmlOutboundOpen(false); fetchData(); }}
+          direction="outbound"
+        />
+        <VatExportEntryModal
+          open={isVatExportOpen}
+          onCancel={() => setIsVatExportOpen(false)}
+          onSuccess={fetchData}
         />
       </Content>
     </Layout>

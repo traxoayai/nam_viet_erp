@@ -13,7 +13,9 @@ import {
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 import { financeService } from "@/features/finance/api/financeService";
+import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
 
 import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate";
 import { salesService } from "@/features/sales/api/salesService";
@@ -160,13 +162,13 @@ const CreateB2BOrderPage = () => {
         }
 
         // 4. HYDRATION TÀI CHÍNH
-        if (orderData.discount_amount > 0)
-          setManualDiscount(orderData.discount_amount);
+        if ((orderData.discount_amount || 0) > 0)
+          setManualDiscount(orderData.discount_amount || 0);
         setShippingFee(orderData.shipping_fee || 0);
         setNote(orderData.note || "");
 
         if (orderData.delivery_method)
-          setDeliveryMethod(orderData.delivery_method);
+          setDeliveryMethod(orderData.delivery_method as any);
         if (orderData.shipping_partner_id)
           selectShippingPartner(orderData.shipping_partner_id);
       } catch (err: any) {
@@ -243,7 +245,7 @@ const CreateB2BOrderPage = () => {
           p_delivery_method: deliveryMethod,
           p_shipping_partner_id:
             deliveryMethod === "internal" ? null : shippingPartnerId,
-          p_warehouse_id: 1,
+          p_warehouse_id: useAuthStore.getState().profile?.warehouse_id || DEFAULT_WAREHOUSE_ID,
           p_order_type: "B2B",
           p_items: items.map((i) => ({
             product_id: i.id,
@@ -366,7 +368,7 @@ const CreateB2BOrderPage = () => {
         <div style={{ display: "flex", alignItems: "center" }}>
           <ActionButtons
             loading={loading}
-            // isOverLimit={financials.isOverLimit} // Bỏ prop này ở đây
+            isOverLimit={financials.isOverLimit}
             onSubmit={handleSubmit}
             onPrint={handlePrintPreview}
             onPrintPicking={handlePrintPickingPreview}

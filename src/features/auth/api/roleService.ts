@@ -1,6 +1,7 @@
 // src/services/roleService.ts
 import { Permission, Role } from "@/features/auth/types/role";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 // 1. Tải danh sách Vai trò
 export const fetchRoles = async (): Promise<Role[]> => {
@@ -40,11 +41,10 @@ export const savePermissionsForRole = async (
   roleId: string,
   keys: string[]
 ) => {
-  const { error } = await supabase.rpc("update_permissions_for_role", {
+  await safeRpc("update_permissions_for_role", {
     p_role_id: roleId,
     p_permission_keys: keys,
   });
-  if (error) throw error;
   return true;
 };
 

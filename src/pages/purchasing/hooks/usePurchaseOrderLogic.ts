@@ -1,5 +1,5 @@
 // src/pages/purchasing/hooks/usePurchaseOrderLogic.ts
-import { Form, App, Modal } from "antd";
+import { Form, App } from "antd";
 import dayjs from "dayjs";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -7,7 +7,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useProductStore } from "@/features/product/stores/productStore";
 import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
 import { POItem } from "@/features/purchasing/types/purchaseOrderTypes";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { moneyLineTotal, moneyAdd } from "@/shared/utils/money";
 
 // Interface cho Shipping Partner
 interface ShippingPartner {
@@ -33,10 +35,11 @@ export const usePurchaseOrderLogic = () => {
   const [loading, setLoading] = useState(false);
   const [itemsList, setItemsList] = useState<POItem[]>([]);
   const [poCode, setPoCode] = useState<string>("");
-  const [poStatus, setPoStatus] = useState<string>("DRAFT");
+  const [poStatus, setPoStatus] = useState<string>("");
   const [financials, setFinancials] = useState({
     subtotal: 0,
-    final: 0,
+    shippingFee: 0,
+    final: 0, // = subtotal only (dùng cho thanh toán NCC)
     paid: 0,
     totalCartons: 0,
   });
@@ -49,7 +52,6 @@ export const usePurchaseOrderLogic = () => {
   // Modal State
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentInitialValues, setPaymentInitialValues] = useState<any>(null);
-  const [costModalOpen, setCostModalOpen] = useState(false);
 
   // --- 1. KHỞI TẠO DỮ LIỆU ---
   useEffect(() => {
@@ -82,14 +84,16 @@ export const usePurchaseOrderLogic = () => {
       if (!po) throw new Error("Không tìm thấy đơn hàng");
 
       setPoCode(po.code);
-      setPoStatus(po.status || "DRAFT");
+      if (!po.status) throw new Error("Đơn hàng không có trạng thái hợp lệ");
+      setPoStatus(po.status);
 
       if (po.supplier?.id) {
-        const { data: richInfo } = await supabase.rpc(
+        const { data: richInfo } = await safeRpc(
           "get_supplier_quick_info",
           { p_supplier_id: po.supplier.id }
         );
-        setSupplierInfo(richInfo || po.supplier);
+        // Merge: thông tin cơ bản từ PO supplier + debt từ RPC
+        setSupplierInfo({ ...po.supplier, ...richInfo });
       }
 
       const mappedItems: POItem[] = (po.items || []).map((item: any) => {
@@ -161,18 +165,15 @@ export const usePurchaseOrderLogic = () => {
   const handleSupplierChange = async (supplierId: number) => {
     const found = suppliers.find((s) => s.id === supplierId);
     if (found) {
-      const { data } = await supabase.rpc("get_supplier_quick_info", {
+      const { data } = await safeRpc("get_supplier_quick_info", {
         p_supplier_id: supplierId,
       });
-      if (data) {
-        setSupplierInfo(data);
-        if (data.lead_time) {
-          form.setFieldsValue({
-            expected_delivery_date: dayjs().add(data.lead_time, "day"),
-          });
-        }
-      } else {
-        setSupplierInfo(found);
+      // Merge: thông tin cơ bản từ suppliers list + debt từ RPC
+      setSupplierInfo({ ...found, ...data });
+      if (data?.lead_time) {
+        form.setFieldsValue({
+          expected_delivery_date: dayjs().add(data.lead_time, "day"),
+        });
       }
     }
   };
@@ -184,13 +185,14 @@ export const usePurchaseOrderLogic = () => {
 
       currentItems.forEach((item) => {
         const qty = Number(item.quantity) || 0;
-        // Nếu là hàng tặng (Bonus) thì giá = 0, nhưng vẫn tính số kiện
+        const bonusQty = Number(item.bonus_quantity) || 0;
+        const totalQty = qty + bonusQty;
         const price = item.is_bonus ? 0 : Number(item.unit_price) || 0;
-        sub += qty * price;
+        sub = moneyAdd(sub, moneyLineTotal(qty, price));
 
         const packSize = item._items_per_carton || 1;
-        if (item.uom === item._wholesale_unit) cartons += qty;
-        else cartons += qty / packSize;
+        if (item.uom === item._wholesale_unit) cartons += totalQty;
+        else cartons += totalQty / packSize;
       });
 
       const ship = form.getFieldValue("shipping_fee") || 0;
@@ -198,7 +200,8 @@ export const usePurchaseOrderLogic = () => {
       setFinancials((prev) => ({
         ...prev,
         subtotal: sub,
-        final: sub + ship,
+        shippingFee: ship,
+        final: sub, // Chỉ tiền hàng — thanh toán NCC dựa trên final
         totalCartons: parseFloat(cartons.toFixed(1)),
       }));
 
@@ -241,7 +244,7 @@ export const usePurchaseOrderLogic = () => {
     const itemsPerCarton = p.items_per_carton || p.itemsPerCarton || 1;
     // Giá cost: Ưu tiên giá nhập gần nhất -> giá vốn thực tế -> 0
     const basePrice =
-      p.latest_purchase_price || p.latestPurchasePrice || p.actual_cost || 0;
+      p.latest_purchase_price || p.latestPurchasePrice || p.last_price || p.actual_cost || p.price || 0;
 
     // 2. Logic tạo dropdown Units
     const unitsData = p.available_units || p.units || [];
@@ -346,6 +349,7 @@ export const usePurchaseOrderLogic = () => {
       unit_price: Number(item.unit_price), // Giá mới nhất từ Table
       uom: item.uom,
       is_bonus: (item as any).is_bonus || false,
+      bonus_quantity: Number(item.bonus_quantity) || 0,
     }));
 
     // 2. Prepare Data
@@ -356,15 +360,13 @@ export const usePurchaseOrderLogic = () => {
       delivery_method: values.delivery_method,
       shipping_partner_id: values.shipping_partner_id,
       shipping_fee: values.shipping_fee,
+      status: poStatus || "DRAFT", // Giữ nguyên status hiện tại khi update
 
       // Logistics
       carrier_name: values.carrier_name,
-      carrier_contact: values.carrier_contact, // Optional field
+      carrier_contact: values.carrier_contact,
       carrier_phone: values.carrier_phone,
       total_packages: values.total_packages,
-      expected_delivery_time: values.expected_delivery_time
-        ? dayjs(values.expected_delivery_time).format("HH:mm")
-        : null,
     };
 
     if (isEditMode) {
@@ -443,7 +445,7 @@ export const usePurchaseOrderLogic = () => {
           }
         },
       });
-    } catch (err) {
+    } catch {
       message.error("Vui lòng kiểm tra lại thông tin nhập liệu");
     }
   };
@@ -459,6 +461,7 @@ export const usePurchaseOrderLogic = () => {
       flow: "out",
       partner_type: "supplier",
       supplier_id: form.getFieldValue("supplier_id"),
+      partner_name: supplierInfo?.name,
       amount: remaining,
       description: `Thanh toán cho đơn hàng ${poCode}`,
       ref_type: "purchase_order",
@@ -467,8 +470,48 @@ export const usePurchaseOrderLogic = () => {
     setPaymentModalOpen(true);
   };
 
-  const handleCalculateInbound = () => {
-    navigate(`/purchasing/costing/${id}`);
+  const requestShippingPayment = () => {
+    const shipFee = financials.shippingFee || 0;
+    if (shipFee <= 0) {
+      message.info("Đơn hàng này không có phí vận chuyển!");
+      return;
+    }
+    const spId = form.getFieldValue("shipping_partner_id");
+    const spName = shippingPartners.find((p) => p.id === spId)?.name;
+    setPaymentInitialValues({
+      business_type: "trade",
+      flow: "out",
+      partner_type: "shipping_partner",
+      partner_name: spName || "",
+      amount: shipFee,
+      description: `Thanh toán vận chuyển đơn hàng ${poCode}`,
+      ref_type: "purchase_order",
+      ref_id: Number(id),
+    });
+    setPaymentModalOpen(true);
+  };
+
+  const handleUpdateLogistics = async () => {
+    setLoading(true);
+    try {
+      const values = await form.validateFields();
+      await purchaseOrderService.updateLogistics(Number(id), {
+        delivery_method: values.delivery_method,
+        shipping_partner_id: values.shipping_partner_id,
+        shipping_fee: values.shipping_fee,
+        total_packages: values.total_packages,
+        expected_delivery_date: values.expected_delivery_date
+          ? dayjs(values.expected_delivery_date).toISOString()
+          : undefined,
+        note: values.note,
+      });
+      message.success("Đã cập nhật thông tin vận chuyển");
+      loadOrderDetail(Number(id));
+    } catch (err: any) {
+      message.error(err.message || "Lỗi cập nhật");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleConfirmFinancials = async (processedItems: any[]) => {
@@ -479,7 +522,6 @@ export const usePurchaseOrderLogic = () => {
         processedItems
       );
       message.success("Nhập kho & Chốt giá vốn thành công!");
-      setCostModalOpen(false);
       loadOrderDetail(Number(id));
     } catch (error: any) {
       console.error(error);
@@ -491,9 +533,10 @@ export const usePurchaseOrderLogic = () => {
   // Thêm vào bên trong usePurchaseOrderLogic
   const cancelOrder = async () => {
     if (!id) return;
-    Modal.confirm({
+    modal.confirm({
       title: "Xác nhận hủy đơn hàng?",
-      content: "Đơn hàng sẽ chuyển sang trạng thái Đã Hủy và không thể phục hồi. Bạn có chắc chắn muốn hủy?",
+      content:
+        "Đơn hàng sẽ chuyển sang trạng thái Đã Hủy và không thể phục hồi. Bạn có chắc chắn muốn hủy?",
       okText: "Đồng ý Hủy",
       okType: "danger",
       cancelText: "Thoát",
@@ -501,14 +544,11 @@ export const usePurchaseOrderLogic = () => {
         try {
           await purchaseOrderService.cancelPO(Number(id));
           message.success("Đã hủy đơn hàng!");
-          
-          // Gọi lại hàm fetch dữ liệu chi tiết của bạn (VD: initData() hoặc fetchDetail())
-          // Thay 'initData' bằng tên hàm load dữ liệu chi tiết thực tế trong hook của bạn
-          window.location.reload(); // Tạm thời dùng reload nếu không chắc chắn tên hàm fetch data
+          loadOrderDetail(Number(id));
         } catch (error: any) {
           message.error("Lỗi hủy đơn: " + error.message);
         }
-      }
+      },
     });
   };
 
@@ -532,17 +572,17 @@ export const usePurchaseOrderLogic = () => {
     onFinish,
     confirmOrder,
     requestPayment,
+    requestShippingPayment,
+    handleUpdateLogistics,
     calculateTotals,
     handleSupplierChange,
     paymentModalOpen,
     setPaymentModalOpen,
     paymentInitialValues,
-    costModalOpen,
-    setCostModalOpen,
-    handleCalculateInbound,
     handleConfirmFinancials,
     handleShippingFeeChange,
     handlePartnerChange,
     cancelOrder,
+    loadOrderDetail,
   };
 };

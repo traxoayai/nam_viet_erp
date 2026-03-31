@@ -3,7 +3,8 @@ import { SearchOutlined } from "@ant-design/icons";
 import { Modal, Table, Input, Tag, Space } from "antd";
 import React, { useState, useEffect } from "react";
 
-import { supabase } from "@/shared/lib/supabaseClient";
+import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 interface Props {
   open: boolean;
@@ -34,20 +35,17 @@ export const PolicyProductModal: React.FC<Props> = ({
     setLoading(true);
     try {
       // [FIX] Dùng RPC chuyên dụng cho B2B để lấy đúng wholesale_unit
-      const { data, error } = await supabase.rpc(
+      const { data } = await safeRpc(
         "search_products_for_b2b_order",
         {
           p_keyword: val || "",
-          p_warehouse_id: 1, // Mặc định kho tổng để lấy thông tin chung
+          p_warehouse_id: DEFAULT_WAREHOUSE_ID, // Mặc định kho tổng để lấy thông tin chung
         }
       );
-
-      if (error) throw error;
 
       // RPC này trả về mảng trực tiếp, không cần .data wrapper
       setProducts(data || []);
     } catch (err) {
-      console.error("Search error:", err);
       setProducts([]);
     } finally {
       setLoading(false);

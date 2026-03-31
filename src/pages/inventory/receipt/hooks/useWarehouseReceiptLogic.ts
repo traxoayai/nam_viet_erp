@@ -4,6 +4,9 @@ import dayjs from "dayjs";
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { useAuthStore } from "@/features/auth/stores/useAuthStore";
+import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
+
 import { invoiceService } from "@/features/finance/api/invoiceService";
 import { inventoryService } from "@/features/inventory/api/inventoryService";
 import { useWarehouseTools } from "@/features/inventory/hooks/useWarehouseTools";
@@ -288,7 +291,7 @@ export const useWarehouseReceiptLogic = () => {
     try {
       const payload = {
         po_id: Number(poId),
-        warehouse_id: 1, // Mặc định kho 1 (hoặc lấy từ user context)
+        warehouse_id: useAuthStore.getState().profile?.warehouse_id || DEFAULT_WAREHOUSE_ID,
         note: "Nhập kho thực tế",
         items: items.map((i) => ({
           product_id: i.product_id,

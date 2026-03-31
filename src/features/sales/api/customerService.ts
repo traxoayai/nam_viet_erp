@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 
 import { CustomerListRecord } from "@/features/sales/types/customer";
 import { uploadFile } from "@/shared/api/storageService";
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 // --- BUCKET LƯU TRỮ CHO KHÁCH HÀNG ---
 const AVATAR_BUCKET = "customer_avatars";
@@ -20,7 +20,7 @@ export const fetchCustomers = async (
   pageSize: number,
   sortByDebt: "asc" | "desc" | null = null // [NEW] Thêm tham số
 ): Promise<{ data: CustomerListRecord[]; totalCount: number }> => {
-  const { data, error } = await supabase.rpc("get_customers_b2c_list", {
+  const { data } = await safeRpc("get_customers_b2c_list", {
     search_query: filters.search_query || null,
     type_filter: filters.type_filter || null,
     status_filter: filters.status_filter || null,
@@ -28,8 +28,6 @@ export const fetchCustomers = async (
     page_size: pageSize,
     sort_by_debt: sortByDebt, // [NEW] Truyền xuống RPC
   });
-
-  if (error) throw error;
 
   const totalCount = data && data.length > 0 ? data[0].total_count : 0;
   return { data: data || [], totalCount: Number(totalCount) };
@@ -39,10 +37,9 @@ export const fetchCustomers = async (
  * 2. Tải chi tiết 1 Khách hàng (Form Sửa)
  */
 export const fetchCustomerDetails = async (id: number): Promise<any> => {
-  const { data, error } = await supabase.rpc("get_customer_b2c_details", {
+  const { data } = await safeRpc("get_customer_b2c_details", {
     p_id: id,
   });
-  if (error) throw error;
   return data;
 };
 
@@ -53,11 +50,10 @@ export const createCustomer = async (
   customerData: any,
   guardians: any[]
 ): Promise<number | null> => {
-  const { data, error } = await supabase.rpc("create_customer_b2c", {
+  const { data } = await safeRpc("create_customer_b2c", {
     p_customer_data: customerData,
     p_guardians: guardians,
   });
-  if (error) throw error;
   return data as number;
 };
 
@@ -69,12 +65,11 @@ export const updateCustomer = async (
   customerData: any,
   guardians: any[]
 ): Promise<boolean> => {
-  const { error } = await supabase.rpc("update_customer_b2c", {
+  await safeRpc("update_customer_b2c", {
     p_id: id,
     p_customer_data: customerData,
     p_guardians: guardians,
   });
-  if (error) throw error;
   return true;
 };
 
@@ -82,8 +77,7 @@ export const updateCustomer = async (
  * 5. Xóa Khách hàng (Xóa mềm)
  */
 export const deleteCustomer = async (id: number): Promise<boolean> => {
-  const { error } = await supabase.rpc("delete_customer_b2c", { p_id: id });
-  if (error) throw error;
+  await safeRpc("delete_customer_b2c", { p_id: id });
   return true;
 };
 
@@ -91,8 +85,7 @@ export const deleteCustomer = async (id: number): Promise<boolean> => {
  * 5b. Khôi phục Khách hàng
  */
 export const reactivateCustomer = async (id: number): Promise<boolean> => {
-  const { error } = await supabase.rpc("reactivate_customer_b2c", { p_id: id });
-  if (error) throw error;
+  await safeRpc("reactivate_customer_b2c", { p_id: id });
   return true;
 };
 
@@ -247,14 +240,9 @@ export const importCustomers = async (file: File): Promise<number> => {
 
       console.log("Data Sent to DB:", validArray);
 
-      const { error: rpcError } = await supabase.rpc(
-        "bulk_upsert_customers_b2c",
-        {
-          p_customers_array: validArray,
-        }
-      );
-
-      if (rpcError) throw rpcError;
+      await safeRpc("bulk_upsert_customers_b2c", {
+        p_customers_array: validArray,
+      });
       resolve(validArray.length);
     } catch (error) {
       console.error("Import Error:", error);
@@ -269,13 +257,12 @@ export const importCustomers = async (file: File): Promise<number> => {
 export const exportCustomers = async (
   filters: any
 ): Promise<CustomerListRecord[]> => {
-  const { data, error } = await supabase.rpc("export_customers_b2c_list", {
+  const { data } = await safeRpc("export_customers_b2c_list", {
     search_query: filters.search_query || null,
     type_filter: filters.type_filter || null,
     status_filter: filters.status_filter || null,
   });
 
-  if (error) throw error;
   return data || [];
 };
 
@@ -296,9 +283,8 @@ export const searchGuardians = async (
   query: string
 ): Promise<CustomerListRecord[]> => {
   if (!query || query.length < 3) return []; // Chỉ tìm khi có ít nhất 3 ký tự
-  const { data, error } = await supabase.rpc("search_customers_by_phone_b2c", {
+  const { data } = await safeRpc("search_customers_by_phone_b2c", {
     p_search_query: query,
   });
-  if (error) throw error;
   return data || [];
 };

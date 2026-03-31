@@ -5,6 +5,8 @@ import {
   OutboundFilter,
 } from "../types/outbound";
 
+import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const outboundService = {
@@ -12,7 +14,7 @@ export const outboundService = {
   async getOutboundTasks(
     filter: OutboundFilter
   ): Promise<{ data: OutboundTask[]; total: number }> {
-    const { data, error } = await supabase.rpc("get_warehouse_outbound_tasks", {
+    const { data } = await safeRpc("get_warehouse_outbound_tasks", {
       p_page: filter.page,
       p_page_size: filter.pageSize,
       p_search: filter.search || null,
@@ -20,13 +22,8 @@ export const outboundService = {
       p_type: filter.type || null,
       p_date_from: filter.date_from || null,
       p_date_to: filter.date_to || null,
-      p_warehouse_id: 1,
+      p_warehouse_id: DEFAULT_WAREHOUSE_ID,
     });
-
-    if (error) {
-      console.error("Error fetching tasks:", error);
-      throw error;
-    }
 
     const tasks = (data || []) as OutboundTask[];
     const total = tasks.length > 0 ? tasks[0].total_count : 0;
@@ -35,48 +32,43 @@ export const outboundService = {
 
   // 2. Get Stats
   async getOutboundStats(warehouseId: number): Promise<OutboundStats> {
-    const { data, error } = await supabase.rpc("get_outbound_stats", {
+    const { data } = await safeRpc("get_outbound_stats", {
       p_warehouse_id: warehouseId,
     });
-    if (error) throw error;
     return data as OutboundStats;
   },
 
   // 3. Get Detail
   async getOrderDetail(orderId: string): Promise<OutboundDetailResponse> {
-    const { data, error } = await supabase.rpc("get_outbound_order_detail", {
+    const { data } = await safeRpc("get_outbound_order_detail", {
       p_order_id: orderId,
     });
-    if (error) throw error;
     return data as OutboundDetailResponse;
   },
 
   // 4. Confirm Packing
   async confirmPacking(orderId: string): Promise<void> {
-    const { error } = await supabase.rpc("confirm_outbound_packing", {
+    await safeRpc("confirm_outbound_packing", {
       p_order_id: orderId,
     });
-    if (error) throw error;
   },
 
   // 5. Update Package Count
   async updatePackageCount(taskId: string, count: number): Promise<void> {
-    const { error } = await supabase.rpc("update_outbound_package_count", {
+    await safeRpc("update_outbound_package_count", {
       p_order_id: taskId,
       p_count: count,
     });
-    if (error) throw error;
   },
 
   // 6. Cancel Task
   async cancelTask(taskId: string, reason: string): Promise<void> {
     const { data: userData } = await supabase.auth.getUser();
-    const { error } = await supabase.rpc("cancel_outbound_task", {
+    await safeRpc("cancel_outbound_task", {
       p_order_id: taskId,
       p_reason: reason,
       p_user_id: userData.user?.id,
     });
-    if (error) throw error;
   },
 
   // 7. Save Draft Progress (FIXED RPC NAME)
@@ -84,18 +76,16 @@ export const outboundService = {
     orderId: string,
     items: { product_id: number; quantity_picked: number }[]
   ): Promise<void> {
-    const { error } = await supabase.rpc("save_outbound_progress", {
+    await safeRpc("save_outbound_progress", {
       p_order_id: orderId,
       p_items: items,
     });
-    if (error) throw error;
   },
 
   // 8. Handover to Shipping (V5)
   async handoverShipping(orderId: string): Promise<void> {
-    const { error } = await supabase.rpc("handover_to_shipping", {
+    await safeRpc("handover_to_shipping", {
       p_order_id: orderId,
     });
-    if (error) throw error;
   },
 };

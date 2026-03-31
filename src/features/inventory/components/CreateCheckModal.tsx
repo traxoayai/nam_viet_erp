@@ -7,6 +7,7 @@ import { inventoryService } from "../api/inventoryService";
 
 import { useAuth } from "@/app/contexts/AuthProvider";
 import { posService } from "@/features/pos/api/posService";
+import { useActiveWarehouses } from "@/shared/hooks/useMasterData";
 
 export const CreateCheckModal = ({ open, onCancel }: any) => {
   const [form] = Form.useForm();
@@ -14,7 +15,7 @@ export const CreateCheckModal = ({ open, onCancel }: any) => {
   const { user } = useAuth();
 
   // Dropdown Data
-  const [activeWarehouses, setActiveWarehouses] = useState<any[]>([]);
+  const { data: activeWarehouses = [] } = useActiveWarehouses();
   const [cabinets, setCabinets] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [manufacturers, setManufacturers] = useState<string[]>([]);
@@ -24,28 +25,20 @@ export const CreateCheckModal = ({ open, onCancel }: any) => {
   // Watchers
   const warehouseId = Form.useWatch("warehouse_id", form);
   const scope = Form.useWatch("scope", form);
-
   useEffect(() => {
     if (open) {
       form.resetFields();
       form.setFieldsValue({ scope: "ALL" });
 
-      // 1. Load Warehouses
-      posService.getActiveWarehouses().then((data) => {
-        setActiveWarehouses(data);
-        // Auto-select logic
-        if (data.length === 1) {
-          form.setFieldsValue({ warehouse_id: data[0].id });
-        } else if (data.length > 0) {
-          form.setFieldsValue({ warehouse_id: data[0].id });
-        }
-      });
+      if (activeWarehouses.length > 0 && !form.getFieldValue("warehouse_id")) {
+        form.setFieldsValue({ warehouse_id: activeWarehouses[0].id });
+      }
 
       // 2. Pre-load Common Data
       inventoryService.getCategories().then(setCategories);
       inventoryService.getManufacturers().then(setManufacturers);
     }
-  }, [open]);
+  }, [open, activeWarehouses]);
 
   // 3. Dynamic Load Cabinets when Warehouse changes
   useEffect(() => {

@@ -6,7 +6,7 @@ import {
   FileProtectOutlined,
   ReadOutlined,
 } from "@ant-design/icons";
-import { Row, Col, Button, message, notification } from "antd";
+import { Row, Col, Button, message, notification, Card } from "antd";
 import { useState } from "react";
 
 import { posService } from "../../api/posService";
@@ -30,7 +30,7 @@ export const PosActionToolbar = () => {
     if (items.length === 0) return message.warning("Giỏ hàng trống!");
     if (!warehouseId) return message.error("Chưa chọn kho xuất hàng!");
 
-    const totals = getTotals(); // Đã tự động trừ Voucher trong Store
+    const totals = getTotals();
 
     const payload: PosCreateOrderPayload = {
       p_order_type: "POS",
@@ -42,10 +42,9 @@ export const PosActionToolbar = () => {
         quantity: i.qty,
         uom: i.unit,
         unit_price: i.price,
-        discount: 0, // Chiết khấu dòng (hiện tại chưa dùng, dùng voucher tổng)
+        discount: 0,
       })),
       p_shipping_fee: 0,
-      // Gửi tiền giảm giá xuống Server để lưu vào đơn
       p_discount_amount: totals.discountVal,
       p_status: "DELIVERED",
       p_warehouse_id: warehouseId,
@@ -76,7 +75,6 @@ export const PosActionToolbar = () => {
     }
   };
 
-  // --- LOGIC IN ẤN ---
   const handlePrintBill = () => {
     if (items.length === 0) return message.warning("Giỏ hàng trống");
     const totals = getTotals();
@@ -85,6 +83,9 @@ export const PosActionToolbar = () => {
       sub_total: totals.subTotal,
       discount_amount: totals.discountVal,
       final_amount: totals.grandTotal,
+      customer_name: customer?.name || customer?.buyer_name || "",
+      customer_phone: customer?.phone || "",
+      loyalty_points: customer?.loyalty_points,
       items: items.map((i) => ({
         product_name: i.name,
         uom: i.unit,
@@ -104,7 +105,15 @@ export const PosActionToolbar = () => {
   };
 
   return (
-    <div style={{ marginTop: 12 }}>
+    <Card 
+      bodyStyle={{ padding: 12 }} 
+      style={{ 
+        marginTop: 16, 
+        borderRadius: 12, 
+        border: 'none', 
+        backgroundColor: '#f8fbfc' 
+      }}
+    >
       <VatInvoiceModal
         visible={showVatModal}
         onCancel={() => setShowVatModal(false)}
@@ -112,11 +121,16 @@ export const PosActionToolbar = () => {
         customer={customer}
       />
 
-      <Row gutter={[8, 8]}>
-        {/* Hàng 1: Nút chức năng */}
+      <Row gutter={[12, 12]}>
         <Col span={8}>
-          <Button block icon={<PrinterOutlined />} onClick={handlePrintBill}>
-            In Bill (F11)
+          <Button 
+            block 
+            icon={<PrinterOutlined />} 
+            onClick={handlePrintBill}
+            size="large"
+            style={{ borderRadius: 8, height: 48, fontWeight: 500 }}
+          >
+            Bill
           </Button>
         </Col>
         <Col span={8}>
@@ -124,8 +138,10 @@ export const PosActionToolbar = () => {
             block
             icon={<ReadOutlined />}
             onClick={handlePrintInstructions}
+            size="large"
+            style={{ borderRadius: 8, height: 48, fontWeight: 500 }}
           >
-            In HDSD
+            HDSD
           </Button>
         </Col>
 
@@ -134,19 +150,29 @@ export const PosActionToolbar = () => {
             block
             icon={<FileProtectOutlined />}
             onClick={() => setShowVatModal(true)}
+            size="large"
+            style={{ borderRadius: 8, height: 48, fontWeight: 500 }}
           >
-            Lấy HĐ VAT
+            VAT
           </Button>
         </Col>
 
-        {/* Hàng 2: Thanh toán */}
+        {/* Hàng 2: Thanh toán chính */}
         <Col span={12}>
           <Button
             type="primary"
             block
             size="large"
-            icon={<WalletOutlined />}
-            style={{ height: 60, background: "#fa8c16", fontSize: 16 }}
+            icon={<WalletOutlined style={{ fontSize: 24 }} />}
+            style={{ 
+              height: 72, 
+              background: "linear-gradient(135deg, #fa8c16 0%, #ffbb96 100%)", 
+              fontSize: 18, 
+              fontWeight: 700,
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(250, 140, 22, 0.3)',
+              borderRadius: 12
+            }}
             onClick={() => handleCheckout("cash")}
           >
             TIỀN MẶT (F9)
@@ -156,14 +182,24 @@ export const PosActionToolbar = () => {
           <Button
             block
             size="large"
-            icon={<QrcodeOutlined />}
-            style={{ height: 60, background: "#b5b7ff", fontSize: 16 }}
+            icon={<QrcodeOutlined style={{ fontSize: 24 }} />}
+            style={{ 
+              height: 72, 
+              background: "linear-gradient(135deg, #1890ff 0%, #91d5ff 100%)", 
+              color: '#fff',
+              fontSize: 18, 
+              fontWeight: 700,
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
+              borderRadius: 12
+            }}
             onClick={() => handleCheckout("transfer")}
           >
             CK (F10)
           </Button>
         </Col>
       </Row>
-    </div>
+    </Card>
   );
 };
+

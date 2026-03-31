@@ -7,7 +7,8 @@ import {
 import { Modal, Table, Button, Space, Tag, message } from "antd";
 import React, { useState, useEffect } from "react";
 
-import { supabase } from "@/shared/lib/supabaseClient";
+import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { DebounceSelect } from "@/shared/ui/common/DebounceSelect";
 
 interface ExcelItem {
@@ -86,15 +87,14 @@ export const ExcelPreviewModal: React.FC<Props> = ({
 
   // 1. Hàm fetch dữ liệu đúng chuẩn RPC B2B
   const fetchProductOptions = async (search: string) => {
-    const { data, error } = await supabase.rpc(
+    try {
+    const { data } = await safeRpc(
       "search_products_for_b2b_order",
       {
         p_keyword: search || "",
-        p_warehouse_id: 1,
+        p_warehouse_id: DEFAULT_WAREHOUSE_ID,
       }
     );
-
-    if (error) return [];
 
     // Map sang format mà Ant Design Select cần
     return (data || []).map((p: any) => ({
@@ -129,6 +129,9 @@ export const ExcelPreviewModal: React.FC<Props> = ({
       // Dữ liệu thô để dùng khi select
       product: p,
     }));
+    } catch {
+      return [];
+    }
   };
 
   const handleProductChange = (key: string, selectedOption: any) => {

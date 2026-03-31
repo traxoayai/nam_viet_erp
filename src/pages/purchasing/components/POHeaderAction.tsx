@@ -6,28 +6,31 @@ import {
   DollarCircleOutlined,
   PrinterOutlined,
   CloseCircleOutlined,
+  CalculatorOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import { Affix, Card, Row, Col, Space, Button, Typography, Tag } from "antd";
-import React from "react";
 import { useNavigate } from "react-router-dom";
 
 const { Title } = Typography;
 
 interface Props {
   isEditMode: boolean;
-  poId?: number; // [NEW] Needed for navigation
   poCode: string;
-  poStatus?: string; // Nhận thêm status để ẩn/hiện nút
+  poStatus?: string;
   loading: boolean;
   onSave: () => void;
   onSubmit: () => void;
-  onCancelOrder: () => void; // [NEW] Hàm hủy đơn
-  onPrint: () => void; // [NEW] Hàm in
-  onRequestPayment: () => void; // Hàm mới
-  onCalculateInbound: () => void; // [NEW] V34
+  onCancelOrder: () => void;
+  onPrint: () => void;
+  onRequestPayment: () => void;
+  onOpenCosting?: () => void;
+  onOpenInvoice?: () => void;
+  onUpdateLogistics?: () => void;
+  onRequestShippingPayment?: () => void;
 }
 
-const POHeaderAction: React.FC<Props> = ({
+const POHeaderAction = ({
   isEditMode,
   poCode,
   poStatus,
@@ -37,10 +40,16 @@ const POHeaderAction: React.FC<Props> = ({
   onCancelOrder,
   onPrint,
   onRequestPayment,
-  onCalculateInbound,
-}) => {
+  onOpenCosting,
+  onOpenInvoice,
+  onUpdateLogistics,
+  onRequestShippingPayment,
+}: Props) => {
   const navigate = useNavigate();
-const canCancel = poStatus === 'DRAFT' || poStatus === 'PENDING';
+  const canCancel = poStatus === "DRAFT" || poStatus === "PENDING";
+  const canEdit = poStatus === "PENDING";
+  const showDrawerButtons = isEditMode && poStatus !== "DRAFT";
+
   const getStatusTag = (status?: string) => {
     switch (status) {
       case "DRAFT":
@@ -64,7 +73,6 @@ const canCancel = poStatus === 'DRAFT' || poStatus === 'PENDING';
         style={{ marginBottom: 16, borderRadius: 0, zIndex: 99 }}
       >
         <Row justify="space-between" align="middle">
-          {/* CỘT TRÁI: Các nút điều hướng và thông tin cơ bản */}
           <Col>
             <Space size="middle" align="center">
               <Button
@@ -73,51 +81,42 @@ const canCancel = poStatus === 'DRAFT' || poStatus === 'PENDING';
               >
                 Quay lại
               </Button>
-              
               <Title level={5} style={{ margin: 0 }}>
                 {isEditMode ? `Đơn hàng: ${poCode}` : "Tạo Đơn Mua Hàng Mới"}
               </Title>
-              
               {getStatusTag(poStatus)}
-
-              {/* [FIX]: Nút In chỉ hiện khi Đã tạo đơn (isEditMode). Bỏ viền đỏ. */}
-              {/* {isEditMode && (
-                 <Button icon={<PrinterOutlined />} onClick={onPrint}>
-                   In đơn
-                 </Button>
-              )} */}
             </Space>
           </Col>
 
-          {/* CỘT PHẢI: Các nút Thao tác (Action) chính */}
           <Col>
             <Space size="small">
               {isEditMode && (
-                 <Button icon={<PrinterOutlined />} onClick={onPrint}
-                  style={{ 
-                      boxShadow: '0 0 8px rgba(101, 194, 248, 0.4)', // Viền phát sáng màu đỏ mờ
-                      borderColor: '#4db5ffff' 
-                   }}
-                 >
-                   In đơn
-                 </Button>
-              )}
-              {/* Nút Hủy: Chỉ hiện khi đang sửa đơn VÀ đơn ở trạng thái cho phép hủy */}
-              {isEditMode && canCancel && (
-                <Button 
-                   danger 
-                   icon={<CloseCircleOutlined />} 
-                   onClick={onCancelOrder} 
-                   style={{ 
-                      boxShadow: '0 0 8px rgba(255, 77, 79, 0.4)', // Viền phát sáng màu đỏ mờ
-                      borderColor: '#ff4d4f' 
-                   }}
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={onPrint}
+                  style={{
+                    boxShadow: "0 0 8px rgba(101, 194, 248, 0.4)",
+                    borderColor: "#4db5ffff",
+                  }}
                 >
-                   Hủy đơn
+                  In đơn
                 </Button>
               )}
 
-              {/* Nút Lưu Nháp và Đặt Hàng: Hiện khi tạo mới hoặc khi đơn đang là Nháp */}
+              {isEditMode && canCancel && (
+                <Button
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={onCancelOrder}
+                  style={{
+                    boxShadow: "0 0 8px rgba(255, 77, 79, 0.4)",
+                    borderColor: "#ff4d4f",
+                  }}
+                >
+                  Hủy đơn
+                </Button>
+              )}
+
               {(poStatus === "DRAFT" || !isEditMode) && (
                 <>
                   <Button
@@ -127,7 +126,6 @@ const canCancel = poStatus === 'DRAFT' || poStatus === 'PENDING';
                   >
                     Lưu Nháp
                   </Button>
-                  
                   <Button
                     type="primary"
                     icon={<SendOutlined />}
@@ -139,28 +137,52 @@ const canCancel = poStatus === 'DRAFT' || poStatus === 'PENDING';
                 </>
               )}
 
-              {/* Hiện nút Yêu cầu thanh toán khi đã đặt hàng (PENDING) */}
-              {poStatus === "PENDING" && (
-                <Button
-                  type="default"
-                  style={{ borderColor: "#faad14", color: "#faad14" }}
-                  icon={<DollarCircleOutlined />}
-                  onClick={onRequestPayment}
-                >
-                  Yêu cầu Thanh toán
-                </Button>
+              {canEdit && (
+                <>
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
+                    onClick={onUpdateLogistics}
+                    loading={loading}
+                  >
+                    Lưu thông tin
+                  </Button>
+                  <Button
+                    style={{ borderColor: "#faad14", color: "#faad14" }}
+                    icon={<DollarCircleOutlined />}
+                    onClick={onRequestPayment}
+                  >
+                    Thanh toán NCC
+                  </Button>
+                  <Button
+                    style={{ borderColor: "#52c41a", color: "#52c41a" }}
+                    icon={<DollarCircleOutlined />}
+                    onClick={onRequestShippingPayment}
+                  >
+                    Thanh toán VC
+                  </Button>
+                </>
               )}
 
-              {/* Nút Tính toán & Nhập kho (V34) - Hiện khi Pending hoặc Shipping */}
-              {(poStatus === "PENDING" || poStatus === "SHIPPING") && (
-                <Button
-                  type="primary"
-                  style={{ backgroundColor: "#722ed1", borderColor: "#722ed1" }}
-                  icon={<DollarCircleOutlined />}
-                  onClick={onCalculateInbound}
-                >
-                  Tính Giá vốn & Nhập kho
-                </Button>
+              {showDrawerButtons && (
+                <>
+                  <Button
+                    type="primary"
+                    style={{ backgroundColor: "#722ed1", borderColor: "#722ed1" }}
+                    icon={<CalculatorOutlined />}
+                    onClick={onOpenCosting}
+                  >
+                    Tính Giá Vốn
+                  </Button>
+                  <Button
+                    type="primary"
+                    style={{ backgroundColor: "#13c2c2", borderColor: "#13c2c2" }}
+                    icon={<FileTextOutlined />}
+                    onClick={onOpenInvoice}
+                  >
+                    Hóa Đơn VAT
+                  </Button>
+                </>
               )}
             </Space>
           </Col>

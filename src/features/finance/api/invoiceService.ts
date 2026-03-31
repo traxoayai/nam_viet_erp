@@ -2,6 +2,7 @@
 import { v4 as uuidv4 } from "uuid";
 
 import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 export const invoiceService = {
   // 1. Upload ảnh lên Bucket 'invoices'
@@ -81,7 +82,7 @@ export const invoiceService = {
   async getInvoices(page: number, pageSize: number, filters: any) {
     let query = supabase
       .from("finance_invoices")
-      .select("*", { count: "exact" })
+      .select("*, suppliers:supplier_id(name)", { count: "exact" })
       .order("created_at", { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1);
 
@@ -105,78 +106,106 @@ export const invoiceService = {
     return { data: data || [], total: count || 0 };
   },
 
-  // 4. Xóa hóa đơn (An toàn: Trừ kho VAT trước)
+  // 3b. Lấy hóa đơn theo ID
+  async getInvoiceById(id: number) {
+    const { data, error } = await supabase
+      .from("finance_invoices")
+      .select("*, suppliers:supplier_id(name)")
+      .eq("id", id)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  // 4. Xóa hóa đơn (Atomic: reverse VAT + delete trong 1 transaction)
   async deleteInvoice(id: number) {
     try {
-      // Bước 1: Gọi RPC để trừ kho VAT (Reverse Entry)
-      const { error: rpcError } = await supabase.rpc(
-        "reverse_vat_invoice_entry",
-        {
-          p_invoice_id: id,
+      // Ưu tiên gọi RPC atomic nếu tồn tại
+      await safeRpc("delete_invoice_atomic", { p_invoice_id: id });
+      return true;
+    } catch (atomicError: any) {
+      // Fallback: Nếu RPC chưa tồn tại, dùng flow cũ (2 bước)
+      if (atomicError.message?.includes("does not exist")) {
+        console.warn("RPC delete_invoice_atomic chưa tồn tại, dùng flow cũ");
+
+        try {
+          await safeRpc("reverse_vat_invoice_entry", { p_invoice_id: id });
+        } catch (rpcError: any) {
+          if (rpcError.message?.includes("violates check constraint")) {
+            throw new Error(
+              "Không thể xóa: Tồn kho VAT không đủ để trừ (hàng đã được xuất bán)."
+            );
+          }
+          throw rpcError;
         }
-      );
 
-      if (rpcError) {
-        console.error("Lỗi RPC Reverse:", rpcError);
+        const { error: deleteError } = await supabase
+          .from("finance_invoices")
+          .delete()
+          .eq("id", id);
+        if (deleteError) throw deleteError;
 
-        // Phân tích lỗi từ Database trả về để báo user
-        if (rpcError.message.includes("violates check constraint")) {
+        return true;
+      } else {
+        if (atomicError.message?.includes("violates check constraint")) {
           throw new Error(
-            "Không thể xóa hóa đơn này vì hàng đã được xuất bán (Tồn kho VAT không đủ để trừ). Vui lòng kiểm tra lại các phiếu xuất."
+            "Không thể xóa: Tồn kho VAT không đủ để trừ (hàng đã được xuất bán)."
           );
         }
-
-        throw rpcError;
+        throw atomicError;
       }
-
-      // Bước 2: Sau khi trừ kho thành công, mới xóa record hóa đơn
-      const { error: deleteError } = await supabase
-        .from("finance_invoices")
-        .delete()
-        .eq("id", id);
-
-      if (deleteError) throw deleteError;
-
-      return true;
-    } catch (error: any) {
-      console.error("Delete Invoice Failed:", error);
-      // Ném lỗi tiếp để UI (InvoiceListPage) bắt được và hiện message.error
-      throw error;
     }
   },
 
   // 1. Hàm gọi VAT Engine
   async processVatEntry(invoiceId: number) {
-    const { error } = await supabase.rpc("process_vat_invoice_entry", {
+    await safeRpc("process_vat_invoice_entry", {
       p_invoice_id: invoiceId,
     });
-    if (error) console.error("⚠️ Lỗi nhập kho VAT:", error);
   },
 
-  // 3. Hàm Tạo Mới (Insert)
+  // 3. Hàm Tạo Mới (Insert) - Luôn tạo draft, KHÔNG tự động nhập kho VAT
   async createInvoice(payload: any) {
     const { data, error } = await supabase
       .from("finance_invoices")
       .insert([
         {
           ...payload,
-          status: "verified",
+          status: "draft",
           created_at: new Date().toISOString(),
         },
       ])
       .select()
-      .single(); // Insert luôn trả về 1 dòng nên dùng single() ok
+      .single();
 
     if (error) throw error;
-
-    // Kích hoạt nhập kho VAT
-    if (data && data.id) await this.processVatEntry(data.id);
 
     return data;
   },
 
-  // 4. Hàm Cập Nhật (Update) - FIX LỖI PGRST116 TẠI ĐÂY
+  // 4. Xác nhận hóa đơn + nhập kho VAT
   async verifyInvoice(id: number, payload: any) {
+    // Check status hiện tại — chỉ verify từ draft
+    const { data: existing } = await supabase
+      .from("finance_invoices")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (existing && existing.status === "verified") {
+      // Đã verified rồi — chỉ update payload, KHÔNG gọi processVatEntry lần 2
+      const { error } = await supabase
+        .from("finance_invoices")
+        .update(payload)
+        .eq("id", id);
+      if (error) throw error;
+      return true;
+    }
+
+    if (existing && existing.status !== "draft") {
+      throw new Error(`Không thể verify: Hóa đơn đang ở trạng thái "${existing.status}"`);
+    }
+
     const { data, error } = await supabase
       .from("finance_invoices")
       .update({
@@ -185,29 +214,24 @@ export const invoiceService = {
       })
       .eq("id", id)
       .select()
-      .maybeSingle(); // <-- DÙNG MAYBESINGLE ĐỂ TRÁNH CRASH NẾU KHÔNG TÌM THẤY
+      .maybeSingle();
 
     if (error) throw error;
+    if (!data) throw new Error("Không tìm thấy hóa đơn để cập nhật.");
 
-    if (!data)
-      throw new Error(
-        "Không tìm thấy hóa đơn để cập nhật (ID sai hoặc không có quyền)."
-      );
-
-    // Kích hoạt nhập kho VAT
-    if (data && data.id) await this.processVatEntry(data.id);
+    // Nhập kho VAT (chỉ lần đầu verify)
+    if (data.id) await this.processVatEntry(data.id);
 
     return true;
   },
 
   // [NEW] Kiểm tra trùng lặp
   async checkInvoiceExists(taxCode: string, symbol: string, number: string) {
-    const { data, error } = await supabase.rpc("check_invoice_exists", {
+    const { data } = await safeRpc("check_invoice_exists", {
       p_tax_code: taxCode,
       p_symbol: symbol,
       p_number: number,
     });
-    if (error) throw error;
     return data as boolean; // True nếu đã tồn tại
   },
 
@@ -217,7 +241,17 @@ export const invoiceService = {
 
     let res;
     if (id) {
-      // Update
+      // Update — chỉ cho phép update nếu đang ở trạng thái draft
+      const { data: existing } = await supabase
+        .from("finance_invoices")
+        .select("status")
+        .eq("id", id)
+        .single();
+
+      if (existing && existing.status !== "draft") {
+        throw new Error(`Không thể lưu nháp: Hóa đơn đang ở trạng thái "${existing.status}"`);
+      }
+
       res = await supabase
         .from("finance_invoices")
         .update(draftPayload)
@@ -244,12 +278,11 @@ export const invoiceService = {
     productName: string,
     vendorUnit: string
   ) {
-    const { data, error } = await supabase.rpc("get_mapped_product", {
+    const { data } = await safeRpc("get_mapped_product", {
       p_tax_code: taxCode,
       p_product_name: productName,
       p_vendor_unit: vendorUnit || "", // <-- QUAN TRỌNG: Tránh gửi null/undefined
     });
-    if (error) throw error;
 
     if (data && data.length > 0) {
       return {
@@ -279,6 +312,53 @@ export const invoiceService = {
       },
       { onConflict: "vendor_tax_code, vendor_product_name, vendor_unit" } // <-- Constraint mới
     );
-    if (error) console.error("Auto-learn mapping failed:", error);
+    if (error) throw new Error("Luu mapping that bai: " + error.message);
+  },
+
+  // Tạo hóa đơn xuất kho VAT (Outbound - Trừ kho)
+  async createOutboundInvoice(payload: any) {
+    const { data, error } = await supabase
+      .from("finance_invoices")
+      .insert([
+        {
+          invoice_number: payload.invoice_number,
+          invoice_symbol: payload.invoice_symbol,
+          invoice_date: payload.invoice_date,
+          supplier_name_raw: payload.supplier_name_raw,
+          buyer_tax_code: payload.buyer_tax_code,
+          total_amount_pre_tax: payload.total_amount_pre_tax,
+          tax_amount: payload.total_tax,
+          total_amount_post_tax: payload.total_amount_post_tax,
+          direction: "outbound",
+          status: "verified_outbound",
+          raw_items: payload.items,
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Gọi RPC trừ kho VAT
+    if (data?.id) {
+      try {
+        await safeRpc("process_vat_export_entry", { p_invoice_id: data.id });
+      } catch (rpcError: any) {
+        // Rollback: delete the invoice that was just created
+        const { error: deleteError } = await supabase
+          .from("finance_invoices")
+          .delete()
+          .eq("id", data.id);
+        if (deleteError) {
+          throw new Error(
+            `Lỗi trừ kho VAT: ${rpcError.message}. ROLLBACK THẤT BẠI — cần xóa thủ công HĐ #${data.id}`
+          );
+        }
+        throw new Error(`Lỗi trừ kho VAT: ${rpcError.message}`);
+      }
+    }
+
+    return data;
   },
 };

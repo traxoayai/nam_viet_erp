@@ -5,6 +5,7 @@ import {
   ProductMasterExportItem,
 } from "../types/master.types";
 
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const productMasterService = {
@@ -48,14 +49,9 @@ export const productMasterService = {
 
     for (let i = 0; i < total; i += CHUNK_SIZE) {
       const chunk = payload.slice(i, i + CHUNK_SIZE);
-      const { error } = await supabase.rpc("import_product_master_v2", {
+      await safeRpc("import_product_master_v2", {
         p_data: chunk,
       });
-
-      if (error) {
-        console.error(`Import Error at chunk ${i}:`, error, chunk);
-        throw new Error(`Lỗi import từ dòng ${i + 1}: ${error.message}`);
-      }
 
       processed += chunk.length;
     }

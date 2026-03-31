@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { inboundService } from "@/features/inventory/api/inboundService";
-import { supabase } from "@/shared/lib/supabaseClient";
+import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { useInboundStore } from "../stores/useInboundStore";
 
 export const useInboundDetail = (id?: string) => {
@@ -62,7 +63,7 @@ export const useInboundDetail = (id?: string) => {
           // 4. Map Payload chuẩn cho process_inbound_receipt
           const payload = {
             p_po_id: Number(id),
-            p_warehouse_id: 1, // Default hoặc lấy từ context
+            p_warehouse_id: DEFAULT_WAREHOUSE_ID, // Default hoặc lấy từ context
             p_items: itemsToReceive.map((item) => {
               const i = item as any;
               return {
@@ -94,9 +95,9 @@ export const useInboundDetail = (id?: string) => {
   const handleSaveDraft = async () => {
     if (!id) return;
     try {
-      await supabase.rpc('save_inbound_draft', {
+      await safeRpc('save_inbound_draft', {
         p_po_id: Number(id),
-        p_draft_data: workingItems 
+        p_draft_data: workingItems
       });
       message.success("Đã lưu nháp! Bạn có thể tắt máy và quét tiếp vào ngày mai.");
     } catch (error: any) {

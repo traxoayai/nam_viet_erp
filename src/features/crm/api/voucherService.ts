@@ -1,3 +1,4 @@
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const voucherService = {
@@ -38,15 +39,10 @@ export const voucherService = {
 
   // GỌI RPC: Bắn voucher cho nhóm khách
   async distributeToSegment(promotionId: string, segmentId: number) {
-    const { data, error } = await supabase.rpc(
-      "distribute_voucher_to_segment",
-      {
-        p_promotion_id: promotionId,
-        p_segment_id: segmentId,
-      }
-    );
-
-    if (error) throw error;
+    const { data } = await safeRpc("distribute_voucher_to_segment", {
+      p_promotion_id: promotionId,
+      p_segment_id: segmentId,
+    });
     return data; // Trả về số lượng khách được nhận
   },
 };

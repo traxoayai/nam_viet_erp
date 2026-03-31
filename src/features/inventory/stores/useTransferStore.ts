@@ -6,7 +6,7 @@ import { transferService } from "../api/transferService";
 import { TransferMaster, TransferDetail } from "../types/transfer";
 
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 interface TransferState {
   transfers: TransferMaster[];
@@ -434,14 +434,9 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     try {
       // [UPDATE V32.4] Gọi RPC Xuất kho tự động (Auto-FEFO)
       // Backend sẽ tự động tìm lô hết hạn sớm nhất để trừ kho -> Chuyển trạng thái sang Shipping
-      const { error } = await supabase.rpc("confirm_transfer_outbound_fefo", {
+      await safeRpc("confirm_transfer_outbound_fefo", {
         p_transfer_id: currentTransfer.id,
       });
-
-      if (error) {
-        // Ném lỗi để catch bên dưới xử lý hiển thị
-        throw error;
-      }
 
       // 2. Thông báo thành công
       message.success(
@@ -521,12 +516,10 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     set({ loading: true });
     try {
       // 3. Gọi RPC V32.8
-      const { data, error } = await supabase.rpc("confirm_transfer_inbound", {
+      const { data } = await safeRpc("confirm_transfer_inbound", {
         p_transfer_id: currentTransfer.id,
         p_actor_warehouse_id: targetWarehouseId,
       });
-
-      if (error) throw error;
 
       // 4. Thành công
       message.success(

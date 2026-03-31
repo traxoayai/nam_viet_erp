@@ -1,4 +1,5 @@
 // src/services/promotionService.ts
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export interface Promotion {
@@ -101,12 +102,11 @@ export const promotionService = {
     customerId: number,
     orderValue: number
   ) {
-    const { data, error } = await supabase.rpc("verify_promotion_code", {
+    const { data } = await safeRpc("verify_promotion_code", {
       p_code: code,
       p_customer_id: customerId,
       p_order_value: orderValue,
     });
-    if (error) throw error;
     return data;
   },
 };

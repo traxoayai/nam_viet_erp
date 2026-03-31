@@ -5,8 +5,10 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 
 import { invoiceService } from "../api/invoiceService";
+import { calcInvoiceTotals } from "@/shared/utils/money";
 
 import { useProductStore } from "@/features/product/stores/productStore";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const useInvoiceVerifyLogic = () => {
   const { message } = App.useApp();
@@ -16,6 +18,13 @@ export const useInvoiceVerifyLogic = () => {
   const [form] = Form.useForm();
 
   const routerState = location.state;
+
+  // Get returnTo and poId from URL search params as fallback
+  const searchParams = new URLSearchParams(location.search);
+  const returnTo =
+    routerState?.returnTo || searchParams.get("returnTo") || null;
+  const linkedPoId = searchParams.get("poId") || null;
+
   const { suppliers, products, fetchCommonData } = useProductStore();
 
   const [loading, setLoading] = useState(false);
@@ -23,32 +32,7 @@ export const useInvoiceVerifyLogic = () => {
   const [isXmlSource, setIsXmlSource] = useState(false);
   const [xmlRawItems, setXmlRawItems] = useState<any[]>([]);
 
-  //   // --- UTILS ---
-  //   const parseFlexibleDate = (dateStr: string | null) => {
-  //     if (!dateStr) return null;
-  //     const normalizedStr = dateStr.replace(/[.-]/g, "/");
-  //     const formats = ["DD/MM/YYYY", "D/M/YYYY", "YYYY/MM/DD", "DD/MM/YY"];
-  //     for (const fmt of formats) {
-  //       const d = dayjs(normalizedStr, fmt, true);
-  //       if (d.isValid()) return d;
-  //     }
-  //     const loose = dayjs(dateStr);
-  //     return loose.isValid() ? loose : null;
-  //   };
-
-  const calculateTotal = (items: any[] = []) => {
-    let totalPreTax = 0;
-    let totalTax = 0;
-    items.forEach((item: any) => {
-      const qty = Number(item?.quantity) || 0;
-      const price = Number(item?.unit_price) || 0;
-      const vat = Number(item?.vat_rate) || 0;
-      const lineTotal = qty * price;
-      totalPreTax += lineTotal;
-      totalTax += lineTotal * (vat / 100);
-    });
-    return { totalPreTax, totalTax, final: totalPreTax + totalTax };
-  };
+  const calculateTotal = (items: any[] = []) => calcInvoiceTotals(items);
 
   // --- ACTIONS ---
   const handleRecalculate = () => {
@@ -60,11 +44,8 @@ export const useInvoiceVerifyLogic = () => {
   const loadInvoiceFromDB = async (invoiceId: number) => {
     try {
       setLoading(true);
-      const { data } = await invoiceService.getInvoices(1, 1, {
-        id: invoiceId,
-      });
-      if (data && data.length > 0) {
-        const record = data[0];
+      const record = await invoiceService.getInvoiceById(invoiceId);
+      if (record) {
         if (record.status !== "draft") setIsReadOnly(true);
 
         form.setFieldsValue({
@@ -73,7 +54,7 @@ export const useInvoiceVerifyLogic = () => {
           invoice_date: record.invoice_date ? dayjs(record.invoice_date) : null,
           supplier_id: record.supplier_id,
           total_amount_post_tax: record.total_amount_post_tax,
-          items: (record.items_json || []).map((item: any, idx: number) => ({
+          items: ((record.items_json as any[]) || []).map((item: any, idx: number) => ({
             ...item,
             key: idx,
             expiry_date: item.expiry_date ? dayjs(item.expiry_date) : null,
@@ -185,20 +166,61 @@ export const useInvoiceVerifyLogic = () => {
         }),
       };
 
-      // 4. PHÂN LUỒNG TẠO MỚI / CẬP NHẬT
-      // Nếu là XML Source (Mới) HOẶC không có ID trên URL -> Gọi Create
-      if (isXmlSource || !id) {
-        console.log("Creating NEW invoice...", payload);
-        await invoiceService.createInvoice(payload);
-        message.success("Đã tạo mới và nhập kho VAT thành công!");
+      // 4. PHÂN LUỒNG: OUTBOUND vs INBOUND
+      const direction = routerState?.direction;
+
+      if (direction === "outbound") {
+        // --- OUTBOUND: Tạo hóa đơn xuất kho (trừ VAT) ---
+        const outboundPayload = {
+          invoice_number: payload.invoice_number,
+          invoice_symbol: payload.invoice_symbol,
+          invoice_date: payload.invoice_date,
+          supplier_name_raw: payload.supplier_name_raw,
+          buyer_tax_code: values.buyer_tax_code || "",
+          total_amount_pre_tax: totals.totalPreTax,
+          total_tax: totals.totalTax,
+          total_amount_post_tax: totals.final,
+          items: (values.items || []).map((item: any) => ({
+            product_id: item.product_id ? Number(item.product_id) : null,
+            product_name: item.product_name || item.name,
+            unit: item.internal_unit || item.unit,
+            quantity: Number(item.quantity) || 0,
+            unit_price: Number(item.unit_price) || 0,
+            vat_rate: Number(item.vat_rate) || 0,
+          })),
+        };
+        await invoiceService.createOutboundInvoice(outboundPayload);
+        message.success("Da xuat kho VAT thanh cong!");
       } else {
-        // Nếu đang sửa hóa đơn cũ -> Gọi Update
-        console.log("Updating EXISTING invoice...", id);
-        await invoiceService.verifyInvoice(Number(id), payload);
-        message.success("Đã cập nhật hóa đơn!");
+        // --- INBOUND: Flow cũ (tạo mới / cập nhật) ---
+        if (!id || id === "new-xml") {
+          // Tạo mới (từ XML hoặc manual) → create draft rồi verify luôn
+          const result = await invoiceService.createInvoice(payload);
+          const newInvoiceId = (result as any)?.id;
+
+          // Auto-link to PO if poId provided
+          if (linkedPoId && newInvoiceId) {
+            await supabase.from("finance_invoice_allocations").insert({
+              invoice_id: newInvoiceId,
+              po_id: Number(linkedPoId),
+              allocated_amount: totals.final,
+            });
+          }
+
+          // Verify ngay (trigger processVatEntry để nhập kho VAT)
+          if (newInvoiceId) {
+            await invoiceService.verifyInvoice(newInvoiceId, payload);
+          }
+
+          message.success("Đã tạo và nhập kho VAT thành công!");
+        } else {
+          // Update existing invoice
+          await invoiceService.verifyInvoice(Number(id), payload);
+          message.success("Đã cập nhật hóa đơn!");
+        }
       }
 
-      navigate("/finance/invoices");
+      navigate(returnTo || "/finance/invoices");
     } catch (error: any) {
       console.error(error);
       message.error("Lỗi: " + error.message);
@@ -208,6 +230,10 @@ export const useInvoiceVerifyLogic = () => {
   };
 
   const onSaveDraft = async (values: any) => {
+    if (isReadOnly) {
+      message.warning("Hóa đơn đã được xác nhận, không thể lưu nháp.");
+      return;
+    }
     setLoading(true);
     try {
       const totals = calculateTotal(values.items);
@@ -253,9 +279,28 @@ export const useInvoiceVerifyLogic = () => {
         status: "draft", // FORCE STATUS
       };
 
-      await invoiceService.saveDraft(id ? Number(id) : null, payload);
+      const draftResult = await invoiceService.saveDraft(
+        id ? Number(id) : null,
+        payload
+      );
+
+      // Auto-link to PO if poId provided
+      if (linkedPoId && draftResult?.id) {
+        await supabase
+          .from("finance_invoice_allocations")
+          .upsert(
+            {
+              invoice_id: draftResult.id,
+              po_id: Number(linkedPoId),
+              allocated_amount: totals.final || 0,
+            },
+            { onConflict: "invoice_id,po_id" }
+          )
+          .then(() => {});
+      }
+
       message.success("Đã lưu nháp hóa đơn!");
-      navigate("/finance/invoices");
+      navigate(returnTo || "/finance/invoices");
     } catch (error: any) {
       console.error(error);
       message.error("Lỗi lưu nháp: " + error.message);

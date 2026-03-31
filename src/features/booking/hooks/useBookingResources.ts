@@ -2,7 +2,7 @@
 import { message } from "antd";
 import { useState, useCallback, useMemo } from "react";
 
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 export interface BookingCustomer {
   id: number;
@@ -40,15 +40,13 @@ export const useBookingResources = () => {
   const searchCustomers = useCallback(async (keyword: string) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("get_customers_b2c_list", {
+      const { data } = await safeRpc("get_customers_b2c_list", {
         search_query: keyword,
         type_filter: null,
         status_filter: "active",
         page_num: 1,
         page_size: 20,
       });
-
-      if (error) throw error;
 
       if (data) {
         // Map to simpler interface
@@ -80,12 +78,10 @@ export const useBookingResources = () => {
     try {
       // Note: If get_users_with_roles doesn't exist, this will fail.
       // But we follow strict user instructions to use this RPC.
-      const { data, error } = await supabase.rpc(
-        "get_users_with_roles" as any,
+      const { data } = await safeRpc(
+        "get_users_with_roles",
         {}
       );
-
-      if (error) throw error;
 
       if (data) {
         // Filter and Map
@@ -118,15 +114,13 @@ export const useBookingResources = () => {
   const fetchVaccines = useCallback(async (keyword: string = "") => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("get_service_packages_list", {
+      const { data } = await safeRpc("get_service_packages_list", {
         p_search_query: keyword,
         p_type_filter: "service", // or 'bundle' potentially
         p_status_filter: "active",
         p_page_num: 1,
         p_page_size: 50,
       });
-
-      if (error) throw error;
 
       if (data) {
         // Map result
@@ -153,7 +147,7 @@ export const useBookingResources = () => {
     async (customerData: Partial<BookingCustomer>) => {
       setLoading(true);
       try {
-        const { data, error } = await supabase.rpc("create_customer_b2c", {
+        const { data } = await safeRpc("create_customer_b2c", {
           p_customer_data: {
             name: customerData.name,
             phone: customerData.phone,
@@ -162,8 +156,6 @@ export const useBookingResources = () => {
             address: customerData.address,
           },
         });
-
-        if (error) throw error;
         message.success("Thêm khách hàng thành công");
         // Optionally refresh or return new ID
         return data;
@@ -186,7 +178,7 @@ export const useBookingResources = () => {
       setLoading(true);
       try {
         // Assuming usage of update_customer_b2c
-        const { error } = await supabase.rpc("update_customer_b2c", {
+        await safeRpc("update_customer_b2c", {
           p_customer_id: id,
           p_customer_data: {
             name: customerData.name,
@@ -196,8 +188,6 @@ export const useBookingResources = () => {
             address: customerData.address,
           },
         });
-
-        if (error) throw error;
         message.success("Cập nhật khách hàng thành công");
         return true;
       } catch (err: any) {

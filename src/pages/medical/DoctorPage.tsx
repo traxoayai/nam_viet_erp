@@ -75,6 +75,9 @@ const DoctorPage = () => {
     isReadOnly,
     isPrescriptionSent,
     prePurchasedVaccines,
+    pharmacyWarehouses,
+    selectedPharmacy,
+    setSelectedPharmacy,
   } = useDoctorWorkbench();
 
   // History Hook for "Copy Prescription"
@@ -190,17 +193,16 @@ const DoctorPage = () => {
 
   return (
     <Layout className="min-h-screen bg-gray-50">
-      <Content className="w-full p-4">
+      <Content className="w-full px-4 py-3" style={{ maxWidth: 1600, margin: "0 auto" }}>
         {/* ROW 1: HEADER (Sticky) */}
-        <div className="sticky top-0 z-50 mb-4 flex justify-between items-start gap-4">
+        <div className="sticky top-0 z-50 mb-3 flex justify-between items-start gap-3 bg-white rounded-lg shadow-sm p-3">
           <div className="flex-1">
             <DoctorBlock1_PatientInfo
               patient={patientInfo}
-              visitId={medicalVisitId} // Changed from visitId to passing logic? Check component prop.
+              visitId={medicalVisitId}
               onCopyPrescription={handleCopyPrescription}
             />
           </div>
-          {/* LAB RESULTS BUTTON */}
           <Button
             type="primary"
             danger
@@ -209,7 +211,6 @@ const DoctorPage = () => {
               fetchLabResults();
               setOpenLabDrawer(true);
             }}
-            className="shadow-md animate-pulse"
           >
             Xem KQ Xét Nghiệm
           </Button>
@@ -217,13 +218,13 @@ const DoctorPage = () => {
 
         {/* THÔNG BÁO VẮC XIN ĐÃ MUA */}
         {prePurchasedVaccines && prePurchasedVaccines.length > 0 && (
-          <div className="bg-purple-100 border border-purple-300 text-purple-800 p-3 rounded-lg mb-4 font-bold text-lg flex items-center shadow-sm">
-            <Syringe className="mr-2" /> Bệnh nhân đã thanh toán Dịch vụ Tiêm chủng: 
+          <div className="bg-purple-50 border border-purple-200 text-purple-800 px-3 py-2 rounded-lg mb-3 text-sm font-medium flex items-center">
+            <Syringe size={16} className="mr-2 flex-shrink-0" /> Tiêm chủng đã TT:
             {prePurchasedVaccines.map(v => ` ${v.products?.name} (Mũi ${v.dose_number})`).join(", ")}
           </div>
         )}
 
-        {/* 1.5 SMART ASSISTANT */}
+        {/* SMART ASSISTANT */}
         <SmartClinicalAssistant
           vitals={vitals}
           clinical={clinical}
@@ -233,7 +234,7 @@ const DoctorPage = () => {
         />
 
         {/* ROW 2: CLINICAL CONTEXT */}
-        <Row gutter={16} className="mb-4">
+        <Row gutter={12} className="mb-3">
           {/* Col 1: Epidemiology (Readonly) */}
           <Col span={6}>
             <Card
@@ -398,7 +399,7 @@ const DoctorPage = () => {
         </Row>
 
         {/* ROW 3: DEEP EXAM (Dynamic) */}
-        <div className="mb-4">
+        <div className="mb-3">
           <ExamFormComponent
             data={clinical}
             onChange={handleClinicalChange}
@@ -409,7 +410,7 @@ const DoctorPage = () => {
         </div>
 
         {/* ROW 4: INDICATION & CONCLUSION */}
-        <Row gutter={16} className="mb-16">
+        <Row gutter={12} className="mb-16">
           {/* Part A: Service Order */}
           <Col span={8} className="flex flex-col gap-4">
             <DoctorBlock3_ServiceOrder
@@ -482,6 +483,9 @@ const DoctorPage = () => {
               onSendPharmacy={handleSendToPharmacy}
               sending={loading}
               isPrescriptionSent={isPrescriptionSent}
+              pharmacyWarehouses={pharmacyWarehouses}
+              selectedPharmacy={selectedPharmacy}
+              onPharmacyChange={setSelectedPharmacy}
             />
           </Col>
         </Row>

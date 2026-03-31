@@ -21,7 +21,7 @@ const triggerPrint = (htmlContent: string) => {
 // 1. IN BILL K80 (CÓ QR CODE)
 export const printPosBill = (order: any) => {
   // Tạo link VietQR động
-  const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-compact.png?amount=${order.final_amount}&addInfo=POS ${order.code}`;
+  const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-compact.png?amount=${order.final_amount}&addInfo=TT ${dayjs().format("DDMMYYHHmm")}`;
 
   const itemsHtml = order.items
     .map(
@@ -61,9 +61,15 @@ export const printPosBill = (order: any) => {
             </div>
             <div class="dashed-line"></div>
             <div class="flex justify-between text-[10px]">
-                <div>Mã: <b>${order.code}</b></div>
-                <div>${new Date().toLocaleString("vi-VN")}</div>
+                <div>Mã: <b>PREVIEW</b></div>
+                <div>${dayjs().format("HH:mm:ss DD/MM/YYYY")}</div>
             </div>
+            ${order.customer_name ? `
+            <div class="text-[10px] mt-1">
+                <div>KH: <b>${order.customer_name}</b>${order.customer_phone ? ` - ${order.customer_phone}` : ""}</div>
+                ${order.loyalty_points != null ? `<div>Điểm tích lũy: <b>${order.loyalty_points?.toLocaleString() || 0}</b></div>` : ""}
+            </div>
+            ` : ""}
             <div class="dashed-line"></div>
             
             <div class="grid grid-cols-12 font-bold uppercase mb-2 text-[10px]">

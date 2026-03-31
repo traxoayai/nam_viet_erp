@@ -1,7 +1,19 @@
--- Enable pg_trgm extension if not exists
+-- =====================================================
+-- Migration 003: Miscellaneous (pg_trgm + match_products_from_excel)
+-- Merged from: 010_misc.sql
+-- Date: 2026-03-31
+-- Safe for production: YES (idempotent)
+-- =====================================================
+
+-- Note: Supabase CLI wraps each migration in a transaction automatically
+
+-- Enable pg_trgm for fuzzy text matching
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
-CREATE OR REPLACE FUNCTION match_products_from_excel(p_data jsonb)
+-- Drop old version (different RETURNS TABLE column order)
+DROP FUNCTION IF EXISTS public.match_products_from_excel(jsonb);
+
+CREATE OR REPLACE FUNCTION public.match_products_from_excel(p_data jsonb)
 RETURNS TABLE (
     excel_sku text,
     excel_name text,
@@ -11,8 +23,9 @@ RETURNS TABLE (
     product_status text,
     base_unit text,
     similarity_score double precision
-) 
+)
 LANGUAGE plpgsql
+SET "search_path" TO 'public'
 AS $$
 DECLARE
     item jsonb;
@@ -22,13 +35,10 @@ DECLARE
     best_match record;
     current_score double precision;
 BEGIN
-    -- Iterate over each item in the input JSON array
     FOR item IN SELECT * FROM jsonb_array_elements(p_data)
     LOOP
         v_sku := trim(both from (item->>'excel_sku'));
         v_name := item->>'excel_name';
-        
-        -- Reset variables
         best_match := null;
         current_score := 0;
 
@@ -39,48 +49,42 @@ BEGIN
             FROM products
             WHERE sku = v_sku AND status = 'active'
             LIMIT 1;
-            
             IF FOUND THEN
                 best_match := rec;
                 current_score := 1.0;
             END IF;
         END IF;
 
-        -- 2. Exact Name Match (If no SKU match found)
+        -- 2. Exact Name Match
         IF best_match IS NULL AND v_name IS NOT NULL AND v_name <> '' THEN
             SELECT id, name, sku, status, retail_unit, 1.0 as score
             INTO rec
             FROM products
             WHERE lower(name) = lower(v_name) AND status = 'active'
             LIMIT 1;
-
             IF FOUND THEN
                 best_match := rec;
                 current_score := 1.0;
             END IF;
         END IF;
 
-        -- 3. Fuzzy Name Match (If still no match)
+        -- 3. Fuzzy Name Match (pg_trgm similarity > 0.4)
         IF best_match IS NULL AND v_name IS NOT NULL AND v_name <> '' THEN
-            -- Use similarity from pg_trgm, threshold 0.4
             SELECT id, name, sku, status, retail_unit, similarity(name, v_name) as score
             INTO rec
             FROM products
-            WHERE status = 'active' 
+            WHERE status = 'active'
               AND similarity(name, v_name) > 0.4
             ORDER BY similarity(name, v_name) DESC
             LIMIT 1;
-
             IF FOUND THEN
                 best_match := rec;
                 current_score := rec.score;
             END IF;
         END IF;
 
-        -- Return result row
         excel_sku := v_sku;
         excel_name := v_name;
-        
         IF best_match IS NOT NULL THEN
             product_id := best_match.id;
             product_name := best_match.name;
@@ -101,3 +105,5 @@ BEGIN
     END LOOP;
 END;
 $$;
+
+-- End of migration 003

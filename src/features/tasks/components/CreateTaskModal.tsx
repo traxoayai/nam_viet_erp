@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, DatePicker } from 'antd';
 import { useTaskBoard } from '../hooks/useTaskBoard';
-import { supabase } from '@/shared/lib/supabaseClient';
+import { safeRpc } from '@/shared/lib/safeRpc';
 import { useAuthStore } from '@/features/auth/stores/useAuthStore';
 import TextEditor from '@/shared/ui/common/TextEditor';
 
@@ -20,11 +20,7 @@ export const CreateTaskModal: React.FC<Props> = ({ open, onClose }) => {
   useEffect(() => {
     const fetchUsers = async () => {
       // Gọi RPC thay vì query table trực tiếp
-      const { data, error } = await supabase.rpc('get_users_with_roles');
-      if (error) {
-         console.error("Lỗi tải danh sách NV:", error);
-         return;
-      }
+      const { data } = await safeRpc('get_users_with_roles');
       if (data) setUsers(data);
     };
     if (open) fetchUsers();

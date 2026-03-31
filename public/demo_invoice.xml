@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HDon>
+  <DLHDon>
+    <TTChung>
+      <THDon>HÓA ĐƠN GIÁ TRỊ GIA TĂNG</THDon>
+      <KHMSHDon>1</KHMSHDon>
+      <KHHDon>C26TSN</KHHDon>
+      <SHDon>0001234</SHDon>
+      <NLap>2026-03-22</NLap>
+      <DVTTe>VND</DVTTe>
+      <TGia>1</TGia>
+      <HTTToan>TM/CK</HTTToan>
+    </TTChung>
+    <NDHDon>
+      <NBan>
+        <Ten>Q321 (Pp Men Biosutyl Dl)</Ten>
+        <MST>0101433056</MST>
+        <DChi>Hapu</DChi>
+        <SDThoai>0901234567</SDThoai>
+      </NBan>
+      <NMua>
+        <Ten>NAM VIỆT EMS</Ten>
+        <MST>0316789012</MST>
+        <DChi>123 Nguyễn Huệ, Q1, TP.HCM</DChi>
+      </NMua>
+      <DSHHDVu>
+        <HHDVu>
+          <STT>1</STT>
+          <THHDVu>Men Biosubtyl SP DL H10v*10vien</THHDVu>
+          <DVTinh>Hộp</DVTinh>
+          <SLuong>10</SLuong>
+          <DGia>48000</DGia>
+          <ThTien>480000</ThTien>
+          <TSuat>8</TSuat>
+        </HHDVu>
+        <HHDVu>
+          <STT>2</STT>
+          <THHDVu>Men tiêu hóa Biosubtyl DL Davac - H25g - Gói</THHDVu>
+          <DVTinh>Hộp</DVTinh>
+          <SLuong>50</SLuong>
+          <DGia>16800</DGia>
+          <ThTien>840000</ThTien>
+          <TSuat>8</TSuat>
+        </HHDVu>
+      </DSHHDVu>
+      <TToan>
+        <TgTCThue>1320000</TgTCThue>
+        <TgTThue>105600</TgTThue>
+        <TgTTTBSo>1425600</TgTTTBSo>
+      </TToan>
+    </NDHDon>
+  </DLHDon>
+</HDon>

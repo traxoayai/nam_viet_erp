@@ -23,6 +23,7 @@ import { PosPaymentSection } from "../../features/pos/components/layout/PosPayme
 import { usePosCartStore } from "../../features/pos/stores/usePosCartStore";
 import { WarehousePosData } from "../../features/pos/types/pos.types";
 
+import { useActiveWarehouses } from "@/shared/hooks/useMasterData";
 import { BarcodeAssignModal } from "@/features/product/components/BarcodeAssignModal"; // [NEW]
 import { supabase } from "@/shared/lib/supabaseClient";
 import { ScannerListener } from "@/shared/ui/warehouse-tools/ScannerListener";
@@ -67,16 +68,16 @@ const PosPage = () => {
   // const searchRef = useRef<any>(null); // Không cần ref nữa vì dùng ScannerListener
   const navigate = useNavigate(); // [NEW] Hook điều hướng
 
-  const [warehouses, setWarehouses] = useState<WarehousePosData[]>([]);
+  const { data: activeWarehouses = [] } = useActiveWarehouses();
   const [assignModalVisible, setAssignModalVisible] = useState(false); // [NEW]
   const [unknownBarcode, setUnknownBarcode] = useState(""); // [NEW]
 
   // --- LOGIC 1: AUTO SELECT WAREHOUSE ---
   useEffect(() => {
+    if (activeWarehouses.length === 0) return;
+
     const initWarehouse = async () => {
-      // 1. Lấy danh sách kho
-      const list = await posService.getActiveWarehouses();
-      setWarehouses(list);
+      const list = activeWarehouses;
 
       // Nếu store đã có kho rồi thì không cần auto select lại (để tránh override khi reload)
       if (warehouseId) return;
@@ -130,19 +131,15 @@ const PosPage = () => {
       }
     };
     initWarehouse();
-  }, []); // Run once
+  }, [activeWarehouses, warehouseId]); // Run when list changes or warehouseId isn't set
 
   // [FIX] Logic Scanner (Sử dụng API search_products_pos V3 mới nhất)
   const handleScan = async (code: string) => {
     if (!warehouseId) return;
     const hide = message.loading("Đang tra cứu...", 0);
     try {
-      // Gọi API tìm kiếm (Backend đã update tìm chính xác Barcode)
-      const { data } = await supabase.rpc("search_products_pos", {
-        p_keyword: code,
-        p_limit: 1,
-        p_warehouse_id: warehouseId,
-      });
+      // Gọi API tìm kiếm thông qua service để đảm bảo format mapping chuẩn
+      const data = await posService.searchProducts(code, warehouseId);
 
       if (data && data.length > 0) {
         const product = data[0];
@@ -264,7 +261,7 @@ const PosPage = () => {
             onChange={handleChangeWarehouse}
             style={{ width: 160 }}
             size="small"
-            options={warehouses.map((w) => ({ label: w.name, value: w.id }))}
+            options={activeWarehouses.map((w: any) => ({ label: w.name, value: w.id }))}
           />
         </Space>
 

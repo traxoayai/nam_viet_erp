@@ -1,81 +1,127 @@
 // src/pages/purchasing/components/POPaymentSummary.tsx
-import { TruckOutlined } from "@ant-design/icons";
-import { Card, Typography, Divider } from "antd";
-import React from "react";
+import { DollarOutlined, TruckOutlined } from "@ant-design/icons";
+import { Card, Typography, Divider, Button } from "antd";
 
 const { Text } = Typography;
 
-interface Props {
-  financials: { subtotal: number; final: number; totalCartons: number };
+interface Financials {
+  subtotal: number;
+  shippingFee: number;
+  final: number;
+  totalCartons: number;
+  paid: number;
 }
 
-// [FIX] Loại bỏ Form.Item nhập liệu, chỉ nhận props để hiển thị
-const POPaymentSummary: React.FC<Props> = ({ financials }) => {
+interface Props {
+  financials: Financials;
+  shippingPartnerName?: string;
+  poStatus?: string;
+  onRequestPayment?: () => void;
+  onRequestShippingPayment?: () => void;
+}
+
+const Row = ({
+  label,
+  value,
+  bold,
+  color,
+}: {
+  label: string;
+  value: string;
+  bold?: boolean;
+  color?: string;
+}) => (
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 6,
+      fontSize: bold ? 16 : 14,
+      color: color || undefined,
+    }}
+  >
+    {bold ? <strong>{label}</strong> : <Text type="secondary">{label}</Text>}
+    {bold ? <strong>{value}</strong> : <Text strong>{value}</Text>}
+  </div>
+);
+
+const POPaymentSummary = ({
+  financials,
+  shippingPartnerName,
+  poStatus,
+  onRequestPayment,
+  onRequestShippingPayment,
+}: Props) => {
+  const showActions = poStatus === "PENDING" || poStatus === "SHIPPING";
+
   return (
-    <Card
-      title={
-        <span>
-          <TruckOutlined /> Tổng Thanh Toán
-        </span>
-      }
-      style={{ marginBottom: 16 }}
-      styles={{ body: { padding: 16 } }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 8,
-        }}
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Card 1: Thanh toán NCC */}
+      <Card
+        title={
+          <span>
+            <DollarOutlined /> Thanh Toán NCC
+          </span>
+        }
+        size="small"
+        styles={{ body: { padding: 12 } }}
       >
-        <Text type="secondary">Tiền hàng:</Text>
-        <Text strong>{financials.subtotal.toLocaleString()} ₫</Text>
-      </div>
+        <Row
+          label="Tiền hàng:"
+          value={`${financials.subtotal.toLocaleString()} ₫`}
+        />
+        <Divider style={{ margin: "8px 0" }} />
+        <Row
+          label="TỔNG TRẢ NCC:"
+          value={`${financials.final.toLocaleString()} ₫`}
+          bold
+          color="#d9363e"
+        />
+        {showActions && onRequestPayment && (
+          <Button
+            type="primary"
+            icon={<DollarOutlined />}
+            onClick={onRequestPayment}
+            style={{ width: "100%", marginTop: 8 }}
+          >
+            Tạo Thanh Toán NCC
+          </Button>
+        )}
+      </Card>
 
-      {/* Chỉ hiển thị kết quả tính toán, KHÔNG nhập ở đây nữa (đã nhập bên POGeneralInfo) */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 8,
-        }}
+      {/* Card 2: Vận chuyển */}
+      <Card
+        title={
+          <span>
+            <TruckOutlined /> Vận Chuyển
+          </span>
+        }
+        size="small"
+        styles={{ body: { padding: 12 } }}
       >
-        <Text type="secondary">Phí vận chuyển (+):</Text>
-        <Text>
-          {(financials.final - financials.subtotal).toLocaleString()} ₫
-        </Text>
-      </div>
-
-      <Divider style={{ margin: "12px 0" }} />
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 18,
-          color: "#d9363e",
-          marginTop: 12,
-        }}
-      >
-        <strong>TỔNG CỘNG:</strong>
-        <strong>{financials.final.toLocaleString()} ₫</strong>
-      </div>
-
-      <div
-        style={{
-          marginTop: 12,
-          padding: 8,
-          background: "#f6ffed",
-          border: "1px solid #b7eb8f",
-          borderRadius: 4,
-          textAlign: "center",
-        }}
-      >
-        <span style={{ color: "#389e0d", fontWeight: "bold" }}>
-          📦 Tổng kiện: {financials.totalCartons} thùng
-        </span>
-      </div>
-    </Card>
+        <Row
+          label="Phí vận chuyển:"
+          value={`${financials.shippingFee.toLocaleString()} ₫`}
+        />
+        {shippingPartnerName && (
+          <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>
+            Đối tác: {shippingPartnerName}
+          </div>
+        )}
+        <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>
+          Tổng kiện: {financials.totalCartons} thùng
+        </div>
+        {showActions && onRequestShippingPayment && (
+          <Button
+            icon={<TruckOutlined />}
+            onClick={onRequestShippingPayment}
+            style={{ width: "100%", marginTop: 4 }}
+          >
+            Tạo Thanh Toán Phí Vận Chuyển
+          </Button>
+        )}
+      </Card>
+    </div>
   );
 };
 

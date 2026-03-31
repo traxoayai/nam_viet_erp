@@ -40,6 +40,7 @@ import { useInboundDetail } from "@/features/inventory/hooks/useInboundDetail";
 import { InboundDetailItem } from "@/features/inventory/types/inbound";
 import { BarcodeAssignModal } from "@/features/product/components/BarcodeAssignModal"; // [NEW]
 import { useRowFlasher } from "@/shared/hooks/useRowFlasher"; // [NEW]
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { ScannerListener } from "@/shared/ui/warehouse-tools/ScannerListener"; // [NEW]
 
@@ -136,7 +137,7 @@ const WarehouseReceiptPage = () => {
     const hide = message.loading("Tra cứu...", 0);
     try {
       // 2. Lookup via RPC
-      const { data } = await supabase.rpc("search_products_pos", {
+      const { data } = await safeRpc("search_products_pos", {
         p_keyword: code,
         p_limit: 1,
         p_warehouse_id: 0, // Global search or use proper ID if available

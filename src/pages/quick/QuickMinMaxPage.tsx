@@ -28,7 +28,7 @@ import { getSuppliers } from "@/features/purchasing/api/supplierService";
 import { upsertProduct } from "@/features/product/api/productService";
 import { getProductDetails } from "@/features/product/api/productService"; // Ensure this is imported for handleSaveRow
 import { useDebounce } from "@/shared/hooks/useDebounce";
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -156,15 +156,13 @@ const QuickMinMaxPage: React.FC = () => {
     try {
       // GỌI RPC MỚI - DỮ LIỆU PHẲNG
       // Không cần filter local, Backend đã làm hết
-      const { data, error } = await supabase.rpc("get_inventory_setup_grid", {
+      const { data } = await safeRpc("get_inventory_setup_grid", {
         p_warehouse_id: selectedWarehouseId,
         p_search: term,
         p_limit: size,
         p_offset: (page - 1) * size,
         p_has_setup_only: showHasStockOnly, // Filter "Đã cài đặt"
       });
-
-      if (error) throw error;
 
       // Map dữ liệu (Backend trả về đã chuẩn, chỉ cần tính lại giá trị hiển thị)
       const rows = (data || []).map((p: any) => ({

@@ -3,6 +3,7 @@ import { BarcodeOutlined } from "@ant-design/icons";
 import { Modal, Form, Select, message, Typography, Tag } from "antd";
 import React, { useState, useEffect } from "react";
 
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 interface Props {
@@ -84,13 +85,11 @@ export const BarcodeAssignModal: React.FC<Props> = ({
       setSubmitting(true);
 
       // [CORE UPDATE] Gọi RPC với tham số p_unit_id
-      const { data, error } = await supabase.rpc("quick_assign_barcode", {
+      const { data } = await safeRpc("quick_assign_barcode", {
         p_product_id: values.product_id,
         p_unit_id: values.unit_id, // Gửi ID thay vì Name
         p_barcode: scannedBarcode,
       });
-
-      if (error) throw error;
       if (data && !data.success) throw new Error(data.message);
 
       message.success(data.message);

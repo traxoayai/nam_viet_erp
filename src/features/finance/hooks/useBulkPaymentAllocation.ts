@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { moneyAdd, moneySub } from '@/shared/utils/money';
 import { financeService } from '../api/financeService';
 
 export interface PendingOrder {
@@ -70,7 +71,7 @@ export const useBulkPaymentAllocation = (customerId?: number) => {
       if (remainingAmount >= item.need_to_collect) {
         item.allocated_amount = item.need_to_collect;
         item.status_after = 'paid';
-        remainingAmount -= item.need_to_collect;
+        remainingAmount = moneySub(remainingAmount, item.need_to_collect);
       } else {
         item.allocated_amount = remainingAmount;
         item.status_after = 'partial';
@@ -83,10 +84,10 @@ export const useBulkPaymentAllocation = (customerId?: number) => {
   }, [pendingOrders, selectedRowKeys, totalReceived]);
 
   const totalAllocated = useMemo(() => {
-    return allocatedOrders.reduce((sum, o) => sum + o.allocated_amount, 0);
+    return allocatedOrders.reduce((sum, o) => moneyAdd(sum, o.allocated_amount), 0);
   }, [allocatedOrders]);
 
-  const remainingToAdvance = totalReceived > totalAllocated ? totalReceived - totalAllocated : 0;
+  const remainingToAdvance = totalReceived > totalAllocated ? moneySub(totalReceived, totalAllocated) : 0;
 
   // Hàm tự động check theo số tiền (Auto-tick)
   const handleTotalReceivedChange = useCallback((amount: number) => {
@@ -99,7 +100,7 @@ export const useBulkPaymentAllocation = (customerId?: number) => {
           if (remain <= 0) break;
           newKeys.push(order.id);
           // Cứ gán trọn vẹn need_to_collect để trừ, đến khi remain cạn thì thôi
-          remain -= order.need_to_collect;
+          remain = moneySub(remain, order.need_to_collect);
       }
       setSelectedRowKeys(newKeys);
   }, [pendingOrders]);

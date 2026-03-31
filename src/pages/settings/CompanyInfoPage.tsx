@@ -74,7 +74,7 @@ const CompanyInfoPage: React.FC = () => {
         }
 
         if (data && data.value) {
-          const info = data.value as CompanyInfo;
+          const info = data.value as unknown as CompanyInfo;
           form.setFieldsValue(info);
           setLogoPreview(info.logoUrl || null);
           if (info.logoUrl) {

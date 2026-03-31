@@ -2,11 +2,11 @@
 // --- BẢO MẬT: Đã xóa import supabaseAdmin để tránh lộ Service Key ---
 import { UserAssignment } from "@/features/auth/types/user";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 // 1. Lấy danh sách Users (Giữ nguyên)
 export const fetchUsersWithRoles = async () => {
-  const { data, error } = await supabase.rpc("get_users_with_roles");
-  if (error) throw error;
+  const { data } = await safeRpc("get_users_with_roles");
   return data;
 };
 
@@ -67,11 +67,10 @@ export const updateUserAssignments = async (
   userId: string,
   assignments: Partial<UserAssignment>[]
 ) => {
-  const { error } = await supabase.rpc("update_user_assignments", {
+  await safeRpc("update_user_assignments", {
     p_user_id: userId,
     p_assignments: assignments,
   });
-  if (error) throw error;
   return true;
 };
 
@@ -88,10 +87,9 @@ export const deleteUser = async (_userId: string) => {
  * 5. Admin Duyệt User
  */
 export const approveUser = async (userId: string): Promise<boolean> => {
-  const { error } = await supabase.rpc("approve_user", {
+  await safeRpc("approve_user", {
     p_user_id: userId,
   });
-  if (error) throw error;
   return true;
 };
 
@@ -102,10 +100,9 @@ export const updateUserStatus = async (
   userId: string,
   status: string
 ): Promise<boolean> => {
-  const { error } = await supabase.rpc("update_user_status", {
+  await safeRpc("update_user_status", {
     p_user_id: userId,
     p_status: status,
   });
-  if (error) throw error;
   return true;
 };

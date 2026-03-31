@@ -180,3 +180,13 @@ button:focus-visible {
 .flash-row {
   animation: flashRow 1.5s ease-out;
 }
+
+/* --- UI OVERRIDES --- */
+.dosage-select-no-right-radius .ant-select-selector {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.huge-input-number-centered .ant-input-number-input {
+  text-align: center !important;
+}

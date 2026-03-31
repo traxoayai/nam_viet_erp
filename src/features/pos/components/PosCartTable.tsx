@@ -5,7 +5,6 @@ import {
   Avatar,
   Tag,
   Space,
-  Input,
   Select,
   InputNumber,
   Button,
@@ -16,7 +15,6 @@ import {
 
 import { usePosCartStore } from "../stores/usePosCartStore";
 import { CartItem } from "../types/pos.types";
-
 import { printInstruction } from "@/shared/utils/printTemplates";
 
 const { Text } = Typography;
@@ -31,131 +29,167 @@ export const PosCartTable = () => {
     {
       title: "Sản phẩm",
       dataIndex: "name",
-      width: 280,
+      width: 350,
       render: (_: any, r: CartItem) => (
-        <Space align="start">
+        <Space align="center" size="middle">
           <Avatar
-            shape="square"
+            shape="circle"
             src={r.image_url}
-            size={48}
-            style={{ backgroundColor: "#f5f5f5" }}
+            size={56}
+            style={{ backgroundColor: "#f0f2f5", border: "1px solid #e8e8e8" }}
           />
           <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{r.name}</div>
-            <div style={{ fontSize: 11, color: "#8c8c8c", marginTop: 2 }}>
+            <div style={{ fontWeight: 600, fontSize: 16, color: "#262626" }}>{r.name}</div>
+            <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
               <Tag
-                color="orange"
-                style={{ marginRight: 4, padding: "0 4px", fontSize: 10 }}
+                color="blue"
+                style={{ borderRadius: 4, marginRight: 8, padding: "0 8px" }}
               >
                 {r.location?.cabinet
                   ? `${r.location.cabinet}-${r.location.row}`
-                  : "Kho"}
+                  : "Kho chính"}
               </Tag>
-              {r.sku}
+              <Text type="secondary">{r.sku}</Text>
             </div>
           </div>
         </Space>
       ),
     },
-
     {
-      title: "Liều dùng",
+      title: "Liều dùng / HDSD",
       dataIndex: "dosage",
-      width: 200,
+      width: 320,
       render: (t: string, r: CartItem) => (
-        <Input.Group compact>
+        <div style={{ display: "flex", width: "100%", alignItems: "center" }}>
           <Select
+            className="dosage-select-no-right-radius"
+            showSearch
             allowClear
             value={t}
-            style={{ width: "calc(100% - 32px)" }}
-            size="small"
-            placeholder="Chọn hoặc nhập liều..."
+            style={{ flex: 1 }}
+            size="large"
+            placeholder="Ghi chú liều dùng..."
             onChange={(val) => updateItemField(r.id, "dosage", val)}
             options={[
-              { value: "Sáng 1 - Tối 1", label: "Sáng 1 - Tối 1" },
+              { value: "Sáng 1 - Tối 1", label: "💊 Sáng 1 - Tối 1" },
               {
                 value: "Sáng 1 - Chiều 1 - Tối 1",
-                label: "Sáng 1 - Chiều 1 - Tối 1",
+                label: "💊 Sáng 1 - Chiều 1 - Tối 1",
               },
-              { value: "Uống khi đau/sốt", label: "Uống khi đau/sốt" },
+              { value: "Uống khi đau/sốt", label: "⚠️ Uống khi đau/sốt" },
             ]}
-            mode="tags"
+            dropdownStyle={{ borderRadius: 8 }}
           />
-          <Tooltip title="In HDSD để bấm vào vỉ">
+          <Tooltip title="In HDSD">
             <Button
-              size="small"
+              size="large"
               icon={<PrinterOutlined />}
+              type="primary"
               style={{
-                width: 32,
-                padding: 0,
-                color: "#1890ff",
-                borderColor: "#1890ff",
+                width: 48,
+                flexShrink: 0,
+                borderRadius: "0 8px 8px 0",
+                marginLeft: -1, // Overlap border
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "#52c41a",
+                borderColor: "#52c41a",
+                zIndex: 1
               }}
               onClick={() => {
                 if (!t) return message.warning("Chưa nhập liều dùng!");
-                printInstruction(r.name, t); // Calls the template function
+                printInstruction(r.name, t);
               }}
             />
           </Tooltip>
-        </Input.Group>
+        </div>
       ),
     },
     {
       title: "ĐVT",
       dataIndex: "unit",
-      width: 70,
+      width: 100,
       align: "center" as const,
-      render: (u: string) => <Tag color="blue">{u}</Tag>,
+      render: (u: string) => (
+        <Tag color="cyan" style={{ fontSize: 13, padding: "4px 10px", borderRadius: 6, fontWeight: 500 }}>
+          {u}
+        </Tag>
+      ),
     },
     {
-      title: "SL",
+      title: "Số lượng",
       dataIndex: "qty",
-      width: 80,
+      width: 120,
       align: "center" as const,
       render: (v: number, r: CartItem) => (
         <InputNumber
           min={1}
-          max={r.stock_quantity} // Không cho nhập quá tồn
+          max={r.stock_quantity}
           value={v}
-          size="small"
-          style={{ width: "100%" }}
+          size="large"
+          style={{ width: "100%", borderRadius: 8 }}
           onChange={(val) => updateQuantity(r.id, val || 1)}
         />
       ),
     },
     {
       title: "Thành tiền",
-      width: 110,
-      align: "right" as const,
+      width: 140,
+      align: "center" as const,
       render: (_: any, r: CartItem) => (
-        <Text strong>{(r.price * r.qty).toLocaleString()}</Text>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <Text strong style={{ fontSize: 16, color: "#fa541c" }}>
+            {(r.price * r.qty).toLocaleString()}
+          </Text>
+          <Text type="secondary" style={{ fontSize: 11 }}>
+            {r.price.toLocaleString()} / {r.unit}
+          </Text>
+        </div>
       ),
     },
     {
-      width: 40,
+      width: 60,
       align: "center" as const,
       render: (_: any, r: CartItem) => (
         <Button
           type="text"
-          size="small"
+          size="large"
           danger
-          icon={<DeleteOutlined />}
+          icon={<DeleteOutlined style={{ fontSize: 18 }} />}
           onClick={() => removeFromCart(r.id)}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            borderRadius: 8,
+            width: 40,
+            height: 40
+          }}
+          className="hover-danger-bg"
         />
       ),
     },
   ];
 
   return (
-    <Table
-      dataSource={items}
-      columns={columns}
-      pagination={false}
-      scroll={{ y: "calc(100vh - 380px)" }} // Chiều cao động trừ đi header/footer
-      size="small"
-      rowKey="id"
-      style={{ flex: 1 }}
-      locale={{ emptyText: "Chưa có sản phẩm nào (F2 để tìm)" }}
-    />
+    <div style={{ 
+      backgroundColor: '#fff', 
+      borderRadius: 12, 
+      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+      overflow: 'hidden'
+    }}>
+      <Table
+        dataSource={items}
+        columns={columns}
+        pagination={false}
+        scroll={{ y: "calc(100vh - 420px)" }}
+        size="large"
+        rowKey="id"
+        style={{ flex: 1 }}
+        locale={{ emptyText: "👉 Bấm F2 để tìm thuốc hoặc quét mã vạch" }}
+      />
+    </div>
   );
 };
+

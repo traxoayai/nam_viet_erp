@@ -1,5 +1,5 @@
 // src/features/booking/api/bookingService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 export interface BookingPayload {
   customer_id: number;
@@ -30,17 +30,15 @@ export const bookingService = {
         ? payload.doctor_id
         : null;
 
-    const { data, error } = await supabase.rpc("create_appointment_booking", {
+    const { data } = await safeRpc("create_appointment_booking", {
       p_customer_id: payload.customer_id,
       p_doctor_id: doctorId,
       p_time: payload.appointment_time,
       p_symptoms: payload.symptoms,
-      p_note: payload.notes || "", // Singular 'note'
+      p_note: payload.notes || "",
       p_type: "examination",
       p_status: payload.status || "confirmed",
     });
-
-    if (error) throw error;
     return data; // Returns appointment_id
   },
 
@@ -54,15 +52,13 @@ export const bookingService = {
         ? payload.doctor_id
         : null;
 
-    const { data, error } = await supabase.rpc("check_in_patient", {
+    const { data } = await safeRpc("check_in_patient", {
       p_customer_id: payload.customer_id,
       p_doctor_id: doctorId,
       p_priority: payload.priority === "urgent" ? "high" : "normal",
       p_symptoms: payload.symptoms,
-      p_notes: payload.notes || "", // Plural 'notes'
+      p_notes: payload.notes || "",
     });
-
-    if (error) throw error;
     return data; // Returns queue_number or queue_id
   },
 };

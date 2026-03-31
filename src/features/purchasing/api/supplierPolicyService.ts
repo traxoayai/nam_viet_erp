@@ -1,6 +1,7 @@
 // src/features/purchasing/api/supplierPolicyService.ts
 import { PolicyFormValues } from "../types/supplierPolicy";
 
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const supplierPolicyService = {
@@ -97,11 +98,10 @@ export const supplierPolicyService = {
       })),
     };
 
-    const { data, error } = await supabase.rpc(
+    const { data } = await safeRpc(
       "create_full_supplier_program",
       payload
     );
-    if (error) throw error;
     return data;
   },
 
@@ -128,11 +128,10 @@ export const supplierPolicyService = {
       })),
     };
 
-    const { data, error } = await supabase.rpc(
+    const { data } = await safeRpc(
       "update_full_supplier_program",
       payload
     );
-    if (error) throw error;
     return data;
   },
 };

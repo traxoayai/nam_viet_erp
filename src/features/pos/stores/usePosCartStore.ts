@@ -10,7 +10,10 @@ import {
   PosProductSearchResult,
 } from "../types/pos.types";
 
-import { supabase } from "@/shared/lib/supabaseClient";
+import { useAuthStore } from "@/features/auth/stores/useAuthStore";
+import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
+import { safeRpc } from "@/shared/lib/safeRpc";
+import { moneyLineTotal, moneySum, moneyMul } from "@/shared/utils/money";
 
 // Định nghĩa cấu trúc 1 Đơn hàng (Tab)
 export interface PosOrder {
@@ -68,7 +71,7 @@ export const usePosCartStore = create<PosCartState>()(
         },
       ],
       activeOrderId: "default",
-      warehouseId: 1,
+      warehouseId: useAuthStore.getState().profile?.warehouse_id || DEFAULT_WAREHOUSE_ID,
       availableVouchers: [],
 
       getCurrentOrder: () => {
@@ -265,19 +268,20 @@ export const usePosCartStore = create<PosCartState>()(
       },
 
       fetchVouchers: async (customerId, total) => {
-        try {
-          const { data, error } = await supabase.rpc(
-            "get_pos_usable_promotions",
-            {
-              p_customer_id: customerId,
-              p_order_total: total,
-            }
-          );
+        // [5.3] Guard: skip if no valid customer
+        if (!customerId) return;
 
-          if (error) {
-            console.error("Lỗi lấy voucher:", error);
-            return;
-          }
+        // [5.2] Capture active order before async call
+        const orderIdBefore = get().activeOrderId;
+
+        try {
+          const { data } = await safeRpc("get_pos_usable_promotions", {
+            p_customer_id: customerId,
+            p_order_total: total,
+          }, { silent: true });
+
+          // [5.2] Discard stale results if order switched during fetch
+          if (get().activeOrderId !== orderIdBefore) return;
 
           const vouchers = (data || []) as PosVoucher[];
 
@@ -326,8 +330,8 @@ export const usePosCartStore = create<PosCartState>()(
 
         const { items, selectedVoucher, customer } = currentOrder;
 
-        // 1. Tổng tiền hàng
-        const subTotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+        // 1. Tổng tiền hàng (dùng safe money arithmetic)
+        const subTotal = moneySum(items.map((i) => moneyLineTotal(i.qty, i.price)));
 
         // 2. Giảm giá (Voucher)
         let discountVal = 0;
@@ -336,7 +340,7 @@ export const usePosCartStore = create<PosCartState>()(
             if (selectedVoucher.discount_type === "fixed") {
               discountVal = selectedVoucher.discount_value;
             } else {
-              discountVal = (subTotal * selectedVoucher.discount_value) / 100;
+              discountVal = moneyMul(subTotal, selectedVoucher.discount_value / 100);
               if (
                 selectedVoucher.max_discount_value &&
                 discountVal > selectedVoucher.max_discount_value

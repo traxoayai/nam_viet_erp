@@ -33,6 +33,7 @@ import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 
 import { useDebounce } from "@/shared/hooks/useDebounce";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 const { Title, Text } = Typography;
@@ -264,10 +265,9 @@ const QuickPricePage: React.FC = () => {
         },
       ];
 
-      const { error } = await supabase.rpc("bulk_update_product_prices", {
+      await safeRpc("bulk_update_product_prices", {
         p_data: payload,
       });
-      if (error) throw error;
 
       message.success("Đã lưu!");
       setProducts((prev) =>
@@ -364,7 +364,7 @@ const QuickPricePage: React.FC = () => {
           i * BATCH_SIZE,
           (i + 1) * BATCH_SIZE
         );
-        const { data } = await supabase.rpc("match_products_from_excel", {
+        const { data } = await safeRpc("match_products_from_excel", {
           p_data: batchItems.map((item) => ({
             name: item.name,
             sku: item.sku,
@@ -482,10 +482,9 @@ const QuickPricePage: React.FC = () => {
       });
 
       if (payload.length > 0) {
-        const { error } = await supabase.rpc("bulk_update_product_prices", {
+        await safeRpc("bulk_update_product_prices", {
           p_data: payload,
         });
-        if (error) throw error;
         message.success(`Đã cập nhật ${payload.length} sản phẩm!`);
 
         // Update State

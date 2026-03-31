@@ -28,6 +28,7 @@ import {
   FundAccount,
 } from "@/features/finance/types/finance";
 import { salesService } from "@/features/sales/api/salesService";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { parseBankStatement } from "@/shared/utils/bankStatementParser";
 
@@ -50,7 +51,7 @@ const ReconciliationPage = () => {
 
   const loadData = async () => {
     setLoading(true);
-    const { data: orders } = await supabase.rpc(
+    const { data: orders } = await safeRpc(
       "get_pending_reconciliation_orders"
     );
     setPendingOrders(orders || []);

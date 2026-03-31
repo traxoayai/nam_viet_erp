@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Table, Card, Typography, Space, Tag, Modal, Button, Row, Col, DatePicker, Select, Input } from 'antd';
 import { EyeOutlined, SearchOutlined, LinkOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/shared/lib/supabaseClient';
+import { safeRpc } from '@/shared/lib/safeRpc';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -41,7 +41,7 @@ const SystemAuditLogPage = () => {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('get_system_logs', {
+      const { data } = await safeRpc('get_system_logs', {
         p_page: page,
         p_page_size: pageSize,
         p_module: moduleFilter || null,
@@ -49,12 +49,10 @@ const SystemAuditLogPage = () => {
         p_date_from: dateRange?.[0] || null,
         p_date_to: dateRange?.[1] || null,
       });
-
-      if (error) throw error;
       setLogs(data?.data || []);
       setTotal(data?.total_count || 0);
     } catch (err: any) {
-      console.error(err);
+      // safeRpc handles logging
     } finally {
       setLoading(false);
     }

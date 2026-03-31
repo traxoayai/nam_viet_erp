@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 
 interface Props {
   loading: boolean;
+  isOverLimit?: boolean;
   onSubmit: (status: "DRAFT" | "QUOTE" | "CONFIRMED") => void;
   onPrint?: () => void;
   onPrintPicking?: () => void; // [NEW]
@@ -20,6 +21,7 @@ interface Props {
 // Sửa lại Component để linh hoạt hơn
 export const ActionButtons = ({
   loading,
+  isOverLimit,
   onSubmit,
   onPrint,
   onPrintPicking,
@@ -93,9 +95,10 @@ export const ActionButtons = ({
             size="large"
             onClick={() => onSubmit("CONFIRMED")}
             loading={loading}
+            disabled={isOverLimit}
             style={{
-              background: "#0050b3",
-              borderColor: "#0050b3",
+              background: isOverLimit ? undefined : "#0050b3",
+              borderColor: isOverLimit ? undefined : "#0050b3",
               minWidth: 150,
             }}
           >

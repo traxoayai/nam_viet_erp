@@ -1,8 +1,13 @@
 // src/features/pos/components/modals/VatInvoiceModal.tsx
-import { Modal, Form, Input, Table, InputNumber, message, Tag } from "antd";
+import { Modal, Form, Input, Table, InputNumber, Tag, Button, Space, App } from "antd";
+import { FileExcelOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
+import dayjs from "dayjs";
 
+import { sepayService } from "@/features/finance/api/sepayService";
+import type { SepayCreateInvoiceRequest } from "@/features/finance/types/sepay.types";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 interface Props {
@@ -20,8 +25,10 @@ export const VatInvoiceModal: React.FC<Props> = ({
   customer,
   onOk,
 }) => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [vatItems, setVatItems] = useState<any[]>([]);
+  const [sepayLoading, setSepayLoading] = useState(false);
 
   // 1. Auto-fill khi mở modal
   useEffect(() => {
@@ -42,7 +49,29 @@ export const VatInvoiceModal: React.FC<Props> = ({
     }
   }, [visible, customer, orderItems]);
 
-  // 2. Check VAT Balance (Giữ nguyên logic)
+  // 2a. Trừ kho VAT sau khi xuất SEPAY thành công (single atomic RPC)
+  const deductVatAfterExport = async (items: any[]) => {
+    try {
+      const deductItems = items
+        .filter((item) => item.vat_qty > 0)
+        .map((item) => ({
+          product_id: item.id,
+          unit: item.unit || "Viên",
+          quantity: item.vat_qty,
+          vat_rate: item.vat_rate,
+        }));
+
+      if (deductItems.length === 0) return;
+
+      await safeRpc("batch_deduct_vat_for_pos", {
+        p_items: deductItems as any,
+      });
+    } catch (err: any) {
+      message.warning("Lỗi trừ kho VAT - vui lòng kiểm tra thủ công");
+    }
+  };
+
+  // 2b. Check VAT Balance (Giữ nguyên logic)
   const checkVatBalance = async () => {
     try {
       const productIds = orderItems.map((i) => i.id);
@@ -253,6 +282,9 @@ export const VatInvoiceModal: React.FC<Props> = ({
       const fileName = `VAT_${invoiceCode}_${new Date().toISOString().slice(0, 10)}.xlsx`;
       XLSX.writeFile(wb, fileName);
 
+      // Trừ kho VAT sau khi xuất Excel (giống SEPAY path)
+      await deductVatAfterExport(validItems);
+
       if (onOk) onOk();
       message.success("Đã xuất file Excel thành công!");
       onCancel();
@@ -261,96 +293,95 @@ export const VatInvoiceModal: React.FC<Props> = ({
       message.error("Lỗi tạo file Excel: " + err.message);
     }
   };
-  // [UPDATE] Export Excel với giá Net
-  //   const handleExportExcel = async () => {
-  //     // Validate (Giữ nguyên)
-  //     const invalidItems = vatItems.filter(i => i.vat_qty > i.max_vat_qty);
-  //     if (invalidItems.length > 0) {
-  //         message.error("Có sản phẩm vượt quá tồn kho VAT cho phép!");
-  //         return;
-  //     }
-  //     const validItems = vatItems.filter(i => i.vat_qty > 0);
-  //     if (validItems.length === 0) {
-  //         message.warning("Không có sản phẩm nào để xuất!");
-  //         return;
-  //     }
+  // SEPAY E-Invoice Export
+  const handleSepayExport = async () => {
+    const invalidItems = vatItems.filter((i) => i.vat_qty > i.max_vat_qty);
+    if (invalidItems.length > 0) {
+      message.error("Có sản phẩm vượt quá tồn kho VAT cho phép!");
+      return;
+    }
+    const validItems = vatItems.filter((i) => i.vat_qty > 0);
+    if (validItems.length === 0) {
+      message.warning("Không có sản phẩm nào để xuất!");
+      return;
+    }
 
-  //     try {
-  //         // Header (Giữ nguyên)
-  //         const headers = [
-  //             "Mã hóa đơn", "Mã số thuế", "Mã QHNSNN", "Tên đơn vị, tổ chức", "Người mua hàng",
-  //             "Số CCCD/Số hộ chiếu", "Địa chỉ", "Số điện thoại", "Email", "Hình thức thanh toán",
-  //             "Số tài khoản ngân hàng", "Tên ngân hàng", "Tiền chiết khấu", "Ghi chú", "Loại hàng hóa",
-  //             "Tên hàng hóa", "Đơn vị tính", "Số lượng", "Đơn giá", "Thành tiền",
-  //             "VAT", "Tổng tiền hàng", "Tổng tiền thuế", "Tổng tiền thanh toán"
-  //         ];
+    try {
+      const values = await form.validateFields();
+      setSepayLoading(true);
 
-  //         const invoiceCode = `HD_${orderItems[0]?.code || Date.now()}`; // Fix: order_code -> code (nếu item map từ RPC)
-  //         const paymentMethod = getPaymentMethodCode(customer?.payment_method || 'cash');
+      const taxCode = values.tax_code || "";
+      const isCompany = taxCode.length >= 10 && !taxCode.includes("-");
 
-  //         const excelRows = validItems.map((item, index) => {
-  //             const isBaseRow = index === 0;
+      // Config (template_code, invoice_series, provider_account_id)
+      // được xử lý server-side trong Edge Function sepay-proxy
+      const payload: SepayCreateInvoiceRequest = {
+        template_code: "",
+        invoice_series: "",
+        issued_date: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+        currency: "VND",
+        provider_account_id: "",
+        payment_method: "TM/CK",
+        is_draft: false,
+        buyer: {
+          type: isCompany ? "company" : "personal",
+          name: values.customer_name || "",
+          legal_name: isCompany ? values.customer_name : undefined,
+          tax_code: taxCode || undefined,
+          address: values.address || undefined,
+          email: values.email || undefined,
+        },
+        items: validItems.map((item, idx) => {
+          const vatPercent = item.vat_rate / 100;
+          const netPrice = item.price / (1 + vatPercent);
+          return {
+            line_number: idx + 1,
+            line_type: 1 as const,
+            item_code: item.sku || item.barcode,
+            item_name: item.name,
+            unit: item.unit || "Cái",
+            quantity: item.vat_qty,
+            unit_price: Math.round(netPrice),
+            tax_rate: item.vat_rate as any,
+          };
+        }),
+      };
 
-  //             let vatStr = String(item.vat_rate);
-  //             if (vatStr === '0') vatStr = '0';
+      const result = await sepayService.createInvoice(payload);
 
-  //             // [LOGIC MỚI] Tính toán cho từng dòng Excel
-  //             const vatPercent = item.vat_rate / 100;
-  //             const grossPrice = item.price; // Giá bán lẻ (đã gồm thuế)
+      if (result.success) {
+        message.success(
+          `Đã gửi SEPAY! Tracking: ${result.data.tracking_code}`
+        );
 
-  //             // Đơn giá (Net Price) để in lên hóa đơn
-  //             const netPrice = grossPrice / (1 + vatPercent);
+        // Trừ kho VAT ngay sau khi SEPAY accept
+        await deductVatAfterExport(validItems);
 
-  //             // Thành tiền (Net Amount)
-  //             const netAmount = netPrice * item.vat_qty;
+        // Poll for completion (non-blocking)
+        try {
+          const finalResult = await sepayService.pollUntilComplete(
+            result.data.tracking_code
+          );
+          const pdfUrl = finalResult.data?.invoice?.pdf_url;
+          if (pdfUrl) {
+            message.success("Hóa đơn đã xuất thành công!");
+            window.open(pdfUrl, "_blank");
+          }
+        } catch {
+          message.info(
+            "Hóa đơn đang xử lý. Kiểm tra lại sau."
+          );
+        }
 
-  //             return [
-  //                 invoiceCode,                            // A
-  //                 customer?.tax_code || '',               // B
-  //                 '',                                     // C
-  //                 customer?.customer_name || '',          // D
-  //                 customer?.buyer_name || '',             // E
-  //                 '',                                     // F
-  //                 customer?.address || '',                // G
-  //                 customer?.phone || '',                  // H
-  //                 customer?.email || '',                  // I
-  //                 isBaseRow ? paymentMethod : '',         // J
-  //                 '', '', 0, '', '0',                     // K, L, M, N, O
-  //                 item.name,                              // P
-  //                 item.unit || 'Cái',                     // Q
-  //                 item.vat_qty,                           // R: Số lượng
-
-  //                 // [FIX] Cột S: Xuất Đơn giá Net (Làm tròn 2 số lẻ nếu cần)
-  //                 parseFloat(netPrice.toFixed(2)),        // S
-
-  //                 // [FIX] Cột T: Thành tiền Net
-  //                 parseFloat(netAmount.toFixed(2)),       // T
-
-  //                 vatStr,                                 // U
-
-  //                 // Tổng (Chỉ dòng đầu)
-  //                 isBaseRow ? parseFloat(totals.goods.toFixed(0)) : '',  // V
-  //                 isBaseRow ? parseFloat(totals.tax.toFixed(0)) : '',    // W
-  //                 isBaseRow ? parseFloat(totals.pay.toFixed(0)) : ''     // X: Tổng thanh toán (Khớp giá bán)
-  //             ];
-  //         });
-
-  //         const wb = XLSX.utils.book_new();
-  //         const ws = XLSX.utils.aoa_to_sheet([headers, ...excelRows]);
-  //         ws['!cols'] = [{wch:15}, {wch:15}, {wch:10}, {wch:30}, {wch:20}, {wch:15}, {wch:40}, {wch:15}, {wch:25}, {wch:10}, {wch:15}, {wch:15}, {wch:10}, {wch:20}, {wch:8}, {wch:30}, {wch:8}, {wch:10}, {wch:12}, {wch:15}, {wch:8}, {wch:15}, {wch:15}, {wch:15}];
-
-  //         const fileName = `VAT_${invoiceCode}_${new Date().toISOString().slice(0,10)}.xlsx`;
-  //         XLSX.writeFile(wb, fileName);
-
-  //         if (onOk) onOk();
-  //         message.success("Đã xuất file Excel chuẩn định dạng!");
-  //         onCancel();
-
-  //     } catch (err: any) {
-  //         console.error(err);
-  //         message.error("Lỗi tạo file Excel: " + err.message);
-  //     }
-  //   };
+        if (onOk) onOk();
+        onCancel();
+      }
+    } catch (err: any) {
+      message.error(err.message || "Lỗi xuất hóa đơn qua SEPAY");
+    } finally {
+      setSepayLoading(false);
+    }
+  };
 
   // 4. [UPDATE] Cấu hình cột hiển thị trên Modal
   const columns = [
@@ -379,8 +410,9 @@ export const VatInvoiceModal: React.FC<Props> = ({
             max={r.max_vat_qty}
             value={r.vat_qty}
             onChange={(val) => {
-              const newItems = [...vatItems];
-              newItems[idx].vat_qty = val || 0;
+              const newItems = vatItems.map((item, i) =>
+                i === idx ? { ...item, vat_qty: val || 0 } : item
+              );
               setVatItems(newItems);
             }}
             status={r.vat_qty > r.max_vat_qty ? "error" : ""}
@@ -446,8 +478,25 @@ export const VatInvoiceModal: React.FC<Props> = ({
       open={visible}
       onCancel={onCancel}
       width={950}
-      onOk={() => handleExportExcel()}
-      okText="Xác nhận & Tải file Excel"
+      footer={
+        <Space>
+          <Button onClick={onCancel}>Hủy</Button>
+          <Button
+            icon={<FileExcelOutlined />}
+            onClick={handleExportExcel}
+          >
+            Tải file Excel
+          </Button>
+          <Button
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            onClick={handleSepayExport}
+            loading={sepayLoading}
+          >
+            Xuất qua SEPAY (E-Invoice)
+          </Button>
+        </Space>
+      }
     >
       <Form form={form} layout="vertical" className="mb-4">
         <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">

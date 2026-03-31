@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import * as XLSX from "xlsx";
 
 import { ProductFilters } from "@/features/product/types/product.types";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 interface FetchParams {
@@ -13,7 +14,7 @@ interface FetchParams {
 
 // 1. HÀM ĐỌC DANH SÁCH (SMART SEARCH V2)
 export const getProducts = async ({ filters, page, pageSize }: FetchParams) => {
-  const { data, error } = await supabase.rpc("search_products_v2", {
+  const { data } = await safeRpc("search_products_v2", {
     p_keyword: filters.search_query || null,
     p_category: filters.category_filter || null,
     p_manufacturer: filters.manufacturer_filter || null,
@@ -21,11 +22,6 @@ export const getProducts = async ({ filters, page, pageSize }: FetchParams) => {
     p_limit: pageSize,
     p_offset: (page - 1) * pageSize,
   });
-
-  if (error) {
-    console.error("Lỗi RPC search_products_v2:", error);
-    throw error;
-  }
 
   // search_products_v2 trả về { data: [...], total_count: number }
   return {
@@ -240,17 +236,12 @@ export const upsertProduct = async (formValues: any) => {
   }
 
   // 5. GỌI RPC V7 (upsert_product_with_units)
-  const { data, error } = await supabase.rpc("upsert_product_with_units", {
+  const { data } = await safeRpc("upsert_product_with_units", {
     p_product_json: productJson,
     p_units_json: unitsJson,
     p_contents_json: contentsJson,
     p_inventory_json: inventoryJson,
   });
-
-  if (error) {
-    console.error("RPC Error (upsert_product_with_units):", error);
-    throw new Error(error.message);
-  }
 
   return data;
 };
@@ -298,14 +289,9 @@ export const updateProductsStatus = async (
 
 // 6. CHECK DEPENDENCIES (Safe Delete Check)
 export const checkDependencies = async (ids: React.Key[]) => {
-  const { data, error } = await supabase.rpc("check_product_dependencies", {
+  const { data } = await safeRpc("check_product_dependencies", {
     p_product_ids: ids as number[],
   });
-
-  if (error) {
-    console.error("Lỗi check_product_dependencies:", error);
-    throw error;
-  }
   return data || [];
 };
 
@@ -325,17 +311,12 @@ export const deleteProducts = async (ids: React.Key[]) => {
 
 // 8. HÀM XUẤT EXCEL
 export const exportProducts = async (filters: ProductFilters) => {
-  const { data, error } = await supabase.rpc("export_products_list", {
+  const { data } = await safeRpc("export_products_list", {
     search_query: filters.search_query || null,
     category_filter: filters.category_filter || null,
     manufacturer_filter: filters.manufacturer_filter || null,
     status_filter: filters.status_filter || null,
   });
-
-  if (error) {
-    console.error("Lỗi khi xuất excel:", error);
-    throw error;
-  }
   return data || [];
 };
 
@@ -394,11 +375,9 @@ export const importProducts = async (file: File) => {
         return product;
       });
 
-      const { error: rpcError } = await supabase.rpc("bulk_upsert_products", {
+      await safeRpc("bulk_upsert_products", {
         p_products_array: productsToUpsert,
       });
-
-      if (rpcError) throw rpcError;
       resolve(productsToUpsert.length);
     } catch (error) {
       console.error("Import Error:", error);
@@ -485,14 +464,9 @@ export const searchProductsForDropdown = async (
 
 // 12. HÀM TÌM KIẾM CHUYÊN BIỆT CHO MUA HÀNG
 export const searchProductsForPurchase = async (keyword: string) => {
-  const { data, error } = await supabase.rpc("search_products_for_purchase", {
+  const { data } = await safeRpc("search_products_for_purchase", {
     p_keyword: keyword || "",
   });
-
-  if (error) {
-    console.error("Lỗi tìm kiếm mua hàng:", error);
-    return [];
-  }
 
   return data.map((p: any) => ({
     id: p.id,
@@ -552,16 +526,11 @@ export const searchProductsForTransfer = async (
   warehouseId: number
 ) => {
   // Gọi RPC V32.3 Final của Core
-  const { data, error } = await supabase.rpc("search_products_for_transfer", {
-    p_warehouse_id: warehouseId, // BẮT BUỘC
+  const { data } = await safeRpc("search_products_for_transfer", {
+    p_warehouse_id: warehouseId,
     p_keyword: keyword,
     p_limit: 20,
   });
-
-  if (error) {
-    console.error("RPC Error:", error);
-    return [];
-  }
   return data || [];
 };
 

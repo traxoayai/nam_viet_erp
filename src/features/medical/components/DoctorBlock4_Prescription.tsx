@@ -1,6 +1,6 @@
 // src/features/medical/components/DoctorBlock4_Prescription.tsx
 import { CheckCircleOutlined, WarningOutlined } from "@ant-design/icons";
-import { Card, Button, Drawer, List, Space, Input, message, Modal } from "antd";
+import { Card, Button, Drawer, List, Space, Input, message, Modal, Select } from "antd";
 import { Pill, FileText } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 
@@ -10,7 +10,7 @@ import { DoctorPrescriptionSearch } from "./DoctorPrescriptionSearch";
 import { DoctorPrescriptionTable } from "./DoctorPrescriptionTable";
 
 import { PosProductSearchResult } from "@/features/pos/types/pos.types";
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 interface Props {
   items: ClinicalPrescriptionItem[];
@@ -20,6 +20,9 @@ interface Props {
   onSendPharmacy?: (warehouseId: number) => void;
   sending?: boolean;
   isPrescriptionSent?: boolean;
+  pharmacyWarehouses?: {id: number, name: string}[];
+  selectedPharmacy?: number;
+  onPharmacyChange?: (value: number) => void;
 }
 
 export const DoctorBlock4_Prescription: React.FC<Props> = ({
@@ -30,6 +33,9 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
   onSendPharmacy,
   sending,
   isPrescriptionSent,
+  pharmacyWarehouses,
+  selectedPharmacy,
+  onPharmacyChange,
 }) => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [templateResults, setTemplateResults] = useState<any[]>([]);
@@ -39,13 +45,12 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
   const searchTemplates = async (keyword: string) => {
     setSearchingTemplates(true);
     try {
-      const { data, error } = await supabase.rpc(
+      const { data } = await safeRpc(
         "search_prescription_templates",
         {
           p_keyword: keyword || "",
         }
       );
-      if (error) throw error;
       setTemplateResults(data || []);
     } catch (err: any) {
       message.error("Lỗi tìm kiếm đơn mẫu: " + err.message);
@@ -165,7 +170,7 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
         </span>
       }
       className="shadow-sm h-full flex flex-col"
-      bodyStyle={{ flex: 1, display: "flex", flexDirection: "column" }}
+      styles={{ body: { flex: 1, display: "flex", flexDirection: "column" } }}
     >
       {/* Helper Toolbar */}
       <div className="flex gap-2 mb-3">
@@ -175,7 +180,7 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
         >
           <DoctorPrescriptionSearch
             onSelectProduct={handleSelectProduct}
-            warehouseId={1}
+            warehouseId={selectedPharmacy ?? 1}
           />
         </div>
 
@@ -188,6 +193,17 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
             Đơn mẫu
           </Button>
 
+          {pharmacyWarehouses && pharmacyWarehouses.length > 0 && (
+            <Select
+              value={selectedPharmacy}
+              onChange={onPharmacyChange}
+              style={{ width: 180 }}
+              options={pharmacyWarehouses.map((w: any) => ({ label: w.name, value: w.id }))}
+              placeholder="Chọn quầy thuốc"
+              size="small"
+            />
+          )}
+
           <Button
             type={isPrescriptionSent ? "default" : "primary"}
             className={
@@ -198,7 +214,7 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
             icon={<CheckCircleOutlined />}
             disabled={readOnly || isPrescriptionSent || items.length === 0}
             loading={sending}
-            onClick={() => onSendPharmacy && onSendPharmacy(1)} // Hardcode warehouseId = 1 (Nhà thuốc lẻ)
+            onClick={() => onSendPharmacy && onSendPharmacy(selectedPharmacy ?? 1)}
           >
             {isPrescriptionSent ? "Đã Chuyển Nhà Thuốc" : "Chuyển Quầy Thuốc"}
           </Button>

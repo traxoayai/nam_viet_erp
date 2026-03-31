@@ -6,6 +6,7 @@ import {
   InventoryCheckSession,
 } from "../types/inventory.types";
 
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 // Đảm bảo đường dẫn import types đúng với dự án
 
@@ -29,23 +30,21 @@ export const inventoryService = {
 
   // 1. Tạo Phiếu Nhập Kho (Gọi RPC)
   async createReceipt(payload: any) {
-    const { data, error } = await supabase.rpc("create_inventory_receipt", {
+    const { data } = await safeRpc("create_inventory_receipt", {
       p_po_id: payload.po_id,
       p_warehouse_id: payload.warehouse_id,
       p_note: payload.note,
       p_items: payload.items, // Array [{product_id, quantity, lot_number, expiry_date}]
     });
-    if (error) throw error;
     return data;
   },
 
   // [NEW] Check Tồn kho khả dụng (V20 Logic)
   async getAvailability(warehouseId: number, productIds: number[]) {
-    const { data, error } = await supabase.rpc("get_product_available_stock", {
+    const { data } = await safeRpc("get_product_available_stock", {
       p_warehouse_id: warehouseId,
       p_product_ids: productIds,
     });
-    if (error) throw error;
     return data;
   },
 
@@ -139,15 +138,13 @@ export const inventoryService = {
     productId: number,
     location: { cabinet?: string; row?: string; slot?: string }
   ) {
-    const { data, error } = await supabase.rpc("update_product_location", {
+    const { data } = await safeRpc("update_product_location", {
       p_warehouse_id: warehouseId,
       p_product_id: productId,
       p_cabinet: location.cabinet || "",
       p_row: location.row || "",
       p_slot: location.slot || "",
     });
-
-    if (error) throw error;
     return data;
   },
 
@@ -175,7 +172,7 @@ export const inventoryService = {
       pageSize = 20,
     } = params;
 
-    const { data, error } = await supabase.rpc("get_inventory_checks_list", {
+    const { data } = await safeRpc("get_inventory_checks_list", {
       p_warehouse_id: warehouseId || null,
       p_search: search || null, // Tìm kiếm (Mã, Note, Tên User)
       p_status: status || null,
@@ -184,8 +181,6 @@ export const inventoryService = {
       p_limit: pageSize,
       p_offset: (page - 1) * pageSize,
     });
-
-    if (error) throw error;
 
     // Ép kiểu về Interface mới
     return data as InventoryCheckSession[];
@@ -202,7 +197,7 @@ export const inventoryService = {
     const { data: user } = await supabase.auth.getUser();
     if (!user.user) throw new Error("Chưa đăng nhập");
 
-    const { data, error } = await supabase.rpc("create_inventory_check", {
+    const { data } = await safeRpc("create_inventory_check", {
       p_warehouse_id: params.warehouseId,
       p_user_id: user.user.id,
       p_note: params.note,
@@ -210,17 +205,14 @@ export const inventoryService = {
       p_text_val: params.textVal || null,
       p_int_val: params.intVal || null,
     });
-
-    if (error) throw error;
     return data;
   },
 
   // 8. Lấy danh sách Tủ/Kệ (Cho Dropdown Modal)
   async getCabinets(warehouseId: number) {
-    const { data, error } = await supabase.rpc("get_warehouse_cabinets", {
+    const { data } = await safeRpc("get_warehouse_cabinets", {
       p_warehouse_id: warehouseId,
     });
-    if (error) throw error;
     return data.map((i: any) => i.cabinet_name);
   },
 
@@ -259,20 +251,18 @@ export const inventoryService = {
     const { data: user } = await supabase.auth.getUser();
     if (!user.user) throw new Error("Chưa đăng nhập");
 
-    const { error } = await supabase.rpc("cancel_inventory_check", {
+    await safeRpc("cancel_inventory_check", {
       p_check_id: checkId,
       p_user_id: user.user.id,
     });
-    if (error) throw error;
   },
 
   // 11. Lưu tạm
   async updateCheckInfo(checkId: number, note: string) {
-    const { error } = await supabase.rpc("update_inventory_check_info", {
+    await safeRpc("update_inventory_check_info", {
       p_check_id: checkId,
       p_note: note,
     });
-    if (error) throw error;
   },
 
   // Xóa item khỏi phiếu kiểm kê
@@ -418,24 +408,22 @@ export const inventoryService = {
       expiry_date?: string;
     }
   ) {
-    const { data, error } = await supabase.rpc(
+    const { data } = await safeRpc(
       "update_inventory_check_item_quantity",
       {
         p_item_id: itemId,
         p_payload: payload,
       }
     );
-    if (error) throw error;
     return data;
   },
 
   // 14. Hoàn tất kiểm kho
   async completeCheck(checkId: number, userId: string) {
-    const { error } = await supabase.rpc("complete_inventory_check", {
+    await safeRpc("complete_inventory_check", {
       p_check_id: checkId,
       p_user_id: userId,
     });
-    if (error) throw error;
   },
 
   // =================================================================
@@ -444,25 +432,22 @@ export const inventoryService = {
 
   // 15. Tìm kiếm sản phẩm để thêm vào phiếu (Có unaccent, system snapshot)
   async searchProductForCheck(keyword: string, warehouseId: number) {
-    const { data, error } = await supabase.rpc(
+    const { data } = await safeRpc(
       "search_products_for_stocktake",
       {
         p_keyword: keyword,
         p_warehouse_id: warehouseId,
       }
     );
-    if (error) throw error;
     return data; // Trả về mảng [{id, name, sku, system_stock, location...}]
   },
 
   // 16. Thêm sản phẩm vào phiếu (Snapshot tồn kho & giá vốn)
   async addItemToCheck(checkId: number, productId: number) {
-    const { data, error } = await supabase.rpc("add_item_to_check_session", {
+    const { data } = await safeRpc("add_item_to_check_session", {
       p_check_id: checkId,
       p_product_id: productId,
     });
-
-    if (error) throw error;
     return data; // { status: 'success'|'exists', item_id, message }
   },
 
@@ -473,17 +458,16 @@ export const inventoryService = {
     fromDate?: string,
     toDate?: string
   ): Promise<ProductCardexItem[]> {
-    const { data, error } = await supabase.rpc("get_product_cardex", {
-      p_product_id: productId,
-      p_warehouse_id: warehouseId,
-      p_from_date: fromDate || null,
-      p_to_date: toDate || null,
-    });
-
-    if (error) {
-      console.error("Lỗi lấy thẻ kho:", error);
+    try {
+      const { data } = await safeRpc("get_product_cardex", {
+        p_product_id: productId,
+        p_warehouse_id: warehouseId,
+        p_from_date: fromDate || null,
+        p_to_date: toDate || null,
+      });
+      return data || [];
+    } catch {
       return [];
     }
-    return data || [];
   },
 };

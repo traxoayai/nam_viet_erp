@@ -4,6 +4,7 @@ import { create } from "zustand";
 import * as authService from "@/features/auth/api/authService";
 import { AuthStoreState } from "@/features/auth/types/auth";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
   // State (Trạng thái)
@@ -32,11 +33,17 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       const profile = await authService.getSelfProfile();
 
       // 2. [NEW] Gọi RPC lấy danh sách quyền
-      const { data: perms } = await supabase.rpc("get_my_permissions");
+      let perms: any[] = [];
+      try {
+        const { data } = await safeRpc("get_my_permissions", {}, { silent: true });
+        perms = data || [];
+      } catch {
+        console.warn("Không thể tải permissions, dùng mặc định rỗng.");
+      }
 
       set({
         profile,
-        permissions: perms || [],
+        permissions: perms,
         isLoadingProfile: false,
       });
       return profile;

@@ -1,19 +1,18 @@
 // src/features/connect/api/connectService.ts
 import { ConnectPost, CreatePostPayload } from "../types/connect.types";
 
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const connectService = {
   // 1. Lấy danh sách bài đăng (Dùng RPC V2 Smart Search)
   async fetchPosts(category: string, search?: string): Promise<ConnectPost[]> {
-    const { data, error } = await supabase.rpc("get_connect_posts", {
+    const { data } = await safeRpc("get_connect_posts", {
       p_category: category,
       p_search: search || null,
       p_limit: 50,
       p_offset: 0,
     });
-
-    if (error) throw error;
 
     // RPC trả về attachments dạng Json, cần map về obj nếu chưa đúng format
     return (data || []).map((post: any) => ({
@@ -28,16 +27,14 @@ export const connectService = {
 
   // 2. Tạo bài viết (Dùng RPC Core đã viết)
   async createPost(payload: CreatePostPayload) {
-    const { error } = await supabase.rpc("create_connect_post", payload);
-    if (error) throw error;
+    await safeRpc("create_connect_post", payload as any);
   },
 
   // 3. Xác nhận đã đọc (Dùng RPC Core đã viết)
   async confirmRead(postId: number) {
-    const { error } = await supabase.rpc("confirm_post_read", {
+    await safeRpc("confirm_post_read", {
       p_post_id: postId,
     });
-    if (error) throw error;
   },
 
   // 4. Xóa bài viết

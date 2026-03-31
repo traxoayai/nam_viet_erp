@@ -8,7 +8,7 @@ import {
   ProductFilters,
 } from "@/features/product/types/product.types";
 import * as supplierService from "@/features/purchasing/api/supplierService";
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 export const useProductStore = create<ProductStoreState>((set, get) => ({
   // Dữ liệu
@@ -87,17 +87,14 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
   // --- HÀM MỚI: Gọi RPC để lấy danh sách Nhóm & Hãng ---
   fetchClassifications: async () => {
     try {
-      const [catRes, manRes] = await Promise.all([
-        supabase.rpc("get_distinct_categories"),
-        supabase.rpc("get_distinct_manufacturers"),
+      const [catData, manData] = await Promise.all([
+        safeRpc("get_distinct_categories").then(r => r.data),
+        safeRpc("get_distinct_manufacturers").then(r => r.data),
       ]);
 
-      if (catRes.error) throw catRes.error;
-      if (manRes.error) throw manRes.error;
-
       set({
-        uniqueCategories: (catRes.data || []).map((i: any) => i.category_name),
-        uniqueManufacturers: (manRes.data || []).map(
+        uniqueCategories: (catData || []).map((i: any) => i.category_name),
+        uniqueManufacturers: (manData || []).map(
           (i: any) => i.manufacturer_name
         ),
       });

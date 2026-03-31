@@ -1,5 +1,5 @@
 import { message } from "antd";
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { generateB2BOrderHTML } from "@/shared/utils/printTemplates";
 import { printHTML } from "@/shared/utils/printUtils";
 import { b2bService } from "@/features/sales/api/b2bService";
@@ -19,11 +19,15 @@ export const useOrderPrint = () => {
         orderToPrint.customer_id || orderToPrint.customer?.id || orderToPrint.partner_id;
 
       if (customerId) {
-        const { data } = await supabase.rpc("get_customer_debt_info", {
-          p_customer_id: Number(customerId),
-        });
-        if (data && data.length > 0) {
-          serverTotalDebt = Number(data[0].current_debt) || 0;
+        try {
+          const { data } = await safeRpc("get_customer_debt_info", {
+            p_customer_id: Number(customerId),
+          }, { silent: true });
+          if (data && (data as any[]).length > 0) {
+            serverTotalDebt = Number((data as any[])[0].current_debt) || 0;
+          }
+        } catch {
+          // Ignore debt fetch error, proceed with 0
         }
       }
 

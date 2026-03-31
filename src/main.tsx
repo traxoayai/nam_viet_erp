@@ -20,7 +20,15 @@ import { AuthProvider } from "@/app/contexts/AuthProvider";
 import { NotificationProvider } from "@/app/contexts/NotificationContext";
 import { PermissionGate } from "@/app/providers/PermissionGate";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 min
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

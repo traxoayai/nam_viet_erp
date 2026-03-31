@@ -21,7 +21,7 @@ export const useCreateOrderB2B = () => {
     const summary = store.getSummary();
     const isOverLimit =
       store.customer &&
-      store.customer.debt_limit > 0 &&
+      store.customer.debt_limit !== null && store.customer.debt_limit !== undefined &&
       store.customer.current_debt + summary.totalPayable >
         store.customer.debt_limit;
 

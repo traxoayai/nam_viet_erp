@@ -36,7 +36,7 @@ import {
   getProductDetails,
 } from "@/features/product/api/productService";
 import { useDebounce } from "@/shared/hooks/useDebounce";
-import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -362,14 +362,12 @@ const QuickUnitPage: React.FC = () => {
         );
 
         // [NEW API CALL] Gửi JSONB {name, sku}
-        const { data: batchResults, error } = await supabase.rpc(
+        const { data: batchResults } = await safeRpc(
           "match_products_from_excel",
           {
             p_data: batchItems,
           }
         );
-
-        if (error) throw error;
         if (batchResults) {
           allServerMatches = [...allServerMatches, ...batchResults];
         }
@@ -475,14 +473,12 @@ const QuickUnitPage: React.FC = () => {
 
     try {
       // Gọi RPC mới
-      const { error } = await supabase.rpc(
+      await safeRpc(
         "bulk_update_product_units_for_quick_unit_page",
         {
           p_data: payload,
         }
       );
-
-      if (error) throw error;
 
       message.success(`Đã cập nhật quy cách cho ${payload.length} sản phẩm!`);
       setReviewModalVisible(false);

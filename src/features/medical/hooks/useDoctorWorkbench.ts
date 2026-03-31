@@ -10,6 +10,7 @@ import {
 
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { printMedicalVisit } from "@/shared/utils/printTemplates";
 
 export const useDoctorWorkbench = () => {
@@ -62,6 +63,24 @@ export const useDoctorWorkbench = () => {
   const [patientInfo, setPatientInfo] = useState<any>(null);
   const [isPrescriptionSent, setIsPrescriptionSent] = useState(false);
   const [prePurchasedVaccines, setPrePurchasedVaccines] = useState<any[]>([]);
+  const [pharmacyWarehouses, setPharmacyWarehouses] = useState<{id: number, name: string}[]>([]);
+  const [selectedPharmacy, setSelectedPharmacy] = useState<number>(1);
+
+  // --- FETCH PHARMACY WAREHOUSES ---
+  useEffect(() => {
+    const fetchPharmacies = async () => {
+      const { data } = await supabase
+        .from('warehouses')
+        .select('id, name')
+        .eq('type', 'pharmacy')
+        .order('name');
+      if (data && data.length > 0) {
+        setPharmacyWarehouses(data);
+        setSelectedPharmacy(data[0].id);
+      }
+    };
+    fetchPharmacies();
+  }, []);
 
   // --- LOADING ---
   useEffect(() => {
@@ -196,12 +215,11 @@ export const useDoctorWorkbench = () => {
       delete (flatPayload as any).prescriptions;
 
       // [FIX 2]: Lệnh duy nhất - Upsert thông qua RPC
-      const { data, error } = await supabase.rpc("create_medical_visit", {
+      const { data } = await safeRpc("create_medical_visit", {
         p_appointment_id: appointmentId,
         p_customer_id: patientInfo?.id,
         p_data: flatPayload, // Nhớ gửi status: 'ready_for_vaccine' nếu ấn nút Tiêm
       });
-      if (error) throw error;
       
       const currentVisitId = data;
 
@@ -258,12 +276,11 @@ export const useDoctorWorkbench = () => {
       return message.warning("Chưa chọn dịch vụ nào");
     setLoading(true);
     try {
-      const { error } = await supabase.rpc("checkout_clinical_services", {
+      await safeRpc("checkout_clinical_services", {
         p_appointment_id: appointmentId,
         p_customer_id: patientInfo.id,
         p_services: selectedServicesJson,
       });
-      if (error) throw error;
       message.success("Đã tạo phiếu thu tiền thành công!");
 
       // Reload Cận lâm sàng
@@ -285,13 +302,12 @@ export const useDoctorWorkbench = () => {
     if (!prescriptionItems.length) return message.warning("Đơn thuốc trống!");
     setLoading(true);
     try {
-      const { error } = await supabase.rpc("send_prescription_to_pos", {
+      await safeRpc("send_prescription_to_pos", {
         p_appointment_id: appointmentId,
         p_customer_id: patientInfo.id,
         p_items: prescriptionItems,
         p_pharmacy_warehouse_id: warehouseId,
       });
-      if (error) throw error;
       message.success("Đã chuyển Đơn tới Quầy Thuốc thành công!");
       setIsPrescriptionSent(true);
     } catch (err: any) {
@@ -322,5 +338,8 @@ export const useDoctorWorkbench = () => {
     isReadOnly,
     isPrescriptionSent,
     prePurchasedVaccines,
+    pharmacyWarehouses,
+    selectedPharmacy,
+    setSelectedPharmacy,
   };
 };

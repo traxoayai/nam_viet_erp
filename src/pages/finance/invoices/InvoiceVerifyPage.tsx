@@ -27,11 +27,12 @@ import {
   Select,
   Tag,
   Alert,
+  App,
 } from "antd";
-import { VerifyProductModal } from "@/features/finance/components/invoices/VerifyProductModal"; 
+import { VerifyProductModal } from "@/features/finance/components/invoices/VerifyProductModal";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-import  { useState } from "react"; 
+import { useState } from "react";
 import { useInvoiceVerifyLogic } from "../../../features/finance/hooks/useInvoiceVerifyLogic";
 
 dayjs.extend(customParseFormat);
@@ -42,6 +43,8 @@ const { Content } = Layout;
 const { Title, Text } = Typography;
 
 const InvoiceVerifyPage = () => {
+  const { message } = App.useApp();
+
   // [NEW] Modal State
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
   const [selectingRowIndex, setSelectingRowIndex] = useState<number | null>(
@@ -158,10 +161,20 @@ const InvoiceVerifyPage = () => {
               style={{ padding: 0, fontWeight: 500, color: "#1f1f1f" }}
             />
           </Form.Item>
-          {isXmlSource && xmlRawItems[index]?.match_type ? <div style={{ fontSize: 11, marginTop: 2 }}>
-                    {xmlRawItems[index].match_type === 'exact' && <Tag color="success" icon={<CheckCircleOutlined />}>Đã học</Tag>}
-                    {xmlRawItems[index].match_type === 'prediction' && <Tag color="warning" icon={<RobotOutlined />}>AI Gợi ý</Tag>}
-                </div> : null}
+          {isXmlSource && xmlRawItems[index]?.match_type ? (
+            <div style={{ fontSize: 11, marginTop: 2 }}>
+              {xmlRawItems[index].match_type === "exact" && (
+                <Tag color="success" icon={<CheckCircleOutlined />}>
+                  Đã học
+                </Tag>
+              )}
+              {xmlRawItems[index].match_type === "prediction" && (
+                <Tag color="warning" icon={<RobotOutlined />}>
+                  AI Gợi ý
+                </Tag>
+              )}
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -287,9 +300,13 @@ const InvoiceVerifyPage = () => {
                     >
                       {selectedProduct.name}
                     </div>
-                    {selectedProduct.barcode ? <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
-                                   <BarcodeOutlined /> {selectedProduct.barcode}
-                                </div> : null}
+                    {selectedProduct.barcode ? (
+                      <div
+                        style={{ fontSize: 11, color: "#8c8c8c", marginTop: 2 }}
+                      >
+                        <BarcodeOutlined /> {selectedProduct.barcode}
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -308,14 +325,13 @@ const InvoiceVerifyPage = () => {
           shouldUpdate={(prev, curr) =>
             prev.items?.[index]?.product_id !==
               curr.items?.[index]?.product_id ||
-            prev.items?.[index]?.quantity !== curr.items?.[index]?.quantity ||
             prev.items?.[index]?.internal_unit !==
               curr.items?.[index]?.internal_unit
           }
+          style={{ marginBottom: 0 }}
         >
           {({ getFieldValue }) => {
             const productId = getFieldValue(["items", index, "product_id"]);
-            // Cache lookup
             const selectedProduct =
               selectedProductsMap[productId] ||
               products.find((p) => p.id === productId);
@@ -327,28 +343,26 @@ const InvoiceVerifyPage = () => {
                 </span>
               );
 
-            const currentQty = getFieldValue(["items", index, "quantity"]) || 0;
+            const baseXmlQty =
+              getFieldValue(["items", index, "xml_quantity"]) || 0;
             const currentUnitId = getFieldValue([
               "items",
               index,
               "internal_unit",
             ]);
-            const baseXmlQty =
-              getFieldValue(["items", index, "xml_quantity"]) || 0;
 
             const units =
               selectedProduct.product_units || selectedProduct.units || [];
             const selectedUnitObj = units.find(
               (u: any) => u.id === currentUnitId
             );
-            const unitName = selectedUnitObj?.unit_name || "";
             const rate = selectedUnitObj?.conversion_rate || 1;
 
             return (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ position: "relative" }}>
                 <Form.Item
                   name={[index, "internal_unit"]}
-                  style={{ marginBottom: 0, width: "100%" }}
+                  style={{ marginBottom: 0 }}
                   rules={[{ required: true, message: "Chọn ĐVT" }]}
                 >
                   <Select
@@ -356,29 +370,37 @@ const InvoiceVerifyPage = () => {
                     disabled={isReadOnly}
                     style={{ width: "100%" }}
                     onChange={(_value, option: any) => {
-                      // [LOGIC]: Update Quantity & Price based on Scale
-                      // 1. Get Rate
                       const newRate = option?.data_rate || 1;
-
                       const fields = form.getFieldsValue();
                       const newItems = [...fields.items];
 
                       if (newItems[index]) {
-                        // 2. Update Quantity (Scale Down: Base / Rate)
-                        if (baseXmlQty > 0) {
-                          const newQty = baseXmlQty / newRate;
-                          newItems[index].quantity = newQty;
-                        }
+                        // [C11] Capture original values before conversion
+                        const originalQty = newItems[index].quantity || 0;
+                        const originalPrice = newItems[index].unit_price || 0;
+                        const originalTotal = originalQty * originalPrice;
 
-                        // 3. Update Unit Price (Scale Up: Base * Rate) [NEW LOGIC]
-                        // Use xml_unit_price (base price from invoice) as source of truth
+                        if (baseXmlQty > 0) {
+                          newItems[index].quantity = baseXmlQty / newRate;
+                        }
                         const basePrice = newItems[index].xml_unit_price || 0;
                         if (basePrice > 0) {
-                          const newPrice = basePrice * newRate;
-                          newItems[index].unit_price = newPrice;
+                          newItems[index].unit_price = basePrice * newRate;
                         }
 
-                        // 4. Apply to Form & Recalculate Total
+                        // [C11] Total preservation check after unit conversion
+                        const convertedQty = newItems[index].quantity || 0;
+                        const convertedPrice = newItems[index].unit_price || 0;
+                        const convertedTotal = convertedQty * convertedPrice;
+                        if (originalTotal > 0 && Math.abs(originalTotal - convertedTotal) > 1) {
+                          message.warning("Cảnh báo: Tổng tiền sau quy đổi bị lệch! Vui lòng kiểm tra lại.");
+                        }
+
+                        // [C11] Fractional quantity warning
+                        if (convertedQty % 1 !== 0) {
+                          message.warning(`Số lượng quy đổi không phải số nguyên (${convertedQty.toFixed(2)}). Kiểm tra quy cách đóng gói.`);
+                        }
+
                         form.setFieldsValue({ items: newItems });
                         setTimeout(() => handleRecalculate(), 0);
                       }
@@ -395,17 +417,32 @@ const InvoiceVerifyPage = () => {
                     ))}
                   </Select>
                 </Form.Item>
-
-                {/* Display Conversion Info */}
-                {currentUnitId ? <div style={{ fontSize: 11, color: '#666', lineHeight: 1.2 }}>
-                                {rate > 1 ? (
-                                    <Tag color="orange" style={{ margin: 0 }}>
-                                       Quy đổi: <b>{Number(currentQty).toFixed(2)}</b> {unitName}
-                                    </Tag>
-                                ) : (
-                                    <span style={{ color: '#888' }}>(Đơn vị cơ bản)</span>
-                                )}
-                            </div> : null}
+                {currentUnitId && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: -16,
+                      left: 0,
+                      fontSize: 11,
+                      color: "#888",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {rate > 1 ? (
+                      <>
+                        Quy đổi:{" "}
+                        <b>
+                          {(
+                            getFieldValue(["items", index, "quantity"]) || 0
+                          ).toFixed(2)}
+                        </b>{" "}
+                        {selectedUnitObj?.unit_name}
+                      </>
+                    ) : (
+                      <span>(Đơn vị cơ bản)</span>
+                    )}
+                  </div>
+                )}
               </div>
             );
           }}
@@ -476,7 +513,14 @@ const InvoiceVerifyPage = () => {
         <Space>
           <Button
             icon={<ArrowLeftOutlined />}
-            onClick={() => navigate("/finance/invoices")}
+            onClick={() => {
+              const params = new URLSearchParams(window.location.search);
+              const back =
+                routerState?.returnTo ||
+                params.get("returnTo") ||
+                "/finance/invoices";
+              navigate(back);
+            }}
           >
             Quay lại
           </Button>
@@ -525,20 +569,26 @@ const InvoiceVerifyPage = () => {
             size="small"
             style={{ marginBottom: 16 }}
           >
-            {isXmlSource && xmlHeader ? <Alert 
-                     message={
-                        <Space>
-                            <InfoCircleOutlined /> 
-                            <Text strong>Thông tin NCC từ XML:</Text> 
-                            <Text>{xmlHeader.supplier_name}</Text>
-                            <Tag color="blue">MST: {xmlHeader.supplier_tax_code}</Tag>
-                            <Text type="secondary">({xmlHeader.supplier_address})</Text>
-                        </Space>
-                     }
-                     type="info" 
-                     showIcon={false}
-                     style={{ marginBottom: 16, border: '1px dashed #1890ff', background: '#e6f7ff' }} 
-                   /> : null}
+            {isXmlSource && xmlHeader ? (
+              <Alert
+                message={
+                  <Space>
+                    <InfoCircleOutlined />
+                    <Text strong>Thông tin NCC từ XML:</Text>
+                    <Text>{xmlHeader.supplier_name}</Text>
+                    <Tag color="blue">MST: {xmlHeader.supplier_tax_code}</Tag>
+                    <Text type="secondary">({xmlHeader.supplier_address})</Text>
+                  </Space>
+                }
+                type="info"
+                showIcon={false}
+                style={{
+                  marginBottom: 16,
+                  border: "1px dashed #1890ff",
+                  background: "#e6f7ff",
+                }}
+              />
+            ) : null}
 
             <Row gutter={16}>
               <Col span={6}>

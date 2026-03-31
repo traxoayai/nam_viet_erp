@@ -30,6 +30,9 @@ export interface PurchaseOrderMaster {
   total_packages?: number; // Tổng số kiện (nếu có logic riêng)
   created_at: string;
 
+  // Invoice tracking
+  invoice_count?: number;
+
   // Optional for UI consistency if needed
   items_count?: number;
   received_count?: number;

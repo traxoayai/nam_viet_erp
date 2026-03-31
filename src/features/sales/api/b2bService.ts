@@ -5,6 +5,7 @@ import {
   B2BOrderDetail,
 } from "../types/b2b.types";
 
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const b2bService = {
@@ -102,44 +103,37 @@ export const b2bService = {
   },
 
   cancelOrderSafe: async (orderId: string, reason: string) => {
-    const { data, error } = await supabase.rpc("cancel_order", {
+    const { data } = await safeRpc("cancel_order", {
       p_order_id: orderId,
       p_reason: reason,
     });
-    if (error) throw error;
     return data;
   },
 
   // Gọi RPC Nhân bản Đơn hàng
   async cloneOrder(oldOrderId: string) {
-    const { data, error } = await supabase.rpc("clone_sales_order", {
+    const { data } = await safeRpc("clone_sales_order", {
       p_old_order_id: oldOrderId,
     });
-    if (error) throw error;
     return data;
   },
 
   // Gọi RPC Xử lý Trả Hàng Bán
   async processSalesReturn(payload: any) {
-    const { data, error } = await supabase.rpc("process_sales_return", {
+    const { data } = await safeRpc("process_sales_return", {
       p_payload: payload,
     });
-    if (error) throw error;
     return data;
   },
 
   getOrders: async (params: B2BOrderFilters): Promise<B2BOrderViewResponse> => {
-    const { data, error } = await supabase.rpc("get_b2b_orders_view", {
+    const { data } = await safeRpc("get_sales_orders_view", {
       p_page: params.page,
       p_page_size: params.pageSize,
       p_search: params.search || null,
       p_status: params.status || null,
+      p_order_type: "B2B",
     });
-
-    if (error) {
-      console.error("Lỗi gọi RPC get_b2b_orders_view:", error);
-      throw error;
-    }
 
     // Supabase RPC trả về data dạng JSON, cần ép kiểu
     return data as unknown as B2BOrderViewResponse;
@@ -150,16 +144,12 @@ export const b2bService = {
     fundAccountId: number,
     note?: string
   ) => {
-    const { data, error } = await supabase.rpc("bulk_pay_orders", {
+    const { data } = await safeRpc("bulk_pay_orders", {
       p_order_ids: orderIds,
       p_fund_account_id: fundAccountId,
       p_note: note || "Kế toán thu tiền hàng loạt",
     });
 
-    if (error) {
-      console.error("Lỗi gọi RPC bulk_pay_orders:", error);
-      throw error;
-    }
     return data;
   },
 };

@@ -6,6 +6,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { useEffect, useState } from "react";
 
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 import "dayjs/locale/vi";
 
@@ -73,7 +74,7 @@ export const NotificationBell = () => {
     );
     setUnreadCount((prev) => Math.max(0, prev - 1));
 
-    await supabase.rpc("mark_notification_read", { p_noti_id: id });
+    await safeRpc("mark_notification_read", { p_noti_id: id }, { silent: true });
   };
 
   // UI Danh sách

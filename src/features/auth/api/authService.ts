@@ -1,6 +1,7 @@
 // src/services/authService.ts
 import { UserProfile } from "@/features/auth/types/auth";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 /**
  * 1. Đăng nhập
@@ -37,12 +38,8 @@ export const checkUserSession = async () => {
  * 4. Lấy hồ sơ public.users của chính user đang đăng nhập
  */
 export const getSelfProfile = async (): Promise<UserProfile | null> => {
-  const { data, error } = await supabase.rpc("get_self_profile");
-
-  if (error) {
-    console.error("Lỗi get_self_profile:", error);
-    throw error;
-  } // RPC trả về 1 mảng, ta chỉ lấy phần tử đầu tiên (hoặc null)
+  const { data } = await safeRpc("get_self_profile");
+  // RPC trả về 1 mảng, ta chỉ lấy phần tử đầu tiên (hoặc null)
   return (data?.[0] as UserProfile) || null;
 };
 
@@ -66,8 +63,7 @@ export const updateSelfPassword = async (newPassword: string) => {
  * 6. User tự cập nhật hồ sơ (Trang Canvas)
  */
 export const updateSelfProfile = async (profileData: any) => {
-  const { error } = await supabase.rpc("update_self_profile", {
+  await safeRpc("update_self_profile", {
     p_profile_data: profileData,
   });
-  if (error) throw error;
 };

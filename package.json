@@ -7,7 +7,14 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:rpc": "vitest run --config vitest.config.integration.ts",
+    "test:rpc:watch": "vitest --config vitest.config.integration.ts",
+    "typegen": "supabase gen types typescript --local --schema public > src/shared/types/database.types.ts",
+    "test:types": "tsc --noEmit",
+    "test:e2e": "npx playwright test",
+    "test:e2e:headed": "npx playwright test --headed",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
@@ -42,6 +49,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
+    "@playwright/test": "^1.58.2",
     "@types/node": "^24.10.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
@@ -60,12 +68,15 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.4.0",
+    "jsdom": "^29.0.1",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
-    "supabase": "^2.67.2",
+    "supabase": "^2.84.4",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.45.0",
-    "vite": "^7.1.7"
-  }
+    "vite": "^7.1.7",
+    "vitest": "^4.1.1"
+  },
+  "packageManager": "pnpm@10.11.0+sha512.6540583f41cc5f628eb3d9773ecee802f4f9ef9923cc45b69890fb47991d4b092964694ec3a4f738a420c918a333062c8b925d312f42e4f0c263eb603551f977"
 }

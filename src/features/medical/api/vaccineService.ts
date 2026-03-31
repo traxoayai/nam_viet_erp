@@ -1,4 +1,5 @@
 // src/features/medical/api/vaccineService.ts
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 // Lấy danh sách lịch sử tiêm (Timeline) của 1 khách hàng
@@ -105,17 +106,7 @@ export const generateTimeline = async (payload: {
   p_product_id?: number;
   p_consulted_by?: string;
 }) => {
-  // Ép kiểu do RPC có thể chưa được auto-generated chính xác 100% về type nếu dev cập nhật bằng tay
-  const { data, error } = await supabase.rpc(
-    "generate_vaccine_timeline",
-    payload as any
-  );
-
-  if (error) {
-    console.error("Error generating vaccine timeline:", error);
-    throw error;
-  }
-
+  const { data } = await safeRpc("generate_vaccine_timeline", payload as any);
   return data;
 };
 
@@ -124,15 +115,9 @@ export const rescheduleDose = async (
   recordId: number,
   newExpectedDate: string
 ) => {
-  const { data, error } = await supabase.rpc("reschedule_vaccine_timeline", {
+  const { data } = await safeRpc("reschedule_vaccine_timeline", {
     p_record_id: recordId,
     p_new_expected_date: newExpectedDate,
   });
-
-  if (error) {
-    console.error("Error rescheduling vaccine dose:", error);
-    throw error;
-  }
-
   return data;
 };

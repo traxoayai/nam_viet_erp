@@ -48,8 +48,8 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
       key: "code",
       fixed: "left" as const,
       width: 120,
-      render: (text: string) => (
-        <Link to={`/purchase-orders/${text}`} style={{ fontWeight: 600 }}>
+      render: (text: string, record: PurchaseOrderMaster) => (
+        <Link to={`/purchase-orders/${record.id}`} style={{ fontWeight: 600 }}>
           {text}
         </Link>
       ),
@@ -142,14 +142,23 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
       title: "Trạng thái",
       dataIndex: "status",
       key: "status",
-      width: 120,
-      render: (status: string) => {
+      width: 160,
+      render: (status: string, record: PurchaseOrderMaster) => {
         const config = PO_STATUS_CONFIG[status] ||
           PO_STATUS_CONFIG[status?.toLowerCase()] || {
             color: "default",
             label: status,
           };
-        return <Tag color={config.color}>{config.label}</Tag>;
+        return (
+          <Space direction="vertical" size={2}>
+            <Tag color={config.color}>{config.label}</Tag>
+            {(record.invoice_count ?? 0) > 0 && (
+              <Tag color="green" style={{ fontSize: 11 }}>
+                HĐ VAT ({record.invoice_count})
+              </Tag>
+            )}
+          </Space>
+        );
       },
     },
     {

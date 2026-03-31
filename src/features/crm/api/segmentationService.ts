@@ -4,6 +4,7 @@ import {
   CustomerSegmentRow,
 } from "../types/segments"; // <-- Import từ segments.ts
 
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const segmentationService = {
@@ -70,9 +71,8 @@ export const segmentationService = {
   },
 
   async refreshSegment(segmentId: number) {
-    const { error } = await supabase.rpc("refresh_segment_members", {
+    await safeRpc("refresh_segment_members", {
       p_segment_id: segmentId,
     });
-    if (error) throw error;
   },
 };

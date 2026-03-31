@@ -28,6 +28,7 @@ import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 
 import { useDebounce } from "@/shared/hooks/useDebounce";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 const { Title } = Typography;
@@ -240,10 +241,9 @@ const QuickBarcodePage: React.FC = () => {
           wholesale_barcode: row.wholesale_barcode,
         },
       ];
-      const { error } = await supabase.rpc("bulk_update_product_barcodes", {
+      await safeRpc("bulk_update_product_barcodes", {
         p_data: payload,
       });
-      if (error) throw error;
 
       setProducts((prev) =>
         prev.map((p) => (p.id === row.id ? { ...p, is_dirty: false } : p))
@@ -301,7 +301,7 @@ const QuickBarcodePage: React.FC = () => {
 
     try {
       // [BATCHING] Reuse logic from QuickPricePage if needed, but for simplicity here:
-      const { data: matches } = await supabase.rpc(
+      const { data: matches } = await safeRpc(
         "match_products_from_excel",
         {
           p_data: itemsToMatch.map((i) => ({ name: i.name, sku: i.sku })),
@@ -354,10 +354,9 @@ const QuickBarcodePage: React.FC = () => {
         return;
       }
 
-      const { error } = await supabase.rpc("bulk_update_product_barcodes", {
+      await safeRpc("bulk_update_product_barcodes", {
         p_data: payload,
       });
-      if (error) throw error;
 
       message.success(`Đã cập nhật ${payload.length} mã vạch!`);
       setReviewModalVisible(false);

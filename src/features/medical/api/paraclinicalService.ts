@@ -1,4 +1,5 @@
 // src/features/medical/api/paraclinicalService.ts
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const paraclinicalService = {
@@ -54,14 +55,12 @@ export const paraclinicalService = {
     imaging_result?: string;
     status: "draft" | "completed";
   }) {
-    const { data, error } = await supabase.rpc("submit_paraclinical_result", {
+    const { data } = await safeRpc("submit_paraclinical_result", {
       p_request_id: payload.request_id,
       p_results_json: payload.results_json || null,
       p_imaging_result: payload.imaging_result || null,
       p_status: payload.status,
     });
-
-    if (error) throw error;
     return data;
   },
 };

@@ -11,6 +11,7 @@ import {
 } from "@/features/finance/types/finance";
 import { FundAccountRecord } from "@/features/finance/types/fundAccount";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 interface FinanceState {
   transactions: TransactionRecord[];
@@ -57,7 +58,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         ...filters,
       });
 
-      set({ transactions: data || [], totalCount: totalCount, loading: false });
+      set({
+        transactions: (data as any[] || []).map(t => ({
+          ...t,
+          flow: t.flow as "in" | "out"
+        })),
+        totalCount: totalCount,
+        loading: false
+      });
     } catch (err: any) {
       console.error("Lỗi tải lịch sử:", err);
       set({ loading: false });
@@ -98,12 +106,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ loading: true });
     try {
       // 1. Gọi API tạo phiếu Hoàn ứng
-      const { data: _newId, error } = await supabase.rpc(
-        "create_finance_transaction",
-        payload
-      );
-
-      if (error) throw error;
+      await safeRpc("create_finance_transaction", payload);
 
       // 2. AURA FIX: Chủ động cập nhật trạng thái phiếu Tạm ứng cũ thành 'completed'
       // (Phòng trường hợp RPC của CORE chưa cập nhật kịp)
@@ -144,12 +147,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   ) => {
     try {
       // Gọi RPC mới (Sếp nhớ nhắc CORE update RPC này nhận tham số p_status)
-      const { error } = await supabase.rpc("confirm_finance_transaction", {
+      await safeRpc("confirm_finance_transaction", {
         p_id: id,
         p_target_status: targetStatus, // Truyền trạng thái mong muốn xuống
       });
-
-      if (error) throw error;
 
       const msg =
         targetStatus === "approved" ? "Đã duyệt chi!" : "Giao dịch hoàn tất!";

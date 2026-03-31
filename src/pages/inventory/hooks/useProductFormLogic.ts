@@ -46,19 +46,19 @@ export const useProductFormLogic = () => {
     return sorted[0];
   }, []);
 
-  // --- PRICING RE-CALCULATION (CHUẨN HÓA SNAKE_CASE) ---
+  // --- PRICING RE-CALCULATION ---
   const recalcPrices = useCallback(() => {
     const allValues = form.getFieldsValue();
-    
-    // [CORE FIX]: Đọc đúng trường actual_cost của Antd Form
-    const inputCost = parseFloat(allValues.actual_cost) || 0; 
+
+    // Form field names use camelCase (actualCost, wholesaleMarginValue, etc.)
+    const inputCost = parseFloat(allValues.actualCost) || 0;
     const units = allValues.units || [];
 
-    const wholesaleMarginValue = parseFloat(allValues.wholesale_margin_value) || 0;
-    const wholesaleMarginType = (allValues.wholesale_margin_type === 'percent' || allValues.wholesale_margin_type === '%') ? 'percent' : 'amount';
+    const wholesaleMarginValue = parseFloat(allValues.wholesaleMarginValue) || 0;
+    const wholesaleMarginType = (allValues.wholesaleMarginType === 'percent' || allValues.wholesaleMarginType === '%') ? 'percent' : 'amount';
 
-    const retailMarginValue = parseFloat(allValues.retail_margin_value) || 0;
-    const retailMarginType = (allValues.retail_margin_type === 'percent' || allValues.retail_margin_type === '%') ? 'percent' : 'amount';
+    const retailMarginValue = parseFloat(allValues.retailMarginValue) || 0;
+    const retailMarginType = (allValues.retailMarginType === 'percent' || allValues.retailMarginType === '%') ? 'percent' : 'amount';
 
     const anchorUnit = findAnchorUnit(units);
     const anchorRate = parseFloat(anchorUnit.conversion_rate) || 1;
@@ -122,14 +122,14 @@ export const useProductFormLogic = () => {
       const rawCost = currentProduct.actual_cost ?? 0;
       const displayCost = Math.round(Number(rawCost) * anchorRate);
 
-      // Ép Type % hay Tiền để UI select đúng
+      // Ép Type % hay Tiền để UI select đúng (camelCase cho form fields)
       const retailTypeDB = currentProduct.retail_margin_type;
-      initData.retail_margin_type = (retailTypeDB === '%' || retailTypeDB === 'percent') ? 'percent' : 'amount';
-      initData.retail_margin_value = currentProduct.retail_margin_value ?? 0;
+      initData.retailMarginType = (retailTypeDB === '%' || retailTypeDB === 'percent') ? 'percent' : 'amount';
+      initData.retailMarginValue = currentProduct.retail_margin_value ?? 0;
 
       const wholesaleTypeDB = currentProduct.wholesale_margin_type;
-      initData.wholesale_margin_type = (wholesaleTypeDB === '%' || wholesaleTypeDB === 'percent') ? 'percent' : 'amount';
-      initData.wholesale_margin_value = currentProduct.wholesale_margin_value ?? 0;
+      initData.wholesaleMarginType = (wholesaleTypeDB === '%' || wholesaleTypeDB === 'percent') ? 'percent' : 'amount';
+      initData.wholesaleMarginValue = currentProduct.wholesale_margin_value ?? 0;
 
       // Xử lý Inventory
       if (currentProduct.inventorySettings) {
@@ -152,17 +152,15 @@ export const useProductFormLogic = () => {
 
       form.resetFields();
       
-      // [CORE FIX]: Ép tên biến chuẩn Snake Case
       setTimeout(() => {
           form.setFieldsValue({
               ...initData,
-              actual_cost: displayCost,
+              actualCost: displayCost,
               name: currentProduct.name,
               barcode: currentProduct.barcode,
               sku: currentProduct.sku,
               registration_number: currentProduct.registration_number,
               packing_spec: currentProduct.packing_spec,
-              actualCost: displayCost,
           });
       }, 100);
 
@@ -220,7 +218,7 @@ export const useProductFormLogic = () => {
       }
 
       // Đưa Giá Hộp về lại Giá Viên trước khi lưu DB
-      const inputCost = parseFloat(values.actual_cost) || 0;
+      const inputCost = parseFloat(values.actualCost) || 0;
       const units = values.units || [];
       const anchor = findAnchorUnit(units);
       const anchorRate = anchor.conversion_rate || 1;
@@ -228,17 +226,19 @@ export const useProductFormLogic = () => {
 
       const fixedUnits = units.map((u: any) => ({
         ...u,
-        price: u.price || 0, 
+        price: u.price || 0,
       }));
 
       const finalValues = {
         ...values,
-        actual_cost: baseCost, 
+        actual_cost: baseCost,
         image_url: finalImageUrl,
         units: fixedUnits,
-        // Dịch Type sang chuỗi % cho DB dễ hiểu
-        retail_margin_type: values.retail_margin_type === 'percent' ? '%' : 'amount',
-        wholesale_margin_type: values.wholesale_margin_type === 'percent' ? '%' : 'amount',
+        // Convert camelCase form fields → snake_case DB fields
+        retail_margin_type: values.retailMarginType === 'percent' ? '%' : 'amount',
+        retail_margin_value: values.retailMarginValue,
+        wholesale_margin_type: values.wholesaleMarginType === 'percent' ? '%' : 'amount',
+        wholesale_margin_value: values.wholesaleMarginValue,
       };
 
       const inventoryPayload = warehouses.map((wh) => {
