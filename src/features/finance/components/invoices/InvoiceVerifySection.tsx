@@ -409,56 +409,25 @@ const InvoiceVerifySection = ({
   return (
     <div>
       <Row gutter={12} style={{ marginBottom: 12 }} align="stretch">
-        {/* Left 60%: stats + payment button */}
-        <Col span={14} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <Row gutter={12} style={{ flex: 1 }}>
-            <Col span={12} style={{ display: "flex" }}>
-              <Card bordered={false} styles={{ body: { padding: "12px 16px" } }} style={{ flex: 1 }}>
-                <Statistic
-                  title="Hóa đơn chờ đối chiếu"
-                  value={stats.pending}
-                  valueStyle={{ color: "#faad14", fontSize: 20 }}
-                  prefix={<ScanOutlined />}
-                />
-              </Card>
-            </Col>
-            <Col span={12} style={{ display: "flex" }}>
-              <Card bordered={false} styles={{ body: { padding: "12px 16px" } }} style={{ flex: 1 }}>
-                <Statistic
-                  title="Tổng tiền hóa đơn"
-                  value={stats.amount}
-                  valueStyle={{ color: "#3f8600", fontSize: 20 }}
-                  prefix={<DollarCircleOutlined />}
-                />
-              </Card>
-            </Col>
-          </Row>
+        <Col span={12} style={{ display: "flex" }}>
+          <Card bordered={false} styles={{ body: { padding: "12px 16px" } }} style={{ flex: 1 }}>
+            <Statistic
+              title="Hóa đơn chờ đối chiếu"
+              value={stats.pending}
+              valueStyle={{ color: "#faad14", fontSize: 20 }}
+              prefix={<ScanOutlined />}
+            />
+          </Card>
         </Col>
-        {/* Right 40%: action buttons */}
-        <Col span={10} style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <Button
-            type="primary"
-            icon={<CloudUploadOutlined />}
-            onClick={() => setIsScanUploadOpen(true)}
-            className="mb-3"
-          >
-            Scan Ảnh (AI Gemini)
-          </Button>
-          <Button
-            type="primary"
-            icon={<FileTextOutlined />}
-            onClick={() => setIsXmlUploadOpen(true)}
-            className="mb-3"
-          >
-            Nhập XML (Chuẩn Thuế)
-          </Button>
-          <Button
-            icon={<LinkOutlined />}
-            onClick={handleOpenLinkModal}
-            loading={linkLoading}
-          >
-            Liên kết HĐ có sẵn
-          </Button>
+        <Col span={12} style={{ display: "flex" }}>
+          <Card bordered={false} styles={{ body: { padding: "12px 16px" } }} style={{ flex: 1 }}>
+            <Statistic
+              title="Tổng tiền hóa đơn"
+              value={stats.amount}
+              valueStyle={{ color: "#3f8600", fontSize: 20 }}
+              prefix={<DollarCircleOutlined />}
+            />
+          </Card>
         </Col>
       </Row>
 
@@ -466,6 +435,47 @@ const InvoiceVerifySection = ({
         title={
           <Space>
             <FilePdfOutlined /> Hóa đơn VAT của Đơn hàng
+          </Space>
+        }
+        extra={
+          <Space size="small">
+            <Button
+              size="small"
+              icon={<CloudUploadOutlined />}
+              onClick={() => setIsScanUploadOpen(true)}
+              style={{
+                borderColor: "#52c41a",
+                color: "#52c41a",
+                boxShadow: "0 1px 4px rgba(82, 196, 26, 0.3)",
+              }}
+            >
+              Scan Ảnh (AI Gemini)
+            </Button>
+            <Button
+              size="small"
+              icon={<FileTextOutlined />}
+              onClick={() => setIsXmlUploadOpen(true)}
+              style={{
+                borderColor: "#1677ff",
+                color: "#1677ff",
+                boxShadow: "0 1px 4px rgba(22, 119, 255, 0.3)",
+              }}
+            >
+              Nhập XML (Chuẩn Thuế)
+            </Button>
+            <Button
+              size="small"
+              icon={<LinkOutlined />}
+              onClick={handleOpenLinkModal}
+              loading={linkLoading}
+              style={{
+                borderColor: "#722ed1",
+                color: "#722ed1",
+                boxShadow: "0 1px 4px rgba(114, 46, 209, 0.3)",
+              }}
+            >
+              Liên kết HĐ có sẵn
+            </Button>
           </Space>
         }
         styles={{ body: { padding: 0 } }}

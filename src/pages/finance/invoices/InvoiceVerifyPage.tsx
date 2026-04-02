@@ -375,31 +375,16 @@ const InvoiceVerifyPage = () => {
                       const newItems = [...fields.items];
 
                       if (newItems[index]) {
-                        // [C11] Capture original values before conversion
-                        const originalQty = newItems[index].quantity || 0;
-                        const originalPrice = newItems[index].unit_price || 0;
-                        const originalTotal = originalQty * originalPrice;
-
-                        if (baseXmlQty > 0) {
-                          newItems[index].quantity = baseXmlQty / newRate;
-                        }
+                        // [FIX] Giữ nguyên SL gốc từ XML, chỉ quy đổi đơn giá
+                        // SL gốc (baseXmlQty) luôn cố định theo hóa đơn VAT
+                        // Đơn giá = xml_unit_price * rate (quy đổi theo ĐVT nhập)
                         const basePrice = newItems[index].xml_unit_price || 0;
                         if (basePrice > 0) {
                           newItems[index].unit_price = basePrice * newRate;
                         }
 
-                        // [C11] Total preservation check after unit conversion
-                        const convertedQty = newItems[index].quantity || 0;
-                        const convertedPrice = newItems[index].unit_price || 0;
-                        const convertedTotal = convertedQty * convertedPrice;
-                        if (originalTotal > 0 && Math.abs(originalTotal - convertedTotal) > 1) {
-                          message.warning("Cảnh báo: Tổng tiền sau quy đổi bị lệch! Vui lòng kiểm tra lại.");
-                        }
-
-                        // [C11] Fractional quantity warning
-                        if (convertedQty % 1 !== 0) {
-                          message.warning(`Số lượng quy đổi không phải số nguyên (${convertedQty.toFixed(2)}). Kiểm tra quy cách đóng gói.`);
-                        }
+                        // SL hiển thị giữ nguyên giá trị gốc XML
+                        // Thông tin quy đổi hiển thị riêng bên dưới Select ĐVT
 
                         form.setFieldsValue({ items: newItems });
                         setTimeout(() => handleRecalculate(), 0);
@@ -432,9 +417,7 @@ const InvoiceVerifyPage = () => {
                       <>
                         Quy đổi:{" "}
                         <b>
-                          {(
-                            getFieldValue(["items", index, "quantity"]) || 0
-                          ).toFixed(2)}
+                          {(baseXmlQty / rate).toFixed(2)}
                         </b>{" "}
                         {selectedUnitObj?.unit_name}
                       </>

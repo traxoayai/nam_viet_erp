@@ -36,6 +36,7 @@ export const usePurchaseOrderLogic = () => {
   const [itemsList, setItemsList] = useState<POItem[]>([]);
   const [poCode, setPoCode] = useState<string>("");
   const [poStatus, setPoStatus] = useState<string>("");
+  const [costingConfirmedAt, setCostingConfirmedAt] = useState<string | null>(null);
   const [financials, setFinancials] = useState({
     subtotal: 0,
     shippingFee: 0,
@@ -86,6 +87,7 @@ export const usePurchaseOrderLogic = () => {
       setPoCode(po.code);
       if (!po.status) throw new Error("Đơn hàng không có trạng thái hợp lệ");
       setPoStatus(po.status);
+      setCostingConfirmedAt(po.costing_confirmed_at || null);
 
       if (po.supplier?.id) {
         const { data: richInfo } = await safeRpc(
@@ -560,6 +562,7 @@ export const usePurchaseOrderLogic = () => {
     loading,
     poCode,
     poStatus,
+    costingConfirmedAt,
     itemsList,
     financials,
     searchKey,

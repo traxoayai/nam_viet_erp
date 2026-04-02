@@ -60,6 +60,7 @@ const PurchaseOrderDetailContent = () => {
 
   // Hiện full thông tin cho mọi status (trừ DRAFT chưa có gì)
   const showSections = logic.isEditMode && logic.poStatus !== "DRAFT";
+  const isCostingLocked = !!logic.costingConfirmedAt;
 
   return (
     <Layout style={{ minHeight: "100vh", background: "transparent" }}>
@@ -238,9 +239,16 @@ const PurchaseOrderDetailContent = () => {
                 icon={<SaveOutlined />}
                 onClick={costingData.handleSubmit}
                 loading={costingData.loading}
-                style={{ minWidth: 200, height: 48, fontSize: 15, background: "#52c41a", borderColor: "#52c41a" }}
+                disabled={isCostingLocked}
+                style={{
+                  minWidth: 200,
+                  height: 48,
+                  fontSize: 15,
+                  background: isCostingLocked ? "#d9d9d9" : "#52c41a",
+                  borderColor: isCostingLocked ? "#d9d9d9" : "#52c41a",
+                }}
               >
-                Chốt Giá Vốn & Công Nợ
+                {isCostingLocked ? "Đã Chốt Giá Vốn ✓" : "Chốt Giá Vốn & Công Nợ"}
               </Button>
             </>
           )}

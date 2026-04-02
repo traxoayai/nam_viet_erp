@@ -14,7 +14,7 @@ export async function setupBrowserContext(page: Page) {
   });
 
   // Grant at browser level too
-  await page.context().grantPermissions(["notifications"], { origin: "http://localhost:5173" });
+  await page.context().grantPermissions(["notifications"]);
 
   // Navigate to set localStorage domain
   await page.goto("/auth/login", { waitUntil: "domcontentloaded" });
@@ -58,4 +58,24 @@ export async function login(
     (url) => !url.toString().includes("/auth/login"),
     { timeout: 15000 }
   );
+
+  // Xử lý màn hình "Cập nhật Mật khẩu Mới" (lần đăng nhập đầu)
+  if (page.url().includes("/onboarding/update-password")) {
+    const newPwInput = page.locator("input[type='password']").first();
+    await newPwInput.waitFor({ state: "visible", timeout: 5000 });
+    await newPwInput.fill(password);
+
+    const confirmPwInput = page.locator("input[type='password']").nth(1);
+    await confirmPwInput.fill(password);
+
+    const saveBtn = page.locator(
+      "button:has-text('Lưu'), button:has-text('Tiếp tục'), button[type='submit']"
+    ).first();
+    await saveBtn.click();
+
+    await page.waitForURL(
+      (url) => !url.toString().includes("/onboarding"),
+      { timeout: 15000 }
+    );
+  }
 }

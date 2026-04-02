@@ -144,6 +144,71 @@ describe("purchaseOrderService", () => {
     });
   });
 
+  // --- confirmCosting ---
+  describe("confirmCosting", () => {
+    it("calls confirm_purchase_costing with correct payload", async () => {
+      mockSafeRpc.mockResolvedValue({ data: { success: true, rebate_earned: 0 } });
+      const payload = {
+        p_po_id: 10,
+        p_total_shipping_fee: 30000,
+        p_items_data: [
+          {
+            id: 1,
+            product_id: 100,
+            final_unit_cost: 99000,
+            rebate_rate: 0,
+            vat_rate: 0,
+            quantity_received: 40,
+            bonus_quantity: 0,
+          },
+        ],
+        p_gifts_data: [],
+      };
+      const result = await purchaseOrderService.confirmCosting(payload);
+      expect(mockSafeRpc).toHaveBeenCalledWith("confirm_purchase_costing", payload);
+      expect(result).toEqual({ success: true, rebate_earned: 0 });
+    });
+
+    it("sends shipping fee as metadata (not added to final_amount by frontend)", async () => {
+      mockSafeRpc.mockResolvedValue({ data: { success: true } });
+      const payload = {
+        p_po_id: 10,
+        p_total_shipping_fee: 50000,
+        p_items_data: [
+          {
+            id: 1,
+            product_id: 100,
+            final_unit_cost: 105000, // includes allocated shipping in unit cost
+            rebate_rate: 0,
+            vat_rate: 0,
+            quantity_received: 40,
+            bonus_quantity: 0,
+          },
+        ],
+        p_gifts_data: [],
+      };
+      await purchaseOrderService.confirmCosting(payload);
+      // Verify shipping fee is passed as-is, RPC handles it
+      const call = mockSafeRpc.mock.calls[0];
+      expect(call[1].p_total_shipping_fee).toBe(50000);
+    });
+
+    it("includes gifts data in payload", async () => {
+      mockSafeRpc.mockResolvedValue({ data: { success: true } });
+      const payload = {
+        p_po_id: 10,
+        p_total_shipping_fee: 0,
+        p_items_data: [],
+        p_gifts_data: [
+          { name: "Qua tang", code: "GIFT-001", quantity: 1, estimated_value: 0, unit_name: "Cai" },
+        ],
+      };
+      await purchaseOrderService.confirmCosting(payload);
+      expect(mockSafeRpc.mock.calls[0][1].p_gifts_data).toHaveLength(1);
+      expect(mockSafeRpc.mock.calls[0][1].p_gifts_data[0].name).toBe("Qua tang");
+    });
+  });
+
   // --- updateLogistics ---
   describe("updateLogistics", () => {
     it("calls update_purchase_order_logistics with correct params", async () => {
