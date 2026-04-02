@@ -1,0 +1,27 @@
+# Dependencies
+node_modules
+
+# Large data files
+.claude
+backups
+docs
+tmp
+
+# SQL dumps
+*.sql
+
+# Test artifacts
+test-results
+playwright-report
+blob-report
+.playwright-mcp
+
+# Local env
+.env
+.env.*
+
+# Git
+.git
+
+# Supabase local
+supabase/.temp

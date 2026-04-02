@@ -1,33 +1,42 @@
 // src/pages/purchasing/components/UpdatePriceModal.tsx
 import { ArrowRightOutlined } from "@ant-design/icons";
-import { Modal, Table, InputNumber, Button, message, Tag } from "antd";
+import { Modal, Table, InputNumber, Button, message, Tag, Typography } from "antd";
 import React, { useEffect, useState } from "react";
 
-import { updateProductPrices } from "@/features/product/api/productService";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { formatCurrency } from "@/shared/utils/format";
+
+const { Text } = Typography;
 
 interface Props {
   visible: boolean;
   onClose: () => void;
-  costingItems: any[]; // Items từ trang Costing
-  oldCosts: any[]; // [NEW] Snapshot giá cũ
+  costingItems: any[];
+  oldCosts: any[];
 }
 
 interface PriceRow {
   key: string;
   product_id: number;
   product_name: string;
-  unit_name: string; // [FIX] Display Unit Name (Wholesale or Base)
 
-  // Display values (converted to display unit)
-  old_cost_display: number;
-  new_cost_display: number;
+  // Base cost per smallest unit (viên)
+  old_base_cost: number;
+  new_base_cost: number;
 
-  current_sell_price: number; // For display unit
-  new_sell_price: number; // For display unit (User edited)
+  // Wholesale
+  has_wholesale: boolean;
+  wholesale_unit_name: string;
+  wholesale_rate: number;
+  current_wholesale_price: number;
+  new_wholesale_price: number;
 
-  units: any[]; // Store list to bulk update
+  // Retail
+  retail_unit_name: string;
+  retail_rate: number;
+  current_retail_price: number;
+  new_retail_price: number;
 }
 
 export const UpdatePriceModal: React.FC<Props> = ({
@@ -51,71 +60,103 @@ export const UpdatePriceModal: React.FC<Props> = ({
     try {
       const productIds = [...new Set(costingItems.map((i) => i.product_id))];
 
-      // Lấy thông tin hiện tại trong DB (Giá cũ)
       const { data: products } = await supabase
         .from("products")
-        .select(`id, name, actual_cost, wholesale_unit, product_units(*)`)
+        .select(
+          `id, name, actual_cost, wholesale_unit, retail_unit,
+           wholesale_margin_value, wholesale_margin_type,
+           retail_margin_value, retail_margin_type,
+           product_units(*)`
+        )
         .in("id", productIds);
 
       const newRows: PriceRow[] = [];
       const defaultSelected: React.Key[] = [];
 
       products?.forEach((p) => {
-        // 1. Tìm giá vốn MỚI (Từ đơn nhập hàng)
         const inputItem = costingItems.find((i) => i.product_id === p.id);
         if (!inputItem) return;
 
-        // Quy đổi giá nhập về giá Base
-        const conversion = inputItem.conversion_factor || 1;
-        const newBaseCost = inputItem.final_unit_cost / conversion;
+        // === BUG FIX: Lookup conversion_rate từ product_units thay vì dùng conversion_factor ===
+        const importUnit = p.product_units.find(
+          (u: any) => u.unit_name === inputItem.unit
+        );
+        const importRate = importUnit?.conversion_rate || 1;
+        const newBaseCost = inputItem.final_unit_cost / importRate;
 
-        // A. Xác định "Đơn vị hiển thị" (Ưu tiên Wholesale Unit)
-        // Nếu không có Wholesale Unit thì mới fallback về Base Unit
-        const displayUnit =
+        // === Xác định đơn vị Bán buôn và Bán lẻ ===
+        const wholesaleUnitObj =
           p.product_units.find((u: any) => u.unit_name === p.wholesale_unit) ||
+          p.product_units.find((u: any) => u.unit_type === "wholesale");
+
+        const retailUnitObj =
+          p.product_units.find((u: any) => u.unit_name === p.retail_unit) ||
           p.product_units.find((u: any) => u.is_base) ||
           p.product_units[0];
 
-        if (!displayUnit) return;
+        if (!retailUnitObj) return;
 
-        // B. Tính toán lại các loại giá theo Đơn vị hiển thị
-        // Lưu ý: actual_cost và newBaseCost đang là giá của Unit Base (nhỏ nhất)
-        const rate = displayUnit.conversion_rate || 1;
+        const wholesaleRate = wholesaleUnitObj?.conversion_rate || 1;
+        const retailRate = retailUnitObj?.conversion_rate || 1;
+        const hasWholesale =
+          !!wholesaleUnitObj &&
+          wholesaleUnitObj.id !== retailUnitObj.id;
 
-        // [FIX] Lấy giá vốn cũ từ Snapshot (Pre-update), KHÔNG lấy từ p.actual_cost
+        // === Giá vốn cũ từ Snapshot ===
         const snapshot = oldCosts.find((o) => o.id === p.id);
-        const trueOldBaseCost = snapshot
-          ? snapshot.actual_cost
-          : p.actual_cost || 0;
+        const oldBaseCost = snapshot ? snapshot.actual_cost : p.actual_cost || 0;
 
-        const displayOldCost = (trueOldBaseCost || 0) * rate; // Giá vốn cũ (quy ra Hộp)
-        const displayNewCost = newBaseCost * rate; // Giá vốn mới (quy ra Hộp)
+        // === Tính giá đề xuất theo Lãi (pattern từ QuickPricePage) ===
+        const wholesaleCost = newBaseCost * wholesaleRate;
 
-        // Logic gợi ý giá bán (Giữ nguyên margin cũ)
-        // Ratio = Tỷ lệ tăng giá vốn
-        const costRatio =
-          displayOldCost > 0 ? displayNewCost / displayOldCost : 1;
-        const suggestedPrice =
-          Math.ceil((displayUnit.price * costRatio) / 1000) * 1000;
+        // Giá Bán Sỉ đề xuất
+        let suggestedWholesalePrice = wholesaleUnitObj?.price_sell || wholesaleUnitObj?.price || 0;
+        if (hasWholesale) {
+          const wMarginVal = p.wholesale_margin_value || 0;
+          const wMarginType = p.wholesale_margin_type;
+          let wMargin = wMarginVal;
+          if (wMarginType === "%" || wMarginType === "percent") {
+            wMargin = wholesaleCost * (wMarginVal / 100);
+          }
+          suggestedWholesalePrice = Math.ceil(wholesaleCost + wMargin);
+        }
 
-        // Push vào mảng rows
+        // Giá Bán Lẻ đề xuất: [Giá Vốn + Lãi Lẻ / wholesale_rate] * retail_rate
+        let suggestedRetailPrice = retailUnitObj?.price_sell || retailUnitObj?.price || 0;
+        const rMarginVal = p.retail_margin_value || 0;
+        const rMarginType = p.retail_margin_type;
+        let rMargin = rMarginVal;
+        if (rMarginType === "%" || rMarginType === "percent") {
+          rMargin = wholesaleCost * (rMarginVal / 100);
+        }
+        const pricePerWholesale = wholesaleCost + rMargin;
+        const pricePerBase = pricePerWholesale / wholesaleRate;
+        suggestedRetailPrice = Math.ceil(pricePerBase * retailRate);
+
+        // === Auto-select nếu giá vốn thay đổi > 1% ===
+        const costRatio = oldBaseCost > 0 ? newBaseCost / oldBaseCost : 1;
         const rowKey = p.id.toString();
+
         newRows.push({
           key: rowKey,
           product_id: p.id,
           product_name: p.name,
-          unit_name: displayUnit.unit_name, // Hiển thị tên đơn vị Bán buôn (VD: Hộp)
 
-          old_cost_display: displayOldCost, // Dùng biến này để hiện lên cột "Giá Vốn Cũ"
-          new_cost_display: displayNewCost, // Dùng biến này để hiện lên cột "Giá Vốn Mới"
+          old_base_cost: oldBaseCost,
+          new_base_cost: newBaseCost,
 
-          current_sell_price: displayUnit.price, // Giá bán hiện tại của Hộp
-          new_sell_price: suggestedPrice, // Giá bán mới của Hộp
+          has_wholesale: hasWholesale,
+          wholesale_unit_name: wholesaleUnitObj?.unit_name || "-",
+          wholesale_rate: wholesaleRate,
+          current_wholesale_price: wholesaleUnitObj?.price_sell || wholesaleUnitObj?.price || 0,
+          new_wholesale_price: suggestedWholesalePrice,
 
-          units: p.product_units, // Giữ nguyên để update đồng loạt
+          retail_unit_name: retailUnitObj?.unit_name || "ĐV",
+          retail_rate: retailRate,
+          current_retail_price: retailUnitObj?.price_sell || retailUnitObj?.price || 0,
+          new_retail_price: suggestedRetailPrice,
         });
 
-        // Tự động check nếu giá vốn thay đổi > 1%
         if (Math.abs(costRatio - 1) > 0.01) {
           defaultSelected.push(rowKey);
         }
@@ -134,61 +175,24 @@ export const UpdatePriceModal: React.FC<Props> = ({
   const handleSave = async () => {
     setLoading(true);
     try {
-      // Chỉ xử lý các dòng được chọn
       const selectedRows = rows.filter((r) => selectedRowKeys.includes(r.key));
-
       if (selectedRows.length === 0) {
         onClose();
         return;
       }
 
-      const updates: any[] = [];
+      const payload = selectedRows.map((row) => ({
+        product_id: row.product_id,
+        retail_price: row.new_retail_price,
+        wholesale_price: row.has_wholesale ? row.new_wholesale_price : null,
+      }));
 
-      // Duyệt qua từng sản phẩm được chọn
-      selectedRows.forEach((row) => {
-        // Tính tỷ lệ thay đổi giá bán dựa trên đơn vị đang hiển thị (Wholesale)
-        const priceChangeRatio =
-          row.current_sell_price > 0
-            ? row.new_sell_price / row.current_sell_price
-            : 1;
+      await safeRpc("bulk_update_product_prices", { p_data: payload });
 
-        // Update TẤT CẢ unit khác theo tỷ lệ này
-        row.units.forEach((unit) => {
-          let newUnitTestPrice = 0;
-
-          if (unit.unit_name === row.unit_name) {
-            // Nếu là chính đơn vị đang sửa (Hộp) -> Lấy giá user nhập
-            newUnitTestPrice = row.new_sell_price;
-          } else {
-            // Nếu là đơn vị khác (Viên) -> Tính theo tỷ lệ thay đổi
-            newUnitTestPrice =
-              Math.ceil((unit.price * priceChangeRatio) / 100) * 100; // Làm tròn trăm đồng
-          }
-
-          updates.push({ id: unit.id, price: newUnitTestPrice });
-        });
-      });
-
-      // Gọi API Update Bulk
-      if (updates.length > 0) {
-        console.log("Đang gửi updates:", updates);
-
-        // Gọi hàm service mới
-        const result = await updateProductPrices(updates);
-
-        if (result.count > 0) {
-          message.success(
-            `Thành công! Đã cập nhật giá mới cho ${result.count} quy cách sản phẩm.`
-          );
-          onClose(); // Chỉ đóng khi thành công
-        } else {
-          message.error(
-            "Không thể lưu vào Database. Vui lòng báo Core kiểm tra quyền (RLS) bảng product_units."
-          );
-        }
-      } else {
-        message.warning("Bạn chưa chọn sản phẩm nào để cập nhật giá.");
-      }
+      message.success(
+        `Thành công! Đã cập nhật giá bán mới cho ${selectedRows.length} sản phẩm.`
+      );
+      onClose();
     } catch (error: any) {
       message.error(`Lỗi hệ thống: ${error.message}`);
     } finally {
@@ -196,26 +200,33 @@ export const UpdatePriceModal: React.FC<Props> = ({
     }
   };
 
+  const numberFormatter = (value: number | undefined) =>
+    `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const numberParser = (value: string | undefined) =>
+    value!.replace(/\$\s?|(,*)/g, "") as unknown as number;
+
   const columns = [
     {
       title: "Sản phẩm",
       dataIndex: "product_name",
+      width: 200,
       render: (text: string, r: PriceRow) => (
         <div>
           <b>{text}</b>
           <div style={{ fontSize: 12, color: "#666" }}>
-            Đơn vị: {r.unit_name}
+            Lẻ: {r.retail_unit_name}
+            {r.has_wholesale && ` | Buôn: ${r.wholesale_unit_name}`}
           </div>
         </div>
       ),
     },
     {
-      title: "Biến động Giá Vốn",
+      title: "Giá Vốn (1 ĐVCS)",
+      width: 200,
       render: (_: any, r: PriceRow) => {
         const diff =
-          r.old_cost_display > 0
-            ? ((r.new_cost_display - r.old_cost_display) / r.old_cost_display) *
-              100
+          r.old_base_cost > 0
+            ? ((r.new_base_cost - r.old_base_cost) / r.old_base_cost) * 100
             : 100;
         const color = diff > 0 ? "red" : "green";
         const icon = diff > 0 ? "↗" : "↘";
@@ -225,8 +236,8 @@ export const UpdatePriceModal: React.FC<Props> = ({
         return (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ fontSize: 12, color: "#999" }}>
-              {formatCurrency(r.old_cost_display)} <ArrowRightOutlined />{" "}
-              <b>{formatCurrency(r.new_cost_display)}</b>
+              {formatCurrency(r.old_base_cost)} <ArrowRightOutlined />{" "}
+              <b>{formatCurrency(r.new_base_cost)}</b>
             </div>
             <Tag color={color}>
               {icon} {Math.abs(diff).toFixed(1)}%
@@ -236,51 +247,94 @@ export const UpdatePriceModal: React.FC<Props> = ({
       },
     },
     {
-      title: "Giá Bán Cũ",
-      dataIndex: "current_sell_price",
-      width: 120,
-      render: (val: number) => formatCurrency(val),
+      title: "Giá Bán Lẻ",
+      width: 200,
+      render: (_: any, record: PriceRow) => (
+        <div>
+          <div style={{ fontSize: 11, color: "#999", marginBottom: 4 }}>
+            {record.retail_unit_name} (Hiện: {formatCurrency(record.current_retail_price)})
+          </div>
+          <InputNumber
+            value={record.new_retail_price}
+            style={{
+              width: "100%",
+              fontWeight: "bold",
+              borderColor:
+                record.new_retail_price !== record.current_retail_price
+                  ? "#1677ff"
+                  : "#d9d9d9",
+            }}
+            formatter={numberFormatter}
+            parser={numberParser}
+            onChange={(v) => {
+              setRows((prev) =>
+                prev.map((r) =>
+                  r.key === record.key
+                    ? { ...r, new_retail_price: Number(v) }
+                    : r
+                )
+              );
+              if (!selectedRowKeys.includes(record.key)) {
+                setSelectedRowKeys((prev) => [...prev, record.key]);
+              }
+            }}
+          />
+        </div>
+      ),
     },
     {
-      title: "Giá Bán Mới (Đề xuất)",
-      dataIndex: "new_sell_price",
-      width: 150,
-      render: (val: number, record: PriceRow) => (
-        <InputNumber
-          value={val}
-          style={{ width: "100%", fontWeight: "bold" }}
-          formatter={(value) =>
-            `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-          }
-          parser={(value) =>
-            value!.replace(/\$\s?|(,*)/g, "") as unknown as number
-          }
-          onChange={(v) => {
-            setRows((prev) =>
-              prev.map((r) =>
-                r.key === record.key ? { ...r, new_sell_price: Number(v) } : r
-              )
-            );
-            // Auto check khi sửa giá
-            if (!selectedRowKeys.includes(record.key)) {
-              setSelectedRowKeys((prev) => [...prev, record.key]);
-            }
-          }}
-        />
-      ),
+      title: "Giá Bán Buôn",
+      width: 200,
+      render: (_: any, record: PriceRow) => {
+        if (!record.has_wholesale)
+          return <Text type="secondary">Không bán buôn</Text>;
+        return (
+          <div>
+            <div style={{ fontSize: 11, color: "#999", marginBottom: 4 }}>
+              {record.wholesale_unit_name} (Hiện:{" "}
+              {formatCurrency(record.current_wholesale_price)})
+            </div>
+            <InputNumber
+              value={record.new_wholesale_price}
+              style={{
+                width: "100%",
+                fontWeight: "bold",
+                borderColor:
+                  record.new_wholesale_price !== record.current_wholesale_price
+                    ? "#52c41a"
+                    : "#d9d9d9",
+              }}
+              formatter={numberFormatter}
+              parser={numberParser}
+              onChange={(v) => {
+                setRows((prev) =>
+                  prev.map((r) =>
+                    r.key === record.key
+                      ? { ...r, new_wholesale_price: Number(v) }
+                      : r
+                  )
+                );
+                if (!selectedRowKeys.includes(record.key)) {
+                  setSelectedRowKeys((prev) => [...prev, record.key]);
+                }
+              }}
+            />
+          </div>
+        );
+      },
     },
   ];
 
   return (
     <Modal
-      title="Cập nhật Giá Bán Lẻ (Dựa trên Giá Vốn mới)"
+      title="Cập nhật Giá bán lẻ & Bán buôn (Dựa trên Lợi nhuận cài đặt)"
       open={visible}
       onCancel={onClose}
-      width={900}
+      width={1100}
       maskClosable={false}
       footer={[
         <Button key="close" onClick={onClose}>
-          Bỏ qua (Giữ giá cũ)
+          Bỏ qua
         </Button>,
         <Button
           key="save"
