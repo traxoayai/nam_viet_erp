@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useRef } from "react";
+
 import { receptionService } from "@/features/medical/api/receptionService";
 import { BookingDrawer } from "@/features/medical/components/reception/BookingDrawer";
 import { SellPackageDrawer } from "@/features/medical/components/reception/SellPackageDrawer";
@@ -211,10 +213,17 @@ export default function ReceptionPage() {
     }
   };
 
+  // Ref để subscription luôn gọi fetchData mới nhất mà không cần re-subscribe
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
+
+  // Effect 1: Fetch data khi filter thay đổi
   useEffect(() => {
     fetchData();
+  }, [searchTerm, filterDate, filterRoom, filterStaff]);
 
-    // Lắng nghe realtime từ bảng appointments theo yêu cầu từ Lệnh tác chiến
+  // Effect 2: Subscribe realtime 1 lần duy nhất
+  useEffect(() => {
     const channel = supabase
       .channel("reception_live_queue")
       .on(
@@ -222,7 +231,7 @@ export default function ReceptionPage() {
         { event: "*", schema: "public", table: "appointments" },
         (payload) => {
           console.log("Có thay đổi lịch hẹn, Auto-refresh!", payload);
-          fetchData(); // Tự động gọi lại hàm lấy danh sách
+          fetchDataRef.current();
         }
       )
       .subscribe();
@@ -230,7 +239,7 @@ export default function ReceptionPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [searchTerm, filterDate, filterRoom, filterStaff]);
+  }, []);
 
   // Load resources for Modal & Filter
   useEffect(() => {

@@ -3,9 +3,13 @@ import { BellOutlined } from "@ant-design/icons";
 import { Badge, Button, List, Popover, Typography, Empty, Avatar } from "antd";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
+import {
+  useNotificationStore,
+  AppNotification,
+} from "@/features/settings/stores/useNotificationStore";
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 import "dayjs/locale/vi";
@@ -15,64 +19,37 @@ dayjs.locale("vi");
 
 export const NotificationBell = () => {
   const { user } = useAuthStore();
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  // Dùng store thay vì local state — NotificationContext đã subscribe realtime
+  const notifications = useNotificationStore((s) => s.notifications);
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const setNotifications = useNotificationStore((s) => s.setNotifications);
+  const markAsReadInStore = useNotificationStore((s) => s.markAsRead);
 
-  // 1. Tải thông báo ban đầu
-  const fetchNotifications = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(10);
-
-    if (data) {
-      setNotifications(data);
-      setUnreadCount(data.filter((n) => !n.is_read).length);
-    }
-  };
-
-  // 2. Lắng nghe Realtime
+  // 1. Tải thông báo ban đầu vào store
   useEffect(() => {
-    fetchNotifications();
+    const fetchNotifications = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(10);
 
-    if (!user) return;
-
-    const subscription = supabase
-      .channel("public:notifications")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`, // Chỉ nhận tin của mình
-        },
-        (payload) => {
-          // Có thông báo mới -> Đẩy vào đầu danh sách
-          const newNoti = payload.new;
-          setNotifications((prev) => [newNoti, ...prev]);
-          setUnreadCount((prev) => prev + 1);
-
-          // (Tùy chọn) Phát âm thanh hoặc hiện Toast
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(subscription);
+      if (data) {
+        setNotifications(data as AppNotification[]);
+      }
     };
-  }, [user]);
+
+    fetchNotifications();
+  }, [user, setNotifications]);
+
+  // 2. Realtime đã được xử lý bởi NotificationContext — không cần subscribe lại
 
   // 3. Đánh dấu đã đọc
   const handleRead = async (id: string) => {
-    // Optimistic Update
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-    );
-    setUnreadCount((prev) => Math.max(0, prev - 1));
+    // Optimistic Update qua store
+    markAsReadInStore(id);
 
     await safeRpc("mark_notification_read", { p_noti_id: id }, { silent: true });
   };

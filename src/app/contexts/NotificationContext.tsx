@@ -1,6 +1,6 @@
 // src/app/contexts/NotificationContext.tsx
 import { notification } from "antd";
-import React, { createContext, useEffect, useRef } from "react";
+import React, { createContext, useCallback, useEffect, useRef } from "react";
 
 import {
   useNotificationStore,
@@ -27,48 +27,56 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const handleNewNotification = (payload: AppNotification) => {
-    // 1. Cập nhật Store
-    addNotification(payload);
+  const handleNewNotification = useCallback(
+    (payload: AppNotification) => {
+      // 1. Cập nhật Store
+      addNotification(payload);
 
-    // 2. Phát âm thanh
-    if (audioRef.current) {
-      audioRef.current
-        .play()
-        .catch((e) => console.log("Audio autoplay blocked:", e));
-    }
+      // 2. Phát âm thanh
+      if (audioRef.current) {
+        audioRef.current
+          .play()
+          .catch((e) => console.log("Audio autoplay blocked:", e));
+      }
 
-    // 3. Hiển thị Toast (Ant Design) - Tự động chọn icon dựa trên type
-    // type: 'info' | 'success' | 'warning' | 'error'
-    const type = payload.type || "info";
-    notification[type]({
-      message: payload.title,
-      description: payload.message,
-      placement: "topRight",
-      duration: 4,
-    });
-
-    // 4. Desktop Notification
-    if (
-      document.visibilityState === "hidden" &&
-      Notification.permission === "granted"
-    ) {
-      new Notification(payload.title, {
-        body: payload.message,
-        icon: "/vite.svg",
+      // 3. Hiển thị Toast (Ant Design) - Tự động chọn icon dựa trên type
+      // type: 'info' | 'success' | 'warning' | 'error'
+      const type = payload.type || "info";
+      notification[type]({
+        message: payload.title,
+        description: payload.message,
+        placement: "topRight",
+        duration: 4,
       });
-    }
-  };
+
+      // 4. Desktop Notification
+      if (
+        document.visibilityState === "hidden" &&
+        Notification.permission === "granted"
+      ) {
+        new Notification(payload.title, {
+          body: payload.message,
+          icon: "/vite.svg",
+        });
+      }
+    },
+    [addNotification]
+  );
+
+  // Dùng ref để luôn có handleNewNotification mới nhất trong subscription
+  const handleRef = useRef(handleNewNotification);
+  handleRef.current = handleNewNotification;
 
   useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
     const subscribeToNotifications = async () => {
-      // Logic lấy User hiện tại vẫn dùng auth.getUser() là chuẩn xác nhất
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const channel = supabase
+      channel = supabase
         .channel("realtime-notifications")
         .on(
           "postgres_changes",
@@ -79,19 +87,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
-            // Ép kiểu dữ liệu trả về từ Realtime cho khớp với Interface
             const newNoti = payload.new as AppNotification;
-            handleNewNotification(newNoti);
+            handleRef.current(newNoti);
           }
         )
         .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
     };
 
     subscribeToNotifications();
+
+    // Cleanup đúng cách: channel được khai báo ngoài async IIFE
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   return (

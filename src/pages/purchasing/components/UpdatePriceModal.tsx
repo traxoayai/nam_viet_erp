@@ -60,6 +60,13 @@ export const UpdatePriceModal: React.FC<Props> = ({
     try {
       const productIds = [...new Set(costingItems.map((i) => i.product_id))];
 
+      // Lấy thêm uom_ordered từ purchase_order_items để biết chính xác đơn vị nhập
+      const itemIds = costingItems.map((i) => i.id).filter(Boolean);
+      const { data: poItems } = await supabase
+        .from("purchase_order_items")
+        .select("id, product_id, uom_ordered, unit, conversion_factor")
+        .in("id", itemIds);
+
       const { data: products } = await supabase
         .from("products")
         .select(
@@ -77,11 +84,13 @@ export const UpdatePriceModal: React.FC<Props> = ({
         const inputItem = costingItems.find((i) => i.product_id === p.id);
         if (!inputItem) return;
 
-        // === BUG FIX: Lookup conversion_rate từ product_units thay vì dùng conversion_factor ===
+        // Lấy đơn vị nhập từ DB (purchase_order_items) vì costingItems có thể thiếu field unit
+        const poItem = poItems?.find((pi) => pi.product_id === p.id);
+        const importUnitName = inputItem.unit || poItem?.uom_ordered || poItem?.unit || p.wholesale_unit;
         const importUnit = p.product_units.find(
-          (u: any) => u.unit_name === inputItem.unit
+          (u: any) => u.unit_name === importUnitName
         );
-        const importRate = importUnit?.conversion_rate || 1;
+        const importRate = importUnit?.conversion_rate || poItem?.conversion_factor || inputItem.conversion_factor || 1;
         const newBaseCost = inputItem.final_unit_cost / importRate;
 
         // === Xác định đơn vị Bán buôn và Bán lẻ ===
