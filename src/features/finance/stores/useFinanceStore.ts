@@ -106,7 +106,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ loading: true });
     try {
       // 1. Gọi API tạo phiếu Hoàn ứng
-      await safeRpc("create_finance_transaction", payload);
+      await safeRpc("create_finance_transaction", {
+        ...payload,
+        p_ref_advance_id: payload.p_ref_advance_id ?? undefined,
+      });
 
       // 2. AURA FIX: Chủ động cập nhật trạng thái phiếu Tạm ứng cũ thành 'completed'
       // (Phòng trường hợp RPC của CORE chưa cập nhật kịp)

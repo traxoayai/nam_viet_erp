@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { inventoryService } from "../api/inventoryService";
 
 import { useAuth } from "@/app/contexts/AuthProvider";
-import { posService } from "@/features/pos/api/posService";
+
 import { useActiveWarehouses } from "@/shared/hooks/useMasterData";
 
 export const CreateCheckModal = ({ open, onCancel }: any) => {

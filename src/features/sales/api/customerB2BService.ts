@@ -30,7 +30,7 @@ export const fetchCustomers = async (
     status_filter: filters.status_filter || null,
     page_num: page,
     page_size: pageSize,
-    sort_by_debt: sortByDebt, // [NEW] Truyền xuống RPC
+    sort_by_debt: sortByDebt ?? undefined, // [NEW] Truyền xuống RPC
   });
 
   const rawData = data || [];
@@ -69,17 +69,18 @@ export const fetchCustomerDetails = async (id: number): Promise<any> => {
   });
   
   // [NEW] Cập nhật Nợ từ View thay vì bảng cũ
-  if (data && data.customer) {
+  const detail = data as unknown as { customer: Record<string, unknown> } | null;
+  if (detail && detail.customer) {
     const { data: debtData } = await supabase
       .from("b2b_customer_debt_view")
       .select("actual_current_debt")
       .eq("customer_id", id)
       .single();
-      
+
     if (debtData) {
-       data.customer.current_debt = debtData.actual_current_debt;
+       detail.customer.current_debt = debtData.actual_current_debt;
     } else {
-       data.customer.current_debt = 0;
+       detail.customer.current_debt = 0;
     }
   }
 

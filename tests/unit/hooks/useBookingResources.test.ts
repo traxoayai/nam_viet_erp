@@ -50,7 +50,7 @@ describe("useBookingResources - safeRpc calls", () => {
 
     expect(mockSafeRpc).toHaveBeenCalledWith("get_customers_b2c_list", {
       search_query: "Nguyen",
-      type_filter: null,
+      type_filter: "",
       status_filter: "active",
       page_num: 1,
       page_size: 20,
@@ -102,6 +102,7 @@ describe("useBookingResources - safeRpc calls", () => {
         gender: "male",
         address: "123 Street",
       },
+      p_guardians: [],
     });
   });
 
@@ -117,7 +118,7 @@ describe("useBookingResources - safeRpc calls", () => {
     await hook.actions.updateCustomer(42, customerData);
 
     expect(mockSafeRpc).toHaveBeenCalledWith("update_customer_b2c", {
-      p_customer_id: 42,
+      p_id: 42,
       p_customer_data: {
         name: "Updated Name",
         phone: "0909999999",
@@ -132,6 +133,6 @@ describe("useBookingResources - safeRpc calls", () => {
     const hook = renderHookSync(() => useBookingResources());
     await hook.actions.fetchDoctors();
 
-    expect(mockSafeRpc).toHaveBeenCalledWith("get_users_with_roles", {});
+    expect(mockSafeRpc).toHaveBeenCalledWith("get_users_with_roles", undefined);
   });
 });

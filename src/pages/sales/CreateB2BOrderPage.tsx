@@ -27,6 +27,7 @@ import { CustomerSelector } from "@/features/sales/components/Header/CustomerSel
 import { ShippingForm } from "@/features/sales/components/Header/ShippingForm";
 import { SalesOrderTable } from "@/features/sales/components/ProductGrid/SalesOrderTable";
 import { useCreateOrderB2B } from "@/features/sales/hooks/useCreateOrderB2B";
+import type { CustomerB2B, CartItem } from "@/features/sales/types/b2b_sales";
 import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { generateB2BOrderHTML } from "@/shared/utils/printTemplates";
@@ -118,11 +119,20 @@ const CreateB2BOrderPage = () => {
         if (customerData) {
           // [NEW] Không dùng customerData.current_debt cũ nữa.
           const actualDebt = await financeService.getB2BDebt(customerData.id);
-          const mappedCustomer = {
-            ...customerData,
+          const cd = customerData as Record<string, unknown>;
+          const mappedCustomer: CustomerB2B = {
+            id: customerData.id,
+            name: (cd.name as string) || "",
+            tax_code: (cd.tax_code as string) || "",
+            vat_address: (cd.vat_address as string) || "",
             shipping_address:
-              orderData.delivery_address || customerData.shipping_address || customerData.address || "",
+              (orderData.delivery_address as string) || (cd.shipping_address as string) || (cd.address as string) || "",
+            phone: (cd.phone as string) || "",
+            debt_limit: (cd.debt_limit as number) || 0,
             current_debt: actualDebt,
+            loyalty_points: (cd.loyalty_points as number) || 0,
+            is_bad_debt: (cd.is_bad_debt as boolean) || false,
+            contacts: [],
           };
           setCustomer(mappedCustomer);
         } else {
@@ -133,27 +143,30 @@ const CreateB2BOrderPage = () => {
 
         // 3. HYDRATION SẢN PHẨM
         const safeItems = orderData.items || [];
-        const mappedItems = safeItems.map((item: any) => {
-          const productInfo = item.product || {};
+        const mappedItems: CartItem[] = safeItems.map((item: Record<string, unknown>) => {
+          const productInfo = (item.product || {}) as Record<string, unknown>;
 
           return {
-            id: item.product_id,
+            id: item.product_id as number,
             key: `${item.product_id}_${Date.now()}_${Math.random()}`,
 
             name:
-              productInfo.name || item.product_name || "Sản phẩm (Mất info)",
-            sku: productInfo.sku || item.sku || "---",
-            image_url: productInfo.image_url || null,
+              (productInfo.name as string) || (item.product_name as string) || "Sản phẩm (Mất info)",
+            sku: (productInfo.sku as string) || (item.sku as string) || "---",
+            image_url: (productInfo.image_url as string) || null,
 
-            price_wholesale: item.unit_price,
-            quantity: item.quantity,
-            wholesale_unit: item.uom || "Cái",
+            price_wholesale: item.unit_price as number,
+            quantity: item.quantity as number,
+            wholesale_unit: (item.uom as string) || "Cái",
 
-            discount: item.discount || 0,
+            discount: (item.discount as number) || 0,
             stock_quantity: 9999,
-            total: item.quantity * item.unit_price - (item.discount || 0),
+            total: (item.quantity as number) * (item.unit_price as number) - ((item.discount as number) || 0),
 
-            active_ingredient: productInfo.active_ingredient,
+            shelf_location: (productInfo.shelf_location as string) || "",
+            lot_number: (productInfo.lot_number as string) || null,
+            expiry_date: (productInfo.expiry_date as string) || null,
+            items_per_carton: (productInfo.items_per_carton as number) || 1,
           };
         });
 

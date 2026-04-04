@@ -7,6 +7,7 @@ import {
   CreateSalesOrderPayload,
 } from "@/features/sales/types/b2b_sales"; // Import Type mới nhất
 import { safeRpc } from "@/shared/lib/safeRpc";
+import type { Json } from "@/shared/lib/database.types";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 // [NEW] Interface cho Update Order
@@ -37,7 +38,7 @@ export const salesService = {
       const { data } = await safeRpc("search_customers_b2b_v2", {
         p_keyword: keyword || "",
       });
-      return data || [];
+      return (data ?? []) as unknown as CustomerB2B[];
     } catch {
       return [];
     }
@@ -53,7 +54,7 @@ export const salesService = {
         p_keyword: keyword || "",
         p_warehouse_id: warehouseId, // [FIX]
       });
-      return data || [];
+      return (data ?? []) as unknown as ProductB2B[];
     } catch {
       return [];
     }
@@ -64,7 +65,7 @@ export const salesService = {
     try {
       const { data } = await safeRpc("get_active_shipping_partners");
       // Data trả về từ RPC cần đảm bảo có trường cut_off_time
-      return data || [];
+      return (data ?? []) as unknown as ShippingPartner[];
     } catch {
       return [];
     }
@@ -80,7 +81,7 @@ export const salesService = {
         p_customer_id: customerId,
         p_order_total: orderTotal,
       });
-      return data || [];
+      return (data ?? []) as unknown as VoucherRecord[];
     } catch {
       return [];
     }
@@ -89,7 +90,7 @@ export const salesService = {
   // 5. Tạo đơn hàng (QUAN TRỌNG: Mapping Payload Mới)
   async createOrder(payload: CreateSalesOrderPayload) {
     // Payload lúc này đã bao gồm: p_delivery_method, p_shipping_partner_id
-    const { data } = await safeRpc("create_sales_order", payload);
+    const { data } = await safeRpc("create_sales_order", payload as unknown as Record<string, unknown>);
 
     return data; // Trả về UUID đơn hàng
   },
@@ -124,25 +125,26 @@ export const salesService = {
         p_page: params.page,
         p_page_size: params.pageSize,
         p_search: params.search || "",
-        p_status: params.status || null,
-        p_order_type: params.orderType || null,
-        p_remittance_status: params.remittanceStatus || null,
-        p_date_from: params.dateFrom || null,
-        p_date_to: params.dateTo || null,
-        p_creator_id: params.creatorId || null,
-        p_payment_status: params.paymentStatus || null,
-        p_invoice_status: params.invoiceStatus || null,
+        p_status: params.status ?? undefined,
+        p_order_type: params.orderType ?? undefined,
+        p_remittance_status: params.remittanceStatus ?? undefined,
+        p_date_from: params.dateFrom ?? undefined,
+        p_date_to: params.dateTo ?? undefined,
+        p_creator_id: params.creatorId ?? undefined,
+        p_payment_status: params.paymentStatus ?? undefined,
+        p_invoice_status: params.invoiceStatus ?? undefined,
         // [NEW] Params
-        p_payment_method: params.paymentMethod || null,
-        p_warehouse_id: params.warehouseId || null,
-        p_customer_id: params.customerId || null,
+        p_payment_method: params.paymentMethod ?? undefined,
+        p_warehouse_id: params.warehouseId ?? undefined,
+        p_customer_id: params.customerId ?? undefined,
       });
 
       // Data trả về từ RPC đã bao gồm total và stats
+      const res = data as unknown as { data: unknown[]; total: number; stats: { total_sales: number; count_pending_remittance: number; total_cash_pending: number } } | null;
       return {
-        data: data?.data || [],
-        total: data?.total || 0,
-        stats: data?.stats || {
+        data: res?.data || [],
+        total: res?.total || 0,
+        stats: res?.stats || {
           total_sales: 0,
           count_pending_remittance: 0,
           total_cash_pending: 0,
@@ -154,13 +156,13 @@ export const salesService = {
   },
 
   // 7. [NEW] Cập nhật Yêu cầu Xuất Hóa Đơn
-  async updateInvoiceRequest(orderId: string, invoiceData: any) {
+  async updateInvoiceRequest(orderId: string, invoiceData: Record<string, unknown>) {
     // invoiceData: { companyName, taxCode, address, email, ... }
     const { error } = await supabase
       .from("orders")
       .update({
         invoice_status: "pending", // Chuyển trạng thái thành "Chờ xuất"
-        invoice_request_data: invoiceData,
+        invoice_request_data: invoiceData as unknown as Json,
         updated_at: new Date().toISOString(),
       })
       .eq("id", orderId);
@@ -201,7 +203,7 @@ export const salesService = {
   // 9. [NEW] Xác nhận thu tiền đơn hàng (Bulk Action)
   async confirmPayment(orderIds: (string | number)[], fundAccountId: number) {
     await safeRpc("confirm_order_payment", {
-      p_order_ids: orderIds,
+      p_order_ids: orderIds.map(String),
       p_fund_account_id: fundAccountId,
     });
     return true;
@@ -215,7 +217,7 @@ export const salesService = {
         payment_method: "bank_transfer",
         updated_at: new Date().toISOString(),
       })
-      .eq("id", orderId);
+      .eq("id", String(orderId));
 
     if (error) throw error;
     return true;
@@ -239,7 +241,7 @@ export const salesService = {
                 sales_invoices(id, status, invoice_number, created_at)
             `
       )
-      .eq("id", orderId)
+      .eq("id", String(orderId))
       .single();
 
     if (error) throw error;
@@ -248,7 +250,7 @@ export const salesService = {
 
   // 11. [NEW] Xóa đơn hàng (Admin Only)
   async deleteOrder(orderId: string | number) {
-    const { error } = await supabase.from("orders").delete().eq("id", orderId);
+    const { error } = await supabase.from("orders").delete().eq("id", String(orderId));
     if (error) throw error;
     return true;
   },

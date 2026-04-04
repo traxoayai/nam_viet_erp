@@ -1,6 +1,7 @@
 // src/features/connect/api/connectService.ts
 import { ConnectPost, CreatePostPayload } from "../types/connect.types";
 
+import type { Database } from "@/shared/lib/database.types";
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
@@ -9,13 +10,15 @@ export const connectService = {
   async fetchPosts(category: string, search?: string): Promise<ConnectPost[]> {
     const { data } = await safeRpc("get_connect_posts", {
       p_category: category,
-      p_search: search || null,
+      p_search: search || undefined,
       p_limit: 50,
       p_offset: 0,
     });
 
     // RPC trả về attachments dạng Json, cần map về obj nếu chưa đúng format
-    return (data || []).map((post: any) => ({
+    type PostRow = ConnectPost & { attachments: string | { name: string; url: string; type: string }[] | null };
+    const rows = (data || []) as unknown as PostRow[];
+    return rows.map((post) => ({
       ...post,
       attachments: post.attachments
         ? typeof post.attachments === "string"
@@ -27,7 +30,15 @@ export const connectService = {
 
   // 2. Tạo bài viết (Dùng RPC Core đã viết)
   async createPost(payload: CreatePostPayload) {
-    await safeRpc("create_connect_post", payload as any);
+    await safeRpc("create_connect_post", {
+      p_category: payload.p_category,
+      p_title: payload.p_title,
+      p_content: payload.p_content,
+      p_is_anonymous: payload.p_is_anonymous,
+      p_must_confirm: payload.p_must_confirm,
+      p_reward_points: payload.p_reward_points,
+      p_attachments: payload.p_attachments as unknown as Database["public"]["Functions"]["create_connect_post"]["Args"]["p_attachments"],
+    });
   },
 
   // 3. Xác nhận đã đọc (Dùng RPC Core đã viết)
@@ -56,7 +67,7 @@ export const connectService = {
   },
 
   // 6. Cập nhật bài viết
-  async updatePost(id: number, payload: any) {
+  async updatePost(id: number, payload: Partial<CreatePostPayload>) {
     const dbPayload = {
       category: payload.p_category,
       title: payload.p_title,

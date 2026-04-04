@@ -63,3 +63,5 @@ backups/
 .claude
 docs
 .vercel
+.cursor/
+.cursorrules

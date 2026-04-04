@@ -51,12 +51,12 @@ export const usePurchaseOrderMaster = () => {
       const { data: rpcData } = await safeRpc("get_purchase_orders_master", {
         p_page: pagination.page,
         p_page_size: pagination.pageSize,
-        p_search: filters.search || null,
-        p_status_delivery: p_status_delivery,
-        p_status_payment: p_status_payment,
-        p_status: p_status,
-        p_date_from: filters.dateRange?.[0] || null,
-        p_date_to: filters.dateRange?.[1] || null,
+        p_search: filters.search || "",
+        p_status_delivery: p_status_delivery || "",
+        p_status_payment: p_status_payment || "",
+        p_status: p_status || "",
+        p_date_from: filters.dateRange?.[0] || "",
+        p_date_to: filters.dateRange?.[1] || "",
       });
 
       // Map dữ liệu & Total count
@@ -92,11 +92,11 @@ export const usePurchaseOrderMaster = () => {
       }
 
       const { data } = await safeRpc("get_po_logistics_stats", {
-        p_search: filters.search || null,
-        p_status_delivery: statsDelivery,
-        p_status_payment: statsPayment,
-        p_date_from: filters.dateRange?.[0] || null,
-        p_date_to: filters.dateRange?.[1] || null,
+        p_search: filters.search ?? undefined,
+        p_status_delivery: statsDelivery ?? undefined,
+        p_status_payment: statsPayment ?? undefined,
+        p_date_from: filters.dateRange?.[0] ?? undefined,
+        p_date_to: filters.dateRange?.[1] ?? undefined,
       });
 
       if (data) setLogisticsStats(data as PoLogisticsStat[]);

@@ -24,7 +24,7 @@ export const useWarehouseStore = create<WarehouseStoreState>((set, get) => ({
         page,
         pageSize
       );
-      set({ warehouses: data, totalCount, loading: false });
+      set({ warehouses: data as unknown as import("@/features/inventory/types/warehouse").Warehouse[], totalCount, loading: false });
     } catch (error) {
       console.error("Lỗi khi tải Kho:", error);
       set({ loading: false });

@@ -68,12 +68,12 @@ describe("usePurchaseOrderMaster - safeRpc calls", () => {
     expect(mockSafeRpc).toHaveBeenCalledWith("get_purchase_orders_master", {
       p_page: 1,
       p_page_size: 12,
-      p_search: null,
-      p_status_delivery: null,
-      p_status_payment: null,
-      p_status: null,
-      p_date_from: null,
-      p_date_to: null,
+      p_search: "",
+      p_status_delivery: "",
+      p_status_payment: "",
+      p_status: "",
+      p_date_from: "",
+      p_date_to: "",
     });
   });
 
@@ -111,9 +111,9 @@ describe("usePurchaseOrderMaster - fetchOrders status filter parsing", () => {
     );
     expect(call).toBeDefined();
     expect(call![1]).toMatchObject({
-      p_status_delivery: null,
-      p_status_payment: null,
-      p_status: null,
+      p_status_delivery: "",
+      p_status_payment: "",
+      p_status: "",
     });
   });
 });
@@ -149,12 +149,12 @@ describe("usePurchaseOrderMaster - get_po_logistics_stats", () => {
     expect(mockSafeRpc).toHaveBeenCalledWith("get_purchase_orders_master", {
       p_page: 1,
       p_page_size: 12,
-      p_search: null,
-      p_status_delivery: null,
-      p_status_payment: null,
-      p_status: null,
-      p_date_from: null,
-      p_date_to: null,
+      p_search: "",
+      p_status_delivery: "",
+      p_status_payment: "",
+      p_status: "",
+      p_date_from: "",
+      p_date_to: "",
     });
   });
 });

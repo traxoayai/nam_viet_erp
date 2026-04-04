@@ -9,6 +9,7 @@ import {
 import { uploadFile } from "@/shared/api/storageService";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import type { Json } from "@/shared/lib/database.types";
 
 // Hàm hỗ trợ TẢI ẢNH TÀI SẢN
 export const uploadAssetImage = async (file: File) => {
@@ -53,9 +54,9 @@ export const createAsset = async (
   history: MaintenanceHistory[]
 ) => {
   const { data } = await safeRpc("create_asset", {
-    p_asset_data: assetData,
-    p_maintenance_plans: plans,
-    p_maintenance_history: history,
+    p_asset_data: assetData as unknown as Json,
+    p_maintenance_plans: plans as unknown as Json,
+    p_maintenance_history: history as unknown as Json,
   });
   return data as number; // Trả về ID mới
 };
@@ -69,9 +70,9 @@ export const updateAsset = async (
 ) => {
   await safeRpc("update_asset", {
     p_id: id,
-    p_asset_data: assetData,
-    p_maintenance_plans: plans,
-    p_maintenance_history: history,
+    p_asset_data: assetData as unknown as Json,
+    p_maintenance_plans: plans as unknown as Json,
+    p_maintenance_history: history as unknown as Json,
   });
   return true;
 };

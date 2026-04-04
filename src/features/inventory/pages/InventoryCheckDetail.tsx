@@ -638,30 +638,30 @@ export const InventoryCheckDetail = () => {
                       search,
                       activeSession.warehouse_id
                     );
-                    return res.map((p: any) => {
+                    if (!res) return [];
+                    return (res as unknown as Array<{ id: number; name: string; sku: string; image_url?: string; system_stock?: number; items_per_carton?: number; retail_unit?: string; unit?: string; wholesale_unit?: string }>).map((p) => {
                       const rate = p.items_per_carton || 1;
                       const stock = Number(p.system_stock || 0);
                       const box = Math.floor(stock / rate);
                       const unit = stock % rate;
 
-                      // [FIX] Ưu tiên hiển thị retail_unit ("Vỉ") thay vì unit mặc định ("Viên")
-                      const retailUnitName = p.retail_unit || p.unit || "Lẻ";
-                      const wholesaleUnitName = p.wholesale_unit || "Hộp";
+                      // [FIX] Uu tien hien thi retail_unit ("Vi") thay vi unit mac dinh ("Vien")
+                      const retailUnitName = p.retail_unit || p.unit || "Le";
+                      const wholesaleUnitName = p.wholesale_unit || "Hop";
 
                       let stockDisplay = "";
                       if (stock <= 0) {
-                        stockDisplay = "Hết hàng";
+                        stockDisplay = "Het hang";
                       } else {
-                        const parts = [];
+                        const parts: string[] = [];
                         if (box > 0) parts.push(`${box} ${wholesaleUnitName}`);
-                        // Hiển thị phần lẻ với đơn vị bán lẻ (Vỉ)
                         if (unit > 0) parts.push(`${unit} ${retailUnitName}`);
                         stockDisplay = parts.join(" - ");
                       }
 
                       return {
-                        value: p.id,
-                        key: p.id,
+                        value: p.id as number,
+                        key: String(p.id),
                         label: (
                           <div
                             style={{

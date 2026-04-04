@@ -26,7 +26,7 @@ export const fetchCustomers = async (
     status_filter: filters.status_filter || null,
     page_num: page,
     page_size: pageSize,
-    sort_by_debt: sortByDebt, // [NEW] Truyền xuống RPC
+    sort_by_debt: sortByDebt ?? undefined, // [NEW] Truyền xuống RPC
   });
 
   const totalCount = data && data.length > 0 ? data[0].total_count : 0;
@@ -263,7 +263,7 @@ export const exportCustomers = async (
     status_filter: filters.status_filter || null,
   });
 
-  return data || [];
+  return (data ?? []) as unknown as CustomerListRecord[];
 };
 
 /**
@@ -286,5 +286,5 @@ export const searchGuardians = async (
   const { data } = await safeRpc("search_customers_by_phone_b2c", {
     p_search_query: query,
   });
-  return data || [];
+  return (data ?? []) as unknown as CustomerListRecord[];
 };

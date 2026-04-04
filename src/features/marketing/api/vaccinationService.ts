@@ -6,13 +6,14 @@ import {
   VaccinationItemInput,
 } from "@/features/marketing/types/vaccination";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import type { Json } from "@/shared/lib/database.types";
 
 export const vaccinationService = {
   // 1. Lấy danh sách
   async getTemplates(search: string = "", status?: string) {
     const { data } = await safeRpc("get_vaccination_templates", {
-      p_search: search || null,
-      p_status: status || null,
+      p_search: search ?? undefined,
+      p_status: status ?? undefined,
     });
     return (data ?? []) as VaccinationTemplate[];
   },
@@ -22,7 +23,7 @@ export const vaccinationService = {
     const { data } = await safeRpc("get_vaccination_template_details", {
       p_id: id,
     });
-    return data as VaccinationDetailResponse;
+    return data as unknown as VaccinationDetailResponse;
   },
 
   // 3. Tạo mới
@@ -31,8 +32,8 @@ export const vaccinationService = {
     items: VaccinationItemInput[]
   ) {
     const { data: newId } = await safeRpc("create_vaccination_template", {
-      p_data: data,
-      p_items: items,
+      p_data: data as unknown as Json,
+      p_items: items as unknown as Json,
     });
     return newId;
   },
@@ -45,8 +46,8 @@ export const vaccinationService = {
   ) {
     await safeRpc("update_vaccination_template", {
       p_id: id,
-      p_data: data,
-      p_items: items,
+      p_data: data as unknown as Json,
+      p_items: items as unknown as Json,
     });
     return true;
   },

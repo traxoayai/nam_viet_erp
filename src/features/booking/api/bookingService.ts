@@ -1,11 +1,12 @@
 // src/features/booking/api/bookingService.ts
 import { safeRpc } from "@/shared/lib/safeRpc";
+import type { Json } from "@/shared/types/database.types";
 
 export interface BookingPayload {
   customer_id: number;
   doctor_id?: string; // UUID string
   appointment_time: string; // ISO string
-  symptoms: any[];
+  symptoms: Json[];
   notes?: string;
   description?: string;
   status?: "confirmed" | "pending";
@@ -15,7 +16,7 @@ export interface CheckInPayload {
   customer_id: number;
   doctor_id?: string; // UUID string
   priority: "normal" | "urgent";
-  symptoms: any[];
+  symptoms: Json[];
   notes?: string;
 }
 
@@ -28,7 +29,7 @@ export const bookingService = {
     const doctorId =
       payload.doctor_id && payload.doctor_id.trim() !== ""
         ? payload.doctor_id
-        : null;
+        : undefined;
 
     const { data } = await safeRpc("create_appointment_booking", {
       p_customer_id: payload.customer_id,
@@ -50,7 +51,7 @@ export const bookingService = {
     const doctorId =
       payload.doctor_id && payload.doctor_id.trim() !== ""
         ? payload.doctor_id
-        : null;
+        : undefined;
 
     const { data } = await safeRpc("check_in_patient", {
       p_customer_id: payload.customer_id,

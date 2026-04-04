@@ -53,35 +53,40 @@ const PurchaseOrderMasterPage: React.FC = () => {
     setCloningId(order.id); // Bật loading
     try {
       // 1. Lấy chi tiết đơn cũ
-      const detail = await purchaseOrderService.getPODetail(order.id);
-      if (!detail) throw new Error("Không tải được dữ liệu gốc");
+      const rawDetail = await purchaseOrderService.getPODetail(order.id);
+      if (!rawDetail) throw new Error("Không tải được dữ liệu gốc");
+      const detail = rawDetail as unknown as Record<string, unknown>;
 
       // 2. Chuẩn bị Payload (Làm sạch dữ liệu)
       const clonePayload = {
-        supplier_id: detail.supplier_id,
-        expected_date: null, // Reset ngày
-        note: `Sao chép từ đơn ${detail.code}`,
-        delivery_method: detail.delivery_method,
-        shipping_partner_id: detail.shipping_partner_id,
-        shipping_fee: detail.shipping_fee,
-        status: "DRAFT", // Bắt buộc về nháp
+        supplier_id: detail.supplier_id as number,
+        expected_date: undefined as string | undefined, // Reset ngày
+        note: `Sao chép từ đơn ${detail.code as string}`,
+        delivery_method: detail.delivery_method as string,
+        shipping_partner_id: detail.shipping_partner_id as number,
+        shipping_fee: detail.shipping_fee as number,
+        status: "DRAFT" as const, // Bắt buộc về nháp
 
         // Map lại items, bỏ ID cũ
-        items: (detail.items || []).map((i: any) => ({
-          product_id: i.product_id,
-          quantity: i.quantity_ordered,
-          unit_price: i.unit_price,
-          unit: i.uom_ordered || i.unit,
-          is_bonus: i.is_bonus,
-        })),
+        items: ((detail.items as unknown[]) || []).map((i: unknown) => {
+          const item = i as Record<string, unknown>;
+          return {
+            product_id: item.product_id as number,
+            quantity: item.quantity_ordered as number,
+            unit_price: item.unit_price as number,
+            unit: (item.uom_ordered as string) || (item.unit as string),
+            is_bonus: item.is_bonus as boolean,
+          };
+        }),
       };
 
       // 3. Gọi API Tạo mới
-      const res = await purchaseOrderService.createPO(clonePayload as any);
+      const res = await purchaseOrderService.createPO(clonePayload);
 
       // 4. Thông báo & Chuyển trang
       message.success("Sao chép thành công!");
-      const newId = res.id || res;
+      const created = res as unknown as { id: number };
+      const newId = created.id || res;
       navigate(`/purchase-orders/${newId}`);
     } catch (error: any) {
       message.error("Lỗi sao chép: " + error.message);

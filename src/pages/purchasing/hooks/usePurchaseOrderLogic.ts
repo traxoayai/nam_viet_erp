@@ -75,80 +75,84 @@ export const usePurchaseOrderLogic = () => {
       .from("shipping_partners")
       .select("*")
       .eq("status", "active");
-    setShippingPartners(data || []);
+    setShippingPartners((data || []) as unknown as ShippingPartner[]);
   };
 
   const loadOrderDetail = async (poId: number) => {
     setLoading(true);
     try {
-      const po = await purchaseOrderService.getPODetail(poId);
-      if (!po) throw new Error("Không tìm thấy đơn hàng");
+      const poRaw = await purchaseOrderService.getPODetail(poId);
+      if (!poRaw) throw new Error("Không tìm thấy đơn hàng");
+      const po = poRaw as unknown as Record<string, unknown>;
 
-      setPoCode(po.code);
+      setPoCode(po.code as string);
       if (!po.status) throw new Error("Đơn hàng không có trạng thái hợp lệ");
-      setPoStatus(po.status);
-      setCostingConfirmedAt(po.costing_confirmed_at || null);
+      setPoStatus(po.status as string);
+      setCostingConfirmedAt((po.costing_confirmed_at as string) || null);
 
-      if (po.supplier?.id) {
+      const supplier = po.supplier as Record<string, unknown> | undefined;
+      if (supplier?.id) {
         const { data: richInfo } = await safeRpc(
           "get_supplier_quick_info",
-          { p_supplier_id: po.supplier.id }
+          { p_supplier_id: supplier.id as number }
         );
         // Merge: thông tin cơ bản từ PO supplier + debt từ RPC
-        setSupplierInfo({ ...po.supplier, ...richInfo });
+        const richObj = richInfo as unknown as Record<string, unknown> | null;
+        setSupplierInfo({ ...supplier, ...richObj });
       }
 
-      const mappedItems: POItem[] = (po.items || []).map((item: any) => {
+      const mappedItems: POItem[] = ((po.items as unknown[]) || []).map((item: unknown) => {
+        const i = item as Record<string, unknown>;
         // [FIX] Normalize Data Keys (Phòng trường hợp RPC trả về biến thể khác)
         const wholesaleUnit =
-          item.wholesale_unit || item.wholesaleUnit || "Hộp";
-        const retailUnit = item.retail_unit || item.retailUnit || "Vỉ";
+          (i.wholesale_unit as string) || (i.wholesaleUnit as string) || "Hộp";
+        const retailUnit = (i.retail_unit as string) || (i.retailUnit as string) || "Vỉ";
         const itemsPerCarton =
-          item.items_per_carton || item.itemsPerCarton || 1;
+          (i.items_per_carton as number) || (i.itemsPerCarton as number) || 1;
 
         return {
-          id: item.id,
-          product_id: item.product_id,
-          sku: item.sku,
-          name: item.product_name,
-          image_url: item.image_url,
-          quantity: item.quantity_ordered,
-          available_units: item.available_units || [],
+          id: i.id as number,
+          product_id: i.product_id as number,
+          sku: i.sku as string,
+          name: i.product_name as string,
+          image_url: i.image_url as string,
+          quantity: i.quantity_ordered as number,
+          available_units: (i.available_units as POItem["available_units"]) || [],
           // [LOGIC] Ưu tiên lấy đơn vị đã lưu trong đơn hàng
-          uom: item.uom_ordered || item.unit || wholesaleUnit,
-          unit_price: Number(item.unit_price),
+          uom: (i.uom_ordered as string) || (i.unit as string) || wholesaleUnit,
+          unit_price: Number(i.unit_price),
           discount: 0,
           _items_per_carton: itemsPerCarton,
           _wholesale_unit: wholesaleUnit,
           _retail_unit: retailUnit,
           // [LOGIC] Tính lại giá gốc (Wholesale Price) để dùng khi đổi ĐVT
           _base_price:
-            Number(item.unit_price) /
-            (item.uom_ordered === wholesaleUnit ? 1 : 1 / itemsPerCarton),
-          vat_rate: item.vat_rate || 0,
-          rebate_rate: item.rebate_rate || 0,
-          allocated_shipping_fee: item.allocated_shipping_fee || 0,
-          bonus_quantity: item.bonus_quantity || 0,
-          is_bonus: item.is_bonus || false,
+            Number(i.unit_price) /
+            (i.uom_ordered === wholesaleUnit ? 1 : 1 / itemsPerCarton),
+          vat_rate: (i.vat_rate as number) || 0,
+          rebate_rate: (i.rebate_rate as number) || 0,
+          allocated_shipping_fee: (i.allocated_shipping_fee as number) || 0,
+          bonus_quantity: (i.bonus_quantity as number) || 0,
+          is_bonus: (i.is_bonus as boolean) || false,
         };
       });
 
       setItemsList(mappedItems);
 
       form.setFieldsValue({
-        supplier_id: po.supplier?.id,
+        supplier_id: supplier?.id as number,
         expected_delivery_date: po.expected_delivery_date
-          ? dayjs(po.expected_delivery_date)
+          ? dayjs(po.expected_delivery_date as string)
           : null,
-        note: po.note,
-        delivery_method: po.delivery_method || "internal",
-        shipping_partner_id: po.shipping_partner_id || undefined,
-        shipping_fee: po.shipping_fee || 0,
-        carrier_name: po.carrier_name,
-        carrier_phone: po.carrier_phone,
-        total_packages: po.total_packages,
+        note: po.note as string,
+        delivery_method: (po.delivery_method as string) || "internal",
+        shipping_partner_id: (po.shipping_partner_id as number) || undefined,
+        shipping_fee: (po.shipping_fee as number) || 0,
+        carrier_name: po.carrier_name as string,
+        carrier_phone: po.carrier_phone as string,
+        total_packages: po.total_packages as number,
         expected_delivery_time: po.expected_delivery_time
-          ? dayjs(po.expected_delivery_time)
+          ? dayjs(po.expected_delivery_time as string)
           : null,
         items: mappedItems,
       });
@@ -171,10 +175,11 @@ export const usePurchaseOrderLogic = () => {
         p_supplier_id: supplierId,
       });
       // Merge: thông tin cơ bản từ suppliers list + debt từ RPC
-      setSupplierInfo({ ...found, ...data });
-      if (data?.lead_time) {
+      const info = data as unknown as Record<string, unknown> | null;
+      setSupplierInfo({ ...found, ...info });
+      if (info?.lead_time) {
         form.setFieldsValue({
-          expected_delivery_date: dayjs().add(data.lead_time, "day"),
+          expected_delivery_date: dayjs().add(info.lead_time as number, "day"),
         });
       }
     }
@@ -388,7 +393,8 @@ export const usePurchaseOrderLogic = () => {
         items: payloadItems,
         status: "DRAFT",
       });
-      return result.id;
+      const created = result as unknown as { id: number };
+      return created.id;
     }
   };
 

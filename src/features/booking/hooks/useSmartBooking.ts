@@ -2,6 +2,8 @@
 import { message } from "antd";
 import { useState } from "react";
 
+import type { Json } from "@/shared/types/database.types";
+
 import { bookingService } from "../api/bookingService";
 
 export interface SelectedSymptom {
@@ -69,7 +71,7 @@ export const useSmartBooking = () => {
         customer_id: customerId,
         doctor_id: doctorId,
         appointment_time: time,
-        symptoms: selectedSymptoms,
+        symptoms: selectedSymptoms as unknown as Json[],
         notes: notes,
         description: "Booking from App UI",
         status: status,
@@ -77,9 +79,9 @@ export const useSmartBooking = () => {
       message.success("Đã tạo lịch hẹn thành công!");
       resetBooking();
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      message.error(error.message || "Lỗi tạo lịch hẹn");
+      message.error(error instanceof Error ? error.message : "Lỗi tạo lịch hẹn");
       return false;
     } finally {
       setIsSubmitting(false);
@@ -96,22 +98,23 @@ export const useSmartBooking = () => {
       // Auto-detect urgency
       const isUrgent = selectedSymptoms.some((s) => s.isUrgent);
 
-      const result = await bookingService.checkInNow({
+      const rawResult = await bookingService.checkInNow({
         customer_id: customerId,
         doctor_id: doctorId,
         priority: isUrgent ? "urgent" : "normal",
-        symptoms: selectedSymptoms,
+        symptoms: selectedSymptoms as unknown as Json[],
         notes: notes,
       });
 
+      const result = rawResult as unknown as { queue_number?: string | number } | null;
       message.success(
         `Đã check-in thành công! Số thứ tự: ${result?.queue_number || "N/A"}`
       );
       resetBooking();
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      message.error(error.message || "Lỗi check-in");
+      message.error(error instanceof Error ? error.message : "Lỗi check-in");
       return false;
     } finally {
       setIsSubmitting(false);

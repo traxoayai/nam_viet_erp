@@ -17,11 +17,11 @@ export const outboundService = {
     const { data } = await safeRpc("get_warehouse_outbound_tasks", {
       p_page: filter.page,
       p_page_size: filter.pageSize,
-      p_search: filter.search || null,
-      p_status: filter.status === "All" ? null : filter.status,
-      p_type: filter.type || null,
-      p_date_from: filter.date_from || null,
-      p_date_to: filter.date_to || null,
+      p_search: filter.search ?? undefined,
+      p_status: filter.status === "All" ? undefined : filter.status,
+      p_type: filter.type ?? undefined,
+      p_date_from: filter.date_from ?? undefined,
+      p_date_to: filter.date_to ?? undefined,
       p_warehouse_id: DEFAULT_WAREHOUSE_ID,
     });
 
@@ -35,7 +35,7 @@ export const outboundService = {
     const { data } = await safeRpc("get_outbound_stats", {
       p_warehouse_id: warehouseId,
     });
-    return data as OutboundStats;
+    return data as unknown as OutboundStats;
   },
 
   // 3. Get Detail
@@ -43,7 +43,7 @@ export const outboundService = {
     const { data } = await safeRpc("get_outbound_order_detail", {
       p_order_id: orderId,
     });
-    return data as OutboundDetailResponse;
+    return data as unknown as OutboundDetailResponse;
   },
 
   // 4. Confirm Packing
@@ -67,7 +67,7 @@ export const outboundService = {
     await safeRpc("cancel_outbound_task", {
       p_order_id: taskId,
       p_reason: reason,
-      p_user_id: userData.user?.id,
+      p_user_id: userData.user?.id ?? "",
     });
   },
 

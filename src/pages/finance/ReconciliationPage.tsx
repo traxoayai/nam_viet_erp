@@ -54,13 +54,13 @@ const ReconciliationPage = () => {
     const { data: orders } = await safeRpc(
       "get_pending_reconciliation_orders"
     );
-    setPendingOrders(orders || []);
+    setPendingOrders((orders ?? []) as unknown as PendingReconciliationOrder[]);
 
     const { data: funds } = await supabase
       .from("fund_accounts")
       .select("*")
       .eq("status", "active");
-    setFundAccounts(funds || []);
+    setFundAccounts((funds ?? []) as unknown as FundAccount[]);
     if (funds?.[0]) setSelectedFundId(funds[0].id);
     setLoading(false);
   };

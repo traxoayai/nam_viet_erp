@@ -58,7 +58,7 @@ describe("useAuthStore", () => {
 
       expect(mockSafeRpc).toHaveBeenCalledWith(
         "get_my_permissions",
-        {},
+        undefined,
         { silent: true }
       );
     });

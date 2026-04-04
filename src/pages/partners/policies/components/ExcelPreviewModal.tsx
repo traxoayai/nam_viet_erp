@@ -97,7 +97,8 @@ export const ExcelPreviewModal: React.FC<Props> = ({
     );
 
     // Map sang format mà Ant Design Select cần
-    return (data || []).map((p: any) => ({
+    const products = (data ?? []) as unknown as { id: number; name: string; sku: string; image_url?: string; wholesale_unit?: string }[];
+    return products.map((p) => ({
       label: (
         // CUSTOM UI HIỂN THỊ OPTION
         <div

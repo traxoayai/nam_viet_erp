@@ -92,29 +92,29 @@ export const CustomerFormModal: React.FC<Props> = ({
       const values = await form.validateFields();
       setLoading(true);
 
-      // Chuẩn bị payload
-      const payload = {
-        name: values.name,
-        phone: values.phone,
-        address: values.address,
-        email: values.email,
-        gender: values.gender,
-        cccd: values.cccd,
-        dob: values.dob ? values.dob.format("YYYY-MM-DD") : null,
-        allergies: values.allergies,
-        medical_history: values.medical_history,
-        type: "CaNhan", // POS chỉ tạo khách cá nhân
+      let data, error;
+
+      // Narrow payload to match DB schema
+      const dbPayload = {
+        name: values.name as string,
+        phone: values.phone as string,
+        address: (values.address as string) ?? null,
+        email: (values.email as string) ?? null,
+        gender: (values.gender as "Nam" | "Nữ" | "Khác") ?? null,
+        cccd: (values.cccd as string) ?? null,
+        dob: values.dob ? (values.dob as { format: (f: string) => string }).format("YYYY-MM-DD") : null,
+        allergies: (values.allergies as string) ?? null,
+        medical_history: (values.medical_history as string) ?? null,
+        type: "CaNhan" as const,
         updated_at: new Date().toISOString(),
         updated_by: user?.id,
       };
-
-      let data, error;
 
       if (customerToEdit) {
         // UPDATE
         const res = await supabase
           .from("customers")
-          .update(payload)
+          .update(dbPayload)
           .eq("id", customerToEdit.id)
           .select()
           .single();
@@ -124,7 +124,7 @@ export const CustomerFormModal: React.FC<Props> = ({
         // INSERT
         const res = await supabase
           .from("customers")
-          .insert([payload])
+          .insert([dbPayload])
           .select()
           .single();
         data = res.data;

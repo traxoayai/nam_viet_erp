@@ -20,7 +20,7 @@ export const posTransactionService = {
       p_user_id: userData.user.id,
     });
 
-    return data as RemittanceResponse;
+    return data as unknown as RemittanceResponse;
   },
 
   async getUserPendingRevenue(userId: string): Promise<number> {

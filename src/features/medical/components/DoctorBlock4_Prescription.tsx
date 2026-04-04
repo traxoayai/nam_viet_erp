@@ -51,7 +51,7 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
           p_keyword: keyword || "",
         }
       );
-      setTemplateResults(data || []);
+      setTemplateResults((data || []) as unknown as Record<string, unknown>[]);
     } catch (err: any) {
       message.error("Lỗi tìm kiếm đơn mẫu: " + err.message);
     } finally {

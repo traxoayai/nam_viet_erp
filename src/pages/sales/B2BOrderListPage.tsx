@@ -289,8 +289,9 @@ const B2BOrderListPage = () => {
     
     try {
       setIsSubmitting(true);
-      const res = await b2bService.cancelOrderSafe(selectedOrderToCancel.id, cancelReason);
-      message.success(res.message || `Đã hủy đơn hàng ${selectedOrderToCancel.code}`);
+      const rawRes = await b2bService.cancelOrderSafe(selectedOrderToCancel.id, cancelReason);
+      const res = rawRes as unknown as { message?: string } | null;
+      message.success(res?.message || `Đã hủy đơn hàng ${selectedOrderToCancel.code}`);
       setCancelModalVisible(false);
       setCancelReason("");
       setSelectedOrderToCancel(null);
@@ -311,12 +312,13 @@ const B2BOrderListPage = () => {
       onOk: async () => {
         try {
           message.loading({ content: "Đang tạo bản sao...", key: "cloneOrder" });
-          const res = await b2bService.cloneOrder(order.id);
-          
-          if (res.success) {
-            message.success({ content: `Đã nhân bản thành công mã: ${res.new_code}`, key: "cloneOrder" });
+          const rawClone = await b2bService.cloneOrder(order.id);
+          const cloneRes = rawClone as unknown as { success: boolean; new_code: string; new_order_id: string } | null;
+
+          if (cloneRes?.success) {
+            message.success({ content: `Đã nhân bản thành công mã: ${cloneRes.new_code}`, key: "cloneOrder" });
             // Chuyển hướng thẳng vào trang Sửa Đơn của đơn mới tạo
-            navigate(`/b2b/orders/edit/${res.new_order_id}`);
+            navigate(`/b2b/orders/edit/${cloneRes.new_order_id}`);
           }
         } catch (e: any) {
           message.error({ content: "Lỗi nhân bản: " + e.message, key: "cloneOrder" });

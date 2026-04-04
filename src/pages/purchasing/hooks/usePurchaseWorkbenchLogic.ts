@@ -62,22 +62,27 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
   const loadOrder = async (id: string) => {
     try {
       setLoading(true);
-      const data = await purchaseOrderService.getPODetail(Number(id));
-      setPoStatus(data.status as any);
-      
+      const rawData = await purchaseOrderService.getPODetail(Number(id));
+      if (!rawData) throw new Error("Không tìm thấy đơn hàng");
+      const data = rawData as unknown as Record<string, unknown>;
+      setPoStatus(data.status as "DRAFT" | "PENDING" | "CONFIRMED" | "COMPLETED");
+
       form.setFieldsValue({
-        supplier_id: data.supplier_id,
-        expected_delivery_date: data.expected_delivery_date ? dayjs(data.expected_delivery_date) : undefined,
-        shipping_method: data.shipping_method,
-        shipping_company: data.shipping_company,
-        shipper_name: data.shipper_name,
-        shipper_phone: data.shipper_phone,
-        total_packages: data.total_packages || 0,
+        supplier_id: data.supplier_id as string,
+        expected_delivery_date: data.expected_delivery_date ? dayjs(data.expected_delivery_date as string) : undefined,
+        shipping_method: data.shipping_method as string,
+        shipping_company: data.shipping_company as string,
+        shipper_name: data.shipper_name as string,
+        shipper_phone: data.shipper_phone as string,
+        total_packages: (data.total_packages as number) || 0,
         shipping_fee: Number(data.shipping_fee) || 0,
-        items: data.items.map((item: any) => ({
-          ...item,
-          is_bonus: item.quantity === 0 && item.bonus_quantity > 0,
-        }))
+        items: ((data.items as unknown[]) || []).map((item: unknown) => {
+          const i = item as WorkbenchItem & Record<string, unknown>;
+          return {
+            ...i,
+            is_bonus: (i.quantity as number) === 0 && (i.bonus_quantity as number) > 0,
+          };
+        }) as WorkbenchItem[],
       });
       calculateTotals();
     } catch (error: any) {

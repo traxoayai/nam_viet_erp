@@ -173,11 +173,11 @@ export const inventoryService = {
     } = params;
 
     const { data } = await safeRpc("get_inventory_checks_list", {
-      p_warehouse_id: warehouseId || null,
-      p_search: search || null, // Tìm kiếm (Mã, Note, Tên User)
-      p_status: status || null,
-      p_start_date: startDate || null,
-      p_end_date: endDate || null,
+      p_warehouse_id: warehouseId ?? undefined,
+      p_search: search ?? undefined, // Tìm kiếm (Mã, Note, Tên User)
+      p_status: status ?? undefined,
+      p_start_date: startDate ?? undefined,
+      p_end_date: endDate ?? undefined,
       p_limit: pageSize,
       p_offset: (page - 1) * pageSize,
     });
@@ -202,8 +202,8 @@ export const inventoryService = {
       p_user_id: user.user.id,
       p_note: params.note,
       p_scope: params.scope,
-      p_text_val: params.textVal || null,
-      p_int_val: params.intVal || null,
+      p_text_val: params.textVal ?? undefined,
+      p_int_val: params.intVal ?? undefined,
     });
     return data;
   },
@@ -213,7 +213,7 @@ export const inventoryService = {
     const { data } = await safeRpc("get_warehouse_cabinets", {
       p_warehouse_id: warehouseId,
     });
-    return data.map((i: any) => i.cabinet_name);
+    return (data as unknown as Array<{ cabinet_name: string }>).map((i) => i.cabinet_name);
   },
 
   // 9. Các hàm hỗ trợ lấy danh mục/Hãng SX (Unique & Not Null)
@@ -242,7 +242,7 @@ export const inventoryService = {
   },
 
   async getDistributors() {
-    const { data } = await supabase.from("distributors").select("id, name");
+    const { data } = await supabase.from("suppliers").select("id, name");
     return data || [];
   },
 
@@ -462,10 +462,10 @@ export const inventoryService = {
       const { data } = await safeRpc("get_product_cardex", {
         p_product_id: productId,
         p_warehouse_id: warehouseId,
-        p_from_date: fromDate || null,
-        p_to_date: toDate || null,
+        p_from_date: fromDate ?? undefined,
+        p_to_date: toDate ?? undefined,
       });
-      return data || [];
+      return (data as unknown as ProductCardexItem[]) || [];
     } catch {
       return [];
     }

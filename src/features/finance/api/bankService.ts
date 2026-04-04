@@ -13,7 +13,14 @@ export const fetchBanks = async (): Promise<Bank[]> => {
     .order("short_name", { ascending: true });
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map((row) => ({
+    ...row,
+    status: row.status as Bank["status"],
+    transfer_supported: row.transfer_supported ?? false,
+    lookup_supported: row.lookup_supported ?? false,
+    created_at: row.created_at ?? undefined,
+    updated_at: row.updated_at ?? undefined,
+  }));
 };
 
 // 2. ĐỒNG BỘ từ VietQR (Nghiệp vụ "thần kỳ")
@@ -37,7 +44,7 @@ export const syncBanksFromVietQR = async (): Promise<number> => {
     bin: bank.bin,
     short_name: bank.shortName, // Chú ý: API là shortName [cite: 2405]
     logo: bank.logo,
-    status: "active", // Mặc định là 'active'
+    status: "active" as const, // Mặc định là 'active'
     transfer_supported: !!bank.transferSupported, // [cite: 2411]
     lookup_supported: !!bank.lookupSupported, // [cite: 2412]
   }));

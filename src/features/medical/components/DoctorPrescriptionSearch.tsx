@@ -42,7 +42,7 @@ export const DoctorPrescriptionSearch: React.FC<Props> = ({
         p_limit: 20,
         p_warehouse_id: warehouseId,
       });
-      setResults(data || []);
+      setResults((data || []) as unknown as PosProductSearchResult[]);
     } catch (err) {
       // safeRpc handles logging
     } finally {
@@ -62,8 +62,9 @@ export const DoctorPrescriptionSearch: React.FC<Props> = ({
         p_warehouse_id: warehouseId,
       });
 
-      if (data && data.length > 0) {
-        onSelectProduct(data[0]);
+      const items = (data || []) as unknown as PosProductSearchResult[];
+      if (items.length > 0) {
+        onSelectProduct(items[0]);
         setInternalKeyword("");
         e.preventDefault();
       }

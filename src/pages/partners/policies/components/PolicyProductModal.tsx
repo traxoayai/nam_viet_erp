@@ -44,7 +44,7 @@ export const PolicyProductModal: React.FC<Props> = ({
       );
 
       // RPC này trả về mảng trực tiếp, không cần .data wrapper
-      setProducts(data || []);
+      setProducts((data ?? []) as unknown as Record<string, unknown>[]);
     } catch (err) {
       setProducts([]);
     } finally {

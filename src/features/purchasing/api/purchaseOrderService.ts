@@ -2,7 +2,7 @@
 import dayjs from "dayjs";
 
 import { supabase } from "@/shared/lib/supabaseClient";
-import { safeRpc } from "@/shared/api/safeRpc";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 export const purchaseOrderService = {
   // 1. Lấy danh sách PO
@@ -43,10 +43,10 @@ export const purchaseOrderService = {
     // Mapping tham số chuẩn xác 100% với RPC create_purchase_order
     const rpcPayload = {
       p_supplier_id: payload.supplier_id,
-      p_expected_date: payload.expected_date || null,
+      p_expected_date: payload.expected_date || "",
       p_note: payload.note || "",
       p_delivery_method: payload.delivery_method || "self_shipping",
-      p_shipping_partner_id: payload.shipping_partner_id || null,
+      p_shipping_partner_id: payload.shipping_partner_id || 0,
       p_shipping_fee: payload.shipping_fee || 0,
       p_status: payload.status,
 
@@ -67,7 +67,7 @@ export const purchaseOrderService = {
 
     const { data } = await safeRpc(
       "create_purchase_order",
-      rpcPayload
+      { ...rpcPayload, p_items: rpcPayload.p_items as unknown as import("@/shared/lib/database.types").Json }
     );
     return data; // Trả về { id, code, status, message }
   },
@@ -84,36 +84,33 @@ export const purchaseOrderService = {
       fullDateTime = dayjs(`${dateStr}T${timeStr}`).toISOString();
     }
 
+    const itemsJson = items.map((item: Record<string, unknown>) => ({
+      product_id: item.product_id,
+      quantity_ordered:
+        item.quantity && Number(item.quantity) > 0
+          ? Number(item.quantity)
+          : 1,
+      uom_ordered: item.uom,
+      unit_price: item.unit_price || 0,
+      is_bonus: item.is_bonus || false,
+      bonus_quantity: item.bonus_quantity || 0,
+    }));
+
     const params = {
       p_po_id: id,
-      // [UPDATE V35.9] Items moved up
-      p_items: items.map((item: any) => ({
-        product_id: item.product_id,
-        quantity_ordered:
-          item.quantity && Number(item.quantity) > 0
-            ? Number(item.quantity)
-            : 1,
-        uom_ordered: item.uom,
-        unit_price: item.unit_price || 0,
-        is_bonus: item.is_bonus || false, // [FIX] Add bonus flag
-        bonus_quantity: item.bonus_quantity || 0,
-      })),
-
+      p_items: itemsJson as unknown as import("@/shared/lib/database.types").Json,
       p_supplier_id: payload.supplier_id,
-      p_expected_date: payload.expected_delivery_date, // Keep legacy param if needed by core, or maybe core uses p_expected_delivery_time now? User said RPC V35.9 adds p_expected_delivery_time. I will keep both if unsure, or just follow user list. User listed p_expected_delivery_time. I will include everything.
-      p_expected_delivery_time: fullDateTime,
-
-      p_note: payload.note,
-      p_delivery_method: payload.delivery_method,
-      p_shipping_partner_id: payload.shipping_partner_id || null,
+      p_expected_date: payload.expected_delivery_date || "",
+      p_expected_delivery_time: fullDateTime ?? undefined,
+      p_note: payload.note || "",
+      p_delivery_method: payload.delivery_method ?? undefined,
+      p_shipping_partner_id: payload.shipping_partner_id || undefined,
       p_shipping_fee: payload.shipping_fee || 0,
-      // p_status: PHẢI có giá trị — nếu không sẽ reset về DRAFT
-      p_status: payload.status,
-
+      p_status: payload.status ?? undefined,
       // [UPDATE V35.9] Logistics Fields
-      p_carrier_name: payload.carrier_name || null,
-      p_carrier_contact: payload.carrier_contact || null,
-      p_carrier_phone: payload.carrier_phone || null,
+      p_carrier_name: payload.carrier_name ?? undefined,
+      p_carrier_contact: payload.carrier_contact ?? undefined,
+      p_carrier_phone: payload.carrier_phone ?? undefined,
       p_total_packages: payload.total_packages || 0,
     };
 

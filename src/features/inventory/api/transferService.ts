@@ -44,12 +44,12 @@ export const transferService = {
     const { data } = await safeRpc("get_transfers", {
       p_page: page,
       p_page_size: pageSize,
-      p_search: filters.search || null,
-      p_status: filters.status || null,
-      p_date_from: filters.dateFrom || null,
-      p_date_to: filters.dateTo || null,
-      p_creator_id: filters.creatorId || null,
-      p_receiver_id: filters.receiverId || null,
+      p_search: (filters.search || null) as string,
+      p_status: (filters.status || null) as string,
+      p_date_from: (filters.dateFrom || null) as string,
+      p_date_to: (filters.dateTo || null) as string,
+      p_creator_id: (filters.creatorId || null) as string,
+      p_receiver_id: (filters.receiverId || null) as string,
     });
 
     // RPC returns { data: [...], total_count: numbers } OR just array?
@@ -64,8 +64,9 @@ export const transferService = {
     // I will assume it returns { data: [], total_count: 0 } or similar.
 
     // SAFEGUARD: If data is array directly, use it. If it has .data property, use that.
-    const resultData = data?.data || data || [];
-    const totalCount = data?.total_count || 0;
+    const result = data as unknown as { data?: TransferMaster[]; total_count?: number } | TransferMaster[];
+    const resultData = (Array.isArray(result) ? result : result?.data) || [];
+    const totalCount = (Array.isArray(result) ? 0 : result?.total_count) || 0;
 
     return { data: resultData, total: totalCount };
   },
@@ -105,10 +106,15 @@ export const transferService = {
     if (itemsError) throw itemsError;
 
     // Map Header & Items
+    const headerData = header as unknown as Record<string, unknown> & {
+      source?: { name: string };
+      dest?: { name: string };
+    };
     const transferMaster: TransferMaster = {
-      ...header,
-      source_warehouse_name: header.source?.name,
-      dest_warehouse_name: header.dest?.name,
+      ...(headerData as unknown as TransferMaster),
+      status: headerData.status as TransferStatus,
+      source_warehouse_name: headerData.source?.name,
+      dest_warehouse_name: headerData.dest?.name,
     };
 
     const transferItems = (items || []).map((item: any) => ({
@@ -159,7 +165,7 @@ export const transferService = {
       const { error: itemError } = await supabase
         .from("inventory_transfer_items")
         .update({
-          quantity_approved: item.qty_approved,
+          qty_approved: item.qty_approved,
           // If approved amount matches requested, we can auto-fill quantity_shipped in next step,
           // but for now just approve.
         })

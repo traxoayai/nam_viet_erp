@@ -145,7 +145,7 @@ export const useDoctorWorkbench = () => {
       }
 
       if (visitData) {
-        setVisit(visitData);
+        setVisit(visitData as Partial<MedicalVisitRow>);
         setVitals({
           pulse: visitData.pulse,
           temperature: visitData.temperature,
@@ -216,9 +216,9 @@ export const useDoctorWorkbench = () => {
 
       // [FIX 2]: Lệnh duy nhất - Upsert thông qua RPC
       const { data } = await safeRpc("create_medical_visit", {
-        p_appointment_id: appointmentId,
+        p_appointment_id: appointmentId ?? "",
         p_customer_id: patientInfo?.id,
-        p_data: flatPayload, // Nhớ gửi status: 'ready_for_vaccine' nếu ấn nút Tiêm
+        p_data: flatPayload as unknown as import("@/shared/lib/database.types").Json,
       });
       
       const currentVisitId = data;
@@ -277,9 +277,9 @@ export const useDoctorWorkbench = () => {
     setLoading(true);
     try {
       await safeRpc("checkout_clinical_services", {
-        p_appointment_id: appointmentId,
+        p_appointment_id: appointmentId ?? "",
         p_customer_id: patientInfo.id,
-        p_services: selectedServicesJson,
+        p_services: selectedServicesJson as unknown as import("@/shared/lib/database.types").Json,
       });
       message.success("Đã tạo phiếu thu tiền thành công!");
 
@@ -287,7 +287,7 @@ export const useDoctorWorkbench = () => {
       const { data: requests } = await supabase
         .from("clinical_service_requests")
         .select("*")
-        .eq("medical_visit_id", visit.id);
+        .eq("medical_visit_id", visit.id ?? "");
       if (requests) setServiceOrders(requests);
     } catch (err: any) {
       message.error("Lỗi thu tiền: " + err.message);
@@ -303,9 +303,9 @@ export const useDoctorWorkbench = () => {
     setLoading(true);
     try {
       await safeRpc("send_prescription_to_pos", {
-        p_appointment_id: appointmentId,
+        p_appointment_id: appointmentId ?? "",
         p_customer_id: patientInfo.id,
-        p_items: prescriptionItems,
+        p_items: prescriptionItems as unknown as import("@/shared/lib/database.types").Json,
         p_pharmacy_warehouse_id: warehouseId,
       });
       message.success("Đã chuyển Đơn tới Quầy Thuốc thành công!");

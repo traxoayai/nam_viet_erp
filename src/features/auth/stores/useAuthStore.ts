@@ -33,10 +33,10 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       const profile = await authService.getSelfProfile();
 
       // 2. [NEW] Gọi RPC lấy danh sách quyền
-      let perms: any[] = [];
+      let perms: string[] = [];
       try {
-        const { data } = await safeRpc("get_my_permissions", {}, { silent: true });
-        perms = data || [];
+        const { data } = await safeRpc("get_my_permissions", undefined, { silent: true });
+        perms = (data as unknown as string[]) || [];
       } catch {
         console.warn("Không thể tải permissions, dùng mặc định rỗng.");
       }

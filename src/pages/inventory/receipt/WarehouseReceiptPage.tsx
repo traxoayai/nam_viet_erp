@@ -41,7 +41,6 @@ import { InboundDetailItem } from "@/features/inventory/types/inbound";
 import { BarcodeAssignModal } from "@/features/product/components/BarcodeAssignModal"; // [NEW]
 import { useRowFlasher } from "@/shared/hooks/useRowFlasher"; // [NEW]
 import { safeRpc } from "@/shared/lib/safeRpc";
-import { supabase } from "@/shared/lib/supabaseClient";
 import { ScannerListener } from "@/shared/ui/warehouse-tools/ScannerListener"; // [NEW]
 
 const { Title, Text } = Typography;

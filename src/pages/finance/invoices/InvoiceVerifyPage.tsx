@@ -27,7 +27,6 @@ import {
   Select,
   Tag,
   Alert,
-  App,
 } from "antd";
 import { VerifyProductModal } from "@/features/finance/components/invoices/VerifyProductModal";
 import dayjs from "dayjs";
@@ -43,8 +42,6 @@ const { Content } = Layout;
 const { Title, Text } = Typography;
 
 const InvoiceVerifyPage = () => {
-  const { message } = App.useApp();
-
   // [NEW] Modal State
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
   const [selectingRowIndex, setSelectingRowIndex] = useState<number | null>(

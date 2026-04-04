@@ -75,14 +75,14 @@ describe("productService", () => {
       expect(result).toEqual({ data: [{ id: 1 }], totalCount: 15 });
     });
 
-    it("passes null for empty filter fields", async () => {
+    it("passes undefined for empty filter fields", async () => {
       mockSafeRpc.mockResolvedValue({ data: { data: [], total_count: 0 } });
       await getProducts({ filters: {}, page: 1, pageSize: 20 });
       expect(mockSafeRpc).toHaveBeenCalledWith("search_products_v2", {
-        p_keyword: null,
-        p_category: null,
-        p_manufacturer: null,
-        p_status: null,
+        p_keyword: undefined,
+        p_category: undefined,
+        p_manufacturer: undefined,
+        p_status: undefined,
         p_limit: 20,
         p_offset: 0,
       });
@@ -152,7 +152,7 @@ describe("productService", () => {
       expect(mockSafeRpc).toHaveBeenCalledWith("export_products_list", {
         search_query: "test",
         category_filter: "Thuoc",
-        manufacturer_filter: null,
+        manufacturer_filter: "",
         status_filter: "active",
       });
       expect(result).toEqual([{ id: 1, name: "P1" }]);

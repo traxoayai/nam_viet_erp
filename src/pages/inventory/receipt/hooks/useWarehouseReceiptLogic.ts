@@ -74,8 +74,11 @@ export const useWarehouseReceiptLogic = () => {
 
   const initPageData = async (id: number) => {
     try {
-      const po = await purchaseOrderService.getPODetail(id);
+      const poRaw = await purchaseOrderService.getPODetail(id);
+      const po = poRaw as unknown as Record<string, unknown> | null;
       setPoData(po);
+
+      if (!po) throw new Error("Không tìm thấy đơn hàng");
 
       // Logic xác định chế độ Xem hay Nhập
       if (po.delivery_status === "delivered" || po.status === "COMPLETED") {
@@ -83,28 +86,31 @@ export const useWarehouseReceiptLogic = () => {
         await loadReceiptData(id);
       } else {
         setIsViewMode(false);
-        loadItemsFromPO(po.items);
+        loadItemsFromPO(po.items as unknown[]);
       }
     } catch (err) {
       message.error("Lỗi tải dữ liệu đơn hàng");
     }
   };
 
-  const loadItemsFromPO = (poItems: any[]) => {
-    const initItems = (poItems || []).map((i: any) => ({
-      key: `${i.product_id}_1`,
-      product_id: i.product_id,
-      product_name: i.product_name,
-      sku: i.sku,
-      image_url: i.image_url, // Map ảnh
-      barcode: i.barcode,
-      uom: i.uom_ordered || i.unit || "Hộp",
-      quantity_ordered: i.quantity_ordered,
-      quantity_received: i.quantity_ordered, // Mặc định nhập đủ
-      stock_management_type: i.stock_management_type || "lot_date",
-      lot_number: "",
-      expiry_date: null,
-    }));
+  const loadItemsFromPO = (poItems: unknown[]) => {
+    const initItems = (poItems || []).map((i: unknown) => {
+      const item = i as Record<string, unknown>;
+      return {
+        key: `${item.product_id}_1`,
+        product_id: item.product_id as number,
+        product_name: item.product_name as string,
+        sku: item.sku as string,
+        image_url: item.image_url as string | undefined, // Map ảnh
+        barcode: item.barcode as string | undefined,
+        uom: (item.uom_ordered as string) || (item.unit as string) || "Hộp",
+        quantity_ordered: item.quantity_ordered as number,
+        quantity_received: item.quantity_ordered as number, // Mặc định nhập đủ
+        stock_management_type: (item.stock_management_type as ReceiptItem["stock_management_type"]) || "lot_date",
+        lot_number: "",
+        expiry_date: null,
+      };
+    });
     setItems(initItems);
   };
 
@@ -123,7 +129,7 @@ export const useWarehouseReceiptLogic = () => {
             uom: i.product?.retail_unit || "Đơn vị",
             quantity_ordered: 0,
             quantity_received: i.quantity,
-            stock_management_type: "lot_date",
+            stock_management_type: "lot_date" as const,
             lot_number: i.lot_number,
             expiry_date: i.expiry_date ? dayjs(i.expiry_date) : null,
           })

@@ -23,8 +23,9 @@ export const fetchPartners = async (
 
   if (error) throw error;
 
-  const totalCount = data && data.length > 0 ? data[0].total_count : 0;
-  return { data: data || [], totalCount: totalCount || 0 };
+  const records = (data ?? []) as unknown as ShippingPartnerListRecord[];
+  const totalCount = records.length > 0 ? (records[0] as unknown as { total_count: number }).total_count : 0;
+  return { data: records, totalCount: totalCount || 0 };
 };
 
 /**
@@ -46,8 +47,8 @@ export const createPartner = async (
   rules: Omit<ShippingRule, "id">[]
 ): Promise<number | null> => {
   const { data, error } = await safeRpc("create_shipping_partner", {
-    p_partner_data: partnerData,
-    p_rules: rules,
+    p_partner_data: JSON.parse(JSON.stringify(partnerData)),
+    p_rules: JSON.parse(JSON.stringify(rules)),
   });
   if (error) throw error;
   return data as number;
@@ -63,8 +64,8 @@ export const updatePartner = async (
 ): Promise<boolean> => {
   const { error } = await safeRpc("update_shipping_partner", {
     p_id: id,
-    p_partner_data: partnerData,
-    p_rules: rules,
+    p_partner_data: JSON.parse(JSON.stringify(partnerData)),
+    p_rules: JSON.parse(JSON.stringify(rules)),
   });
   if (error) throw error;
   return true;

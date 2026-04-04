@@ -25,7 +25,7 @@ export const productMasterService = {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        allData = [...allData, ...data];
+        allData = [...allData, ...(data as unknown as ProductMasterExportItem[])];
 
         // Nếu số lượng lấy về ít hơn limit -> Đã là trang cuối
         if (data.length < PAGE_SIZE) {
@@ -50,7 +50,7 @@ export const productMasterService = {
     for (let i = 0; i < total; i += CHUNK_SIZE) {
       const chunk = payload.slice(i, i + CHUNK_SIZE);
       await safeRpc("import_product_master_v2", {
-        p_data: chunk,
+        p_data: chunk as unknown as import("@/shared/lib/database.types").Json,
       });
 
       processed += chunk.length;

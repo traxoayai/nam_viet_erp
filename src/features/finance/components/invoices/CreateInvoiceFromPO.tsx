@@ -208,9 +208,9 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
         status: "verified",
       });
 
-      // Auto-link to PO
-      if (result?.id || result?.[0]?.id) {
-        const invoiceId = result.id || result[0].id;
+      // Auto-link to PO — createInvoice uses .single() so result is an object
+      if (result?.id) {
+        const invoiceId = result.id;
         await supabase.from("finance_invoice_allocations").insert({
           invoice_id: invoiceId,
           po_id: Number(poId),
@@ -262,9 +262,9 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
 
       const result = await invoiceService.saveDraft(null, payload);
 
-      // Auto-link draft to PO too
-      if (result?.id || result?.[0]?.id) {
-        const invoiceId = result.id || result[0].id;
+      // Auto-link draft to PO too — saveDraft returns an object
+      if (result?.id) {
+        const invoiceId = result.id;
         await supabase.from("finance_invoice_allocations").insert({
           invoice_id: invoiceId,
           po_id: Number(poId),

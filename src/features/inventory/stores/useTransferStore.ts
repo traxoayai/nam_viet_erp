@@ -112,8 +112,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     // Optimistic update or wait? Let's wait for safety logic
     set({ loading: true });
     try {
-      // @ts-ignore
-      await transferService.updateTransferStatus(id, status);
+      await transferService.updateTransferStatus(id, status as import("../types/transfer").TransferStatus);
       message.success("Cập nhật trạng thái thành công");
 
       // Reload detail if current
@@ -214,10 +213,11 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     if (!current) return [];
 
     try {
-      return await transferService.fetchSourceBatches(
+      const batches = await transferService.fetchSourceBatches(
         productId,
         current.source_warehouse_id
       );
+      return (batches as unknown as Record<string, unknown>[]) || [];
     } catch (error) {
       console.error("Error fetching batches:", error);
       return [];
@@ -522,8 +522,9 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       });
 
       // 4. Thành công
+      const result = data as unknown as { items_processed?: number };
       message.success(
-        `Nhập kho thành công! Đã cộng tồn kho cho ${data.items_processed || 0} lô hàng.`
+        `Nhập kho thành công! Đã cộng tồn kho cho ${result?.items_processed || 0} lô hàng.`
       );
 
       // Refresh lại dữ liệu phiếu để thấy trạng thái 'completed'

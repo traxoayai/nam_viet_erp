@@ -3,6 +3,7 @@ import { message } from "antd";
 import { useState, useCallback, useMemo } from "react";
 
 import { safeRpc } from "@/shared/lib/safeRpc";
+import type { Json } from "@/shared/types/database.types";
 
 export interface BookingCustomer {
   id: number;
@@ -42,7 +43,7 @@ export const useBookingResources = () => {
     try {
       const { data } = await safeRpc("get_customers_b2c_list", {
         search_query: keyword,
-        type_filter: null,
+        type_filter: "",
         status_filter: "active",
         page_num: 1,
         page_size: 20,
@@ -50,18 +51,20 @@ export const useBookingResources = () => {
 
       if (data) {
         // Map to simpler interface
-        const mapped = data.map((c: any) => ({
+        type CustomerRow = { id: number; name: string; phone: string; customer_code: string; dob: string | null; gender: string | null; address: string | null };
+        const rows = data as unknown as CustomerRow[];
+        const mapped = rows.map((c) => ({
           id: c.id,
           name: c.name,
           phone: c.phone,
           customer_code: c.customer_code,
-          dob: c.dob || null, // Map new fields
-          gender: c.gender || null, // Map new fields
-          address: c.address || null, // Map new fields
+          dob: c.dob || null,
+          gender: c.gender || null,
+          address: c.address || null,
         }));
         setCustomers(mapped);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error searching customers:", err);
       message.error("Không thể tìm kiếm khách hàng");
     } finally {
@@ -80,23 +83,21 @@ export const useBookingResources = () => {
       // But we follow strict user instructions to use this RPC.
       const { data } = await safeRpc(
         "get_users_with_roles",
-        {}
+        undefined
       );
 
       if (data) {
-        // Filter and Map
-        // User requested: Remove strict filters temporarily
-        const docs = data
-          // .filter((u: any) => u.role === 'doctor' || u.role === 'bac_si') // Relaxed filter
-          .map((u: any) => ({
-            id: u.id,
-            name: u.name, // Ensure 'name' is used
-            role: u.role,
-          }));
+        type UserRow = { id: string; name: string; role: string };
+        const rows = data as unknown as UserRow[];
+        const docs = rows.map((u) => ({
+          id: u.id,
+          name: u.name,
+          role: u.role,
+        }));
 
         setDoctors(docs);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn(
         "Error fetching doctors (RPC get_users_with_roles might be missing):",
         err
@@ -123,8 +124,9 @@ export const useBookingResources = () => {
       });
 
       if (data) {
-        // Map result
-        const vax = data.map((v: any) => ({
+        type VaccineRow = { id: number; name: string; price: number; sku: string };
+        const rows = data as unknown as VaccineRow[];
+        const vax = rows.map((v) => ({
           id: v.id,
           name: v.name,
           price: v.price || 0,
@@ -132,7 +134,7 @@ export const useBookingResources = () => {
         }));
         setVaccines(vax);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching vaccines:", err);
       message.error("Không thể tải danh sách vắc-xin");
     } finally {
@@ -154,14 +156,15 @@ export const useBookingResources = () => {
             dob: customerData.dob,
             gender: customerData.gender,
             address: customerData.address,
-          },
+          } as unknown as Json,
+          p_guardians: [] as unknown as Json,
         });
         message.success("Thêm khách hàng thành công");
         // Optionally refresh or return new ID
         return data;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error creating customer:", err);
-        message.error(err.message || "Không thể tạo khách hàng");
+        message.error(err instanceof Error ? err.message : "Không thể tạo khách hàng");
         return null;
       } finally {
         setLoading(false);
@@ -177,22 +180,21 @@ export const useBookingResources = () => {
     async (id: number, customerData: Partial<BookingCustomer>) => {
       setLoading(true);
       try {
-        // Assuming usage of update_customer_b2c
         await safeRpc("update_customer_b2c", {
-          p_customer_id: id,
+          p_id: id,
           p_customer_data: {
             name: customerData.name,
             phone: customerData.phone,
             dob: customerData.dob,
             gender: customerData.gender,
             address: customerData.address,
-          },
+          } as unknown as Json,
         });
         message.success("Cập nhật khách hàng thành công");
         return true;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error updating customer:", err);
-        message.error(err.message || "Không thể cập nhật khách hàng");
+        message.error(err instanceof Error ? err.message : "Không thể cập nhật khách hàng");
         return false;
       } finally {
         setLoading(false);

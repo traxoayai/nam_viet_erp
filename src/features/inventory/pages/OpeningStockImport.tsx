@@ -305,7 +305,7 @@ export const OpeningStockImport = () => {
     const largeUnit =
       wholesaleUnit ||
       units?.sort((a: any, b: any) => b.conversion_rate - a.conversion_rate)[0];
-    const hasLargeUnit = largeUnit && largeUnit.conversion_rate > 1;
+    const hasLargeUnit = largeUnit && (largeUnit.conversion_rate ?? 0) > 1;
 
     const newData = [...data];
     const idx = newData.findIndex((i) => i.key === editingRowKey);
@@ -375,14 +375,15 @@ export const OpeningStockImport = () => {
         "import_opening_stock_v3_by_id",
         {
           p_stock_array: payload,
-          p_user_id: user?.id,
+          p_user_id: user?.id ?? "",
           p_warehouse_id: selectedWarehouseId,
         }
       );
+      const result = res as unknown as { imported_count: number; receipt_code: string };
       message.success(
-        `Đã nhập kho và ghi nhận giá trị cho ${res.imported_count} dòng!`
+        `Đã nhập kho và ghi nhận giá trị cho ${result.imported_count} dòng!`
       );
-      setSuccessResult({ code: res.receipt_code, count: res.imported_count });
+      setSuccessResult({ code: result.receipt_code, count: result.imported_count });
       setCurrentStep(2);
     } catch (error: any) {
       message.error("Lỗi: " + error.message);

@@ -191,11 +191,12 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
         );
 
         // 2. Xử lý phản hồi
-        if (res.status === "exists") {
+        const result = res as unknown as { status: string; item_id: number; message?: string };
+        if (result.status === "exists") {
           message.info("Sản phẩm đã có trong danh sách! Đang di chuyển tới...");
           // Scroll tới sản phẩm đã có
-          set({ activeItemId: res.item_id });
-        } else if (res.status === "success") {
+          set({ activeItemId: result.item_id });
+        } else if (result.status === "success") {
           message.success("Đã thêm sản phẩm mới vào phiếu!");
 
           // 3. Reload lại danh sách items để có dữ liệu đầy đủ (Join Product, Units...)
@@ -203,9 +204,9 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
           await get().fetchSessionDetails(activeSession.id);
 
           // 4. Highlight sản phẩm mới thêm
-          set({ activeItemId: res.item_id });
+          set({ activeItemId: result.item_id });
         } else {
-          message.error(res.message || "Không thể thêm sản phẩm");
+          message.error(result.message || "Không thể thêm sản phẩm");
         }
       } catch (error: any) {
         console.error(error);

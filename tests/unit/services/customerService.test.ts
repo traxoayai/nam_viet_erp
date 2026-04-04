@@ -58,11 +58,11 @@ describe("customerService", () => {
       expect(result).toEqual({ data: [], totalCount: 0 });
     });
 
-    it("defaults sortByDebt to null", async () => {
+    it("defaults sortByDebt to undefined", async () => {
       mockSafeRpc.mockResolvedValue({ data: [] });
       await fetchCustomers({}, 1, 20);
       expect(mockSafeRpc).toHaveBeenCalledWith("get_customers_b2c_list", expect.objectContaining({
-        sort_by_debt: null,
+        sort_by_debt: undefined,
       }));
     });
   });

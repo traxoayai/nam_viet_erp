@@ -64,7 +64,7 @@ export const updateTask = async (taskId: string, updates: Partial<Task>) => {
 export const createTask = async (taskData: Partial<Task>) => {
   const { data, error } = await supabase
     .from('tasks')
-    .insert([taskData])
+    .insert([JSON.parse(JSON.stringify(taskData))])
     .select()
     .single();
     

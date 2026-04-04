@@ -44,13 +44,14 @@ const SystemAuditLogPage = () => {
       const { data } = await safeRpc('get_system_logs', {
         p_page: page,
         p_page_size: pageSize,
-        p_module: moduleFilter || null,
-        p_action: actionFilter || null,
-        p_date_from: dateRange?.[0] || null,
-        p_date_to: dateRange?.[1] || null,
+        p_module: moduleFilter || undefined,
+        p_action: actionFilter || undefined,
+        p_date_from: dateRange?.[0] || undefined,
+        p_date_to: dateRange?.[1] || undefined,
       });
-      setLogs(data?.data || []);
-      setTotal(data?.total_count || 0);
+      const result = data as unknown as { data: SystemLog[]; total_count: number } | null;
+      setLogs(result?.data || []);
+      setTotal(result?.total_count || 0);
     } catch (err: any) {
       // safeRpc handles logging
     } finally {

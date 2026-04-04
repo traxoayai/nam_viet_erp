@@ -6,7 +6,7 @@ export interface Role {
   id: string; // UUID
   name: string;
   description: string | null;
-  created_at?: string;
+  created_at: string | null;
 }
 
 // Dữ liệu thô từ bảng 'permissions'

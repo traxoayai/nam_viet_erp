@@ -6,6 +6,7 @@ import {
 
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
+import type { Json } from "@/shared/lib/database.types";
 
 export const segmentationService = {
   async getSegments() {
@@ -20,7 +21,7 @@ export const segmentationService = {
   async createSegment(payload: CreateSegmentPayload) {
     const { data, error } = await supabase
       .from("customer_segments")
-      .insert([payload])
+      .insert([{ ...payload, criteria: payload.criteria as unknown as Json }])
       .select()
       .single();
     if (error) throw error;
@@ -34,7 +35,7 @@ export const segmentationService = {
   async updateSegment(id: number, payload: Partial<CreateSegmentPayload>) {
     const { error } = await supabase
       .from("customer_segments")
-      .update(payload)
+      .update({ ...payload, criteria: payload.criteria as unknown as Json })
       .eq("id", id);
     if (error) throw error;
   },

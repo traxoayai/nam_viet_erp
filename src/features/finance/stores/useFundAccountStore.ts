@@ -19,7 +19,13 @@ export const useFundAccountStore = create<FundAccountStoreState>(
       set({ loading: true });
       try {
         const data = await service.fetchFundAccounts();
-        const records = data.map((acc) => ({ ...acc, key: acc.id }));
+        const records: FundAccountRecord[] = data.map((acc) => ({
+          ...acc,
+          key: acc.id,
+          bankName: acc.bankName ?? undefined,
+          created_at: acc.created_at ?? undefined,
+          updated_at: acc.updated_at ?? undefined,
+        }));
         set({ fundAccounts: records, loading: false });
       } catch (error) {
         console.error(error);

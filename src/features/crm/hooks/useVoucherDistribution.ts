@@ -72,7 +72,7 @@ export const useVoucherDistribution = () => {
       );
 
       // 3. Thông báo kết quả
-      if (count > 0) {
+      if (count != null && count > 0) {
         notification.success({
           message: "Phân phối thành công!",
           description: `Đã gửi voucher "${promoName}" vào ví của ${count} khách hàng thuộc nhóm "${segmentName}".`,

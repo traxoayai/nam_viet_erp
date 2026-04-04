@@ -15,18 +15,19 @@ interface FetchParams {
 // 1. HÀM ĐỌC DANH SÁCH (SMART SEARCH V2)
 export const getProducts = async ({ filters, page, pageSize }: FetchParams) => {
   const { data } = await safeRpc("search_products_v2", {
-    p_keyword: filters.search_query || null,
-    p_category: filters.category_filter || null,
-    p_manufacturer: filters.manufacturer_filter || null,
-    p_status: filters.status_filter || null,
+    p_keyword: filters.search_query ?? undefined,
+    p_category: filters.category_filter ?? undefined,
+    p_manufacturer: filters.manufacturer_filter ?? undefined,
+    p_status: filters.status_filter ?? undefined,
     p_limit: pageSize,
     p_offset: (page - 1) * pageSize,
   });
 
   // search_products_v2 trả về { data: [...], total_count: number }
+  const result = data as unknown as { data: unknown[]; total_count: number } | null;
   return {
-    data: data?.data || [],
-    totalCount: data?.total_count || 0,
+    data: result?.data || [],
+    totalCount: result?.total_count || 0,
   };
 };
 
@@ -53,11 +54,12 @@ export const getProductDetails = async (id: number) => {
     .eq("product_id", id);
 
   // C. Chuyển đổi cấu trúc Tồn kho DB -> Form
-  const inventorySettings: Record<string, any> = {};
+  const inventorySettings: Record<string, unknown> = {};
   if (inventoryData) {
-    inventoryData.forEach((inv: any) => {
-      if (inv.warehouses && inv.warehouses.key) {
-        inventorySettings[inv.warehouses.key] = {
+    inventoryData.forEach((inv: Record<string, unknown>) => {
+      const wh = inv.warehouses as Record<string, unknown> | null;
+      if (wh && wh.key) {
+        inventorySettings[wh.key as string] = {
           warehouse_id: inv.warehouse_id,
           min: inv.min_stock,
           max: inv.max_stock,
@@ -73,8 +75,8 @@ export const getProductDetails = async (id: number) => {
   // [FIX] Lấy dữ liệu Marketing (Tìm bản ghi channel='website')
   const marketingData =
     data.product_contents && data.product_contents.length > 0
-      ? data.product_contents.find((c: any) => c.channel === "website") || {}
-      : {};
+      ? (data.product_contents.find((c) => c.channel === "website") as Record<string, unknown> | undefined) ?? {}
+      : {} as Record<string, unknown>;
 
   // D. MAP DỮ LIỆU DB (Snake_case) -> FORM (CamelCase)
   return {
@@ -127,11 +129,11 @@ export const getProductDetails = async (id: number) => {
 
     // [FIX] Map Marketing Content vào object content
     content: {
-      description_html: marketingData.description_html || "",
-      short_description: marketingData.short_description || "",
-      seo_title: marketingData.seo_title || "",
-      seo_description: marketingData.seo_description || "",
-      seo_keywords: marketingData.seo_keywords || [],
+      description_html: (marketingData as Record<string, unknown>).description_html || "",
+      short_description: (marketingData as Record<string, unknown>).short_description || "",
+      seo_title: (marketingData as Record<string, unknown>).seo_title || "",
+      seo_description: (marketingData as Record<string, unknown>).seo_description || "",
+      seo_keywords: (marketingData as Record<string, unknown>).seo_keywords || [],
     },
   };
 };
@@ -278,7 +280,7 @@ export const updateProductsStatus = async (
   const { error } = await supabase
     .from("products")
     .update({ status: status })
-    .in("id", ids);
+    .in("id", ids as number[]);
 
   if (error) {
     console.error("Lỗi khi cập nhật trạng thái:", error);
@@ -300,7 +302,7 @@ export const deleteProducts = async (ids: React.Key[]) => {
   const { error } = await supabase
     .from("products")
     .update({ status: "deleted" })
-    .in("id", ids);
+    .in("id", ids as number[]);
 
   if (error) {
     console.error("Lỗi khi xóa sản phẩm (Soft Delete):", error);
@@ -312,10 +314,10 @@ export const deleteProducts = async (ids: React.Key[]) => {
 // 8. HÀM XUẤT EXCEL
 export const exportProducts = async (filters: ProductFilters) => {
   const { data } = await safeRpc("export_products_list", {
-    search_query: filters.search_query || null,
-    category_filter: filters.category_filter || null,
-    manufacturer_filter: filters.manufacturer_filter || null,
-    status_filter: filters.status_filter || null,
+    search_query: filters.search_query || "",
+    category_filter: filters.category_filter || "",
+    manufacturer_filter: filters.manufacturer_filter || "",
+    status_filter: filters.status_filter || "",
   });
   return data || [];
 };
@@ -360,14 +362,14 @@ export const importProducts = async (file: File) => {
         .from("warehouses")
         .select("key, id");
       const safeWarehouses = warehouses || [];
-      const warehouseKeys = safeWarehouses.map((w) => w.key);
+      const warehouseKeys: string[] = safeWarehouses.map((w) => w.key);
 
-      const productsToUpsert = rawProducts.map((row: any[]) => {
-        const product: any = { inventory_settings: {} };
+      const productsToUpsert = rawProducts.map((row: unknown[]) => {
+        const product: Record<string, unknown> = { inventory_settings: {} };
         row.forEach((value, index) => {
           const header = headers[index];
           if (warehouseKeys.includes(header)) {
-            product.inventory_settings[header] = value;
+            (product.inventory_settings as Record<string, unknown>)[header] = value;
           } else {
             product[header] = value;
           }
@@ -376,7 +378,7 @@ export const importProducts = async (file: File) => {
       });
 
       await safeRpc("bulk_upsert_products", {
-        p_products_array: productsToUpsert,
+        p_products_array: productsToUpsert as unknown as import("@/shared/lib/database.types").Json,
       });
       resolve(productsToUpsert.length);
     } catch (error) {
@@ -419,7 +421,7 @@ export const searchProductsForDropdown = async (
     let serviceQuery = supabase
       .from("service_packages")
       .select("id, name, sku, unit, total_cost_price, price, type, created_at")
-      .in("type", validServiceTypes)
+      .in("type", validServiceTypes as ("service" | "bundle")[])
       .eq("status", "active")
       .limit(20);
 
@@ -468,7 +470,8 @@ export const searchProductsForPurchase = async (keyword: string) => {
     p_keyword: keyword || "",
   });
 
-  return data.map((p: any) => ({
+  const items = (data || []) as Record<string, unknown>[];
+  return items.map((p) => ({
     id: p.id,
     name: p.name,
     sku: p.sku,

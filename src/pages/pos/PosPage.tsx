@@ -21,11 +21,9 @@ import { PosCustomerCard } from "../../features/pos/components/layout/PosCustome
 import { PosLeftSection } from "../../features/pos/components/layout/PosLeftSection";
 import { PosPaymentSection } from "../../features/pos/components/layout/PosPaymentSection";
 import { usePosCartStore } from "../../features/pos/stores/usePosCartStore";
-import { WarehousePosData } from "../../features/pos/types/pos.types";
 
 import { useActiveWarehouses } from "@/shared/hooks/useMasterData";
 import { BarcodeAssignModal } from "@/features/product/components/BarcodeAssignModal"; // [NEW]
-import { supabase } from "@/shared/lib/supabaseClient";
 import { ScannerListener } from "@/shared/ui/warehouse-tools/ScannerListener";
 
 // Import Layout Components

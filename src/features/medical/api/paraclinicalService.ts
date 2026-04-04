@@ -57,8 +57,8 @@ export const paraclinicalService = {
   }) {
     const { data } = await safeRpc("submit_paraclinical_result", {
       p_request_id: payload.request_id,
-      p_results_json: payload.results_json || null,
-      p_imaging_result: payload.imaging_result || null,
+      p_results_json: payload.results_json ?? undefined,
+      p_imaging_result: payload.imaging_result ?? undefined,
       p_status: payload.status,
     });
     return data;

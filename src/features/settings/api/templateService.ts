@@ -10,7 +10,7 @@ export const fetchTemplates = async (): Promise<DocumentTemplate[]> => {
     .order("name", { ascending: true });
 
   if (error) throw error;
-  return data || [];
+  return (data || []) as unknown as DocumentTemplate[];
 };
 
 // 2. Thêm Mẫu mới

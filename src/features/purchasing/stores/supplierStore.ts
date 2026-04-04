@@ -26,8 +26,8 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
 
       // [CORE UPDATE]: Gọi RPC mới có trả về cột 'debt'
       const { data } = await safeRpc("get_suppliers_list", {
-        search_query: filters.search_query || null,
-        status_filter: filters.status_filter || null,
+        search_query: filters.search_query || "",
+        status_filter: filters.status_filter || "",
         page_num: page,
         page_size: pageSize,
       });
@@ -58,7 +58,7 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
         .single();
 
       if (error) throw error;
-      set({ currentSupplier: data as Supplier, loadingDetails: false });
+      set({ currentSupplier: data as unknown as Supplier, loadingDetails: false });
     } catch (error) {
       console.error("Lỗi khi tải chi tiết NCC:", error);
       set({ loadingDetails: false });
@@ -97,9 +97,9 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
 
       await get().fetchSuppliers();
       set({ loading: false });
-      return data; // Trả về ID mới tạo
-    } catch (error: any) {
-      console.error("Lỗi khi thêm NCC:", error.message);
+      return data as unknown as Supplier; // Trả về kết quả RPC
+    } catch (error: unknown) {
+      console.error("Lỗi khi thêm NCC:", (error as Error).message);
       set({ loading: false });
       return null;
     }

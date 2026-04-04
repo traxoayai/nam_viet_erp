@@ -14,7 +14,8 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
   fetchUsers: async () => {
     set({ loadingUsers: true });
     try {
-      const users = await userService.fetchUsersWithRoles();
+      const result = await userService.fetchUsersWithRoles();
+      const users = (result ?? []) as unknown as UserRoleInfo[];
       set({ users, loadingUsers: false });
     } catch (error) {
       console.error(error);
@@ -109,7 +110,7 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
       await get().fetchUsers(); // Tải lại danh sách
       set({ loadingUsers: false });
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi khi duyệt user:", error);
       set({ loadingUsers: false });
       throw error;

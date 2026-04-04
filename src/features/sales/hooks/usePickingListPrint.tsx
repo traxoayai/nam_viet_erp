@@ -31,7 +31,7 @@ export const usePickingListPrint = () => {
           detail.delivery_address || detail.customer?.shipping_address || "",
         note: detail.note || "",
         status: detail.status || "CONFIRMED",
-        shipping_partner: detail.shipping_partner_name || "Tự giao",
+        shipping_partner: (detail as unknown as { shipping_partner_name?: string }).shipping_partner_name || "Tự giao",
         shipping_phone: detail.customer?.phone || "",
         cutoff_time: "---",
         package_count: 0,

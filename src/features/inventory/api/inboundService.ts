@@ -17,10 +17,10 @@ export const inboundService = {
     const { data } = await safeRpc("get_warehouse_inbound_tasks", {
       p_page: filter.page,
       p_page_size: filter.pageSize,
-      p_search: filter.search || null,
-      p_status: filter.status === "all" ? null : filter.status,
-      p_date_from: filter.date_from || null,
-      p_date_to: filter.date_to || null,
+      p_search: filter.search ?? undefined,
+      p_status: filter.status === "all" ? undefined : filter.status,
+      p_date_from: filter.date_from ?? undefined,
+      p_date_to: filter.date_to ?? undefined,
       p_warehouse_id: DEFAULT_WAREHOUSE_ID, // Default warehouse for now, can be parameterized later
     });
 
@@ -37,7 +37,7 @@ export const inboundService = {
 
     // Ensure structure matches if RPC returns slightly different content,
     // but assuming RPC matches the interface for now.
-    return data as InboundDetailResponse;
+    return data as unknown as InboundDetailResponse;
   },
 
   // 3. Submit Receipt

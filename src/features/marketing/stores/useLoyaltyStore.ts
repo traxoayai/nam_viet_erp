@@ -5,6 +5,7 @@ import {
   LoyaltyPolicy,
   DEFAULT_LOYALTY_POLICY,
 } from "@/features/marketing/types/loyalty";
+import type { Json } from "@/shared/lib/database.types";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 interface LoyaltyStoreState {
@@ -31,7 +32,7 @@ export const useLoyaltyStore = create<LoyaltyStoreState>((set) => ({
         .single();
 
       if (data && data.value) {
-        set({ policy: data.value as LoyaltyPolicy });
+        set({ policy: data.value as unknown as LoyaltyPolicy });
       } else {
         // Chưa có thì dùng mặc định
         set({ policy: DEFAULT_LOYALTY_POLICY });
@@ -48,7 +49,7 @@ export const useLoyaltyStore = create<LoyaltyStoreState>((set) => ({
     try {
       const { error } = await supabase.from("system_settings").upsert({
         key: SETTING_KEY,
-        value: newPolicy,
+        value: newPolicy as unknown as Json,
         updated_at: new Date().toISOString(),
       });
 

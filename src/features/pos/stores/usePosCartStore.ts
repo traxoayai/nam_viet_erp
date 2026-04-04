@@ -283,7 +283,7 @@ export const usePosCartStore = create<PosCartState>()(
           // [5.2] Discard stale results if order switched during fetch
           if (get().activeOrderId !== orderIdBefore) return;
 
-          const vouchers = (data || []) as PosVoucher[];
+          const vouchers = (data ?? []) as unknown as PosVoucher[];
 
           set({ availableVouchers: vouchers });
 

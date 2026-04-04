@@ -127,11 +127,11 @@ describe("inventoryService", () => {
       mockSafeRpc.mockResolvedValue({ data: [] });
       await inventoryService.getCheckSessions({});
       expect(mockSafeRpc).toHaveBeenCalledWith("get_inventory_checks_list", {
-        p_warehouse_id: null,
-        p_search: null,
-        p_status: null,
-        p_start_date: null,
-        p_end_date: null,
+        p_warehouse_id: undefined,
+        p_search: undefined,
+        p_status: undefined,
+        p_start_date: undefined,
+        p_end_date: undefined,
         p_limit: 20,
         p_offset: 0,
       });
@@ -152,8 +152,8 @@ describe("inventoryService", () => {
         p_user_id: "user-123",
         p_note: "Monthly check",
         p_scope: "ALL",
-        p_text_val: null,
-        p_int_val: null,
+        p_text_val: undefined,
+        p_int_val: undefined,
       });
       expect(result).toEqual({ id: 50 });
     });
@@ -220,14 +220,14 @@ describe("inventoryService", () => {
       expect(result).toEqual([{ type: "in", quantity: 100 }]);
     });
 
-    it("passes null for optional date params", async () => {
+    it("passes undefined for optional date params", async () => {
       mockSafeRpc.mockResolvedValue({ data: [] });
       await inventoryService.getProductCardex(10, 1);
       expect(mockSafeRpc).toHaveBeenCalledWith("get_product_cardex", {
         p_product_id: 10,
         p_warehouse_id: 1,
-        p_from_date: null,
-        p_to_date: null,
+        p_from_date: undefined,
+        p_to_date: undefined,
       });
     });
 

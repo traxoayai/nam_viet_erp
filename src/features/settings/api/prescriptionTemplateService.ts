@@ -1,5 +1,5 @@
 import type {
-  //   PrescriptionTemplate,
+  PrescriptionTemplate,
   PrescriptionTemplateInput,
   PrescriptionItemInput,
   TemplateDetailResponse,
@@ -13,10 +13,10 @@ export const prescriptionTemplateService = {
    */
   async getTemplates(searchText: string = "", status?: string) {
     const { data } = await safeRpc("get_prescription_templates", {
-      p_search: searchText || null,
-      p_status: status || null,
+      p_search: searchText || undefined,
+      p_status: status || undefined,
     });
-    return (data ?? []) as any[]; // Hoặc Type PrescriptionTemplate[]
+    return (data ?? []) as unknown as PrescriptionTemplate[];
   },
 
   /**
@@ -26,7 +26,7 @@ export const prescriptionTemplateService = {
     const { data } = await safeRpc("get_prescription_template_details", {
       p_id: id,
     });
-    return data as TemplateDetailResponse;
+    return data as unknown as TemplateDetailResponse;
   },
 
   /**
@@ -37,10 +37,10 @@ export const prescriptionTemplateService = {
     items: PrescriptionItemInput[]
   ) {
     const { data } = await safeRpc("create_prescription_template", {
-      p_data: templateData,
-      p_items: items,
+      p_data: JSON.parse(JSON.stringify(templateData)),
+      p_items: JSON.parse(JSON.stringify(items)),
     });
-    return data as number; // Trả về ID mới
+    return data as unknown as number; // Trả về ID mới
   },
 
   /**
@@ -53,10 +53,10 @@ export const prescriptionTemplateService = {
   ) {
     const { data } = await safeRpc("update_prescription_template", {
       p_id: id,
-      p_data: templateData,
-      p_items: items,
+      p_data: JSON.parse(JSON.stringify(templateData)),
+      p_items: JSON.parse(JSON.stringify(items)),
     });
-    return data as boolean;
+    return data as unknown as boolean;
   },
 
   /**
@@ -66,6 +66,6 @@ export const prescriptionTemplateService = {
     const { data } = await safeRpc("delete_prescription_template", {
       p_id: id,
     });
-    return data as boolean;
+    return data as unknown as boolean;
   },
 };

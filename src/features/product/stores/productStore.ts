@@ -1,9 +1,11 @@
 // src/features/product/stores/productStore.ts
 import { create } from "zustand";
 
+import { Warehouse } from "@/features/inventory/types/warehouse";
 import * as warehouseService from "@/features/inventory/api/warehouseService";
 import * as productService from "@/features/product/api/productService";
 import {
+  Product,
   ProductStoreState,
   ProductFilters,
 } from "@/features/product/types/product.types";
@@ -44,7 +46,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
         pageSize,
       });
       set({
-        products: data,
+        products: data as Product[],
         totalCount: totalCount,
         loading: false,
       });
@@ -74,7 +76,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
       ]);
 
       set({
-        warehouses: warehousesResult.data,
+        warehouses: warehousesResult.data as unknown as Warehouse[],
         suppliers: suppliersResult,
         // products: productsResult as any, // REMOVED: Conflict with fetchProducts
       });
@@ -149,7 +151,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
     set({ loading: true });
     try {
       // 1. Check Dependencies
-      const dependencies = await productService.checkDependencies(ids);
+      const dependencies = await productService.checkDependencies(ids) as unknown[];
 
       if (dependencies && dependencies.length > 0) {
         set({ loading: false });
@@ -179,7 +181,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
       // If status === 'inactive', check dependencies first.
 
       if (status === "inactive") {
-        const dependencies = await productService.checkDependencies(ids);
+        const dependencies = await productService.checkDependencies(ids) as unknown[];
         if (dependencies && dependencies.length > 0) {
           set({ loading: false });
           return { success: false, dependencies };

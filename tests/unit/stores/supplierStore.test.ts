@@ -77,15 +77,15 @@ describe("useSupplierStore", () => {
       expect(state.loading).toBe(false);
     });
 
-    it("passes null for empty filter fields", async () => {
+    it("passes empty string for empty filter fields", async () => {
       mockSafeRpc.mockResolvedValue({ data: [] });
 
       useSupplierStore.setState({ filters: {}, page: 1, pageSize: 10 });
       await useSupplierStore.getState().fetchSuppliers();
 
       expect(mockSafeRpc).toHaveBeenCalledWith("get_suppliers_list", {
-        search_query: null,
-        status_filter: null,
+        search_query: "",
+        status_filter: "",
         page_num: 1,
         page_size: 10,
       });

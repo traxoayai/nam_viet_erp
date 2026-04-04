@@ -63,7 +63,7 @@ export const QuickCustomerModal: React.FC<QuickCustomerModalProps> = ({
           // result might be the ID directly or an object containing ID, depending on RPC.
           // Based on logic in useBookingResources, createCustomer returns `data`, which is usually the ID or the object.
           // Assuming create_customer_b2c returns the ID or object with id.
-          const newId = typeof result === "object" ? result?.id : result;
+          const newId = typeof result === "object" ? (result as unknown as { id: number })?.id : result;
           onSuccess(newId);
           onCancel();
         }

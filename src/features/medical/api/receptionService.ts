@@ -24,7 +24,7 @@ export const receptionService = {
       appointment_time: payload.appointment_time,
       room_id: payload.room_id,
       service_ids: payload.service_ids,
-      service_type: payload.service_type,
+      service_type: payload.service_type as "examination" | "vaccination",
       priority: payload.priority || "normal",
       note: payload.note,
       doctor_id: payload.doctor_id,
@@ -65,7 +65,8 @@ export const receptionService = {
     // Lấy từ bảng users/staffs hoặc view_users (nếu DB auth không cho fetch)
     // Tạm gọi bảng user_profiles hoặc bảng profiles (nếu có mapping). Ta dùng rpc hoặc query cơ bản.
     // Nếu ứng dụng đang dùng sys_users hoặc profiles:
-    const { data } = await supabase
+    // "profiles" không có trong generated DB types, bypass type check
+    const { data } = await (supabase as unknown as { from: (t: string) => { select: (s: string) => PromiseLike<{ data: { id: string; full_name: string; email: string }[] | null }> } })
       .from("profiles")
       .select("id, full_name, email");
     return data || [];

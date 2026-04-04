@@ -64,10 +64,11 @@ export default function NurseExecutionPage() {
     try {
       const dateStr = filterDate.format("YYYY-MM-DD");
       const data = await nurseService.getNurseExecutionQueue(dateStr);
-      setQueue(data);
-      
+      const queueData = (data ?? []) as unknown as Record<string, unknown>[];
+      setQueue(queueData);
+
       // Auto-select first if none selected
-      if (!selectedPatientId && data.length > 0) {
+      if (!selectedPatientId && queueData.length > 0) {
         // setSelectedPatientId(data[0].customer_id);
       }
     } catch (err: any) {

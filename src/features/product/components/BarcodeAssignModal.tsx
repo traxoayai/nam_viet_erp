@@ -90,12 +90,13 @@ export const BarcodeAssignModal: React.FC<Props> = ({
         p_unit_id: values.unit_id, // Gửi ID thay vì Name
         p_barcode: scannedBarcode,
       });
-      if (data && !data.success) throw new Error(data.message);
+      const result = data as unknown as { success: boolean; message: string; data: unknown } | null;
+      if (result && !result.success) throw new Error(result.message);
 
-      message.success(data.message);
+      message.success(result?.message);
 
       // Trả về dữ liệu sản phẩm đầy đủ để POS/Receipt tự add vào giỏ
-      onSuccess(data.data);
+      onSuccess(result?.data);
     } catch (err: any) {
       message.error(err.message || "Lỗi gán mã vạch");
     } finally {

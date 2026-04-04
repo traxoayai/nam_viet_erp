@@ -41,7 +41,7 @@ export const usePurchaseOrderStore = create<PurchaseOrderState>((set, get) => ({
         pageSize
       );
 
-      set({ orders: data, totalCount, loading: false });
+      set({ orders: data as unknown as PurchaseOrderMaster[], totalCount, loading: false });
     } catch (error) {
       console.error("Error fetching orders:", error);
       set({ loading: false });

@@ -7,15 +7,16 @@ import type {
 } from "@/features/marketing/types/servicePackage";
 
 import { safeRpc } from "@/shared/lib/safeRpc";
+import type { Json } from "@/shared/lib/database.types";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const servicePackageService = {
   // 1. Lấy danh sách
   async fetchPackages(filter: PackageFilter) {
     const { data } = await safeRpc("get_service_packages_list", {
-      p_search_query: filter.search_query || null,
-      p_type_filter: filter.type_filter || null,
-      p_status_filter: filter.status_filter || null,
+      p_search_query: filter.search_query || "",
+      p_type_filter: filter.type_filter || "",
+      p_status_filter: filter.status_filter || "",
       p_page_num: filter.page_num || 1,
       p_page_size: filter.page_size || 10,
     });
@@ -36,7 +37,7 @@ export const servicePackageService = {
   // 3. Tính giá vốn (Server-side)
   async calculateCost(items: ServicePackageItemInput[]) {
     const { data } = await safeRpc("calculate_package_cost", {
-      p_items: items,
+      p_items: items as unknown as Json,
     });
     return data as number;
   },
@@ -47,8 +48,8 @@ export const servicePackageService = {
     items: ServicePackageItemInput[]
   ) {
     const { data } = await safeRpc("create_service_package", {
-      p_data: pkgData,
-      p_items: items,
+      p_data: pkgData as unknown as Json,
+      p_items: items as unknown as Json,
     });
     return data;
   },
@@ -61,8 +62,8 @@ export const servicePackageService = {
   ) {
     await safeRpc("update_service_package", {
       p_id: id,
-      p_data: pkgData,
-      p_items: items,
+      p_data: pkgData as unknown as Json,
+      p_items: items as unknown as Json,
     });
     return true;
   },
