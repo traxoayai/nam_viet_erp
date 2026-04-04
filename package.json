@@ -14,7 +14,9 @@
     "test:types": "tsc --noEmit",
     "test:e2e": "npx playwright test",
     "test:e2e:headed": "npx playwright test --headed",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run",
+    "test:all": "npm run test:unit && npm run test:rpc && npm run test:e2e",
+    "test:ci": "npm run test:unit && npm run test:rpc"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

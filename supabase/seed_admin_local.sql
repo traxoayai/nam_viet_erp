@@ -33,10 +33,18 @@ BEGIN
     RAISE NOTICE 'User admin@test.com da ton tai: %', v_user_id;
   END IF;
 
+  -- 1b. Dam bao identity ton tai (GoTrue can identity de login)
+  INSERT INTO auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+  VALUES (
+    v_user_id, v_user_id, 'admin@test.com',
+    jsonb_build_object('sub', v_user_id::text, 'email', 'admin@test.com', 'email_verified', true),
+    'email', NOW(), NOW(), NOW()
+  ) ON CONFLICT DO NOTHING;
+
   -- 2. Dam bao user co profile trong public.users
-  INSERT INTO public.users (id, full_name, status, created_at)
-  VALUES (v_user_id, 'Admin Test', 'active', NOW())
-  ON CONFLICT (id) DO UPDATE SET status = 'active', full_name = COALESCE(public.users.full_name, 'Admin Test');
+  INSERT INTO public.users (id, full_name, status, created_at, profile_updated_at)
+  VALUES (v_user_id, 'Admin Test', 'active', NOW(), NOW())
+  ON CONFLICT (id) DO UPDATE SET status = 'active', full_name = COALESCE(public.users.full_name, 'Admin Test'), profile_updated_at = COALESCE(public.users.profile_updated_at, NOW());
 
   -- 3. Dam bao permission admin-all ton tai
   INSERT INTO public.permissions (key, name, module)

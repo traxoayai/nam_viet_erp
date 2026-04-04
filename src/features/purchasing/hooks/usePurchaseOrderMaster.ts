@@ -52,11 +52,11 @@ export const usePurchaseOrderMaster = () => {
         p_page: pagination.page,
         p_page_size: pagination.pageSize,
         p_search: filters.search || "",
-        p_status_delivery: p_status_delivery || "",
-        p_status_payment: p_status_payment || "",
-        p_status: p_status || "",
-        p_date_from: filters.dateRange?.[0] || "",
-        p_date_to: filters.dateRange?.[1] || "",
+        p_status_delivery: p_status_delivery || null,
+        p_status_payment: p_status_payment || null,
+        p_status: p_status || null,
+        p_date_from: filters.dateRange?.[0] || null,
+        p_date_to: filters.dateRange?.[1] || null,
       });
 
       // Map dữ liệu & Total count

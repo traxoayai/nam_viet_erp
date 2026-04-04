@@ -69,11 +69,11 @@ describe("usePurchaseOrderMaster - safeRpc calls", () => {
       p_page: 1,
       p_page_size: 12,
       p_search: "",
-      p_status_delivery: "",
-      p_status_payment: "",
-      p_status: "",
-      p_date_from: "",
-      p_date_to: "",
+      p_status_delivery: null,
+      p_status_payment: null,
+      p_status: null,
+      p_date_from: null,
+      p_date_to: null,
     });
   });
 
@@ -111,10 +111,35 @@ describe("usePurchaseOrderMaster - fetchOrders status filter parsing", () => {
     );
     expect(call).toBeDefined();
     expect(call![1]).toMatchObject({
-      p_status_delivery: "",
-      p_status_payment: "",
-      p_status: "",
+      p_status_delivery: null,
+      p_status_payment: null,
+      p_status: null,
     });
+  });
+});
+
+describe("usePurchaseOrderMaster - empty string sanitization", () => {
+  beforeEach(() => {
+    mockSafeRpc.mockReset();
+    mockSafeRpc.mockResolvedValue({ data: [], error: null });
+  });
+
+  it("never sends empty string for non-text params (prevents PG type cast errors)", async () => {
+    const hook = renderHookSync(() => usePurchaseOrderMaster());
+    await hook.fetchOrders();
+
+    const call = mockSafeRpc.mock.calls.find(
+      (c: any[]) => c[0] === "get_purchase_orders_master"
+    );
+    expect(call).toBeDefined();
+    const params = call![1];
+    // Non-text params must be null, never ""
+    expect(params.p_status_delivery).toBeNull();
+    expect(params.p_status_payment).toBeNull();
+    expect(params.p_date_from).toBeNull();
+    expect(params.p_date_to).toBeNull();
+    // Text params can be "" (p_search)
+    expect(params.p_search).toBe("");
   });
 });
 
@@ -150,11 +175,11 @@ describe("usePurchaseOrderMaster - get_po_logistics_stats", () => {
       p_page: 1,
       p_page_size: 12,
       p_search: "",
-      p_status_delivery: "",
-      p_status_payment: "",
-      p_status: "",
-      p_date_from: "",
-      p_date_to: "",
+      p_status_delivery: null,
+      p_status_payment: null,
+      p_status: null,
+      p_date_from: null,
+      p_date_to: null,
     });
   });
 });

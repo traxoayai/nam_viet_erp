@@ -3,7 +3,7 @@ import path from "path";
 
 export default defineConfig({
   test: {
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/rpc/**/*.test.ts"],
     testTimeout: 30000,
     hookTimeout: 30000,
     pool: "forks",
