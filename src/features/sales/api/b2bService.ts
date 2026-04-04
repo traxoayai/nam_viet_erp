@@ -130,8 +130,8 @@ export const b2bService = {
     const { data } = await safeRpc("get_sales_orders_view", {
       p_page: params.page,
       p_page_size: params.pageSize,
-      p_search: params.search ?? undefined,
-      p_status: params.status ?? undefined,
+      p_search: params.search || undefined,
+      p_status: params.status || undefined,
       p_order_type: "B2B",
     });
 

@@ -159,6 +159,38 @@ describe("salesService", () => {
       const result = await salesService.getOrders({ page: 1, pageSize: 10 });
       expect(result).toEqual({ data: [], total: 0, stats: {} });
     });
+
+    it("converts empty string filters to undefined (prevents UUID cast error)", async () => {
+      mockSafeRpc.mockResolvedValue({
+        data: { data: [], total: 0, stats: { total_sales: 0, count_pending_remittance: 0, total_cash_pending: 0 } },
+      });
+      await salesService.getOrders({
+        page: 1,
+        pageSize: 10,
+        creatorId: "",
+        paymentStatus: "",
+        invoiceStatus: "",
+        status: "",
+        orderType: "",
+        paymentMethod: "",
+      });
+      expect(mockSafeRpc).toHaveBeenCalledWith("get_sales_orders_view", {
+        p_page: 1,
+        p_page_size: 10,
+        p_search: "",
+        p_status: undefined,
+        p_order_type: undefined,
+        p_remittance_status: undefined,
+        p_date_from: undefined,
+        p_date_to: undefined,
+        p_creator_id: undefined,
+        p_payment_status: undefined,
+        p_invoice_status: undefined,
+        p_payment_method: undefined,
+        p_warehouse_id: undefined,
+        p_customer_id: undefined,
+      });
+    });
   });
 
   // --- confirmPayment ---
