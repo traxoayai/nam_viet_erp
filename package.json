@@ -16,7 +16,8 @@
     "test:e2e:headed": "npx playwright test --headed",
     "test:unit": "vitest run",
     "test:all": "npm run test:unit && npm run test:rpc && npm run test:e2e",
-    "test:ci": "npm run test:unit && npm run test:rpc"
+    "test:ci": "npm run test:unit && npm run test:rpc",
+    "test:rpc:prod": "TEST_TARGET=prod vitest run --config vitest.config.integration.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

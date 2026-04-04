@@ -50,7 +50,7 @@ describe("useBookingResources - safeRpc calls", () => {
 
     expect(mockSafeRpc).toHaveBeenCalledWith("get_customers_b2c_list", {
       search_query: "Nguyen",
-      type_filter: "",
+      type_filter: null,
       status_filter: "active",
       page_num: 1,
       page_size: 20,

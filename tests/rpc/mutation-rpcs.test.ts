@@ -1,5 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { adminClient } from "../helpers/supabase";
+import { describe as _describe, it, expect } from "vitest";
+import { adminClient, isProduction } from "../helpers/supabase";
+
+// Skip mutation tests on production to avoid side effects
+const describe = isProduction ? _describe.skip : _describe;
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 const FAKE_ID = 999999;
