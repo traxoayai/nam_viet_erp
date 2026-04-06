@@ -110,7 +110,7 @@ describe("purchaseOrderService", () => {
       expect(result).toEqual({ id: 10, code: "PO-NEW", status: "DRAFT", message: "ok" });
     });
 
-    it("sends null (not 0) when shipping_partner_id is undefined", async () => {
+    it("sends 0 when shipping_partner_id is undefined", async () => {
       mockSafeRpc.mockResolvedValue({ data: { id: 11, code: "PO-INT" } });
       await purchaseOrderService.createPO({
         supplier_id: 1,
@@ -119,10 +119,10 @@ describe("purchaseOrderService", () => {
         items: [{ product_id: 1, quantity: 5, unit_price: 1000, unit: "Hop" }],
       });
       const call = mockSafeRpc.mock.calls[0];
-      expect(call[1].p_shipping_partner_id).toBeNull();
+      expect(call[1].p_shipping_partner_id).toBe(0);
     });
 
-    it("sends null (not 0) when shipping_partner_id is 0", async () => {
+    it("sends 0 when shipping_partner_id is 0", async () => {
       mockSafeRpc.mockResolvedValue({ data: { id: 12, code: "PO-ZERO" } });
       await purchaseOrderService.createPO({
         supplier_id: 1,
@@ -131,7 +131,7 @@ describe("purchaseOrderService", () => {
         items: [],
       });
       const call = mockSafeRpc.mock.calls[0];
-      expect(call[1].p_shipping_partner_id).toBeNull();
+      expect(call[1].p_shipping_partner_id).toBe(0);
     });
   });
 

@@ -69,11 +69,11 @@ describe("usePurchaseOrderMaster - safeRpc calls", () => {
       p_page: 1,
       p_page_size: 12,
       p_search: "",
-      p_status_delivery: null,
-      p_status_payment: null,
-      p_status: null,
-      p_date_from: null,
-      p_date_to: null,
+      p_status_delivery: "",
+      p_status_payment: "",
+      p_status: "",
+      p_date_from: "",
+      p_date_to: "",
     });
   });
 
@@ -111,9 +111,9 @@ describe("usePurchaseOrderMaster - fetchOrders status filter parsing", () => {
     );
     expect(call).toBeDefined();
     expect(call![1]).toMatchObject({
-      p_status_delivery: null,
-      p_status_payment: null,
-      p_status: null,
+      p_status_delivery: "",
+      p_status_payment: "",
+      p_status: "",
     });
   });
 });
@@ -133,11 +133,11 @@ describe("usePurchaseOrderMaster - empty string sanitization", () => {
     );
     expect(call).toBeDefined();
     const params = call![1];
-    // Non-text params must be null, never ""
-    expect(params.p_status_delivery).toBeNull();
-    expect(params.p_status_payment).toBeNull();
-    expect(params.p_date_from).toBeNull();
-    expect(params.p_date_to).toBeNull();
+    // All filter params default to "" when no filter is applied
+    expect(params.p_status_delivery).toBe("");
+    expect(params.p_status_payment).toBe("");
+    expect(params.p_date_from).toBe("");
+    expect(params.p_date_to).toBe("");
     // Text params can be "" (p_search)
     expect(params.p_search).toBe("");
   });
@@ -175,11 +175,11 @@ describe("usePurchaseOrderMaster - get_po_logistics_stats", () => {
       p_page: 1,
       p_page_size: 12,
       p_search: "",
-      p_status_delivery: null,
-      p_status_payment: null,
-      p_status: null,
-      p_date_from: null,
-      p_date_to: null,
+      p_status_delivery: "",
+      p_status_payment: "",
+      p_status: "",
+      p_date_from: "",
+      p_date_to: "",
     });
   });
 });
