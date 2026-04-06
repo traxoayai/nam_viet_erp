@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient } from "../helpers/supabase";
+import { seedRpcAccessRules } from "../helpers/seedRpcAccessRules";
 
 /**
  * Tests for finance RPCs.
@@ -17,6 +18,8 @@ import { adminClient } from "../helpers/supabase";
  * service_role calls get 'Unauthorized: Chưa đăng nhập.'
  */
 describe("finance RPCs", () => {
+  beforeAll(() => seedRpcAccessRules());
+
   // ----------------------------------------------------------------
   // create_finance_transaction — documents actual behavior
   // ----------------------------------------------------------------

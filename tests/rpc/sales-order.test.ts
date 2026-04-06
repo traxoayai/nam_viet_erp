@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient } from "../helpers/supabase";
+import { seedRpcAccessRules } from "../helpers/seedRpcAccessRules";
 
 /**
  * Tests for create_sales_order RPC.
@@ -10,6 +11,8 @@ import { adminClient } from "../helpers/supabase";
  * bypasses check_rpc_access but still tests the core SQL logic.
  */
 describe("create_sales_order", () => {
+  beforeAll(() => seedRpcAccessRules());
+
   it("rejects null warehouse_id", async () => {
     const { error } = await adminClient.rpc("create_sales_order", {
       p_items: [

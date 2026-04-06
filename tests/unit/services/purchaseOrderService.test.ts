@@ -109,6 +109,30 @@ describe("purchaseOrderService", () => {
       });
       expect(result).toEqual({ id: 10, code: "PO-NEW", status: "DRAFT", message: "ok" });
     });
+
+    it("sends null (not 0) when shipping_partner_id is undefined", async () => {
+      mockSafeRpc.mockResolvedValue({ data: { id: 11, code: "PO-INT" } });
+      await purchaseOrderService.createPO({
+        supplier_id: 1,
+        delivery_method: "internal",
+        status: "DRAFT",
+        items: [{ product_id: 1, quantity: 5, unit_price: 1000, unit: "Hop" }],
+      });
+      const call = mockSafeRpc.mock.calls[0];
+      expect(call[1].p_shipping_partner_id).toBeNull();
+    });
+
+    it("sends null (not 0) when shipping_partner_id is 0", async () => {
+      mockSafeRpc.mockResolvedValue({ data: { id: 12, code: "PO-ZERO" } });
+      await purchaseOrderService.createPO({
+        supplier_id: 1,
+        shipping_partner_id: 0,
+        status: "DRAFT",
+        items: [],
+      });
+      const call = mockSafeRpc.mock.calls[0];
+      expect(call[1].p_shipping_partner_id).toBeNull();
+    });
   });
 
   // --- confirmPO ---
@@ -141,6 +165,32 @@ describe("purchaseOrderService", () => {
       const result = await purchaseOrderService.cancelPO(12);
       expect(mockSafeRpc).toHaveBeenCalledWith("cancel_purchase_order", { p_po_id: 12 });
       expect(result).toBe(true);
+    });
+  });
+
+  // --- updatePO ---
+  describe("updatePO", () => {
+    it("sends null (not undefined) when shipping_partner_id is missing", async () => {
+      mockSafeRpc.mockResolvedValue({ data: null });
+      await purchaseOrderService.updatePO(5, {
+        supplier_id: 1,
+        delivery_method: "internal",
+        note: "",
+        status: "DRAFT",
+      }, [{ product_id: 1, quantity: 10, uom: "Hop", unit_price: 5000 }]);
+      const call = mockSafeRpc.mock.calls[0];
+      expect(call[1].p_shipping_partner_id).toBeNull();
+    });
+
+    it("preserves valid shipping_partner_id when provided", async () => {
+      mockSafeRpc.mockResolvedValue({ data: null });
+      await purchaseOrderService.updatePO(5, {
+        supplier_id: 1,
+        shipping_partner_id: 7,
+        status: "DRAFT",
+      }, [{ product_id: 1, quantity: 10, uom: "Hop", unit_price: 5000 }]);
+      const call = mockSafeRpc.mock.calls[0];
+      expect(call[1].p_shipping_partner_id).toBe(7);
     });
   });
 

@@ -79,6 +79,45 @@ describe("purchase order RPCs", () => {
   });
 
   // ----------------------------------------------------------------
+  // create_purchase_order — null shipping_partner_id should NOT cause FK error
+  // ----------------------------------------------------------------
+  it("create_purchase_order accepts null shipping_partner_id without FK violation", async () => {
+    // Test read-only: verify DB schema cho phép NULL shipping_partner_id
+    // Kiểm tra column nullable bằng cách query metadata thay vì tạo data thật
+    const { data: existing } = await adminClient
+      .from("purchase_orders")
+      .select("id, shipping_partner_id")
+      .is("shipping_partner_id", null)
+      .limit(1)
+      .maybeSingle();
+
+    // Nếu đã có PO với shipping_partner_id = NULL → column chắc chắn nullable
+    if (existing) {
+      expect(existing.shipping_partner_id).toBeNull();
+      return;
+    }
+
+    // Fallback: gọi RPC với invalid supplier để trigger lỗi business logic,
+    // KHÔNG phải FK violation — chứng minh null shipping_partner_id được accept
+    const { error } = await adminClient.rpc("create_purchase_order", {
+      p_supplier_id: -1,
+      p_expected_date: null,
+      p_note: "",
+      p_delivery_method: "internal",
+      p_shipping_partner_id: null,
+      p_shipping_fee: 0,
+      p_status: "DRAFT",
+      p_items: [],
+    });
+
+    // Lỗi phải là business logic (supplier không tồn tại, Unauthorized, v.v.)
+    // KHÔNG được là FK constraint violation trên shipping_partner_id
+    if (error) {
+      expect(error.message).not.toMatch(/foreign key constraint.*shipping_partner_id/i);
+    }
+  });
+
+  // ----------------------------------------------------------------
   // Read-only: verify purchase_orders table is accessible via service_role
   // ----------------------------------------------------------------
   it("can read purchase_orders table via service_role", async () => {

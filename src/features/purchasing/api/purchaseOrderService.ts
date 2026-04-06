@@ -46,7 +46,7 @@ export const purchaseOrderService = {
       p_expected_date: payload.expected_date || null,
       p_note: payload.note || "",
       p_delivery_method: payload.delivery_method || "self_shipping",
-      p_shipping_partner_id: payload.shipping_partner_id || 0,
+      p_shipping_partner_id: payload.shipping_partner_id || null,
       p_shipping_fee: payload.shipping_fee || 0,
       p_status: payload.status,
 
@@ -104,7 +104,7 @@ export const purchaseOrderService = {
       p_expected_delivery_time: fullDateTime ?? undefined,
       p_note: payload.note || "",
       p_delivery_method: payload.delivery_method ?? undefined,
-      p_shipping_partner_id: payload.shipping_partner_id || undefined,
+      p_shipping_partner_id: payload.shipping_partner_id || null,
       p_shipping_fee: payload.shipping_fee || 0,
       p_status: payload.status ?? undefined,
       // [UPDATE V35.9] Logistics Fields

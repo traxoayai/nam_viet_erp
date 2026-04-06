@@ -345,14 +345,23 @@ describe("Purchasing RPCs", () => {
 // ─── Suppliers ───────────────────────────────────────────────────────────────
 
 describe("Suppliers RPCs", () => {
-  it("get_suppliers_list", async () => {
-    const { error } = await adminClient.rpc("get_suppliers_list", {
+  it("get_suppliers_list — returns data when no filter", async () => {
+    const { data, error } = await adminClient.rpc("get_suppliers_list", {
       page_num: 1,
       page_size: 10,
       search_query: "",
       status_filter: "",
     });
     expectNoTypeError(error);
+
+    // Must return data if suppliers table has rows
+    const { count } = await adminClient
+      .from("suppliers")
+      .select("*", { count: "exact", head: true });
+    if (count && count > 0) {
+      expect(data).not.toBeNull();
+      expect((data as unknown[]).length).toBeGreaterThan(0);
+    }
   });
 
   it("get_supplier_quick_info", async () => {
