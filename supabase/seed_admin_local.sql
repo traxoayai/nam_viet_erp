@@ -17,7 +17,10 @@ BEGIN
       id, instance_id, email, encrypted_password,
       email_confirmed_at, created_at, updated_at,
       raw_app_meta_data, raw_user_meta_data,
-      aud, role, confirmation_token
+      aud, role, confirmation_token,
+      email_change, email_change_token_new, email_change_token_current,
+      email_change_confirm_status, phone, phone_change, phone_change_token,
+      recovery_token, reauthentication_token, is_sso_user, is_anonymous
     ) VALUES (
       gen_random_uuid(), '00000000-0000-0000-0000-000000000000',
       'admin@test.com',
@@ -25,7 +28,8 @@ BEGIN
       NOW(), NOW(), NOW(),
       '{"provider":"email","providers":["email"]}'::jsonb,
       '{"full_name":"Admin Test"}'::jsonb,
-      'authenticated', 'authenticated', ''
+      'authenticated', 'authenticated', '',
+      '', '', '', 0, '', '', '', '', '', false, false
     )
     RETURNING id INTO v_user_id;
     RAISE NOTICE 'Da tao user admin@test.com: %', v_user_id;

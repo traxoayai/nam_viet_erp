@@ -6,6 +6,7 @@ import { PurchaseOrderMaster, PoLogisticsStat } from "../types/purchase";
 
 import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import type { Database } from "@/shared/lib/database.types";
 
 export const usePurchaseOrderMaster = () => {
   // --- STATE ---
@@ -48,16 +49,21 @@ export const usePurchaseOrderMaster = () => {
         p_status = statusFilter;
       }
 
-      const { data: rpcData } = await safeRpc("get_purchase_orders_master", {
+      const rpcParams: Record<string, unknown> = {
         p_page: pagination.page,
         p_page_size: pagination.pageSize,
         p_search: filters.search || "",
         p_status_delivery: p_status_delivery || "",
         p_status_payment: p_status_payment || "",
-        p_status: p_status || "",
-        p_date_from: filters.dateRange?.[0] || "",
-        p_date_to: filters.dateRange?.[1] || "",
-      });
+      };
+      if (p_status) rpcParams.p_status = p_status;
+      if (filters.dateRange?.[0]) rpcParams.p_date_from = filters.dateRange[0];
+      if (filters.dateRange?.[1]) rpcParams.p_date_to = filters.dateRange[1];
+
+      const { data: rpcData } = await safeRpc(
+        "get_purchase_orders_master",
+        rpcParams as Database["public"]["Functions"]["get_purchase_orders_master"]["Args"],
+      );
 
       // Map dữ liệu & Total count
       // Giả sử item đầu tiên chứa full_count (kỹ thuật thường dùng trong Supabase RPC phân trang)

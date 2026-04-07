@@ -83,6 +83,28 @@ describe("Data assertions — listing RPCs return data", () => {
     expect((data as unknown[]).length).toBeGreaterThan(0);
   });
 
+  it("get_purchase_orders_master returns POs with empty string status filters", async () => {
+    const count = await tableCount("purchase_orders");
+    if (count === 0) return;
+
+    const { data, error } = await adminClient.rpc(
+      "get_purchase_orders_master",
+      {
+        p_page: 1,
+        p_page_size: 10,
+        p_search: "",
+        p_status_delivery: "",
+        p_status_payment: "",
+        p_status: "",
+        p_date_from: null,
+        p_date_to: null,
+      }
+    );
+    expect(error).toBeNull();
+    expect(data).not.toBeNull();
+    expect((data as unknown[]).length).toBeGreaterThan(0);
+  });
+
   it("get_customers_b2b_list returns B2B customers", async () => {
     const count = await tableCount("customers_b2b");
     if (count === 0) return;

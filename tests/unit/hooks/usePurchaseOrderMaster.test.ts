@@ -71,9 +71,6 @@ describe("usePurchaseOrderMaster - safeRpc calls", () => {
       p_search: "",
       p_status_delivery: "",
       p_status_payment: "",
-      p_status: "",
-      p_date_from: "",
-      p_date_to: "",
     });
   });
 
@@ -113,8 +110,9 @@ describe("usePurchaseOrderMaster - fetchOrders status filter parsing", () => {
     expect(call![1]).toMatchObject({
       p_status_delivery: "",
       p_status_payment: "",
-      p_status: "",
     });
+    // p_status is omitted when empty (optional param, not sent to avoid SQL filter)
+    expect(call![1].p_status).toBeUndefined();
   });
 });
 
@@ -133,11 +131,12 @@ describe("usePurchaseOrderMaster - empty string sanitization", () => {
     );
     expect(call).toBeDefined();
     const params = call![1];
-    // All filter params default to "" when no filter is applied
+    // Text filter params default to "" when no filter is applied
     expect(params.p_status_delivery).toBe("");
     expect(params.p_status_payment).toBe("");
-    expect(params.p_date_from).toBe("");
-    expect(params.p_date_to).toBe("");
+    // Timestamptz params: omitted entirely when no date range (spread empty object)
+    expect(params.p_date_from).toBeUndefined();
+    expect(params.p_date_to).toBeUndefined();
     // Text params can be "" (p_search)
     expect(params.p_search).toBe("");
   });
@@ -177,9 +176,6 @@ describe("usePurchaseOrderMaster - get_po_logistics_stats", () => {
       p_search: "",
       p_status_delivery: "",
       p_status_payment: "",
-      p_status: "",
-      p_date_from: "",
-      p_date_to: "",
     });
   });
 });

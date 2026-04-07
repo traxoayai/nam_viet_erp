@@ -9,9 +9,10 @@ const FAKE_ID = 999999;
 
 function expectValidError(error: { code?: string; message?: string } | null) {
   if (!error) return; // success is also OK for some mutations
-  // Should NOT be type cast or function-not-found
+  // Should NOT be type cast, function-not-found, or overload ambiguity
   expect(["22P02", "22007"]).not.toContain(error.code);
   expect(error.code).not.toBe("PGRST202");
+  expect(error.code).not.toBe("PGRST203");
 }
 
 // ─── Sales ──────────────────────────────────────────────────────────────────

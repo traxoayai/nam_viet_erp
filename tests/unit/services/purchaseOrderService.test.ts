@@ -122,6 +122,19 @@ describe("purchaseOrderService", () => {
       expect(call[1].p_shipping_partner_id).toBe(0);
     });
 
+    it("sends current ISO date when expected_date is undefined (prevents PG timestamptz cast error)", async () => {
+      mockSafeRpc.mockResolvedValue({ data: { id: 13, code: "PO-NODATE" } });
+      await purchaseOrderService.createPO({
+        supplier_id: 1,
+        status: "DRAFT",
+        items: [],
+      });
+      const call = mockSafeRpc.mock.calls[0];
+      // Should be a valid ISO date string, not null or empty
+      expect(typeof call[1].p_expected_date).toBe("string");
+      expect(call[1].p_expected_date.length).toBeGreaterThan(0);
+    });
+
     it("sends 0 when shipping_partner_id is 0", async () => {
       mockSafeRpc.mockResolvedValue({ data: { id: 12, code: "PO-ZERO" } });
       await purchaseOrderService.createPO({

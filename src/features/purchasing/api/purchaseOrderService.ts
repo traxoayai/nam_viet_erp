@@ -43,7 +43,7 @@ export const purchaseOrderService = {
     // Mapping tham số chuẩn xác 100% với RPC create_purchase_order
     const rpcPayload = {
       p_supplier_id: payload.supplier_id,
-      p_expected_date: payload.expected_date || "",
+      p_expected_date: payload.expected_date || new Date().toISOString(),
       p_note: payload.note || "",
       p_delivery_method: payload.delivery_method || "self_shipping",
       p_shipping_partner_id: payload.shipping_partner_id || 0,
