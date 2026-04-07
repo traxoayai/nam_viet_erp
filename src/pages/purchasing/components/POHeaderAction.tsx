@@ -26,7 +26,6 @@ interface Props {
   onRequestPayment: () => void;
   onOpenCosting?: () => void;
   onOpenInvoice?: () => void;
-  onUpdateLogistics?: () => void;
   onRequestShippingPayment?: () => void;
 }
 
@@ -42,7 +41,6 @@ const POHeaderAction = ({
   onRequestPayment,
   onOpenCosting,
   onOpenInvoice,
-  onUpdateLogistics,
   onRequestShippingPayment,
 }: Props) => {
   const navigate = useNavigate();
@@ -142,10 +140,10 @@ const POHeaderAction = ({
                   <Button
                     type="primary"
                     icon={<SaveOutlined />}
-                    onClick={onUpdateLogistics}
+                    onClick={onSave}
                     loading={loading}
                   >
-                    Lưu thông tin
+                    Lưu
                   </Button>
                   <Button
                     style={{ borderColor: "#faad14", color: "#faad14" }}

@@ -499,29 +499,6 @@ export const usePurchaseOrderLogic = () => {
     setPaymentModalOpen(true);
   };
 
-  const handleUpdateLogistics = async () => {
-    setLoading(true);
-    try {
-      const values = await form.validateFields();
-      await purchaseOrderService.updateLogistics(Number(id), {
-        delivery_method: values.delivery_method,
-        shipping_partner_id: values.shipping_partner_id,
-        shipping_fee: values.shipping_fee,
-        total_packages: values.total_packages,
-        expected_delivery_date: values.expected_delivery_date
-          ? dayjs(values.expected_delivery_date).toISOString()
-          : undefined,
-        note: values.note,
-      });
-      message.success("Đã cập nhật thông tin vận chuyển");
-      loadOrderDetail(Number(id));
-    } catch (err: any) {
-      message.error(err.message || "Lỗi cập nhật");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleConfirmFinancials = async (processedItems: any[]) => {
     setLoading(true);
     try {
@@ -582,7 +559,6 @@ export const usePurchaseOrderLogic = () => {
     confirmOrder,
     requestPayment,
     requestShippingPayment,
-    handleUpdateLogistics,
     calculateTotals,
     handleSupplierChange,
     paymentModalOpen,

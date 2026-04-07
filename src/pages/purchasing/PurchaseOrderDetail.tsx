@@ -79,7 +79,6 @@ const PurchaseOrderDetailContent = () => {
           setInvoiceRefreshKey((k) => k + 1);
           scrollToSection("section-invoice");
         }}
-        onUpdateLogistics={logic.handleUpdateLogistics}
         onRequestShippingPayment={logic.requestShippingPayment}
       />
 
