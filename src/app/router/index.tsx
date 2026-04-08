@@ -21,6 +21,7 @@ import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
 import AssetManagementPage from "@/pages/finance/AssetManagementPage";
 import DoctorPage from "@/pages/medical/DoctorPage";
 import ReceptionPage from "@/pages/medical/ReceptionPage"; // [NEW]
+import PortalRegistrationPage from "@/pages/crm/PortalRegistrationPage"; // [NEW]
 import DoctorQueuePage from "@/pages/medical/DoctorQueuePage";
 import ParaclinicalPage from "@/pages/medical/ParaclinicalPage"; // [NEW]
 import NurseExecutionPage from "@/pages/medical/NurseExecutionPage"; // [NEW]
@@ -468,6 +469,14 @@ const routes: RouteObject[] = [
             element: (
               <PermissionGuard permission={PERMISSIONS.CRM.B2B.VIEW}>
                 <CustomerB2BPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "crm/portal-registrations",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.CRM.B2B.VIEW}>
+                <PortalRegistrationPage />
               </PermissionGuard>
             ),
           },

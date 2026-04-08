@@ -90,9 +90,9 @@ psql "${TEMP_URL}" < "${SCHEMA_BACKUP}" 2>/dev/null
 
 # Apply migrations to temp DB
 MIGRATION_FILES=(
-    "supabase/migrations/20260325000001_001_infrastructure.sql"
-    "supabase/migrations/20260325000001_002_business_logic.sql"
-    "supabase/migrations/20260325000001_003_misc.sql"
+    "supabase/migrations/20260408100000_exposure_and_voucher_v2.sql"
+    "supabase/migrations/20260408110000_fix_voucher_params_and_catalog_deals.sql"
+    "supabase/migrations/20260408120000_fix_clone_race_pricefilter.sql"
 )
 
 DRY_RUN_OK=true
@@ -166,10 +166,13 @@ echo -e "${YELLOW}[5/5] Post-migration verification...${NC}"
 FUNCTIONS_TO_CHECK=(
     "check_rpc_access"
     "create_sales_order"
-    "confirm_purchase_costing"
+    "clone_sales_order"
+    "get_customer_exposure_summary"
+    "get_customer_product_prices"
+    "get_wholesale_catalog"
+    "get_customer_debt_summary"
+    "verify_promotion_code"
     "_deduct_stock_fefo"
-    "approve_user"
-    "match_products_from_excel"
 )
 
 ALL_OK=true
@@ -185,7 +188,7 @@ for func in "${FUNCTIONS_TO_CHECK[@]}"; do
 done
 
 # Check key tables
-TABLES_TO_CHECK=("rpc_access_rules" "rpc_rate_log")
+TABLES_TO_CHECK=("rpc_access_rules" "rpc_rate_log" "promotions" "promotion_usages")
 for tbl in "${TABLES_TO_CHECK[@]}"; do
     EXISTS=$(psql "${SUPABASE_DB_URL}" -t -c \
         "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '${tbl}';" 2>/dev/null | tr -d ' ')

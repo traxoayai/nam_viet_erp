@@ -326,7 +326,7 @@ const WarehouseInboundPage = () => {
 
             {selectedRowKeys.length === 0 && (
               <Col xs={24} md={6} style={{ textAlign: "right" }}>
-                <Button icon={<Filter size={16} />}>Bộ lọc nâng cao</Button>
+                <Button icon={<Filter size={16} />}>Bộ lọc</Button>
               </Col>
             )}
           </Row>

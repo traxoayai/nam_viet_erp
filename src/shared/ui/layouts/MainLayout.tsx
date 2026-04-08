@@ -380,6 +380,11 @@ const finalMenuItems: MenuItem[] = [
         "/crm/b2b",
         <TeamOutlined />
       ),
+      getItem(
+        <Link to="/crm/portal-registrations">Khách Portal (Chờ duyệt)</Link>,
+        "/crm/portal-registrations",
+        <UserAddOutlined />
+      ),
     ]
   ),
 
