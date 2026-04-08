@@ -124,6 +124,29 @@ serve(async (req) => {
       });
     }
 
+    if (action === "download_invoice") {
+      const sepayToken = await getSepayToken();
+      const { tracking_code, type } = body as { tracking_code?: string; type?: "pdf" | "xml" };
+
+      if (!tracking_code) {
+        return new Response(JSON.stringify({ success: false, error: "tracking_code is required" }), {
+          status: 400,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      const res = await fetch(
+        `${SEPAY_BASE_URL}/v1/invoices/${tracking_code}/download?type=${type ?? "pdf"}`,
+        { headers: { Authorization: `Bearer ${sepayToken}` } },
+      );
+
+      const data = await res.json();
+      return new Response(JSON.stringify(data), {
+        status: res.ok ? 200 : 400,
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
       status: 400,
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
