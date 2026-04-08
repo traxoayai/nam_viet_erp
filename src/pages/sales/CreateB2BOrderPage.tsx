@@ -7,6 +7,7 @@ import {
   Typography,
   Card,
   Input,
+  Select,
   message,
   Alert,
 } from "antd";
@@ -44,6 +45,7 @@ const CreateB2BOrderPage = () => {
   const { id } = useParams();
   const isEditMode = !!id;
   const [loading, setLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "credit" | "bank_transfer">("credit");
 
   // [NEW] Hook Picking Print
   const { printByData: printPicking, printData: pickingData } =
@@ -259,6 +261,7 @@ const CreateB2BOrderPage = () => {
           p_shipping_partner_id:
             deliveryMethod === "internal" ? null : shippingPartnerId,
           p_warehouse_id: useAuthStore.getState().profile?.warehouse_id || DEFAULT_WAREHOUSE_ID,
+          p_payment_method: paymentMethod,
           p_order_type: "B2B",
           p_items: items.map((i) => ({
             product_id: i.id,
@@ -462,6 +465,21 @@ const CreateB2BOrderPage = () => {
                 size="small"
                 style={{ marginBottom: 16 }}
               >
+                <div style={{ marginBottom: 12 }}>
+                  <Typography.Text strong style={{ display: "block", marginBottom: 4 }}>
+                    Phương thức thanh toán
+                  </Typography.Text>
+                  <Select
+                    value={paymentMethod}
+                    onChange={setPaymentMethod}
+                    style={{ width: "100%" }}
+                    options={[
+                      { value: "credit", label: "Công nợ" },
+                      { value: "cash", label: "Tiền mặt" },
+                      { value: "bank_transfer", label: "Chuyển khoản" },
+                    ]}
+                  />
+                </div>
                 <VoucherSelector
                   customerId={customer?.id}
                   orderTotal={financials.subTotal}

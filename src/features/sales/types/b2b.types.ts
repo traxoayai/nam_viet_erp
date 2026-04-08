@@ -61,7 +61,7 @@ export interface B2BOrderDetail {
   status: B2BOrderItem["status"];
   created_at: string;
   note?: string;
-  payment_method?: string;
+  payment_method?: "cash" | "credit" | "bank_transfer";
 
   // Thông tin khách hàng (Join)
   customer_id: string;
@@ -76,6 +76,8 @@ export interface B2BOrderDetail {
   discount_amount: number;
   shipping_fee: number;
   final_amount: number;
+  paid_amount: number;
+  payment_status: "paid" | "partial" | "unpaid";
 
   // Danh sách sản phẩm
   items: B2BOrderDetailItem[];

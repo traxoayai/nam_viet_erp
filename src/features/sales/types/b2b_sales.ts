@@ -18,6 +18,7 @@ export interface CreateSalesOrderPayload {
   p_delivery_method: "internal" | "app" | "coach";
   p_shipping_partner_id?: number | null;
   p_warehouse_id: number; // [NEW] Trường bắt buộc mới
+  p_payment_method?: "cash" | "credit" | "bank_transfer";
   p_order_type: "B2B" | "POS";
   p_items: SalesOrderItemPayload[];
 }

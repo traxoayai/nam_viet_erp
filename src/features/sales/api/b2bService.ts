@@ -72,6 +72,8 @@ export const b2bService = {
       discount_amount: orderData.discount_amount || 0,
       shipping_fee: orderData.shipping_fee || 0,
       final_amount: orderData.final_amount || 0, // DB: final_amount là khách phải trả
+      paid_amount: orderData.paid_amount || 0,
+      payment_status: orderData.payment_status || "unpaid",
 
       // Map Items
       items: (orderData.order_items || []).map((item: any) => ({

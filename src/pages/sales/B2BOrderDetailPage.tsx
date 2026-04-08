@@ -11,7 +11,7 @@ import {
   EditOutlined, // [NEW]
   FileExcelOutlined,
 } from "@ant-design/icons";
-import { SnippetsOutlined } from "@ant-design/icons"; // [NEW]
+import { SnippetsOutlined, DollarOutlined } from "@ant-design/icons"; // [NEW]
 import {
   Affix,
   Button,
@@ -39,6 +39,7 @@ import { b2bService } from "@/features/sales/api/b2bService";
 import { useOrderPrint } from "@/features/sales/hooks/useOrderPrint"; // [NEW]
 import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint"; // [NEW]
 import { B2BOrderDetail } from "@/features/sales/types/b2b.types";
+import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal";
 import {
   B2B_STATUS_COLOR,
   B2B_STATUS_LABEL,
@@ -58,6 +59,7 @@ const B2BOrderDetailPage = () => {
   const [order, setOrder] = useState<B2BOrderDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [financeModalOpen, setFinanceModalOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -561,6 +563,21 @@ const B2BOrderDetailPage = () => {
             </>
           )}
 
+          {/* 2.5. NÚT TẠO PHIẾU THU (chỉ hiện khi đơn chưa thanh toán đủ) */}
+          {order &&
+            order.status !== "CANCELLED" &&
+            order.status !== "DRAFT" &&
+            order.status !== "QUOTE" &&
+            order.payment_status !== "paid" && (
+              <Button
+                icon={<DollarOutlined />}
+                style={{ color: "#faad14", borderColor: "#faad14" }}
+                onClick={() => setFinanceModalOpen(true)}
+              >
+                Tạo Phiếu Thu
+              </Button>
+            )}
+
           {/* 3. CÁC NÚT THAO TÁC (TÙY TRẠNG THÁI) */}
           {(order?.status === "DRAFT" || order?.status === "QUOTE") && (
             <>
@@ -612,6 +629,36 @@ const B2BOrderDetailPage = () => {
           )}
         </div>
       </Affix>
+
+      {/* FINANCE MODAL */}
+      <FinanceFormModal
+        open={financeModalOpen}
+        onCancel={() => setFinanceModalOpen(false)}
+        initialFlow="in"
+        onSuccess={() => {
+          setFinanceModalOpen(false);
+          if (id) fetchOrder(id);
+          message.success("Đã lập phiếu thu thành công!");
+        }}
+        initialValues={
+          order
+            ? {
+                business_type: "trade",
+                partner_type: "customer_b2b",
+                partner_id: order.customer_id,
+                partner_name: order.customer_name,
+                amount: Math.max(
+                  0,
+                  order.final_amount - (order.paid_amount || 0)
+                ),
+                ref_type: "order",
+                ref_id: order.code,
+                description: `Thu tiền đơn hàng ${order.code}`,
+                payment_method: order.payment_method,
+              }
+            : undefined
+        }
+      />
 
       {/* [NEW] HIDDEN PICKING PRINT */}
       {pickingData ? (
