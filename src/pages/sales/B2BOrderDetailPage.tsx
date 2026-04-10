@@ -606,14 +606,14 @@ const B2BOrderDetailPage = () => {
             </>
           )}
 
-          {order?.status === "CONFIRMED" && (
+          {/* {order?.status === "CONFIRMED" && (
             <Button
               onClick={() => handleUpdateStatus("SHIPPING")} // Logic cũ là DELIVERED, nên đổi thành SHIPPING hoặc DELIVERED tùy quy trình
               type="primary"
             >
               Giao hàng
             </Button>
-          )}
+          )} */}
 
           {order?.status === "SHIPPING" && (
             <Button
