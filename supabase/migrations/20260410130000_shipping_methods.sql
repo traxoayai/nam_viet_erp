@@ -26,9 +26,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_shipping_addresses_default
 
 ALTER TABLE public.shipping_addresses ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "service_role_all_shipping_addresses"
-  ON public.shipping_addresses FOR ALL
-  USING (true) WITH CHECK (true);
+DO $$ BEGIN
+  CREATE POLICY "service_role_all_shipping_addresses"
+    ON public.shipping_addresses FOR ALL
+    USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 2. transport_vehicles — Danh sách xe khách/vận tải
 CREATE TABLE IF NOT EXISTS public.transport_vehicles (
@@ -43,9 +46,12 @@ CREATE TABLE IF NOT EXISTS public.transport_vehicles (
 
 ALTER TABLE public.transport_vehicles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "service_role_all_transport_vehicles"
-  ON public.transport_vehicles FOR ALL
-  USING (true) WITH CHECK (true);
+DO $$ BEGIN
+  CREATE POLICY "service_role_all_transport_vehicles"
+    ON public.transport_vehicles FOR ALL
+    USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 3. delivery_routes — Lịch tuyến mặc định theo thứ
 CREATE TABLE IF NOT EXISTS public.delivery_routes (
@@ -59,9 +65,12 @@ CREATE TABLE IF NOT EXISTS public.delivery_routes (
 
 ALTER TABLE public.delivery_routes ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "service_role_all_delivery_routes"
-  ON public.delivery_routes FOR ALL
-  USING (true) WITH CHECK (true);
+DO $$ BEGIN
+  CREATE POLICY "service_role_all_delivery_routes"
+    ON public.delivery_routes FOR ALL
+    USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 4. delivery_schedule_overrides — Override ngày cụ thể
 CREATE TABLE IF NOT EXISTS public.delivery_schedule_overrides (
@@ -75,9 +84,12 @@ CREATE TABLE IF NOT EXISTS public.delivery_schedule_overrides (
 
 ALTER TABLE public.delivery_schedule_overrides ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "service_role_all_delivery_schedule_overrides"
-  ON public.delivery_schedule_overrides FOR ALL
-  USING (true) WITH CHECK (true);
+DO $$ BEGIN
+  CREATE POLICY "service_role_all_delivery_schedule_overrides"
+    ON public.delivery_schedule_overrides FOR ALL
+    USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 5. Mở rộng orders — thêm shipping fields
 ALTER TABLE public.orders

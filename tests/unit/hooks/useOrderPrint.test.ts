@@ -157,6 +157,101 @@ describe("useOrderPrint - safeRpc calls", () => {
     ).resolves.not.toThrow();
   });
 
+  it.each([
+    ["CONFIRMED", "CONFIRMED"],
+    ["PACKED", "PACKED"],
+    ["SHIPPING", "SHIPPING"],
+    ["DELIVERED", "DELIVERED"],
+    ["COMPLETED", "COMPLETED"],
+  ])(
+    "status %s: oldDebt = serverDebt - thisOrderUnpaid, totalPayable = serverDebt",
+    async (status) => {
+      const serverDebt = 1_000_000;
+      const finalAmount = 300_000;
+      const paidAmount = 100_000;
+      const thisOrderUnpaid = finalAmount - paidAmount; // 200_000
+
+      mockGetOrderDetail.mockResolvedValue({
+        id: 10,
+        customer_id: 100,
+        status,
+        final_amount: finalAmount,
+        paid_amount: paidAmount,
+        payment_status: "partial",
+        items: [],
+      });
+      mockSafeRpc.mockResolvedValue({
+        data: [{ current_debt: serverDebt }],
+        error: null,
+      });
+
+      const { generateB2BOrderHTML } = await import(
+        "@/shared/utils/printTemplates"
+      );
+
+      const { printOrder } = useOrderPrint();
+      await printOrder({
+        id: 10,
+        customer_id: 100,
+        status,
+        final_amount: finalAmount,
+        paid_amount: paidAmount,
+        payment_status: "partial",
+      });
+
+      const callArgs = (generateB2BOrderHTML as ReturnType<typeof vi.fn>).mock
+        .calls.at(-1)?.[0];
+      expect(callArgs.old_debt).toBe(serverDebt - thisOrderUnpaid); // 800_000
+      expect(callArgs.total_payable_display).toBe(serverDebt); // 1_000_000
+    }
+  );
+
+  it.each([
+    ["DRAFT", "DRAFT"],
+    ["QUOTE", "QUOTE"],
+  ])(
+    "status %s (not debt-recorded): oldDebt = serverDebt, totalPayable = serverDebt + thisOrderUnpaid",
+    async (status) => {
+      const serverDebt = 500_000;
+      const finalAmount = 200_000;
+      const paidAmount = 0;
+      const thisOrderUnpaid = finalAmount - paidAmount; // 200_000
+
+      mockGetOrderDetail.mockResolvedValue({
+        id: 11,
+        customer_id: 100,
+        status,
+        final_amount: finalAmount,
+        paid_amount: paidAmount,
+        payment_status: "unpaid",
+        items: [],
+      });
+      mockSafeRpc.mockResolvedValue({
+        data: [{ current_debt: serverDebt }],
+        error: null,
+      });
+
+      const { generateB2BOrderHTML } = await import(
+        "@/shared/utils/printTemplates"
+      );
+
+      const { printOrder } = useOrderPrint();
+      await printOrder({
+        id: 11,
+        customer_id: 100,
+        status,
+        final_amount: finalAmount,
+        paid_amount: paidAmount,
+        payment_status: "unpaid",
+      });
+
+      const callArgs = (generateB2BOrderHTML as ReturnType<typeof vi.fn>).mock
+        .calls.at(-1)?.[0];
+      expect(callArgs.old_debt).toBe(serverDebt); // 500_000
+      expect(callArgs.total_payable_display).toBe(serverDebt + thisOrderUnpaid); // 700_000
+    }
+  );
+
   it("falls back to customer.id when customer_id is not set", async () => {
     // fullOrder also has no customer_id, only customer.id
     mockGetOrderDetail.mockResolvedValue({

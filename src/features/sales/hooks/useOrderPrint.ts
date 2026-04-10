@@ -34,6 +34,7 @@ export const useOrderPrint = () => {
       // 2. Logic Hiển thị Nợ (QUAN TRỌNG)
       const isDebtRecorded = [
         "CONFIRMED",
+        "PACKED",
         "SHIPPING",
         "DELIVERED",
         "COMPLETED",
