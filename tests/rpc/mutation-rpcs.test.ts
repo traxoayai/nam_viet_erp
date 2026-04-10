@@ -508,6 +508,7 @@ describe("Finance Mutation RPCs", () => {
   it("confirm_finance_transaction — rejects non-existent transaction", async () => {
     const { error } = await adminClient.rpc("confirm_finance_transaction", {
       p_id: FAKE_ID,
+      p_target_status: "completed",
     });
     expectValidError(error);
   });

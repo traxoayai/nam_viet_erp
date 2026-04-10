@@ -484,6 +484,8 @@ export const searchProductsForPurchase = async (keyword: string) => {
     wholesale_unit: p.wholesale_unit,
     retail_unit: p.retail_unit,
     last_price: p.latest_purchase_price,
+    total_stock: p.total_stock,
+    avg_monthly_sold: p.avg_monthly_sold,
   }));
 };
 

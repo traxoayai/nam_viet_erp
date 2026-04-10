@@ -25,6 +25,10 @@ export interface POItem {
   // [NEW] Mảng đơn vị động trả về từ API
   available_units?: ProductUnitOption[];
 
+  // Thông tin tồn kho (hỗ trợ quyết định mua hàng)
+  total_stock?: number;
+  avg_monthly_sold?: number;
+
   // Các trường meta để tính toán
   _items_per_carton: number;
   _wholesale_unit: string;

@@ -2,9 +2,9 @@
 import dayjs from "dayjs";
 
 // Config tài khoản ngân hàng nhận tiền (Sau này đưa vào Setting)
-const BANK_ID = "OCB"; // Ví dụ: MB, VCB, TPB
-const BANK_ACCOUNT = "0385061892";
-const ACCOUNT_NAME = "LÊ HỒNG NHUNG";
+const BANK_ID = "Timo"; // Ví dụ: MB, VCB, TPB
+const BANK_ACCOUNT = "0965637788";
+const ACCOUNT_NAME = "LE VIET HUNG";
 
 const triggerPrint = (htmlContent: string) => {
   const printWindow = window.open("", "", "height=600,width=800");

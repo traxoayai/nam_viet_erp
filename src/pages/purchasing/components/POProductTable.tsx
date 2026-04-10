@@ -100,6 +100,12 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {item.sku}
                   </Text>
+                  <Text style={{ fontSize: 11, marginLeft: 8 }} type={item.total_stock && item.total_stock > 0 ? "secondary" : "danger"}>
+                    Tồn: {(item.total_stock ?? 0).toLocaleString()}
+                  </Text>
+                  <Text style={{ fontSize: 11, marginLeft: 8 }} type="secondary">
+                    TB: {(item.avg_monthly_sold ?? 0).toLocaleString()}/th
+                  </Text>
                 </div>
               </div>
               <Button
@@ -187,6 +193,26 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
             <div style={{ fontSize: 12, color: "#888" }}>{r.sku}</div>
           </div>
         </Space>
+      ),
+    },
+    {
+      title: "Tồn kho",
+      width: 80,
+      align: "center" as const,
+      render: (_: any, r: POItem) => (
+        <Text type={r.total_stock && r.total_stock > 0 ? undefined : "danger"}>
+          {(r.total_stock ?? 0).toLocaleString()}
+        </Text>
+      ),
+    },
+    {
+      title: "TB bán/tháng",
+      width: 100,
+      align: "center" as const,
+      render: (_: any, r: POItem) => (
+        <Text type="secondary">
+          {(r.avg_monthly_sold ?? 0).toLocaleString()}
+        </Text>
       ),
     },
     {

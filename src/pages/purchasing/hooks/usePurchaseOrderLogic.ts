@@ -286,6 +286,8 @@ export const usePurchaseOrderLogic = () => {
       unit_price: basePrice,
 
       discount: 0,
+      total_stock: p.total_stock ?? 0,
+      avg_monthly_sold: p.avg_monthly_sold ?? 0,
       _items_per_carton: itemsPerCarton,
       _wholesale_unit: wholesaleUnit,
       _retail_unit: retailUnit,
