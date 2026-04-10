@@ -77,6 +77,7 @@ import QuickBarcodePage from "@/pages/quick/QuickBarcodePage";
 import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
 import SystemAuditLogPage from "@/pages/reports/SystemAuditLogPage"; // [NEW]
 import TaskKanbanPage from "@/pages/hr/TaskKanbanPage";
+import NotificationManagementPage from "@/pages/notifications/NotificationManagementPage";
 
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
@@ -479,6 +480,12 @@ const routes: RouteObject[] = [
                 <PortalRegistrationPage />
               </PermissionGuard>
             ),
+          },
+
+          // Quản lý thông báo Portal
+          {
+            path: "notifications/portal",
+            element: <NotificationManagementPage />,
           },
 
           // 10. Quản lý Marketing
