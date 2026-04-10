@@ -217,7 +217,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
     },
     {
       title: "ĐVT",
-      width: 150,
+      width: 100,
       render: (_: any, r: POItem, idx: number) => renderUnitSelect(r, idx),
     },
     {
@@ -247,21 +247,21 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
         />
       ),
     },
-    {
-      title: "Hàng tặng", // [NEW] Bonus Column
-      width: 90,
-      align: "center" as const,
-      render: (_: any, r: POItem, idx: number) => (
-        <Checkbox
-          checked={r.is_bonus}
-          onChange={(e) => {
-            const val = e.target.checked;
-            onItemChange(idx, "is_bonus", val);
-            if (val) onItemChange(idx, "unit_price", 0);
-          }}
-        />
-      ),
-    },
+    // {
+    //   title: "Hàng tặng", // [NEW] Bonus Column
+    //   width: 90,
+    //   align: "center" as const,
+    //   render: (_: any, r: POItem, idx: number) => (
+    //     <Checkbox
+    //       checked={r.is_bonus}
+    //       onChange={(e) => {
+    //         const val = e.target.checked;
+    //         onItemChange(idx, "is_bonus", val);
+    //         if (val) onItemChange(idx, "unit_price", 0);
+    //       }}
+    //     />
+    //   ),
+    // },
 
     {
       title: "Thành tiền",
