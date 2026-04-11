@@ -78,4 +78,8 @@ export const PERMISSIONS = {
     CREATE: "pos-create",
     LIST: "pos-list",
   },
+  PORTAL: {
+    VIEW: "portal.view",
+    MANAGE: "portal.manage",
+  },
 };
