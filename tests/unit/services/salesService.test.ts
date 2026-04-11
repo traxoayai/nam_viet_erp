@@ -139,6 +139,7 @@ describe("salesService", () => {
         p_payment_method: undefined,
         p_warehouse_id: undefined,
         p_customer_id: undefined,
+        p_source: undefined,
       });
       expect(result.data).toEqual([{ id: 1 }]);
       expect(result.total).toBe(1);
@@ -158,6 +159,20 @@ describe("salesService", () => {
       mockSafeRpc.mockRejectedValue(new Error("fail"));
       const result = await salesService.getOrders({ page: 1, pageSize: 10 });
       expect(result).toEqual({ data: [], total: 0, stats: {} });
+    });
+
+    it("passes source param to RPC when provided", async () => {
+      mockSafeRpc.mockResolvedValue({
+        data: { data: [{ id: 1 }], total: 1, stats: { total_sales: 100 } },
+      });
+      await salesService.getOrders({
+        page: 1,
+        pageSize: 10,
+        source: "portal",
+      });
+      expect(mockSafeRpc).toHaveBeenCalledWith("get_sales_orders_view",
+        expect.objectContaining({ p_source: "portal" })
+      );
     });
 
     it("converts empty string filters to undefined (prevents UUID cast error)", async () => {
@@ -189,6 +204,7 @@ describe("salesService", () => {
         p_payment_method: undefined,
         p_warehouse_id: undefined,
         p_customer_id: undefined,
+        p_source: undefined,
       });
     });
   });
