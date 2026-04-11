@@ -95,7 +95,7 @@ export const ActionButtons = ({
             size="large"
             onClick={() => onSubmit("CONFIRMED")}
             loading={loading}
-            disabled={isOverLimit}
+            //disabled={isOverLimit}
             style={{
               background: isOverLimit ? undefined : "#0050b3",
               borderColor: isOverLimit ? undefined : "#0050b3",

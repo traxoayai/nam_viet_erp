@@ -10,7 +10,6 @@ import {
   Grid,
   Avatar,
   Form,
-  Checkbox, // [NEW]
 } from "antd";
 import React from "react";
 
