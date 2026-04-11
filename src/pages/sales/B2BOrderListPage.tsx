@@ -59,12 +59,17 @@ import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint"
 
 const { Text } = Typography;
 
-const B2BOrderListPage = () => {
+interface B2BOrderListPageProps {
+  defaultSource?: string;
+  hideSourceFilter?: boolean;
+}
+
+const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageProps = {}) => {
   const navigate = useNavigate();
 
   // --- 1. STATE & HOOKS ---
   const { tableProps, filterProps, stats, currentFilters, refresh } =
-    useSalesOrders({ orderType: "B2B" });
+    useSalesOrders({ orderType: "B2B", source: defaultSource });
   const { printOrder } = useOrderPrint(); // [NEW]
   const { printData: pickingData } = usePickingListPrint(); // [NEW] Fetch & Print Picking
 
@@ -796,6 +801,18 @@ const B2BOrderListPage = () => {
               value: u.id,
             })),
           },
+          ...(!hideSourceFilter
+            ? [
+                {
+                  key: "source",
+                  placeholder: "Nguồn đơn",
+                  options: [
+                    { label: "ERP", value: "erp" },
+                    { label: "Portal", value: "portal" },
+                  ],
+                },
+              ]
+            : []),
         ]}
         actions={[
           {
