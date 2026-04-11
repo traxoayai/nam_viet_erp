@@ -119,6 +119,7 @@ export const salesService = {
     paymentMethod?: string;
     warehouseId?: number;
     customerId?: number;
+    source?: string;
   }) {
     try {
       const { data } = await safeRpc("get_sales_orders_view", {
@@ -136,6 +137,7 @@ export const salesService = {
         p_payment_method: params.paymentMethod || undefined,
         p_warehouse_id: params.warehouseId || undefined,
         p_customer_id: params.customerId || undefined,
+        p_source: params.source || undefined,
       });
 
       // Data trả về từ RPC đã bao gồm total và stats
