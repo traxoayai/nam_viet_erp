@@ -7,9 +7,10 @@ import { useListingLogic } from "@/shared/hooks/useListingLogic";
 interface UseSalesOrdersProps {
   // Cho phép truyền 'POS', 'B2B', hoặc comma-separated strings như 'POS,CLINICAL'
   orderType?: string;
+  source?: string;
 }
 
-export const useSalesOrders = ({ orderType }: UseSalesOrdersProps = {}) => {
+export const useSalesOrders = ({ orderType, source }: UseSalesOrdersProps = {}) => {
   const [stats, setStats] = useState<any>({
     total_sales: 0,
     count_pending_remittance: 0,
@@ -32,6 +33,7 @@ export const useSalesOrders = ({ orderType }: UseSalesOrdersProps = {}) => {
         paymentMethod: params.paymentMethod, // [NEW]
         warehouseId: params.warehouseId, // [NEW]
         customerId: params.customerId, // [NEW]
+        source: params.source || source,
       });
 
       if (response.stats) {
@@ -43,7 +45,7 @@ export const useSalesOrders = ({ orderType }: UseSalesOrdersProps = {}) => {
         total: response.total,
       };
     },
-    [orderType]
+    [orderType, source]
   );
 
   const { tableProps, filterProps, filters, refresh, setFilters } =
