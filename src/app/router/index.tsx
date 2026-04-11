@@ -78,6 +78,7 @@ import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [
 import SystemAuditLogPage from "@/pages/reports/SystemAuditLogPage"; // [NEW]
 import TaskKanbanPage from "@/pages/hr/TaskKanbanPage";
 import NotificationManagementPage from "@/pages/notifications/NotificationManagementPage";
+import PortalDashboardPage from "@/pages/portal/PortalDashboardPage";
 
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
@@ -473,19 +474,38 @@ const routes: RouteObject[] = [
               </PermissionGuard>
             ),
           },
+          // Portal Hub
           {
-            path: "crm/portal-registrations",
+            path: "portal/dashboard",
             element: (
-              <PermissionGuard permission={PERMISSIONS.CRM.B2B.VIEW}>
+              <PermissionGuard permission={PERMISSIONS.PORTAL.VIEW}>
+                <PortalDashboardPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "portal/registrations",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.PORTAL.VIEW}>
                 <PortalRegistrationPage />
               </PermissionGuard>
             ),
           },
-
-          // Quản lý thông báo Portal
           {
-            path: "notifications/portal",
-            element: <NotificationManagementPage />,
+            path: "portal/orders",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.PORTAL.VIEW}>
+                <B2BOrderListPage defaultSource="portal" hideSourceFilter />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "portal/notifications",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.PORTAL.MANAGE}>
+                <NotificationManagementPage />
+              </PermissionGuard>
+            ),
           },
 
           // 10. Quản lý Marketing

@@ -76,6 +76,7 @@ import {
   ChevronRight,
   ChevronLeft,
   FlaskConical,
+  Globe,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
@@ -380,10 +381,34 @@ const finalMenuItems: MenuItem[] = [
         "/crm/b2b",
         <TeamOutlined />
       ),
+    ]
+  ),
+
+  // 9.5 Portal
+  getItem(
+    "Cổng Portal",
+    "portal",
+    <Globe size={20} color="#4b5563" strokeWidth={1.5} />,
+    [
       getItem(
-        <Link to="/crm/portal-registrations">Khách Portal (Chờ duyệt)</Link>,
-        "/crm/portal-registrations",
+        <Link to="/portal/dashboard">Tổng quan</Link>,
+        "/portal/dashboard",
+        <AppstoreOutlined />
+      ),
+      getItem(
+        <Link to="/portal/registrations">Đăng ký Portal</Link>,
+        "/portal/registrations",
         <UserAddOutlined />
+      ),
+      getItem(
+        <Link to="/portal/orders">Đơn hàng Portal</Link>,
+        "/portal/orders",
+        <ShoppingCartOutlined />
+      ),
+      getItem(
+        <Link to="/portal/notifications">Gửi thông báo</Link>,
+        "/portal/notifications",
+        <SendOutlined />
       ),
     ]
   ),
@@ -632,6 +657,12 @@ const MENU_PERMISSIONS: Record<string, string> = {
   "/finance/dashboard": "finance.view", // [FIX] Dùng quyền view
   "/finance/transactions": "finance.view", // [FIX] Dùng quyền view (thay vì fin-approve-cash)
   "/finance/debts": "finance.view", // [FIX] Dùng quyền view
+
+  // --- PORTAL ---
+  "/portal/dashboard": "portal.view",
+  "/portal/registrations": "portal.view",
+  "/portal/orders": "portal.view",
+  "/portal/notifications": "portal.manage",
 
   // --- CẤU HÌNH ---
   "settings-group": "settings",
