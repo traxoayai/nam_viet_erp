@@ -118,8 +118,8 @@ const PortalDashboardPage = () => {
             />
             <YAxis allowDecimals={false} />
             <Tooltip
-              labelFormatter={(d: string) => {
-                const date = new Date(d);
+              labelFormatter={(d) => {
+                const date = new Date(String(d));
                 return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
               }}
             />
