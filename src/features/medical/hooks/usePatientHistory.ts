@@ -49,7 +49,7 @@ export const usePatientHistory = (customerId: number | undefined) => {
                 items:clinical_prescription_items (
                     quantity, usage_note,
                     product:products (id, name, sku),
-                    unit:product_units (unit_name)
+                    unit:product_units (id, unit_name)
                 )
             )
           `
@@ -71,7 +71,7 @@ export const usePatientHistory = (customerId: number | undefined) => {
                 quantity: i.quantity,
                 unit_name: i.unit?.unit_name,
                 usage_note: i.usage_note,
-                product_unit_id: 1,
+                product_unit_id: i.unit?.id || 1,
               }))
             ) || [];
           return { ...visit, flatMedicines };
@@ -114,11 +114,10 @@ export const usePatientHistory = (customerId: number | undefined) => {
     const newItems = oldPrescription.map((item) => ({
       product_id: item.product_id,
       product_name: item.product_name,
-      product_unit_id: item.product_unit_id || 1,
+      product_unit_id: item.product_unit_id,
       unit_name: item.unit_name,
       quantity: item.quantity,
       usage_note: item.usage_note || "",
-      stock_quantity: 999,
     }));
     setItems([...currentItems, ...newItems]);
     message.success(`Đã thêm ${newItems.length} thuốc vào đơn hiện tại.`);

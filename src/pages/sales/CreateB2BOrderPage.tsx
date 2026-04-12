@@ -145,12 +145,26 @@ const CreateB2BOrderPage = () => {
 
         // 3. HYDRATION SẢN PHẨM
         const safeItems = orderData.items || [];
+
+        // Fetch stock thật cho tất cả sản phẩm trong đơn
+        const productIds = safeItems.map((i: Record<string, unknown>) => i.product_id as number).filter(Boolean);
+        const stockMap = new Map<number, number>();
+        if (productIds.length > 0) {
+          const { data: stockData } = await supabase.rpc("get_products_stock_status", {
+            p_product_ids: productIds,
+          });
+          for (const s of (stockData || []) as Array<{ product_id: number; total_quantity: number }>) {
+            stockMap.set(s.product_id, s.total_quantity);
+          }
+        }
+
         const mappedItems: CartItem[] = safeItems.map((item: Record<string, unknown>) => {
           const productInfo = (item.product || {}) as Record<string, unknown>;
+          const pid = item.product_id as number;
 
           return {
-            id: item.product_id as number,
-            key: `${item.product_id}_${Date.now()}_${Math.random()}`,
+            id: pid,
+            key: `${pid}_${Date.now()}_${Math.random()}`,
 
             name:
               (productInfo.name as string) || (item.product_name as string) || "Sản phẩm (Mất info)",
@@ -159,10 +173,10 @@ const CreateB2BOrderPage = () => {
 
             price_wholesale: item.unit_price as number,
             quantity: item.quantity as number,
-            wholesale_unit: (item.uom as string) || "Cái",
+            wholesale_unit: (item.uom as string) || "",
 
             discount: (item.discount as number) || 0,
-            stock_quantity: 9999,
+            stock_quantity: stockMap.get(pid) ?? 0,
             total: (item.quantity as number) * (item.unit_price as number) - ((item.discount as number) || 0),
 
             shelf_location: (productInfo.shelf_location as string) || "",

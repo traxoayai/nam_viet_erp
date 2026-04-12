@@ -11,6 +11,7 @@ import { DoctorPrescriptionTable } from "./DoctorPrescriptionTable";
 
 import { PosProductSearchResult } from "@/features/pos/types/pos.types";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 interface Props {
   items: ClinicalPrescriptionItem[];
@@ -74,24 +75,43 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
   }, [isDrawerOpen]);
   // Đã trích phần MOCK TYPE ra dùng Props
 
-  const applyTemplate = (tpl: any) => {
+  const applyTemplate = async (tpl: any) => {
     const newItems = [...items];
-    tpl.items.forEach((tItem: any) => {
-      const exist = newItems.find((i) => i.product_id === tItem.product_id);
-      if (!exist) {
-        newItems.push({
-          ...tItem,
-          product_unit_id: 1,
-          unit_name: tItem.unit || "Viên", // Lấy theo trả về từ RPC json
-          usage_note: tItem.usage_instruction || "",
-        });
+    const newProducts = tpl.items.filter(
+      (tItem: any) => !newItems.find((i) => i.product_id === tItem.product_id)
+    );
+
+    // Batch lookup product_unit_id cho tất cả sản phẩm mới
+    const productIds = newProducts.map((t: any) => t.product_id).filter(Boolean);
+    const unitMap = new Map<number, number>();
+    if (productIds.length > 0) {
+      const { data: units } = await supabase
+        .from("product_units")
+        .select("id, product_id, unit_type, is_base")
+        .in("product_id", productIds);
+      for (const pid of productIds) {
+        const pUnits = (units || []).filter((u) => u.product_id === pid);
+        const best = pUnits.find((u) => u.unit_type === "retail")
+          || pUnits.find((u) => u.is_base)
+          || pUnits[0];
+        if (best) unitMap.set(pid, best.id);
       }
+    }
+
+    newProducts.forEach((tItem: any) => {
+      newItems.push({
+        ...tItem,
+        product_unit_id: unitMap.get(tItem.product_id) || 1,
+        unit_name: tItem.unit || "",
+        usage_note: tItem.usage_instruction || "",
+      });
     });
+
     setItems(newItems);
     setIsDrawerOpen(false);
   };
 
-  const addProductToTable = (product: PosProductSearchResult) => {
+  const addProductToTable = async (product: PosProductSearchResult) => {
     // Check duplicate
     const exist = items.find((i) => i.product_id === product.id);
     if (exist) {
@@ -102,11 +122,19 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
         )
       );
     } else {
-      // Add New
+      // Lookup retail unit ID
+      const { data: units } = await supabase
+        .from("product_units")
+        .select("id, unit_type, is_base")
+        .eq("product_id", product.id);
+      const best = (units || []).find((u) => u.unit_type === "retail")
+        || (units || []).find((u) => u.is_base)
+        || (units || [])[0];
+
       const newItem: ClinicalPrescriptionItem = {
         product_id: product.id,
         product_name: product.name,
-        product_unit_id: 1,
+        product_unit_id: best?.id || 1,
         unit_name: product.unit,
         quantity: 1,
         usage_note: "",

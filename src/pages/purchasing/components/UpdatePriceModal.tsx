@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { resolveProductUnits } from "@/pages/purchasing/utils/resolveProductUnits";
 import { formatCurrency } from "@/shared/utils/format";
 
 const { Text } = Typography;
@@ -94,22 +95,14 @@ export const UpdatePriceModal: React.FC<Props> = ({
         const newBaseCost = inputItem.final_unit_cost / importRate;
 
         // === Xác định đơn vị Bán buôn và Bán lẻ ===
-        const wholesaleUnitObj =
-          p.product_units.find((u: any) => u.unit_name === p.wholesale_unit) ||
-          p.product_units.find((u: any) => u.unit_type === "wholesale");
-
-        const retailUnitObj =
-          p.product_units.find((u: any) => u.unit_name === p.retail_unit) ||
-          p.product_units.find((u: any) => u.is_base) ||
-          p.product_units[0];
+        const { wholesaleUnitObj, retailUnitObj, hasWholesale, wholesaleRate, retailRate } =
+          resolveProductUnits({
+            wholesale_unit: p.wholesale_unit,
+            retail_unit: p.retail_unit,
+            product_units: p.product_units,
+          });
 
         if (!retailUnitObj) return;
-
-        const wholesaleRate = wholesaleUnitObj?.conversion_rate || 1;
-        const retailRate = retailUnitObj?.conversion_rate || 1;
-        const hasWholesale =
-          !!wholesaleUnitObj &&
-          wholesaleUnitObj.id !== retailUnitObj.id;
 
         // === Giá vốn cũ từ Snapshot ===
         const snapshot = oldCosts.find((o) => o.id === p.id);
