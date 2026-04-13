@@ -140,6 +140,8 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
       const { activeSession } = get();
       if (!activeSession) return;
       try {
+        // Flush tất cả saves đang pending trước khi chốt sổ
+        await flushAllPendingSaves();
         await inventoryService.completeCheck(activeSession.id, userId);
         message.success("Đã hoàn tất kiểm kê!");
       } catch (err: any) {
@@ -249,9 +251,34 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
   })
 );
 
-// Helper debounce save
-const saveToDbDebounced = debounce((itemId: number, payload: any) => {
-  inventoryService
-    .updateCheckItemQuantity(itemId, payload)
-    .catch((err) => console.error(err));
-}, 500);
+// Helper debounce save — PER-ITEM debounce để tránh mất data khi sửa nhiều item liên tiếp
+const debouncedSaveMap = new Map<number, ReturnType<typeof debounce>>();
+const pendingSaves = new Map<number, Promise<unknown>>();
+
+function saveToDbDebounced(itemId: number, payload: Record<string, unknown>) {
+  if (!debouncedSaveMap.has(itemId)) {
+    debouncedSaveMap.set(
+      itemId,
+      debounce((id: number, p: Record<string, unknown>) => {
+        const promise = inventoryService
+          .updateCheckItemQuantity(id, p)
+          .catch((err) => console.error("Lỗi lưu item", id, err))
+          .finally(() => pendingSaves.delete(id));
+        pendingSaves.set(id, promise);
+      }, 500)
+    );
+  }
+  debouncedSaveMap.get(itemId)!(itemId, payload);
+}
+
+/** Flush tất cả pending debounce saves và đợi hoàn tất — gọi trước khi complete */
+async function flushAllPendingSaves() {
+  // Force-fire tất cả debounce timers đang chờ
+  for (const fn of debouncedSaveMap.values()) {
+    fn.flush();
+  }
+  // Đợi tất cả RPC calls hoàn tất
+  if (pendingSaves.size > 0) {
+    await Promise.all(pendingSaves.values());
+  }
+}

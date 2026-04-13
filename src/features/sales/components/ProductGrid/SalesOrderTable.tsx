@@ -99,22 +99,6 @@ export const SalesOrderTable = ({
       render: (val: number) => <Text>{val.toLocaleString()} ₫</Text>,
     },
     {
-      title: "Chiết khấu",
-      width: 110,
-      render: (_: any, r: CartItem) => (
-        <InputNumber
-          min={0}
-          value={r.discount}
-          formatter={(value) =>
-            `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-          }
-          onChange={(v) => onUpdateItem(r.key, "discount", v || 0)}
-          style={{ width: "100%" }}
-          placeholder="0"
-        />
-      ),
-    },
-    {
       title: "Thành tiền",
       align: "right" as const,
       width: 140,
