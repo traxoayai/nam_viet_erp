@@ -401,6 +401,11 @@ const finalMenuItems: MenuItem[] = [
         <UserAddOutlined />
       ),
       getItem(
+        <Link to="/portal/users">Portal Users</Link>,
+        "/portal/users",
+        <UserOutlined />
+      ),
+      getItem(
         <Link to="/portal/orders">Đơn hàng Portal</Link>,
         "/portal/orders",
         <ShoppingCartOutlined />
@@ -663,6 +668,7 @@ const MENU_PERMISSIONS: Record<string, string> = {
   "/portal/registrations": "portal.view",
   "/portal/orders": "portal.view",
   "/portal/notifications": "portal.manage",
+  "/portal/users": "portal.manage",
 
   // --- CẤU HÌNH ---
   "settings-group": "settings",

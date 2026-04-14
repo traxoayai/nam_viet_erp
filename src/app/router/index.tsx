@@ -79,6 +79,7 @@ import SystemAuditLogPage from "@/pages/reports/SystemAuditLogPage"; // [NEW]
 import TaskKanbanPage from "@/pages/hr/TaskKanbanPage";
 import NotificationManagementPage from "@/pages/notifications/NotificationManagementPage";
 import PortalDashboardPage from "@/pages/portal/PortalDashboardPage";
+import PortalUsersPage from "@/pages/portal/PortalUsersPage";
 
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
@@ -504,6 +505,14 @@ const routes: RouteObject[] = [
             element: (
               <PermissionGuard permission={PERMISSIONS.PORTAL.MANAGE}>
                 <NotificationManagementPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "portal/users",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.PORTAL.MANAGE}>
+                <PortalUsersPage />
               </PermissionGuard>
             ),
           },

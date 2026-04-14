@@ -19,6 +19,7 @@ export type PortalRegistrationRequest = {
   approved_by: string | null;
   approved_at: string | null;
   created_at: string;
+  auth_user_id: string | null;
 };
 
 export type CustomerB2BOption = {
@@ -40,7 +41,7 @@ export const fetchPortalRegistrations = async (
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data as PortalRegistrationRequest[];
+  return (data as unknown) as PortalRegistrationRequest[];
 };
 
 export const searchCustomersB2B = async (
@@ -69,15 +70,7 @@ export const approvePortalRegistration = async (
   debtLimit: number = 50000000,
   paymentTerm: number = 30,
 ): Promise<Record<string, unknown>> => {
-  // Step 1: Get request email
-  const { data: request } = await supabase
-    .from("registration_requests")
-    .select("email, contact_name")
-    .eq("id", requestId)
-    .single();
-  if (!request) throw new Error("Request not found");
-
-  // Step 2: Create auth user via Edge Function
+  // Step 1: Create auth user via Edge Function (it looks up email/name from request_id)
   const { data: session } = await supabase.auth.getSession();
   const edgeRes = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`,
@@ -87,17 +80,14 @@ export const approvePortalRegistration = async (
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.session?.access_token}`,
       },
-      body: JSON.stringify({
-        email: request.email,
-        display_name: request.contact_name,
-      }),
+      body: JSON.stringify({ request_id: requestId }),
     },
   );
   const edgeData = await edgeRes.json();
   if (!edgeRes.ok)
     throw new Error(edgeData.error || "Failed to create auth user");
 
-  // Step 3: Call RPC to approve
+  // Step 2: Call RPC to approve
   const { data, error } = await safeRpc("approve_portal_registration", {
     p_request_id: requestId,
     p_existing_customer_id: existingCustomerId || null,
@@ -113,6 +103,17 @@ export const rejectPortalRegistration = async (
   requestId: string,
   reason: string = "",
 ): Promise<void> => {
+  // Step 1: Fetch request info before updating
+  // Note: auth_user_id chưa có trong generated types (cần chạy typegen sau migration)
+  const { data: requestRaw } = await supabase
+    .from("registration_requests")
+    .select("email, business_name")
+    .eq("id", requestId)
+    .single();
+  if (!requestRaw) throw new Error("Request not found");
+  const request = requestRaw as { email: string; business_name: string };
+
+  // Step 2: Update status to rejected
   const { error } = await supabase
     .from("registration_requests")
     .update({
@@ -121,6 +122,30 @@ export const rejectPortalRegistration = async (
       updated_at: new Date().toISOString(),
     })
     .eq("id", requestId);
-
   if (error) throw error;
+
+  // Step 3: Send rejection email (non-blocking)
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-portal-email`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.session?.access_token}`,
+        },
+        body: JSON.stringify({
+          type: "registration_rejected",
+          email: request.email,
+          data: {
+            business_name: request.business_name,
+            reason,
+          },
+        }),
+      },
+    );
+  } catch {
+    console.warn("[Portal] Failed to send rejection email for request:", requestId);
+  }
 };
