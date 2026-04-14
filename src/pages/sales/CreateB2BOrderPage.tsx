@@ -266,7 +266,6 @@ const CreateB2BOrderPage = () => {
         await salesService.createOrder({
           p_customer_id: customer!.id,
           p_delivery_address: customer!.shipping_address,
-          p_delivery_time: estimatedDeliveryText,
           p_note: note,
           p_discount_amount: financials.discountAmount,
           p_shipping_fee: shippingFee,

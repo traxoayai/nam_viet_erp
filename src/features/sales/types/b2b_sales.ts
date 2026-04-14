@@ -10,7 +10,7 @@ export { type ShippingPartner }; // Export lại để các file khác dùng n�
 export interface CreateSalesOrderPayload {
   p_customer_id: number;
   p_delivery_address: string;
-  p_delivery_time: string;
+  p_delivery_time?: string;
   p_note: string;
   p_discount_amount: number;
   p_shipping_fee: number;
