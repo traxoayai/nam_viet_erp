@@ -35,7 +35,11 @@ export function resolveProductUnits(input: ResolveInput): ResolveResult {
     product_units.find((u) => u.unit_type === "wholesale") ||
     (wholesale_unit
       ? product_units.find((u) => u.unit_name === wholesale_unit)
-      : undefined);
+      : undefined) ||
+    // Fallback: đơn vị có conversion_rate lớn nhất (> 1) = bán buôn
+    product_units
+      .filter((u) => (u.conversion_rate || 0) > 1)
+      .sort((a, b) => (b.conversion_rate || 0) - (a.conversion_rate || 0))[0];
 
   const retailUnitObj =
     product_units.find((u) => u.unit_type === "retail") ||

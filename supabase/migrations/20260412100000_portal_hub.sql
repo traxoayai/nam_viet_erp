@@ -470,7 +470,13 @@ ON CONFLICT (key) DO NOTHING;
 -- ============================================================
 -- G. ENABLE REALTIME + RELOAD
 -- ============================================================
-ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+EXCEPTION WHEN duplicate_object THEN
+  NULL; -- already added
+END;
+$$;
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;
