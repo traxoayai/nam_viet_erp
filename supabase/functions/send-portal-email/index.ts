@@ -7,6 +7,7 @@ const corsHeaders = {
 }
 
 type EmailType = 'registration_received' | 'registration_approved' | 'registration_rejected'
+  | 'admin_new_registration' | 'admin_new_order' | 'admin_payment_received'
 
 interface EmailPayload {
   type: EmailType
@@ -15,6 +16,16 @@ interface EmailPayload {
     business_name?: string
     portal_url?: string
     reason?: string
+    contact_name?: string
+    contact_email?: string
+    contact_phone?: string
+    order_code?: string
+    customer_name?: string
+    total_amount?: number
+    amount?: string
+    partner_name?: string
+    reference?: string
+    description?: string
   }
 }
 
@@ -142,6 +153,120 @@ function buildHtmlEmail(
         </p>`
       return { subject, html: wrapper(subject, body) }
     }
+
+    case 'admin_new_registration': {
+      const bName = data.business_name || 'Kh\u00F4ng r\u00F5'
+      const subject = `[${brandName}] \u0110\u0103ng k\u00FD Portal m\u1EDBi: ${bName}`
+      const body = `
+        <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">\u0110\u0103ng k\u00FD Portal m\u1EDBi</h2>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          C\u00F3 m\u1ED9t \u0111\u01A1n \u0111\u0103ng k\u00FD Portal m\u1EDBi c\u1EA7n duy\u1EC7t:
+        </p>
+        <div style="margin:24px 0;padding:16px;background-color:#f0fdfa;border-left:4px solid ${brandColor};border-radius:4px;">
+          <table style="width:100%;font-size:14px;color:#374151;">
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Doanh nghi\u1EC7p:</td>
+              <td style="padding:4px 8px;">${bName}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Ng\u01B0\u1EDDi li\u00EAn h\u1EC7:</td>
+              <td style="padding:4px 8px;">${data.contact_name || '\u2014'}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Email:</td>
+              <td style="padding:4px 8px;">${data.contact_email || '\u2014'}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">\u0110i\u1EC7n tho\u1EA1i:</td>
+              <td style="padding:4px 8px;">${data.contact_phone || '\u2014'}</td>
+            </tr>
+          </table>
+        </div>
+        <div style="margin:24px 0;text-align:center;">
+          <a href="#/portal/registrations"
+             style="display:inline-block;padding:14px 32px;background-color:${brandColor};color:#ffffff;text-decoration:none;border-radius:6px;font-size:16px;font-weight:600;">
+            Xem & Duy\u1EC7t \u0111\u01A1n
+          </a>
+        </div>`
+      return { subject, html: wrapper(subject, body) }
+    }
+
+    case 'admin_new_order': {
+      const orderCode = data.order_code || 'N/A'
+      const custName = data.customer_name || 'Kh\u00E1ch h\u00E0ng'
+      const totalAmt = data.total_amount != null
+        ? new Intl.NumberFormat('vi-VN').format(data.total_amount) + ' \u0111'
+        : '0 \u0111'
+      const subject = `[${brandName}] \u0110\u01A1n h\u00E0ng Portal m\u1EDBi: ${orderCode}`
+      const body = `
+        <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">\u0110\u01A1n h\u00E0ng Portal m\u1EDBi</h2>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          C\u00F3 \u0111\u01A1n h\u00E0ng m\u1EDBi t\u1EEB Portal c\u1EA7n x\u1EED l\u00FD:
+        </p>
+        <div style="margin:24px 0;padding:16px;background-color:#f0fdfa;border-left:4px solid ${brandColor};border-radius:4px;">
+          <table style="width:100%;font-size:14px;color:#374151;">
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">M\u00E3 \u0111\u01A1n:</td>
+              <td style="padding:4px 8px;">${orderCode}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Kh\u00E1ch h\u00E0ng:</td>
+              <td style="padding:4px 8px;">${custName}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">T\u1ED5ng ti\u1EC1n:</td>
+              <td style="padding:4px 8px;font-weight:700;color:${brandColor};">${totalAmt}</td>
+            </tr>
+          </table>
+        </div>
+        <div style="margin:24px 0;text-align:center;">
+          <a href="#/sales/orders"
+             style="display:inline-block;padding:14px 32px;background-color:${brandColor};color:#ffffff;text-decoration:none;border-radius:6px;font-size:16px;font-weight:600;">
+            Xem \u0111\u01A1n h\u00E0ng
+          </a>
+        </div>`
+      return { subject, html: wrapper(subject, body) }
+    }
+
+    case 'admin_payment_received': {
+      const amt = data.amount || '0 \u0111'
+      const partner = data.partner_name || 'Kh\u00F4ng r\u00F5'
+      const ref = data.reference || 'N/A'
+      const desc = data.description || ''
+      const subject = `[${brandName}] Thanh to\u00E1n m\u1EDBi: ${amt}`
+      const body = `
+        <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Thanh to\u00E1n m\u1EDBi</h2>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          H\u1EC7 th\u1ED1ng v\u1EEBa ghi nh\u1EADn m\u1ED9t kho\u1EA3n thanh to\u00E1n:
+        </p>
+        <div style="margin:24px 0;padding:16px;background-color:#f0fdfa;border-left:4px solid ${brandColor};border-radius:4px;">
+          <table style="width:100%;font-size:14px;color:#374151;">
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">S\u1ED1 ti\u1EC1n:</td>
+              <td style="padding:4px 8px;font-weight:700;color:${brandColor};">${amt}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">\u0110\u1ED1i t\u00E1c:</td>
+              <td style="padding:4px 8px;">${partner}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Tham chi\u1EBFu:</td>
+              <td style="padding:4px 8px;">${ref}</td>
+            </tr>
+            ${desc ? `<tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">M\u00F4 t\u1EA3:</td>
+              <td style="padding:4px 8px;">${desc}</td>
+            </tr>` : ''}
+          </table>
+        </div>
+        <div style="margin:24px 0;text-align:center;">
+          <a href="#/finance"
+             style="display:inline-block;padding:14px 32px;background-color:${brandColor};color:#ffffff;text-decoration:none;border-radius:6px;font-size:16px;font-weight:600;">
+            Xem t\u00E0i ch\u00EDnh
+          </a>
+        </div>`
+      return { subject, html: wrapper(subject, body) }
+    }
   }
 }
 
@@ -188,7 +313,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    const validTypes: EmailType[] = ['registration_received', 'registration_approved', 'registration_rejected']
+    const validTypes: EmailType[] = [
+      'registration_received', 'registration_approved', 'registration_rejected',
+      'admin_new_registration', 'admin_new_order', 'admin_payment_received',
+    ]
     if (!validTypes.includes(type)) {
       return new Response(
         JSON.stringify({ error: `Invalid type. Must be one of: ${validTypes.join(', ')}` }),
