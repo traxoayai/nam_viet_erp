@@ -48,41 +48,33 @@ test.describe("B2B Payment Status Display", () => {
     await page.goto("/b2b/orders");
     await page.waitForTimeout(3000);
 
-    // Click first order row
-    const firstRow = page
-      .locator("table tbody tr, .ant-table-tbody tr")
-      .first();
+    // Click first visible data row (skip Ant Design measure rows)
+    const dataRows = page.locator(
+      ".ant-table-tbody tr.ant-table-row"
+    );
 
-    if ((await firstRow.count()) === 0) {
+    await dataRows.first().waitFor({ state: "visible", timeout: 10_000 }).catch(() => {});
+
+    if ((await dataRows.count()) === 0) {
       test.skip();
       return;
     }
 
-    await firstRow.click();
+    await dataRows.first().click();
     await page.waitForTimeout(3000);
 
-    // Order detail should show payment info
-    // Look for payment-related sections
-    const paymentCard = page.locator(".ant-card", { hasText: /Thanh toán/ });
-    const hasPaymentCard = await paymentCard
-      .isVisible({ timeout: 5_000 })
-      .catch(() => false);
+    // Order detail should show payment breakdown card
+    const paymentCard = page.locator("text=Thanh toán").first();
+    await expect(paymentCard).toBeVisible({ timeout: 10_000 });
 
-    if (hasPaymentCard) {
-      // Payment card should show status
-      const statusTexts = ["Chưa TT", "Đã TT", "Một phần", "Chưa thanh toán", "Đã thanh toán"];
-      let foundStatus = false;
-      for (const text of statusTexts) {
-        const el = paymentCard.locator(`text=${text}`);
-        if ((await el.count()) > 0) {
-          foundStatus = true;
-          break;
-        }
-      }
-      expect(foundStatus).toBe(true);
+    // Verify price breakdown fields exist
+    const breakdownLabels = ["Tạm tính", "Tổng cộng"];
+    for (const label of breakdownLabels) {
+      const el = page.getByText(label, { exact: false }).first();
+      await expect(el).toBeVisible({ timeout: 5_000 });
     }
 
-    // No crash/error
+    // No crash/error toast
     const errorToast = page.locator(".ant-message-error");
     const hasError = await errorToast
       .isVisible({ timeout: 2_000 })
