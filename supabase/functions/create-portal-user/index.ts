@@ -79,11 +79,15 @@ Deno.serve(async (req) => {
       )
     }
 
+    const portalUrl = Deno.env.get('PORTAL_SITE_URL') ?? 'https://nam-viet-b2b.vercel.app'
+    const redirectTo = `${portalUrl.replace(/\/$/, '')}/auth/callback`
+
     // User does not exist -> create via inviteUserByEmail (sends invite email automatically)
     const { data: newUser, error: createError } = await supabase.auth.admin.inviteUserByEmail(
       email,
       {
         data: { display_name: display_name || email },
+        redirectTo,
       },
     )
 

@@ -18,6 +18,7 @@ import dayjs from "dayjs";
 
 import {
   fetchPortalUsers,
+  resendPortalInviteOrResetPassword,
   togglePortalUserStatus,
   type PortalUserRow,
 } from "@/features/sales/api/portalUserService";
@@ -33,6 +34,7 @@ const PortalUsersPage: React.FC = () => {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   const loadData = useCallback(
     async (searchValue?: string) => {
@@ -75,6 +77,23 @@ const PortalUsersPage: React.FC = () => {
       antMessage.error(`Lỗi: ${msg}`);
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const handleResendInviteOrReset = async (record: PortalUserRow) => {
+    setResendingId(record.id);
+    try {
+      const result = await resendPortalInviteOrResetPassword(record.email);
+      antMessage.success(
+        result.action === "invite"
+          ? `Đã gửi lại email mời cho ${record.email}`
+          : `Đã gửi email đặt lại mật khẩu cho ${record.email}`,
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      antMessage.error(`Lỗi gửi email: ${msg}`);
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -158,20 +177,29 @@ const PortalUsersPage: React.FC = () => {
     {
       title: "Hành động",
       key: "action",
-      width: 130,
+      width: 280,
       align: "center" as const,
       fixed: "right" as const,
       render: (_: unknown, record: PortalUserRow) => {
         const isActive = record.status === "active";
         return (
-          <Button
-            size="small"
-            danger={isActive}
-            loading={togglingId === record.id}
-            onClick={() => handleToggleStatus(record)}
-          >
-            {isActive ? "Vô hiệu hóa" : "Kích hoạt"}
-          </Button>
+          <Space>
+            <Button
+              size="small"
+              loading={resendingId === record.id}
+              onClick={() => handleResendInviteOrReset(record)}
+            >
+              Gửi lại mời / reset
+            </Button>
+            <Button
+              size="small"
+              danger={isActive}
+              loading={togglingId === record.id}
+              onClick={() => handleToggleStatus(record)}
+            >
+              {isActive ? "Vô hiệu hóa" : "Kích hoạt"}
+            </Button>
+          </Space>
         );
       },
     },

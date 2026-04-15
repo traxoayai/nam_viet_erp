@@ -87,6 +87,33 @@ export const togglePortalUserStatus = async (
   if (error) throw error;
 };
 
+export const resendPortalInviteOrResetPassword = async (
+  email: string,
+): Promise<{ action: "invite" | "recovery"; message: string }> => {
+  const { data: session } = await supabase.auth.getSession();
+  const edgeRes = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resend-portal-invite`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.session?.access_token}`,
+      },
+      body: JSON.stringify({ email }),
+    },
+  );
+
+  const edgeData = await edgeRes.json();
+  if (!edgeRes.ok) {
+    throw new Error(edgeData.error || "Failed to resend invite/reset password");
+  }
+
+  return {
+    action: edgeData.action as "invite" | "recovery",
+    message: (edgeData.message as string) || "Đã gửi email thành công",
+  };
+};
+
 type CreateCustomerB2BParams = {
   name: string;
   taxCode?: string;
