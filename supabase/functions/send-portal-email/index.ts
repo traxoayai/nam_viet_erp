@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { SmtpClient } from 'https://deno.land/x/smtp@v0.7.0/mod.ts'
+import nodemailer from 'npm:nodemailer@6'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,6 +8,7 @@ const corsHeaders = {
 
 type EmailType = 'registration_received' | 'registration_approved' | 'registration_rejected'
   | 'admin_new_registration' | 'admin_new_order' | 'admin_payment_received'
+  | 'portal_user_invite' | 'portal_user_reset_password'
 
 interface EmailPayload {
   type: EmailType
@@ -26,6 +27,8 @@ interface EmailPayload {
     partner_name?: string
     reference?: string
     description?: string
+    action_link?: string
+    display_name?: string
   }
 }
 
@@ -267,6 +270,58 @@ function buildHtmlEmail(
         </div>`
       return { subject, html: wrapper(subject, body) }
     }
+
+    case 'portal_user_invite': {
+      const subject = `[${brandName}] Tài khoản Portal đã được tạo`
+      const actionLink = data.action_link || '#'
+      const displayName = data.display_name || data.business_name || 'Quý khách'
+      const body = `
+        <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Mời kích hoạt tài khoản Portal</h2>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          Xin chào <strong>${displayName}</strong>,
+        </p>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          Quản trị viên đã tạo tài khoản B2B Portal cho bạn trên hệ thống <strong>${brandName}</strong>.
+          Vui lòng bấm nút bên dưới để đặt mật khẩu lần đầu.
+        </p>
+        <div style="margin:24px 0;text-align:center;">
+          <a href="${actionLink}"
+             style="display:inline-block;padding:14px 32px;background-color:${brandColor};color:#ffffff;text-decoration:none;border-radius:6px;font-size:16px;font-weight:600;">
+            Đặt mật khẩu tài khoản
+          </a>
+        </div>
+        <p style="margin:0;color:#6b7280;font-size:13px;">
+          Nếu nút không hoạt động, sao chép liên kết sau vào trình duyệt:<br/>
+          <a href="${actionLink}" style="color:${brandColor};word-break:break-all;">${actionLink}</a>
+        </p>`
+      return { subject, html: wrapper(subject, body) }
+    }
+
+    case 'portal_user_reset_password': {
+      const subject = `[${brandName}] Yêu cầu đặt lại mật khẩu Portal`
+      const actionLink = data.action_link || '#'
+      const displayName = data.display_name || data.business_name || 'Quý khách'
+      const body = `
+        <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Đặt lại mật khẩu</h2>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          Xin chào <strong>${displayName}</strong>,
+        </p>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          Bạn vừa yêu cầu gửi lại liên kết đặt mật khẩu cho tài khoản B2B Portal.
+          Vui lòng bấm nút bên dưới để tạo mật khẩu mới.
+        </p>
+        <div style="margin:24px 0;text-align:center;">
+          <a href="${actionLink}"
+             style="display:inline-block;padding:14px 32px;background-color:${brandColor};color:#ffffff;text-decoration:none;border-radius:6px;font-size:16px;font-weight:600;">
+            Đặt lại mật khẩu
+          </a>
+        </div>
+        <p style="margin:0;color:#6b7280;font-size:13px;">
+          Nếu bạn không thực hiện yêu cầu này, có thể bỏ qua email.<br/>
+          Liên kết trực tiếp: <a href="${actionLink}" style="color:${brandColor};word-break:break-all;">${actionLink}</a>
+        </p>`
+      return { subject, html: wrapper(subject, body) }
+    }
   }
 }
 
@@ -316,6 +371,7 @@ Deno.serve(async (req) => {
     const validTypes: EmailType[] = [
       'registration_received', 'registration_approved', 'registration_rejected',
       'admin_new_registration', 'admin_new_order', 'admin_payment_received',
+      'portal_user_invite', 'portal_user_reset_password',
     ]
     if (!validTypes.includes(type)) {
       return new Response(
@@ -327,39 +383,39 @@ Deno.serve(async (req) => {
     // Build email content
     const { subject, html } = buildHtmlEmail(type, data || {})
 
-    // SMTP config
-    const smtpHost = Deno.env.get('SMTP_HOST')
+    // Gmail SMTP config
+    const smtpHost = Deno.env.get('SMTP_HOST') || 'smtp.gmail.com'
     const smtpPort = parseInt(Deno.env.get('SMTP_PORT') || '465', 10)
     const smtpUser = Deno.env.get('SMTP_USER')
-    const smtpPass = Deno.env.get('SMTP_PASS')
-    const smtpFrom = Deno.env.get('SMTP_FROM')
+    const smtpPass = Deno.env.get('SMTP_PASSWORD')
+    const smtpFrom = Deno.env.get('SMTP_FROM') || smtpUser
 
-    if (!smtpHost || !smtpUser || !smtpPass || !smtpFrom) {
+    if (!smtpUser || !smtpPass) {
       return new Response(
-        JSON.stringify({ error: 'SMTP configuration is incomplete' }),
+        JSON.stringify({
+          error: 'SMTP configuration is incomplete (SMTP_USER/SMTP_PASSWORD)',
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
-    // Send email via SMTP
-    const client = new SmtpClient()
-
-    await client.connectTLS({
-      hostname: smtpHost,
+    // Send email via Gmail SMTP (nodemailer)
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
       port: smtpPort,
-      username: smtpUser,
-      password: smtpPass,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
     })
 
-    await client.send({
+    await transporter.sendMail({
       from: smtpFrom,
       to: email,
       subject,
-      content: '',
       html,
     })
-
-    await client.close()
 
     return new Response(
       JSON.stringify({ success: true, message: `Email "${type}" sent to ${email}` }),
