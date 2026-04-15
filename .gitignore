@@ -64,4 +64,4 @@ backups/
 docs
 .vercel
 .cursor/
-.cursorrules
+.cursorrulessupabase/.env.local

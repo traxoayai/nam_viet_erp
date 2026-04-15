@@ -28,46 +28,101 @@ CREATE INDEX IF NOT EXISTS idx_portal_cart_product
   ON public.portal_cart_items (product_id);
 
 -- RLS: user chỉ CRUD giỏ của mình
-CREATE POLICY "cart_select_own" ON public.portal_cart_items
-  FOR SELECT TO authenticated
-  USING (
-    portal_user_id = (
-      SELECT pu.id FROM public.portal_users pu
-      WHERE pu.auth_user_id = auth.uid() LIMIT 1
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'portal_cart_items'
+      AND policyname = 'cart_select_own'
+  ) THEN
+    CREATE POLICY "cart_select_own" ON public.portal_cart_items
+      FOR SELECT TO authenticated
+      USING (
+        portal_user_id = (
+          SELECT pu.id FROM public.portal_users pu
+          WHERE pu.auth_user_id = auth.uid() LIMIT 1
+        )
+      );
+  END IF;
+END
+$$;
 
-CREATE POLICY "cart_insert_own" ON public.portal_cart_items
-  FOR INSERT TO authenticated
-  WITH CHECK (
-    portal_user_id = (
-      SELECT pu.id FROM public.portal_users pu
-      WHERE pu.auth_user_id = auth.uid() LIMIT 1
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'portal_cart_items'
+      AND policyname = 'cart_insert_own'
+  ) THEN
+    CREATE POLICY "cart_insert_own" ON public.portal_cart_items
+      FOR INSERT TO authenticated
+      WITH CHECK (
+        portal_user_id = (
+          SELECT pu.id FROM public.portal_users pu
+          WHERE pu.auth_user_id = auth.uid() LIMIT 1
+        )
+      );
+  END IF;
+END
+$$;
 
-CREATE POLICY "cart_update_own" ON public.portal_cart_items
-  FOR UPDATE TO authenticated
-  USING (
-    portal_user_id = (
-      SELECT pu.id FROM public.portal_users pu
-      WHERE pu.auth_user_id = auth.uid() LIMIT 1
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'portal_cart_items'
+      AND policyname = 'cart_update_own'
+  ) THEN
+    CREATE POLICY "cart_update_own" ON public.portal_cart_items
+      FOR UPDATE TO authenticated
+      USING (
+        portal_user_id = (
+          SELECT pu.id FROM public.portal_users pu
+          WHERE pu.auth_user_id = auth.uid() LIMIT 1
+        )
+      );
+  END IF;
+END
+$$;
 
-CREATE POLICY "cart_delete_own" ON public.portal_cart_items
-  FOR DELETE TO authenticated
-  USING (
-    portal_user_id = (
-      SELECT pu.id FROM public.portal_users pu
-      WHERE pu.auth_user_id = auth.uid() LIMIT 1
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'portal_cart_items'
+      AND policyname = 'cart_delete_own'
+  ) THEN
+    CREATE POLICY "cart_delete_own" ON public.portal_cart_items
+      FOR DELETE TO authenticated
+      USING (
+        portal_user_id = (
+          SELECT pu.id FROM public.portal_users pu
+          WHERE pu.auth_user_id = auth.uid() LIMIT 1
+        )
+      );
+  END IF;
+END
+$$;
 
 -- Service role full access
-CREATE POLICY "cart_service_all" ON public.portal_cart_items
-  FOR ALL TO service_role
-  USING (true) WITH CHECK (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'portal_cart_items'
+      AND policyname = 'cart_service_all'
+  ) THEN
+    CREATE POLICY "cart_service_all" ON public.portal_cart_items
+      FOR ALL TO service_role
+      USING (true) WITH CHECK (true);
+  END IF;
+END
+$$;
 
 -- Auto-update updated_at
 CREATE OR REPLACE FUNCTION public.fn_portal_cart_updated_at()
@@ -78,9 +133,23 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER trg_portal_cart_updated_at
-  BEFORE UPDATE ON public.portal_cart_items
-  FOR EACH ROW
-  EXECUTE FUNCTION public.fn_portal_cart_updated_at();
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE t.tgname = 'trg_portal_cart_updated_at'
+      AND c.relname = 'portal_cart_items'
+      AND n.nspname = 'public'
+  ) THEN
+    CREATE TRIGGER trg_portal_cart_updated_at
+      BEFORE UPDATE ON public.portal_cart_items
+      FOR EACH ROW
+      EXECUTE FUNCTION public.fn_portal_cart_updated_at();
+  END IF;
+END
+$$;
 
 COMMIT;
