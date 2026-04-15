@@ -1,6 +1,6 @@
 // src/features/notifications/components/NotificationBell.tsx
-import { BellOutlined } from "@ant-design/icons";
-import { Badge, Button, List, Popover, Typography, Empty, Avatar } from "antd";
+import { BellOutlined, RightOutlined, CheckOutlined } from "@ant-design/icons";
+import { Badge, Button, Divider, List, Popover, Typography, Empty, Avatar } from "antd";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { useEffect, useState } from "react";
@@ -54,6 +54,7 @@ export const NotificationBell = () => {
   const unreadCount = useNotificationStore((s) => s.unreadCount);
   const setNotifications = useNotificationStore((s) => s.setNotifications);
   const markAsReadInStore = useNotificationStore((s) => s.markAsRead);
+  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
 
   // 1. Tải thông báo ban đầu vào store
   useEffect(() => {
@@ -96,54 +97,87 @@ export const NotificationBell = () => {
     }
   };
 
+  const handleMarkAllRead = async () => {
+    markAllAsRead();
+    await safeRpc("mark_all_my_notifications_read", undefined, { silent: true });
+  };
+
+  const handleViewAll = () => {
+    setOpen(false);
+    navigate("/notifications");
+  };
+
   // UI Danh sách
   const content = (
-    <div style={{ width: 350, maxHeight: 400, overflowY: "auto" }}>
-      <List
-        dataSource={notifications}
-        locale={{ emptyText: <Empty description="Không có thông báo mới" /> }}
-        renderItem={(item) => {
-          const hasLink = !!getNotificationLink(item);
-          return (
-            <List.Item
-              style={{
-                background: item.is_read ? "white" : "#e6f7ff",
-                cursor: "pointer",
-                padding: "8px 12px",
-              }}
-              onClick={() => handleClick(item)}
-            >
-              <List.Item.Meta
-                avatar={
-                  <Avatar
-                    style={{
-                      backgroundColor:
-                        item.type === "warning" ? "#ff4d4f" : "#1890ff",
-                    }}
-                    icon={<BellOutlined />}
-                  />
-                }
-                title={
-                  <Typography.Text
-                    strong={!item.is_read}
-                    style={hasLink ? { color: "#1890ff" } : undefined}
-                  >
-                    {item.title}
-                  </Typography.Text>
-                }
-                description={
-                  <div>
-                    <div>{item.message}</div>
-                    <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>
-                      {dayjs(item.created_at).fromNow()}
+    <div style={{ width: 350 }}>
+      <div style={{ maxHeight: 360, overflowY: "auto" }}>
+        <List
+          dataSource={notifications}
+          locale={{ emptyText: <Empty description="Không có thông báo mới" /> }}
+          renderItem={(item) => {
+            const hasLink = !!getNotificationLink(item);
+            return (
+              <List.Item
+                style={{
+                  background: item.is_read ? "white" : "#e6f7ff",
+                  cursor: "pointer",
+                  padding: "8px 12px",
+                }}
+                onClick={() => handleClick(item)}
+              >
+                <List.Item.Meta
+                  avatar={
+                    <Avatar
+                      style={{
+                        backgroundColor:
+                          item.type === "warning" ? "#ff4d4f" : "#1890ff",
+                      }}
+                      icon={<BellOutlined />}
+                    />
+                  }
+                  title={
+                    <Typography.Text
+                      strong={!item.is_read}
+                      style={hasLink ? { color: "#1890ff" } : undefined}
+                    >
+                      {item.title}
+                    </Typography.Text>
+                  }
+                  description={
+                    <div>
+                      <div>{item.message}</div>
+                      <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>
+                        {dayjs(item.created_at).fromNow()}
+                      </div>
                     </div>
-                  </div>
-                }
-              />
-            </List.Item>
-          );
-        }}
-      />
+                  }
+                />
+              </List.Item>
+            );
+          }}
+        />
+      </div>
+      <Divider style={{ margin: 0 }} />
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px" }}>
+        {unreadCount > 0 && (
+          <Button
+            type="link"
+            size="small"
+            icon={<CheckOutlined />}
+            onClick={handleMarkAllRead}
+          >
+            Đọc tất cả
+          </Button>
+        )}
+        <Button
+          type="link"
+          size="small"
+          onClick={handleViewAll}
+          style={{ marginLeft: "auto" }}
+        >
+          Xem tất cả <RightOutlined />
+        </Button>
+      </div>
     </div>
   );
 
