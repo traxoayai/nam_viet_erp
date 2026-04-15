@@ -319,22 +319,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const body = await req.json();
 
     // =========================================================================
-    // Route 0: debug env (temp — xoa sau khi fix)
-    // =========================================================================
-    if ((body as Record<string, string>).action === "debug-env") {
-      return jsonResponse({
-        has_client_id: !!GMAIL_CLIENT_ID,
-        has_client_secret: !!GMAIL_CLIENT_SECRET,
-        has_refresh_token: !!GMAIL_REFRESH_TOKEN,
-        has_push_secret: !!GMAIL_PUSH_SECRET,
-        has_pubsub_topic: !!PUBSUB_TOPIC,
-        client_id_prefix: GMAIL_CLIENT_ID?.slice(0, 8) || "EMPTY",
-        supabase_url_prefix: SUPABASE_URL?.slice(0, 20) || "EMPTY",
-      });
-    }
-
-    // =========================================================================
-    // Route 1: renew-watch (goi boi App Scripts cron moi 6 ngay)
+    // Route 1: renew-watch (auto-renewed by pg_cron every 6 days)
     // =========================================================================
     if ((body as RenewWatchRequest).action === "renew-watch") {
       // Auth: accept x-gmail-push-secret header OR service_role Bearer token
