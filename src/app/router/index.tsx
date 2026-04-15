@@ -1,4 +1,5 @@
 // src/app/router/index.tsx
+import { lazy, Suspense } from "react";
 import { Navigate, type RouteObject, Outlet } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
@@ -78,6 +79,7 @@ import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [
 import SystemAuditLogPage from "@/pages/reports/SystemAuditLogPage"; // [NEW]
 import TaskKanbanPage from "@/pages/hr/TaskKanbanPage";
 import NotificationManagementPage from "@/pages/notifications/NotificationManagementPage";
+const NotificationsPage = lazy(() => import("@/pages/notifications/NotificationsPage"));
 import PortalDashboardPage from "@/pages/portal/PortalDashboardPage";
 import PortalUsersPage from "@/pages/portal/PortalUsersPage";
 
@@ -498,6 +500,14 @@ const routes: RouteObject[] = [
               <PermissionGuard permission={PERMISSIONS.PORTAL.VIEW}>
                 <B2BOrderListPage defaultSource="portal" hideSourceFilter />
               </PermissionGuard>
+            ),
+          },
+          {
+            path: "notifications",
+            element: (
+              <Suspense fallback={null}>
+                <NotificationsPage />
+              </Suspense>
             ),
           },
           {
