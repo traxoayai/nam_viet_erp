@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useCallback, useMemo } from "react";
 
+import { isOverCreditLimit } from "@/shared/lib/creditLimitCheck";
 import { useShippingPartnerStore } from "@/features/partners/stores/useShippingPartnerStore";
 // QUAN TRỌNG: Import Type chuẩn từ shippingPartner để đồng bộ với Store
 import { ShippingPartner } from "@/features/partners/types/shippingPartner";
@@ -19,16 +20,18 @@ export const useCreateOrderB2B = () => {
   // --- 1. LOGIC TÀI CHÍNH (FINANCIALS) ---
   const financials = useMemo(() => {
     const summary = store.getSummary();
-    const isOverLimit =
-      store.customer &&
-      store.customer.debt_limit !== null && store.customer.debt_limit !== undefined &&
-      store.customer.current_debt + summary.totalPayable >
-        store.customer.debt_limit;
+    const isOverLimit = store.customer
+      ? isOverCreditLimit({
+          debtLimit: store.customer.debt_limit,
+          currentDebt: store.customer.current_debt,
+          orderAmount: summary.totalPayable,
+        })
+      : false;
 
     return {
       ...summary,
       newTotalDebt: summary.totalPayable,
-      isOverLimit: !!isOverLimit,
+      isOverLimit,
     };
   }, [store.items, store.shippingFee, store.selectedVoucher, store.customer]);
 

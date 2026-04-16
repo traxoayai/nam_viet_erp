@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
 
@@ -107,11 +108,11 @@ export const rejectPortalRegistration = async (
   // Note: auth_user_id chưa có trong generated types (cần chạy typegen sau migration)
   const { data: requestRaw } = await supabase
     .from("registration_requests")
-    .select("email, business_name")
+    .select("email, business_name, auth_user_id")
     .eq("id", requestId)
     .single();
   if (!requestRaw) throw new Error("Request not found");
-  const request = requestRaw as { email: string; business_name: string };
+  const request = requestRaw as unknown as { email: string; business_name: string; auth_user_id: string | null };
 
   // Step 2: Update status to rejected
   const { error } = await supabase
@@ -123,6 +124,19 @@ export const rejectPortalRegistration = async (
     })
     .eq("id", requestId);
   if (error) throw error;
+
+  // Step 2b: Clean up orphaned auth user (non-blocking)
+  if (request.auth_user_id) {
+    try {
+      const adminClient = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_SERVICE_KEY,
+      );
+      await adminClient.auth.admin.deleteUser(request.auth_user_id);
+    } catch {
+      console.warn("[Portal] Failed to delete orphaned auth user:", request.auth_user_id);
+    }
+  }
 
   // Step 3: Send rejection email (non-blocking)
   try {
