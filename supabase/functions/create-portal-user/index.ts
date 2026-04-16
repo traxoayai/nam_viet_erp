@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
         .maybeSingle()
 
       if (portalUser) {
-        // Already has portal_users record -> 422 error
+        // Already has portal_users record -> 422 erro
         return new Response(
           JSON.stringify({
             error: 'Portal user already exists',

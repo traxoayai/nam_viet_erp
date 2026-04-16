@@ -125,6 +125,8 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 }));
 
 // --- Tự động lắng nghe thay đổi Auth của Supabase ---
+// Listener này CẦN THIẾT vì ProtectedRoute + 23 files đọc user từ store (không phải AuthProvider).
+// Khi SIGNED_OUT (token hết hạn, bị revoke...) → clear store → ProtectedRoute redirect về login.
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === "SIGNED_OUT") {
     useAuthStore.setState({ user: null, profile: null, permissions: [] });
