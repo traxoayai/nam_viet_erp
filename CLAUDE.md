@@ -5,6 +5,7 @@ Vite + React 19 + TypeScript strict + Ant Design 5 + Zustand 5 + TanStack Query 
 
 ## Docs (BẮT BUỘC đọc khi cần context)
 - [Architecture](docs/ARCHITECTURE.md) — folder structure, modules, patterns, formulas
+- [Business Logic](docs/BUSINESS_LOGIC.md) — nghiệp vụ tất cả module: luồng, RPC, gotchas (ĐỌC KHI LÀM TASK)
 - [Production Migration Plan](docs/PRODUCTION_MIGRATION_PLAN.md)
 
 ## Rules

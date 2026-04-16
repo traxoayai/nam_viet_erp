@@ -924,7 +924,7 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
             await refresh();
 
             message.success({
-              content: "Đã nộp tiền và chốt nợ thành công!",
+              content: "Đã tạo phiếu thu, chờ Thủ Quỹ duyệt!",
               key: "bulkPay",
             });
             setIsPaymentModalOpen(false);

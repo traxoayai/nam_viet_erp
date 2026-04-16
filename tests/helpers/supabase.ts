@@ -3,9 +3,9 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 // ─── Local config ────────────────────────────────────────────────────────────
 const LOCAL_URL = "http://127.0.0.1:54321";
 const LOCAL_SERVICE_KEY =
-  "eyJhbGciOiJFUzI1NiIsImtpZCI6ImI4MTI2OWYxLTIxZDgtNGYyZS1iNzE5LWMyMjQwYTg0MGQ5MCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MjA4OTQ1OTM1NH0.8GjR4mNaa3RFezv2KK4QUlwE8ShJ1e1mmLVeawdrkXVh1VphbBBG5xW4q_Pu_flFXQE37OQT5wIS48TM6ALa2Q";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU";
 const LOCAL_ANON_KEY =
-  "eyJhbGciOiJFUzI1NiIsImtpZCI6ImI4MTI2OWYxLTIxZDgtNGYyZS1iNzE5LWMyMjQwYTg0MGQ5MCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjIwODk0NTkzNDZ9.WSVbPVL1j6DfN5Lr6gaxbehCG4QDffb6AqJEJthH4cLKugNfSPb1MKgUc4CEl3o42hnqAKhiW1b-aGR9wAuSUw";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
 
 // ─── Production config ───────────────────────────────────────────────────────
 const PROD_URL = "https://iudkexocalqdhxuyjacu.supabase.co";
