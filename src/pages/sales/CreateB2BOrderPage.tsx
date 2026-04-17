@@ -219,15 +219,20 @@ const CreateB2BOrderPage = () => {
     // Nếu là DRAFT hoặc QUOTE (Báo giá) thì cho phép nhập thoải mái.
     if (status === "CONFIRMED") {
       const outOfStockItems = items.filter((item) => {
-        // Lưu ý: item.stock_quantity cần được lấy từ dữ liệu sản phẩm lúc add vào
-        // Nếu không có dữ liệu tồn (ví dụ undefined), mặc định cho qua (hoặc chặn tùy Sếp)
+        // stock_quantity là base unit (đvcs); quantity là wholesale unit (Hộp/Kiện...)
+        // Phải nhân conversion_factor để so sánh cùng đơn vị.
         const currentStock = item.stock_quantity || 0;
-        return item.quantity > currentStock;
+        const neededBase = item.quantity * ((item as { conversion_factor?: number }).conversion_factor || 1);
+        return neededBase > currentStock;
       });
 
       if (outOfStockItems.length > 0) {
         const errorMsg = outOfStockItems
-          .map((i) => `${i.name} (Tồn: ${i.stock_quantity || 0})`)
+          .map((i) => {
+            const cf = (i as { conversion_factor?: number }).conversion_factor || 1;
+            const need = i.quantity * cf;
+            return `${i.name} (cần ${need} đvcs, tồn ${i.stock_quantity || 0} đvcs)`;
+          })
           .join(", ");
         message.error({
           content: `Không đủ tồn kho để tạo đơn! Vui lòng kiểm tra lại: ${errorMsg}`,
