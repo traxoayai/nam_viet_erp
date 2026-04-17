@@ -14,7 +14,6 @@ import {
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 import { financeService } from "@/features/finance/api/financeService";
 import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
 
@@ -273,7 +272,9 @@ const CreateB2BOrderPage = () => {
           p_delivery_method: deliveryMethod,
           p_shipping_partner_id:
             deliveryMethod === "internal" ? null : shippingPartnerId,
-          p_warehouse_id: useAuthStore.getState().profile?.warehouse_id || DEFAULT_WAREHOUSE_ID,
+          // Backend (create_sales_order) tự resolve kho B2B qua get_b2b_warehouse_id()
+          // khi order_type='B2B'. FE chỉ gửi placeholder nhất quán.
+          p_warehouse_id: DEFAULT_WAREHOUSE_ID,
           p_payment_method: paymentMethod,
           p_order_type: "B2B",
           p_items: items.map((i) => ({
