@@ -1,4 +1,6 @@
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { GmailAccount, loadGmailAccounts } from "./accounts.ts";
+import { AccountState, getAccountState, setAccountState } from "./state.ts";
 
 // =============================================================================
 // Types
@@ -69,23 +71,28 @@ interface RenewWatchRequest {
 
 const GMAIL_CLIENT_ID = Deno.env.get("GMAIL_CLIENT_ID") || "";
 const GMAIL_CLIENT_SECRET = Deno.env.get("GMAIL_CLIENT_SECRET") || "";
-const GMAIL_REFRESH_TOKEN = Deno.env.get("GMAIL_REFRESH_TOKEN") || "";
 const GMAIL_PUSH_SECRET = Deno.env.get("GMAIL_PUSH_SECRET") || "";
 const PUBSUB_TOPIC = Deno.env.get("PUBSUB_TOPIC") || "";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-let cachedAccessToken: string | null = null;
-let tokenExpiresAt = 0;
+const ACCOUNTS: GmailAccount[] = loadGmailAccounts((k) => Deno.env.get(k) || undefined);
 
-async function getGmailAccessToken(): Promise<string> {
-  if (cachedAccessToken && Date.now() < tokenExpiresAt) {
-    return cachedAccessToken;
+interface CachedToken {
+  token: string;
+  expiresAt: number;
+}
+const tokenCache = new Map<string, CachedToken>();
+
+async function getGmailAccessToken(account: GmailAccount): Promise<string> {
+  const cached = tokenCache.get(account.email);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.token;
   }
 
-  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
-    throw new Error("Gmail OAuth2 credentials chua cau hinh (GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN)");
+  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET) {
+    throw new Error("Gmail OAuth2 credentials chua cau hinh (GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET)");
   }
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -93,7 +100,7 @@ async function getGmailAccessToken(): Promise<string> {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "refresh_token",
-      refresh_token: GMAIL_REFRESH_TOKEN,
+      refresh_token: account.refreshToken,
       client_id: GMAIL_CLIENT_ID,
       client_secret: GMAIL_CLIENT_SECRET,
     }),
@@ -101,18 +108,20 @@ async function getGmailAccessToken(): Promise<string> {
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Gmail OAuth2 token error (${res.status}): ${body}`);
+    throw new Error(`Gmail OAuth2 token error cho ${account.email} (${res.status}): ${body}`);
   }
 
   const json = await res.json();
   if (!json.access_token) {
-    throw new Error("Gmail OAuth2 response thieu access_token");
+    throw new Error(`Gmail OAuth2 response thieu access_token cho ${account.email}`);
   }
 
-  cachedAccessToken = json.access_token as string;
-  // Refresh 5 phut truoc khi het han
-  tokenExpiresAt = Date.now() + ((json.expires_in as number) - 300) * 1000;
-  return cachedAccessToken;
+  const entry: CachedToken = {
+    token: json.access_token as string,
+    expiresAt: Date.now() + ((json.expires_in as number) - 300) * 1000,
+  };
+  tokenCache.set(account.email, entry);
+  return entry.token;
 }
 
 // =============================================================================
@@ -283,29 +292,6 @@ function getSupabaseClient(): SupabaseClient {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 }
 
-async function getSystemSetting(supabase: SupabaseClient, key: string): Promise<string> {
-  const { data, error } = await supabase
-    .from("system_settings")
-    .select("value")
-    .eq("key", key)
-    .single();
-
-  if (error || !data) return "0";
-  // value la jsonb, co the la string wrapped in quotes
-  const val = data.value;
-  return typeof val === "string" ? val : JSON.stringify(val);
-}
-
-async function setSystemSetting(supabase: SupabaseClient, key: string, value: string): Promise<void> {
-  const { error } = await supabase
-    .from("system_settings")
-    .upsert({ key, value }, { onConflict: "key" });
-
-  if (error) {
-    console.error(`Loi update system_settings[${key}]:`, error.message);
-  }
-}
-
 // =============================================================================
 // [F] Main Handler
 // =============================================================================
@@ -330,24 +316,50 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return jsonResponse({ error: "Unauthorized" }, 401);
       }
 
-      const accessToken = await getGmailAccessToken();
-      const watchResult = await gmailWatch(accessToken, PUBSUB_TOPIC);
-
-      const supabase = getSupabaseClient();
-      await setSystemSetting(supabase, "gmail_push_watch_expiry", watchResult.expiration);
-
-      // Neu chua co historyId (lan dau), seed luon
-      const currentHistoryId = await getSystemSetting(supabase, "gmail_push_last_history_id");
-      if (currentHistoryId === "0") {
-        await setSystemSetting(supabase, "gmail_push_last_history_id", watchResult.historyId);
+      if (ACCOUNTS.length === 0) {
+        return jsonResponse({ error: "No Gmail accounts configured" }, 500);
       }
 
-      console.log(`[renew-watch] OK. Expiry: ${watchResult.expiration}, historyId: ${watchResult.historyId}`);
+      const supabase = getSupabaseClient();
+      const results: Array<{
+        email: string;
+        status: "ok" | "error";
+        expiration?: string;
+        historyId?: string;
+        error?: string;
+      }> = [];
+
+      for (const account of ACCOUNTS) {
+        try {
+          const accessToken = await getGmailAccessToken(account);
+          const watchResult = await gmailWatch(accessToken, PUBSUB_TOPIC);
+
+          const currentState = await getAccountState(supabase, account.email);
+          const nextState: AccountState = {
+            historyId: currentState.historyId === "0" ? watchResult.historyId : currentState.historyId,
+            expiry: Number(watchResult.expiration),
+          };
+          await setAccountState(supabase, account.email, nextState);
+
+          console.log(`[renew-watch] ${account.email} OK. Expiry: ${watchResult.expiration}, historyId: ${watchResult.historyId}`);
+          results.push({
+            email: account.email,
+            status: "ok",
+            expiration: watchResult.expiration,
+            historyId: watchResult.historyId,
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          console.error(`[renew-watch] ${account.email} FAIL:`, msg);
+          results.push({ email: account.email, status: "error", error: msg });
+        }
+      }
+
+      const allOk = results.every((r) => r.status === "ok");
       return jsonResponse({
-        status: "watch_renewed",
-        expiration: watchResult.expiration,
-        historyId: watchResult.historyId,
-      });
+        status: allOk ? "watch_renewed" : "partial_failure",
+        accounts: results,
+      }, allOk ? 200 : 207);
     }
 
     // =========================================================================
@@ -358,46 +370,41 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ error: "Invalid Pub/Sub payload" }, 400);
     }
 
-    // Decode Pub/Sub data
     const rawData = decodeBase64Url(pubsubPayload.message.data);
     const pushData: GmailPushData = JSON.parse(rawData);
     console.log(`[push] Email: ${pushData.emailAddress}, historyId: ${pushData.historyId}`);
 
-    // Xac thuc: chi chap nhan push tu dung email da dang ky
-    const expectedEmail = Deno.env.get("GMAIL_USER_EMAIL") || "";
-    if (expectedEmail && pushData.emailAddress !== expectedEmail) {
-      console.warn(`[push] Rejected: email mismatch. Expected ${expectedEmail}, got ${pushData.emailAddress}`);
+    // Lookup account theo emailAddress tu payload
+    const account = ACCOUNTS.find((a) => a.email === pushData.emailAddress);
+    if (!account) {
+      console.warn(`[push] Rejected: email ${pushData.emailAddress} khong co trong ACCOUNTS`);
       return jsonResponse({ error: "Unauthorized email" }, 403);
     }
 
     const supabase = getSupabaseClient();
-    const lastHistoryId = await getSystemSetting(supabase, "gmail_push_last_history_id");
+    const state = await getAccountState(supabase, account.email);
 
     // Lan dau: chi luu historyId, khong xu ly
-    if (lastHistoryId === "0") {
-      await setSystemSetting(supabase, "gmail_push_last_history_id", pushData.historyId);
-      console.log("[push] Initialized historyId:", pushData.historyId);
+    if (state.historyId === "0") {
+      await setAccountState(supabase, account.email, { ...state, historyId: pushData.historyId });
+      console.log(`[push] ${account.email} initialized historyId:`, pushData.historyId);
       return jsonResponse({ status: "initialized" });
     }
 
-    // Lay access token
-    const accessToken = await getGmailAccessToken();
+    const accessToken = await getGmailAccessToken(account);
 
-    // Fetch history tu lastHistoryId
     let history: GmailHistoryResponse;
     try {
-      history = await gmailHistoryList(accessToken, lastHistoryId);
+      history = await gmailHistoryList(accessToken, state.historyId);
     } catch (err: unknown) {
       if (err instanceof Error && (err as Error & { status?: number }).status === 404) {
-        // historyId qua cu -> reset
-        await setSystemSetting(supabase, "gmail_push_last_history_id", pushData.historyId);
-        console.warn("[push] historyId stale, reset to:", pushData.historyId);
+        await setAccountState(supabase, account.email, { ...state, historyId: pushData.historyId });
+        console.warn(`[push] ${account.email} historyId stale, reset to:`, pushData.historyId);
         return jsonResponse({ status: "historyId_reset" });
       }
       throw err;
     }
 
-    // Xu ly tung message moi
     let processedCount = 0;
     let skippedCount = 0;
 
@@ -408,7 +415,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
         try {
           const message = await gmailMessageGet(accessToken, msgId);
 
-          // Filter: chi xu ly email tu support@timo.vn
           const fromHeader = message.payload.headers.find(
             (h) => h.name.toLowerCase() === "from",
           );
@@ -417,16 +423,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
             continue;
           }
 
-          // Parse email body
           const emailBody = extractEmailBody(message);
           const parsed = parseTimoEmail(emailBody, msgId);
           if (!parsed) {
-            console.warn(`[push] Khong parse duoc email Timo: ${msgId}`);
+            console.warn(`[push] ${account.email} khong parse duoc email: ${msgId}`);
             skippedCount++;
             continue;
           }
 
-          // Goi RPC co san (reuse 100%)
           const { data: rpcResult, error: rpcError } = await supabase.rpc(
             "process_incoming_bank_transfer",
             {
@@ -437,22 +441,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
           );
 
           if (rpcError) {
-            console.error(`[push] RPC error cho msg ${msgId}:`, rpcError.message);
+            console.error(`[push] ${account.email} RPC error msg ${msgId}:`, rpcError.message);
           } else {
-            console.log(`[push] Processed ${msgId}:`, JSON.stringify(rpcResult));
+            console.log(`[push] ${account.email} processed ${msgId}:`, JSON.stringify(rpcResult));
             processedCount++;
           }
         } catch (msgErr) {
-          console.error(`[push] Error xu ly message ${msgId}:`, msgErr);
+          console.error(`[push] ${account.email} error msg ${msgId}:`, msgErr);
         }
       }
     }
 
-    // Luon update historyId (ke ca khi co loi xu ly tung message)
-    await setSystemSetting(supabase, "gmail_push_last_history_id", pushData.historyId);
+    await setAccountState(supabase, account.email, { ...state, historyId: pushData.historyId });
 
-    console.log(`[push] Done. Processed: ${processedCount}, Skipped: ${skippedCount}`);
-    return jsonResponse({ status: "ok", processed: processedCount, skipped: skippedCount });
+    console.log(`[push] ${account.email} Done. Processed: ${processedCount}, Skipped: ${skippedCount}`);
+    return jsonResponse({ status: "ok", email: account.email, processed: processedCount, skipped: skippedCount });
 
   } catch (err) {
     console.error("[gmail-push-receiver] Fatal error:", err);
