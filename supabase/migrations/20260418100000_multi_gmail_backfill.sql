@@ -1,0 +1,13 @@
+-- Backfill legacy single-account state to new per-email format.
+-- Legacy keys:
+--   gmail_push_last_history_id, gmail_push_watch_expiry (not email-scoped)
+-- New key:
+--   gmail_state:<email> = jsonb { historyId, expiry }
+--
+-- This migration is a no-op. Backfill tu xay ra:
+-- 1. Renew-watch endpoint sau deploy tu populate state cho moi account trong ACCOUNTS env.
+-- 2. Push handler fallback ve initialized branch neu historyId="0".
+-- 3. Legacy keys giu lai de rollback an toan (chi xoa khi da verify new system).
+--
+-- No-op migration (documents the transition); kept for audit trail.
+SELECT 1;
