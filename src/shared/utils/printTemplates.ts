@@ -294,20 +294,20 @@ export const generateB2BOrderHTML = (order: any) => {
                 </div>
             </div>
             <div class="total-col" style="width: 60%;">
-               <div class="total-row"><span>Cộng tiền hàng:</span> <span>${Number(order.total_amount || 0).toLocaleString()} ₫</span></div>
+               <div class="total-row"><span>Cộng tiền hàng:</span> <span>${Number(order.sub_total ?? order.total_amount ?? 0).toLocaleString()} ₫</span></div>
                <div class="total-row"><span>Chiết khấu:</span> <span>- ${Number(order.discount_amount || 0).toLocaleString()} ₫</span></div>
                <div class="total-row"><span>Phí vận chuyển:</span> <span>+ ${Number(order.shipping_fee || 0).toLocaleString()} ₫</span></div>
-               
+
                <div style="border-top: 1px dashed #ccc; margin: 5px 0;"></div>
 
                <div class="total-row"><span>Thanh toán đơn này:</span> <b>${currentTotal.toLocaleString()} ₫</b></div>
-               
+
                ${
                  oldDebt !== 0
                    ? `
-                   <div class="total-row" style="color: #d4380d;">
-                       <span>${oldDebt > 0 ? "Nợ cũ (Cộng dồn):" : ""}</span> 
-                       <span>${Math.abs(oldDebt).toLocaleString()} ₫</span>
+                   <div class="total-row" style="color: ${oldDebt > 0 ? "#d4380d" : "#389e0d"};">
+                       <span>${oldDebt > 0 ? "Nợ cũ (Cộng dồn):" : "Khách đã trả trước (Trừ vào tổng):"}</span>
+                       <span>${oldDebt > 0 ? "" : "- "}${Math.abs(oldDebt).toLocaleString()} ₫</span>
                    </div>
                `
                    : ""
