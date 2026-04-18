@@ -203,9 +203,9 @@ NOW_MS=$(($(date +%s) * 1000))
 ROW_COUNT=$(echo "$VERIFY" | grep -oE '"key":"gmail_state:' | wc -l | tr -d ' ')
 
 if [[ "$ROW_COUNT" -ge "$ACCOUNT_COUNT" ]]; then
-  # Extract smallest expiry from JSON
-  MIN_EXPIRY=$(echo "$VERIFY" | grep -oE '"expiry":[0-9]+' | grep -oE '[0-9]+' | sort -n | head -1)
-  if [[ -n "$MIN_EXPIRY" && "$MIN_EXPIRY" -gt "$NOW_MS" ]]; then
+  # Extract smallest expiry from JSON. `|| true` vi pipefail + head -1 gay SIGPIPE.
+  MIN_EXPIRY=$(echo "$VERIFY" | grep -oE '"expiry":[ ]*[0-9]+' | grep -oE '[0-9]+' | sort -n | head -1 || true)
+  if [[ -n "${MIN_EXPIRY:-}" && "$MIN_EXPIRY" -gt "$NOW_MS" ]]; then
     DAYS=$(( (MIN_EXPIRY - NOW_MS) / 86400000 ))
     ok "Watch OK: ${ROW_COUNT} account(s), min expiry con $DAYS ngay"
   else
