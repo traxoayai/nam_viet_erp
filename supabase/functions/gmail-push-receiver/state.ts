@@ -23,11 +23,19 @@ export async function getAccountState(
 
   if (error || !data) return { ...DEFAULT_STATE };
 
-  const value = data.value as Partial<AccountState> | null;
+  const value = data.value as { historyId?: unknown; expiry?: unknown } | null;
   if (!value) return { ...DEFAULT_STATE };
 
+  // Accept historyId nhu string hoac number (Gmail Pub/Sub co the gui number).
+  const rawHistory = value.historyId;
+  const historyId = typeof rawHistory === "string"
+    ? rawHistory
+    : typeof rawHistory === "number"
+    ? String(rawHistory)
+    : "0";
+
   return {
-    historyId: typeof value.historyId === "string" ? value.historyId : "0",
+    historyId,
     expiry: typeof value.expiry === "number" ? value.expiry : 0,
   };
 }
@@ -37,9 +45,14 @@ export async function setAccountState(
   email: string,
   state: AccountState,
 ): Promise<void> {
+  // Force historyId ve string truoc khi luu (Gmail push co the truyen number).
+  const normalized: AccountState = {
+    historyId: String(state.historyId),
+    expiry: Number(state.expiry),
+  };
   const { error } = await supabase
     .from("system_settings")
-    .upsert({ key: stateKey(email), value: state }, { onConflict: "key" });
+    .upsert({ key: stateKey(email), value: normalized }, { onConflict: "key" });
 
   if (error) {
     console.error(`setAccountState[${email}] error:`, error.message);

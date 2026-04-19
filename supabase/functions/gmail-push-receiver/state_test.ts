@@ -56,3 +56,19 @@ Deno.test("setAccountState: upserts jsonb state", async () => {
   await setAccountState(mock as any, "b@gmail.com", { historyId: "456", expiry: 1000 });
   assertEquals(mock._store["gmail_state:b@gmail.com"], { historyId: "456", expiry: 1000 });
 });
+
+Deno.test("getAccountState: coerces number historyId to string (Pub/Sub quirk)", async () => {
+  const mock = makeMockSupabase({
+    "gmail_state:n@gmail.com": { historyId: 789012, expiry: 555 },
+  });
+  // deno-lint-ignore no-explicit-any
+  const state = await getAccountState(mock as any, "n@gmail.com");
+  assertEquals(state, { historyId: "789012", expiry: 555 });
+});
+
+Deno.test("setAccountState: coerces historyId to string before persisting", async () => {
+  const mock = makeMockSupabase();
+  // deno-lint-ignore no-explicit-any
+  await setAccountState(mock as any, "c@gmail.com", { historyId: 999 as unknown as string, expiry: 2000 });
+  assertEquals(mock._store["gmail_state:c@gmail.com"], { historyId: "999", expiry: 2000 });
+});
