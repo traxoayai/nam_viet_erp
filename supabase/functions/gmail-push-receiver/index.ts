@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createRemoteJWKSet, jwtVerify } from "https://esm.sh/jose@5.9.6";
 import { GmailAccount, loadGmailAccounts } from "./accounts.ts";
 import { AccountState, getAccountState, setAccountState } from "./state.ts";
 
@@ -74,10 +75,45 @@ const GMAIL_CLIENT_SECRET = Deno.env.get("GMAIL_CLIENT_SECRET") || "";
 const GMAIL_PUSH_SECRET = Deno.env.get("GMAIL_PUSH_SECRET") || "";
 const PUBSUB_TOPIC = Deno.env.get("PUBSUB_TOPIC") || "";
 
+// OIDC auth for Pub/Sub push (opt-in). Khi PUBSUB_OIDC_AUDIENCE set -> require va verify
+// OIDC JWT tu Google, dam bao request den tu Pub/Sub subscription da config dung SA.
+const PUBSUB_OIDC_AUDIENCE = Deno.env.get("PUBSUB_OIDC_AUDIENCE") || "";
+const PUBSUB_OIDC_SERVICE_ACCOUNT = Deno.env.get("PUBSUB_OIDC_SERVICE_ACCOUNT") || "";
+const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const ACCOUNTS: GmailAccount[] = loadGmailAccounts((k) => Deno.env.get(k) || undefined);
+
+async function verifyPubsubOidc(
+  req: Request,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!PUBSUB_OIDC_AUDIENCE) return { ok: true }; // verification disabled
+  const auth = req.headers.get("Authorization") || "";
+  if (!auth.startsWith("Bearer ")) {
+    return { ok: false, reason: "Missing Authorization header" };
+  }
+  const token = auth.slice(7);
+  try {
+    const { payload } = await jwtVerify(token, GOOGLE_JWKS, {
+      issuer: ["https://accounts.google.com", "accounts.google.com"],
+      audience: PUBSUB_OIDC_AUDIENCE,
+    });
+    if (
+      PUBSUB_OIDC_SERVICE_ACCOUNT &&
+      (payload as { email?: string }).email !== PUBSUB_OIDC_SERVICE_ACCOUNT
+    ) {
+      return {
+        ok: false,
+        reason: `SA email mismatch: ${(payload as { email?: string }).email}`,
+      };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : "Invalid JWT" };
+  }
+}
 
 interface CachedToken {
   token: string;
@@ -365,6 +401,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // =========================================================================
     // Route 2: Pub/Sub push notification
     // =========================================================================
+
+    // Verify OIDC token neu da enable (xem PUBSUB_OIDC_AUDIENCE env).
+    // Khi disabled -> bo qua, tin cay gateway + allowlist email trong ACCOUNTS.
+    const oidcResult = await verifyPubsubOidc(req);
+    if (!oidcResult.ok) {
+      console.warn(`[push] OIDC reject: ${oidcResult.reason}`);
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+
     const pubsubPayload = body as PubSubPushPayload;
     if (!pubsubPayload.message?.data) {
       return jsonResponse({ error: "Invalid Pub/Sub payload" }, 400);
