@@ -39,7 +39,7 @@ const ApproveRegistrationModal: React.FC<Props> = ({
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null,
   );
-  const [debtLimit, setDebtLimit] = useState(50_000_000);
+  const [debtLimit, setDebtLimit] = useState(0);
   const [paymentTerm, setPaymentTerm] = useState(30);
   const [customers, setCustomers] = useState<CustomerB2BOption[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
