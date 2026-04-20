@@ -11,7 +11,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify caller is authenticated ERP admin
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -24,7 +23,6 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    // Verify JWT
     const token = authHeader.replace('Bearer ', '')
     const { data: { user: caller }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !caller) {
@@ -33,7 +31,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { request_id, email, business_name, portal_url } = await req.json()
+    const { request_id } = await req.json()
 
     if (!request_id) {
       return new Response(JSON.stringify({ error: 'request_id is required' }), {
@@ -41,7 +39,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Read registration_requests to check auth_user_id
     const { data: regRequest, error: regError } = await supabase
       .from('registration_requests')
       .select('auth_user_id, email, business_name')
@@ -54,63 +51,24 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Use request data as fallback for email/business_name
-    const resolvedEmail = email || regRequest.email
-    const resolvedBusinessName = business_name || regRequest.business_name
-
-    if (!resolvedEmail) {
-      return new Response(JSON.stringify({ error: 'Email is required (not found in request or input)' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // New flow: auth_user_id already exists on the registration request
+    // New flow: auth_user_id đã tồn tại (được tạo khi đăng ký ở Portal)
     if (regRequest.auth_user_id) {
-      // Send approval email via send-portal-email
-      const emailRes = await fetch(
-        `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-portal-email`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          },
-          body: JSON.stringify({
-            type: 'registration_approved',
-            email: resolvedEmail,
-            data: {
-              business_name: resolvedBusinessName,
-              portal_url: portal_url || undefined,
-            },
-          }),
-        },
-      )
-
-      if (!emailRes.ok) {
-        const emailErr = await emailRes.json().catch(() => ({ error: 'Unknown email error' }))
-        console.error('send-portal-email failed:', emailErr)
-        // Non-blocking: log but don't fail the approval
-      }
-
       return new Response(JSON.stringify({
         auth_user_id: regRequest.auth_user_id,
         created: false,
-        message: 'Auth user already exists, approval email sent.',
       }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Legacy flow: auth_user_id is null -> create via inviteUserByEmail
-    // Check if auth user already exists
+    // Legacy flow: auth_user_id null → tạo auth user qua invite
     const { data: existingUsers } = await supabase.auth.admin.listUsers()
-    const existing = existingUsers?.users?.find((u) => u.email === resolvedEmail)
+    const existing = existingUsers?.users?.find((u) => u.email === regRequest.email)
 
     if (existing) {
       return new Response(JSON.stringify({
         auth_user_id: existing.id,
         created: false,
-        message: 'Auth user already exists (legacy flow)',
       }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -119,11 +77,10 @@ Deno.serve(async (req) => {
     const defaultPortalUrl = Deno.env.get('PORTAL_SITE_URL') ?? 'https://nam-viet-b2b.vercel.app'
     const redirectTo = `${defaultPortalUrl.replace(/\/$/, '')}/auth/callback`
 
-    // Create auth user with invite (sends email automatically)
     const { data: newUser, error: createError } = await supabase.auth.admin.inviteUserByEmail(
-      resolvedEmail,
+      regRequest.email,
       {
-        data: { display_name: resolvedBusinessName || resolvedEmail },
+        data: { display_name: regRequest.business_name || regRequest.email },
         redirectTo,
       },
     )
@@ -137,7 +94,6 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       auth_user_id: newUser.user.id,
       created: true,
-      message: 'User created, invite email sent (legacy flow)',
     }), {
       status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

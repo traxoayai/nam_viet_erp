@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
 
@@ -32,6 +31,32 @@ export type CustomerB2BOption = {
   tax_code: string | null;
 };
 
+const PORTAL_URL =
+  import.meta.env.VITE_PORTAL_URL ?? "https://nam-viet-b2b.vercel.app";
+
+async function callEdgeFunction<T = unknown>(
+  name: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const { data: session } = await supabase.auth.getSession();
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.session?.access_token ?? ""}`,
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error((data.error as string) || `Edge function "${name}" lỗi`);
+  }
+  return data as T;
+}
+
 export const fetchPortalRegistrations = async (
   status: string = "pending",
 ): Promise<PortalRegistrationRequest[]> => {
@@ -42,7 +67,7 @@ export const fetchPortalRegistrations = async (
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data as unknown) as PortalRegistrationRequest[];
+  return data as unknown as PortalRegistrationRequest[];
 };
 
 export const searchCustomersB2B = async (
@@ -71,32 +96,62 @@ export const approvePortalRegistration = async (
   debtLimit: number = 50000000,
   paymentTerm: number = 30,
 ): Promise<Record<string, unknown>> => {
-  // Step 1: Create auth user via Edge Function (it looks up email/name from request_id)
-  const { data: session } = await supabase.auth.getSession();
-  const edgeRes = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.session?.access_token}`,
-      },
-      body: JSON.stringify({ request_id: requestId }),
-    },
-  );
-  const edgeData = await edgeRes.json();
-  if (!edgeRes.ok)
-    throw new Error(edgeData.error || "Failed to create auth user");
+  // Step 1: Lấy auth_user_id từ registration_requests (đã được tạo lúc khách đăng ký)
+  const { data: requestRaw, error: fetchError } = await supabase
+    .from("registration_requests")
+    .select("auth_user_id, email, business_name, status")
+    .eq("id", requestId)
+    .single();
 
-  // Step 2: Call RPC to approve
+  if (fetchError || !requestRaw) {
+    throw new Error("Không tìm thấy yêu cầu đăng ký");
+  }
+  const request = requestRaw as unknown as {
+    auth_user_id: string | null;
+    email: string;
+    business_name: string;
+    status: string;
+  };
+
+  if (request.status !== "pending") {
+    throw new Error(`Yêu cầu đã ở trạng thái "${request.status}", không thể duyệt.`);
+  }
+
+  let authUserId = request.auth_user_id;
+
+  // Legacy fallback: request không có auth_user_id → Edge Function sẽ invite tạo mới
+  if (!authUserId) {
+    const edgeData = await callEdgeFunction<{ auth_user_id: string }>(
+      "approve-registration",
+      { request_id: requestId, skip_email: true },
+    );
+    authUserId = edgeData.auth_user_id;
+  }
+
+  // Step 2: Gọi RPC để commit dữ liệu TRƯỚC khi gửi mail
   const { data, error } = await safeRpc("approve_portal_registration", {
     p_request_id: requestId,
     p_existing_customer_id: existingCustomerId || null,
-    p_auth_user_id: edgeData.auth_user_id,
+    p_auth_user_id: authUserId,
     p_debt_limit: debtLimit,
     p_payment_term: paymentTerm,
   });
   if (error) throw error;
+
+  // Step 3: RPC thành công → gửi mail kích hoạt (non-blocking)
+  try {
+    await callEdgeFunction("send-portal-email", {
+      type: "registration_approved",
+      email: request.email,
+      data: {
+        business_name: request.business_name,
+        portal_url: PORTAL_URL,
+      },
+    });
+  } catch (mailErr) {
+    console.warn("[Portal] Gửi mail duyệt thất bại:", mailErr);
+  }
+
   return data as Record<string, unknown>;
 };
 
@@ -104,62 +159,8 @@ export const rejectPortalRegistration = async (
   requestId: string,
   reason: string = "",
 ): Promise<void> => {
-  // Step 1: Fetch request info before updating
-  // Note: auth_user_id chưa có trong generated types (cần chạy typegen sau migration)
-  const { data: requestRaw } = await supabase
-    .from("registration_requests")
-    .select("email, business_name, auth_user_id")
-    .eq("id", requestId)
-    .single();
-  if (!requestRaw) throw new Error("Request not found");
-  const request = requestRaw as unknown as { email: string; business_name: string; auth_user_id: string | null };
-
-  // Step 2: Update status to rejected
-  const { error } = await supabase
-    .from("registration_requests")
-    .update({
-      status: "rejected",
-      rejection_reason: reason,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", requestId);
-  if (error) throw error;
-
-  // Step 2b: Clean up orphaned auth user (non-blocking)
-  if (request.auth_user_id) {
-    try {
-      const adminClient = createClient(
-        import.meta.env.VITE_SUPABASE_URL,
-        import.meta.env.VITE_SUPABASE_SERVICE_KEY,
-      );
-      await adminClient.auth.admin.deleteUser(request.auth_user_id);
-    } catch {
-      console.warn("[Portal] Failed to delete orphaned auth user:", request.auth_user_id);
-    }
-  }
-
-  // Step 3: Send rejection email (non-blocking)
-  try {
-    const { data: session } = await supabase.auth.getSession();
-    await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-portal-email`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.session?.access_token}`,
-        },
-        body: JSON.stringify({
-          type: "registration_rejected",
-          email: request.email,
-          data: {
-            business_name: request.business_name,
-            reason,
-          },
-        }),
-      },
-    );
-  } catch {
-    console.warn("[Portal] Failed to send rejection email for request:", requestId);
-  }
+  await callEdgeFunction("reject-registration", {
+    request_id: requestId,
+    reason: reason || undefined,
+  });
 };
