@@ -48,7 +48,7 @@ const ApproveRegistrationModal: React.FC<Props> = ({
     if (open) {
       setLinkMode("new");
       setSelectedCustomerId(null);
-      setDebtLimit(50_000_000);
+      setDebtLimit(0);
       setPaymentTerm(30);
     }
   }, [open]);
@@ -139,7 +139,7 @@ const ApproveRegistrationModal: React.FC<Props> = ({
           </Text>
           <InputNumber
             value={debtLimit}
-            onChange={(v) => setDebtLimit(v ?? 50_000_000)}
+            onChange={(v) => setDebtLimit(v ?? 0)}
             min={0}
             step={5_000_000}
             formatter={(v) =>
