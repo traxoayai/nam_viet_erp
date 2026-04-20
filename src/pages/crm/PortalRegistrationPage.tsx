@@ -24,7 +24,7 @@ import {
   Tabs,
   Input,
 } from "antd";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import dayjs from "dayjs";
 import {
   fetchPortalRegistrations,
@@ -48,6 +48,7 @@ const PortalRegistrationPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<PortalRegistrationRequest[]>([]);
   const [activeTab, setActiveTab] = useState("pending");
+  const [searchText, setSearchText] = useState("");
   const [selectedRequest, setSelectedRequest] =
     useState<PortalRegistrationRequest | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -76,6 +77,32 @@ const PortalRegistrationPage: React.FC = () => {
   useEffect(() => {
     loadData(activeTab);
   }, [activeTab, loadData]);
+
+  // Reset tìm kiếm khi đổi tab để tránh nhầm lẫn
+  useEffect(() => {
+    setSearchText("");
+  }, [activeTab]);
+
+  const filteredData = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    if (!keyword) return data;
+    return data.filter((r) => {
+      const haystack = [
+        r.business_name,
+        r.email,
+        r.phone,
+        r.tax_code,
+        r.contact_name,
+        r.contact_phone,
+        r.contact_email,
+        r.address,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(keyword);
+    });
+  }, [data, searchText]);
 
   const handleApproveConfirm = async (
     existingCustomerId: number | null,
@@ -276,11 +303,20 @@ const PortalRegistrationPage: React.FC = () => {
             Quản lý và xét duyệt yêu cầu mở tài khoản từ Website Portal
           </Text>
         </div>
-        <Badge count={data.length} offset={[10, 0]} color="#1677ff">
-          <Button type="default" onClick={() => loadData()} loading={loading}>
-            Làm mới
-          </Button>
-        </Badge>
+        <Space>
+          <Input.Search
+            placeholder="Tìm theo tên DN, email, SĐT, MST, người liên hệ..."
+            allowClear
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 320 }}
+          />
+          <Badge count={filteredData.length} offset={[10, 0]} color="#1677ff">
+            <Button type="default" onClick={() => loadData()} loading={loading}>
+              Làm mới
+            </Button>
+          </Badge>
+        </Space>
       </div>
 
       <Card
@@ -299,14 +335,18 @@ const PortalRegistrationPage: React.FC = () => {
         />
         <Table
           columns={columns}
-          dataSource={data}
+          dataSource={filteredData}
           loading={loading}
           rowKey="id"
           pagination={{ pageSize: 10 }}
           locale={{
             emptyText: (
               <Empty
-                description={`Không có yêu cầu nào ${STATUS_CONFIG[activeTab as keyof typeof STATUS_CONFIG]?.label.toLowerCase() ?? ""}`}
+                description={
+                  searchText.trim()
+                    ? `Không tìm thấy kết quả cho "${searchText.trim()}"`
+                    : `Không có yêu cầu nào ${STATUS_CONFIG[activeTab as keyof typeof STATUS_CONFIG]?.label.toLowerCase() ?? ""}`
+                }
               />
             ),
           }}
