@@ -14,6 +14,7 @@ export type PortalUserRow = {
   created_at: string;
   customer_name: string;
   customer_code: string;
+  is_banned: boolean;
 };
 
 export const fetchPortalUsers = async (

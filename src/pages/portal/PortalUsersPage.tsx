@@ -140,15 +140,13 @@ const PortalUsersPage: React.FC = () => {
     },
     {
       title: "Trạng thái",
-      dataIndex: "status",
       key: "status",
-      width: 120,
-      render: (status: string) =>
-        status === "active" ? (
-          <Tag color="green">Hoạt động</Tag>
-        ) : (
-          <Tag color="red">Vô hiệu</Tag>
-        ),
+      width: 140,
+      render: (_: unknown, record: PortalUserRow) => {
+        if (record.is_banned) return <Tag color="volcano">Bị khoá</Tag>;
+        if (record.status === "active") return <Tag color="green">Hoạt động</Tag>;
+        return <Tag color="red">Vô hiệu</Tag>;
+      },
     },
     {
       title: "Login cuối",

@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
       type: 'invite',
       email,
       options: {
-        data: { display_name: display_name || email },
+        data: { display_name: display_name || email, is_portal_user: true },
         redirectTo,
       },
     })

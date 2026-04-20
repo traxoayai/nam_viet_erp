@@ -80,7 +80,10 @@ Deno.serve(async (req) => {
     const { data: newUser, error: createError } = await supabase.auth.admin.inviteUserByEmail(
       regRequest.email,
       {
-        data: { display_name: regRequest.business_name || regRequest.email },
+        data: {
+          display_name: regRequest.business_name || regRequest.email,
+          is_portal_user: true,
+        },
         redirectTo,
       },
     )
