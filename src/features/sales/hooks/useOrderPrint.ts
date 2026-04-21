@@ -1,11 +1,17 @@
 import { message } from "antd";
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { generateB2BOrderHTML } from "@/shared/utils/printTemplates";
-import { printHTML } from "@/shared/utils/printUtils";
+import { openPrintWindow, renderAndPrint } from "@/shared/utils/printUtils";
 import { b2bService } from "@/features/sales/api/b2bService";
 
 export const useOrderPrint = () => {
   const printOrder = async (order: any) => {
+    // Mở window NGAY trong user gesture (click) để không bị popup blocker chặn
+    // sau các await bên dưới. Chrome chỉ cho phép window.open khi còn transient
+    // user activation — activation sẽ mất sau await đầu tiên.
+    const printWindow = openPrintWindow();
+    if (!printWindow) return;
+
     const hide = message.loading("Đang đồng bộ dữ liệu in mới nhất...", 0);
     try {
       // [FIX TỐI THƯỢNG]: LUÔN LUÔN fetch Full Order Detail trước khi in 
@@ -75,10 +81,11 @@ export const useOrderPrint = () => {
       };
 
       const html = generateB2BOrderHTML(printData);
-      printHTML(html);
+      renderAndPrint(printWindow, html);
     } catch (e: any) {
       console.error(e);
       message.error("Lỗi in: " + e.message);
+      printWindow.close();
     } finally {
       hide();
     }
