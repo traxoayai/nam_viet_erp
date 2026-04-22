@@ -12,6 +12,19 @@ async function tableCount(table: string): Promise<number> {
   return count ?? 0;
 }
 
+/** Đếm rows mà một cột cụ thể có giá trị non-null & non-empty. */
+async function columnNonEmptyCount(
+  table: string,
+  column: string
+): Promise<number> {
+  const { count } = await adminClient
+    .from(table)
+    .select("*", { count: "exact", head: true })
+    .not(column, "is", null)
+    .neq(column, "");
+  return count ?? 0;
+}
+
 // ─── Listing RPCs phải trả data khi table có rows ────────────────────────────
 
 describe("Data assertions — listing RPCs return data", () => {
@@ -178,7 +191,9 @@ describe("Data assertions — listing RPCs return data", () => {
   });
 
   it("get_distinct_categories returns categories", async () => {
-    const count = await tableCount("products");
+    // Function filter category_name IS NOT NULL AND <> '',
+    // nên cần có ít nhất 1 product có category_name thực sự
+    const count = await columnNonEmptyCount("products", "category_name");
     if (count === 0) return;
 
     const { data, error } = await adminClient.rpc("get_distinct_categories");
@@ -188,7 +203,7 @@ describe("Data assertions — listing RPCs return data", () => {
   });
 
   it("get_distinct_manufacturers returns manufacturers", async () => {
-    const count = await tableCount("products");
+    const count = await columnNonEmptyCount("products", "manufacturer_name");
     if (count === 0) return;
 
     const { data, error } = await adminClient.rpc(

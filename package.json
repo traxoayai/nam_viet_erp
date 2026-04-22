@@ -10,16 +10,16 @@
     "build": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:rpc": "vitest run --config vitest.config.integration.ts",
-    "test:rpc:watch": "vitest --config vitest.config.integration.ts",
+    "test:rpc": "node scripts/run-vitest.mjs run --config vitest.config.integration.ts",
+    "test:rpc:watch": "node scripts/run-vitest.mjs --config vitest.config.integration.ts",
     "typegen": "supabase gen types typescript --local --schema public > src/shared/types/database.types.ts",
     "test:types": "tsc --noEmit",
     "test:e2e": "npx playwright test",
     "test:e2e:headed": "npx playwright test --headed",
-    "test:unit": "vitest run",
+    "test:unit": "node scripts/run-vitest.mjs run",
     "test:all": "npm run test:unit && npm run test:rpc && npm run test:e2e",
     "test:ci": "npm run test:unit && npm run test:rpc",
-    "test:rpc:prod": "TEST_TARGET=prod vitest run --config vitest.config.integration.ts"
+    "test:rpc:prod": "TEST_TARGET=prod node scripts/run-vitest.mjs run --config vitest.config.integration.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

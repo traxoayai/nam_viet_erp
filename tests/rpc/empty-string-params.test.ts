@@ -1,10 +1,36 @@
 import { describe, it, expect } from "vitest";
 import { adminClient } from "../helpers/supabase";
 
+// Local PostgREST thỉnh thoảng trả 502/503 "upstream response" khi test suite
+// chạy song song nhiều RPC nặng. Wrap các "happy-path" call với retry nhẹ để
+// không bị flaky vì infra, giữ nguyên assertion về type-cast errors.
+async function rpcWithRetry<T>(
+  fn: () => PromiseLike<{ data: T; error: { code?: string; message?: string } | null }>,
+  retries = 3
+): Promise<{ data: T; error: { code?: string; message?: string } | null }> {
+  let last: { data: T; error: { code?: string; message?: string } | null } | null = null;
+  for (let i = 0; i < retries; i++) {
+    last = await fn();
+    const msg = last.error?.message ?? "";
+    // Chỉ retry khi là lỗi infra (upstream/502/503/aborted) — lỗi business pass-through luôn.
+    const transient = /upstream|502|503|aborted|ECONNRESET|network/i.test(msg);
+    if (!last.error || !transient) return last;
+    await new Promise((r) => setTimeout(r, 120 * (i + 1)));
+  }
+  return last!;
+}
+
 // Helper: expect a type-cast error (22P02 for UUID/bigint, 22007 for timestamp)
-function expectTypeError(error: { code: string } | null) {
+// PostgREST đôi khi trả error không đính `code` → fallback sang message match.
+function expectTypeError(error: { code?: string; message?: string } | null) {
   expect(error).not.toBeNull();
-  expect(["22P02", "22007"]).toContain(error!.code);
+  const code = error?.code;
+  const msg = error?.message ?? "";
+  const okCode = code === "22P02" || code === "22007";
+  const okMsg = /invalid input syntax|invalid text representation|type (bigint|timestamp|uuid)/i.test(
+    msg
+  );
+  expect(okCode || okMsg).toBe(true);
 }
 
 // ─── 1. get_sales_orders_view ────────────────────────────────────────────────
@@ -206,13 +232,15 @@ describe("get_warehouse_inbound_tasks", () => {
   });
 
   it("accepts null for optional params", async () => {
-    const { error } = await adminClient.rpc("get_warehouse_inbound_tasks", {
-      ...defaults,
-      p_search: null,
-      p_status: null,
-      p_date_from: null,
-      p_date_to: null,
-    });
+    const { error } = await rpcWithRetry(() =>
+      adminClient.rpc("get_warehouse_inbound_tasks", {
+        ...defaults,
+        p_search: null,
+        p_status: null,
+        p_date_from: null,
+        p_date_to: null,
+      })
+    );
     expect(error).toBeNull();
   });
 });

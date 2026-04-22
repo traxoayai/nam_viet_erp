@@ -21,6 +21,15 @@ vi.mock("@/shared/utils/printTemplates", () => ({
 
 vi.mock("@/shared/utils/printUtils", () => ({
   printHTML: vi.fn(),
+  // useOrderPrint.ts đã refactor để mở window ngay trong user-gesture, nên mock
+  // phải export đủ openPrintWindow + renderAndPrint.
+  openPrintWindow: vi.fn(() => ({
+    document: { open: vi.fn(), write: vi.fn(), close: vi.fn() },
+    focus: vi.fn(),
+    print: vi.fn(),
+    close: vi.fn(),
+  })),
+  renderAndPrint: vi.fn(),
 }));
 
 // Mock b2bService — use a variable so we can change the return per test

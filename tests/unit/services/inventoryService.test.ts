@@ -206,6 +206,33 @@ describe("inventoryService", () => {
     });
   });
 
+  describe("searchProductBatchesForStocktake", () => {
+    it("calls search_product_batches_for_stocktake with silent option", async () => {
+      mockSafeRpc.mockResolvedValue({ data: [{ lot_number: "L1", quantity: 1 }] });
+      const rows = await inventoryService.searchProductBatchesForStocktake(3, 7);
+      expect(mockSafeRpc).toHaveBeenCalledWith(
+        "search_product_batches_for_stocktake",
+        { p_product_id: 3, p_warehouse_id: 7 },
+        { silent: true }
+      );
+      expect(rows).toEqual([{ lot_number: "L1", quantity: 1 }]);
+    });
+  });
+
+  describe("splitCheckItem", () => {
+    it("calls add_surplus_stocktake_line and returns id", async () => {
+      mockSafeRpc.mockResolvedValue({
+        data: { status: "success", item_id: 42, id: 42 },
+      });
+      const result = await inventoryService.splitCheckItem(1, 100);
+      expect(mockSafeRpc).toHaveBeenCalledWith("add_surplus_stocktake_line", {
+        p_check_id: 1,
+        p_product_id: 100,
+      });
+      expect(result).toEqual({ id: 42 });
+    });
+  });
+
   // --- getProductCardex ---
   describe("getProductCardex", () => {
     it("calls get_product_cardex with all params", async () => {

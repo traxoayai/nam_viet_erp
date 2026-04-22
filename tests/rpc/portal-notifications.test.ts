@@ -20,22 +20,34 @@ async function seedNotification(overrides: {
   is_read?: boolean;
   data?: Record<string, unknown>;
 }) {
-  const { data, error } = await adminClient
-    .from("b2b_notifications")
-    .insert({
-      customer_b2b_id: overrides.customer_b2b_id ?? realCustomerId,
-      type: overrides.type ?? "system",
-      title: overrides.title ?? `${TEST_PREFIX}Test notification`,
-      body: overrides.body ?? "Test body",
-      is_read: overrides.is_read ?? false,
-      data: overrides.data ?? {},
-    })
-    .select("id")
-    .single();
+  // Local PostgREST thỉnh thoảng trả 502 "invalid response from upstream"
+  // do connection pool churn → retry nhẹ 3 lần với backoff ngắn.
+  const MAX_RETRIES = 3;
+  let lastErr: { message: string } | null = null;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const { data, error } = await adminClient
+      .from("b2b_notifications")
+      .insert({
+        customer_b2b_id: overrides.customer_b2b_id ?? realCustomerId,
+        type: overrides.type ?? "system",
+        title: overrides.title ?? `${TEST_PREFIX}Test notification`,
+        body: overrides.body ?? "Test body",
+        is_read: overrides.is_read ?? false,
+        data: overrides.data ?? {},
+      })
+      .select("id")
+      .single();
 
-  if (error) throw new Error(`Seed notification failed: ${error.message}`);
-  seededIds.push(data.id);
-  return data.id;
+    if (!error && data) {
+      seededIds.push(data.id);
+      return data.id;
+    }
+    lastErr = error;
+    await new Promise((r) => setTimeout(r, 150 * attempt));
+  }
+  throw new Error(
+    `Seed notification failed after ${MAX_RETRIES} retries: ${lastErr?.message ?? "unknown"}`
+  );
 }
 
 // ─── Setup / Teardown ───────────────────────────────────────────────────────
