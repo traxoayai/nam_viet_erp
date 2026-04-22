@@ -35,6 +35,22 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
     // Ưu tiên hiển thị giá trị đang chọn
     const currentValue = item.uom;
 
+    // Defensive: nếu giá trị đang lưu (uom) không nằm trong available_units
+    // → vẫn render thêm option đó để user thấy/giữ nguyên (tránh Ant Select
+    //   tự fallback option đầu khi value không match — gốc bug "Tub" → "Hộp").
+    const hasInAvailable = item.available_units?.some(
+      (u) => u.unit_name === currentValue
+    );
+    const hasInLegacy =
+      currentValue === item._wholesale_unit ||
+      currentValue === item._retail_unit;
+    const showStickyOption =
+      !!currentValue &&
+      ((item.available_units &&
+        item.available_units.length > 0 &&
+        !hasInAvailable) ||
+        (!item.available_units?.length && !hasInLegacy));
+
     return (
       <Select
         value={currentValue}
@@ -51,6 +67,11 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
           // }
         }}
       >
+        {showStickyOption ? (
+          <Option key="__sticky_current" value={currentValue}>
+            {currentValue} (đã lưu)
+          </Option>
+        ) : null}
         {/* LOGIC MỚI: Render từ mảng available_units trả về từ API */}
         {item.available_units && item.available_units.length > 0 ? (
           item.available_units.map((u) => (
@@ -99,10 +120,20 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {item.sku}
                   </Text>
-                  <Text style={{ fontSize: 11, marginLeft: 8 }} type={item.total_stock && item.total_stock > 0 ? "secondary" : "danger"}>
+                  <Text
+                    style={{ fontSize: 11, marginLeft: 8 }}
+                    type={
+                      item.total_stock && item.total_stock > 0
+                        ? "secondary"
+                        : "danger"
+                    }
+                  >
                     Tồn: {(item.total_stock ?? 0).toLocaleString()}
                   </Text>
-                  <Text style={{ fontSize: 11, marginLeft: 8 }} type="secondary">
+                  <Text
+                    style={{ fontSize: 11, marginLeft: 8 }}
+                    type="secondary"
+                  >
                     TB: {(item.avg_monthly_sold ?? 0).toLocaleString()}/th
                   </Text>
                 </div>
