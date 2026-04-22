@@ -66,12 +66,19 @@ export const useInboundDetail = (id?: string) => {
             p_warehouse_id: DEFAULT_WAREHOUSE_ID, // Default hoặc lấy từ context
             p_items: itemsToReceive.map((item) => {
               const i = item as any;
+              const unit = i.uom || i.unit;
+              if (!unit) {
+                throw new Error(
+                  `Sản phẩm ${i.product_name || i.product_id}: thiếu đơn vị (uom). ` +
+                  `Không thể nhập kho — kiểm tra lại đơn vị trong PO.`,
+                );
+              }
               return {
                 product_id: i.product_id,
                 quantity: i.input_quantity || 0,
-                unit: i.uom || i.unit || "Hộp", // Quan trọng: Truyền đúng Đơn vị để DB tính quy đổi
+                unit, // không hard-code "Hộp" — fail-closed nếu thiếu để upstream lộ bug
                 unit_price: i.unit_price || i.final_unit_cost || 0,
-                lot_number: i.input_lot || "DEFAULT", // Tránh null lỗi DB
+                lot_number: i.input_lot || "DEFAULT",
                 expiry_date: i.input_expiry ? dayjs(i.input_expiry).format("YYYY-MM-DD") : "2099-12-31",
               };
             }),
