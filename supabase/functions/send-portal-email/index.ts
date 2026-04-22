@@ -9,6 +9,7 @@ const corsHeaders = {
 type EmailType = 'registration_received' | 'registration_approved' | 'registration_rejected'
   | 'admin_new_registration' | 'admin_new_order' | 'admin_payment_received'
   | 'portal_user_invite' | 'portal_user_reset_password'
+  | 'payment_reminder'
 
 interface EmailPayload {
   type: EmailType
@@ -29,6 +30,10 @@ interface EmailPayload {
     description?: string
     action_link?: string
     display_name?: string
+    // payment_reminder fields
+    remaining_amount?: number
+    hours_left?: number
+    milestone_idx?: number
   }
 }
 
@@ -297,6 +302,58 @@ function buildHtmlEmail(
       return { subject, html: wrapper(subject, body) }
     }
 
+    case 'payment_reminder': {
+      const orderCode = data.order_code || 'N/A'
+      const displayName = data.display_name || data.business_name || 'Quý khách'
+      const portalUrl = data.portal_url || '#'
+      const totalAmt = data.total_amount != null
+        ? new Intl.NumberFormat('vi-VN').format(data.total_amount) + ' đ'
+        : '0 đ'
+      const remainAmt = data.remaining_amount != null
+        ? new Intl.NumberFormat('vi-VN').format(data.remaining_amount) + ' đ'
+        : totalAmt
+      const hoursLeft = typeof data.hours_left === 'number' ? Math.max(0, Math.round(data.hours_left)) : 0
+      const subject = `[${brandName}] Nhắc thanh toán đơn ${orderCode}`
+      const urgency = hoursLeft <= 4
+        ? `<strong style="color:#b91c1c;">Đơn sẽ tự hủy trong ~${hoursLeft} giờ nữa nếu chưa thanh toán.</strong>`
+        : `Đơn sẽ tự hủy sau ${hoursLeft} giờ nữa nếu chưa thanh toán.`
+      const body = `
+        <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Đơn hàng đang chờ thanh toán</h2>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          Xin chào <strong>${displayName}</strong>,
+        </p>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          Đơn hàng <strong>${orderCode}</strong> của bạn trên <strong>${brandName}</strong> hiện đang ở trạng thái
+          <em>chờ thanh toán</em>. ${urgency}
+        </p>
+        <div style="margin:24px 0;padding:16px;background-color:#fef3c7;border-left:4px solid #f59e0b;border-radius:4px;">
+          <table style="width:100%;font-size:14px;color:#374151;">
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Mã đơn:</td>
+              <td style="padding:4px 8px;">${orderCode}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Tổng tiền:</td>
+              <td style="padding:4px 8px;">${totalAmt}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Cần thanh toán:</td>
+              <td style="padding:4px 8px;font-weight:700;color:#b45309;">${remainAmt}</td>
+            </tr>
+          </table>
+        </div>
+        <div style="margin:24px 0;text-align:center;">
+          <a href="${portalUrl}"
+             style="display:inline-block;padding:14px 32px;background-color:${brandColor};color:#ffffff;text-decoration:none;border-radius:6px;font-size:16px;font-weight:600;">
+            Thanh toán ngay
+          </a>
+        </div>
+        <p style="margin:16px 0 0;color:#6b7280;font-size:13px;">
+          Nếu bạn đã chuyển khoản, vui lòng bỏ qua email này — hệ thống sẽ tự động cập nhật trong vài phút.
+        </p>`
+      return { subject, html: wrapper(subject, body) }
+    }
+
     case 'portal_user_reset_password': {
       const subject = `[${brandName}] Yêu cầu đặt lại mật khẩu Portal`
       const actionLink = data.action_link || '#'
@@ -372,6 +429,7 @@ Deno.serve(async (req) => {
       'registration_received', 'registration_approved', 'registration_rejected',
       'admin_new_registration', 'admin_new_order', 'admin_payment_received',
       'portal_user_invite', 'portal_user_reset_password',
+      'payment_reminder',
     ]
     if (!validTypes.includes(type)) {
       return new Response(
