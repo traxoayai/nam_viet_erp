@@ -98,6 +98,10 @@ final_unit_cost = (unit_price × (1 - rebate%) × (1 + VAT%) + allocated_shippin
 | `create_finance_transaction` | Tạo phiếu thu/chi |
 | `confirm_finance_transaction` | Duyệt phiếu |
 
+### Concurrency safety (2026-04-23)
+- `auto_allocate_payment_to_orders` trigger dùng `SELECT FOR UPDATE` trên `orders` trong cả 2 FOR loop (pay-exact-order + pay-old-debt FIFO). Serialize 2 payment transaction song song cùng update `paid_amount` → tránh lost update.
+- Role app (authenticated, anon, service_role) có `idle_in_transaction_session_timeout = 5min` — Postgres tự terminate connection bỏ rơi transaction. Cron `idle-tx-monitor` (mỗi 15 phút) alert admin nếu idle tx > 10 phút, auto-kill > 60 phút.
+
 ---
 
 ## 3. Kho Hàng (Inventory)
@@ -148,6 +152,11 @@ total_base = (wholesale_qty × wholesale_rate) + (retail_qty × retail_rate) + b
 - FEFO pre-allocation khi init transfer, user chỉ cần update SL
 - Location snapshot kiểm kê (cabinet-row-slot)
 
+### Concurrency safety (2026-04-23)
+- `confirm_outbound_packing` dùng `pg_advisory_xact_lock(MD5(order_id)::BIGINT)` ngay đầu body → serialize toàn bộ flow packing (idempotent check + FEFO deduct) cho cùng 1 đơn. Ngăn double-deduct bug đã gây 21 đơn trong 15/3–20/4.
+- Backup revert tables: `_revert_double_deduct_20260417`, `_revert_double_deduct_20260418`, `_revert_double_deduct_20260423` — giữ để rollback nếu cần. **An toàn xóa sau 30 ngày**.
+- Scan queries (`scripts/audit/scan_double_deduct.sql`, `scripts/audit/scan_pending_with_deduction.sql`) read-only, có thể rerun periodic để phát hiện regression.
+
 ---
 
 ## 4. Bán Hàng B2B (Sales)
@@ -189,6 +198,10 @@ DRAFT → QUOTE → CONFIRMED → SHIPPED → DELIVERED
 | `clone_sales_order` | Nhân bản đơn cũ |
 | `process_sales_return` | Trả hàng |
 | `get_available_vouchers` | Voucher khả dụng cho B2B |
+
+### Status lifecycle guard (2026-04-23)
+- `orders.status` column: `DEFAULT 'PENDING'` + `NOT NULL`. Ngăn đơn status NULL lọt lưới filter.
+- RPC `create_sales_order.p_status` vẫn DEFAULT `'CONFIRMED'` (giữ behavior cũ cho caller), nhưng INSERT dùng `COALESCE(p_status, 'PENDING')` — nếu caller explicit truyền NULL thì fallback 'PENDING' thay vì lọt qua.
 
 ---
 
