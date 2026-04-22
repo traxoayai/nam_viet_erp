@@ -1,5 +1,15 @@
 import { describe, it, expect, beforeAll } from "vitest";
+
 import { adminClient, isProduction } from "../helpers/supabase";
+
+import {
+  createTestWarehouse,
+  createTestProduct,
+  createTestBatch,
+  createTestB2BCustomer,
+  createTestOrder,
+  cleanupTestData,
+} from "./helpers/fixtures";
 
 /**
  * Bug #1 (Data Integrity P0 — Task 3):
@@ -116,8 +126,14 @@ describe("Bug #1: auto_allocate_payment_to_orders concurrent safety", () => {
         ]);
 
         // Cả 2 insert phải thành công
-        expect(resA.error, `insert A failed: ${resA.error?.message}`).toBeNull();
-        expect(resB.error, `insert B failed: ${resB.error?.message}`).toBeNull();
+        expect(
+          resA.error,
+          `insert A failed: ${resA.error?.message}`
+        ).toBeNull();
+        expect(
+          resB.error,
+          `insert B failed: ${resB.error?.message}`
+        ).toBeNull();
 
         const { data: order, error: readErr } = await adminClient
           .from("orders")
@@ -163,29 +179,128 @@ describe("Bug #1: auto_allocate_payment_to_orders concurrent safety", () => {
  * SAFETY: chỉ chạy local (TEST_TARGET != 'prod').
  */
 describe("Bug #3: confirm_outbound_packing advisory lock", () => {
-  // Test scaffold — cần warehouse/product/batch/inventory_batches fixture.
-  // Skip để commit được; task sau sẽ mở rộng fixture setup.
-  // Verification hiện tại dựa vào:
-  //   - pg_get_functiondef chứa pg_advisory_xact_lock (đã verify manual: 1)
-  //   - Logic review: lock giữ tới hết xact → serialize 2 session cùng order
-  it.skip("serializes 2 concurrent packing for same order", async () => {
-    // Setup (TODO):
-    //   1. Insert warehouse test
-    //   2. Insert product test với actual_cost
-    //   3. Insert batch + inventory_batches với quantity = 10
-    //   4. Insert order CONFIRMED với 1 order_item qty=2
-    // Call:
-    //   const [resA, resB] = await Promise.all([
-    //     adminClient.rpc('confirm_outbound_packing', { p_order_id: orderId }),
-    //     adminClient.rpc('confirm_outbound_packing', { p_order_id: orderId }),
-    //   ]);
-    // Assert:
-    //   - Tổng deducted qty trên inventory_batches = 2 (không phải 4)
-    //   - COUNT(*) inventory_transactions WHERE ref_id = orderCode AND action_group = 'SALE' = 1
-    //   - 1 call return { already_deducted: false, success: true }
-    //   - 1 call return { already_deducted: true, success: true }
-    // Cleanup: delete order, order_items, inventory_transactions, inventory_batches,
-    //          batch, product, warehouse.
-    expect(true).toBe(true);
-  }, 30000);
+  const skipOnProd = isProduction;
+
+  it.skipIf(skipOnProd)(
+    "serializes 2 concurrent packing for same order (no double deduct)",
+    async () => {
+      const marker = `BUG3-${Date.now()}`;
+      try {
+        const warehouseId = await createTestWarehouse(adminClient, {
+          name: marker,
+        });
+        const { productId } = await createTestProduct(adminClient, {
+          name: marker,
+          actualCost: 10000,
+        });
+        const { batchId, inventoryBatchId } = await createTestBatch(
+          adminClient,
+          productId,
+          warehouseId,
+          {
+            quantity: 100,
+            batchCode: `TEST-INTEGRATION-BATCH-${marker}`,
+            inboundPrice: 10000,
+          }
+        );
+        const customerB2bId = await createTestB2BCustomer(adminClient, {
+          name: marker,
+        });
+
+        // Insert CONFIRMED order TRỰC TIẾP → trigger `orders_deduct_on_confirm`
+        // chỉ fire AFTER UPDATE (không fire trên INSERT) → order CHƯA trừ kho.
+        // Scenario này đúng race window: 2 call confirm_outbound_packing song song
+        // cùng thấy "chưa trừ" → cả 2 cùng định trừ → advisory lock phải serialize.
+        const { orderId, orderCode } = await createTestOrder(adminClient, {
+          customerB2bId,
+          warehouseId,
+          status: "CONFIRMED",
+          orderType: "B2B",
+          code: `TEST-INTEGRATION-ORD-${marker}`,
+          items: [{ productId, quantity: 2, unitPrice: 10000, uom: "Hộp" }],
+        });
+
+        // Baseline: chưa có sale txn
+        const { data: beforeTxn } = await adminClient
+          .from("inventory_transactions")
+          .select("id, quantity")
+          .eq("ref_id", orderCode)
+          .in("action_group", ["sale", "SALE"]);
+        expect(beforeTxn ?? []).toHaveLength(0);
+
+        // Gọi 2 lần SONG SONG → advisory lock phải serialize.
+        // Có 2 outcome hợp lệ (đều chứng minh lock hoạt động):
+        //   (A) T2 vào critical section TRƯỚC khi T1 commit UPDATE status → T2 thấy
+        //       status=CONFIRMED + txn đã ghi → success + already_deducted=true.
+        //   (B) T2 vào SAU khi T1 commit → T2 thấy status=PACKED → raise exception
+        //       "Đơn hàng không ở trạng thái chờ đóng gói (CONFIRMED)".
+        // Cả 2 đều OK miễn là KHÔNG có txn thứ 2 được insert (no double-deduct).
+        const [r1, r2] = await Promise.all([
+          adminClient.rpc("confirm_outbound_packing", { p_order_id: orderId }),
+          adminClient.rpc("confirm_outbound_packing", { p_order_id: orderId }),
+        ]);
+
+        // Chấp nhận cả 2 outcome (case A hoặc B).
+        const successes = [r1, r2].filter((r) => r.error === null);
+        const errors = [r1, r2].filter((r) => r.error !== null);
+
+        // Tối thiểu phải có 1 success (call đi vào critical section đầu tiên)
+        expect(successes.length).toBeGreaterThanOrEqual(1);
+
+        // Nếu có error: message phải là "không CONFIRMED" (case B), không phải crash khác
+        if (errors.length > 0) {
+          expect(errors[0].error!.message).toMatch(/CONFIRMED|chờ đóng gói/);
+        }
+
+        // KEY ASSERT: tổng sale txn phải đúng 1 (không double-deduct)
+        const { data: afterTxn } = await adminClient
+          .from("inventory_transactions")
+          .select("quantity")
+          .eq("ref_id", orderCode)
+          .in("action_group", ["sale", "SALE"])
+          .lt("quantity", 0);
+        expect(afterTxn ?? []).toHaveLength(1);
+        expect(afterTxn![0].quantity).toBe(-2);
+
+        // inventory_batches.quantity = 100 - 2 = 98 (KHÔNG phải 96)
+        const { data: invBatch } = await adminClient
+          .from("inventory_batches")
+          .select("quantity")
+          .eq("id", inventoryBatchId)
+          .single();
+        expect(invBatch?.quantity).toBe(98);
+
+        // Phân tích response:
+        //   - Call đầu tiên vào critical section: already_deducted=false, trừ kho
+        //   - Call thứ 2 (case A): already_deducted=true (idempotent)
+        //   - Call thứ 2 (case B): error vì status=PACKED
+        if (successes.length === 2) {
+          const flags = successes.map(
+            (r) =>
+              (r.data as { already_deducted?: boolean } | null)
+                ?.already_deducted
+          );
+          // Case A: 1 false (trừ thật) + 1 true (idempotent)
+          expect(flags.filter((x) => x === true).length).toBeGreaterThanOrEqual(
+            1
+          );
+          expect(flags.filter((x) => x === false).length).toBe(1);
+        }
+
+        // Sau khi packing xong: order phải ở status PACKED
+        const { data: afterOrder } = await adminClient
+          .from("orders")
+          .select("status")
+          .eq("id", orderId)
+          .single();
+        expect(afterOrder?.status).toBe("PACKED");
+
+        // Dùng batchId để tránh ESLint unused-var (verify batch tồn tại)
+        expect(batchId).toBeGreaterThan(0);
+      } finally {
+        await cleanupTestData(adminClient, [marker]);
+      }
+    },
+    60000
+  );
 });
