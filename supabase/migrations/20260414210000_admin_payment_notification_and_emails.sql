@@ -10,7 +10,14 @@
 BEGIN;
 
 -- 1. Enable pg_net extension for async HTTP calls
-CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
+-- Shadow DB (supabase CLI) không có superuser → skip; PROD đã có extension
+DO $pgnet$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'pg_net: skipped (no superuser on shadow DB)';
+END
+$pgnet$;
 
 -- 2. Admin payment notification trigger
 CREATE OR REPLACE FUNCTION public.fn_notify_admin_payment_received()

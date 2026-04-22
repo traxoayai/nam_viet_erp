@@ -327,6 +327,10 @@ END;
 $$;
 
 -- 4. Restore demo data
+INSERT INTO public.products (id, name, status, sku, wholesale_unit, actual_cost)
+SELECT 8, 'Sản phẩm demo 8', 'active', 'DEMO-008', 'Hộp', 100000
+WHERE NOT EXISTS (SELECT 1 FROM public.products WHERE id = 8);
+
 UPDATE public.products SET status = 'active' WHERE id = 8;
 
 INSERT INTO public.products (id, name, status, sku, wholesale_unit, actual_cost)
