@@ -23,6 +23,11 @@ npx supabase db query --linked -f scripts/audit/scan_pending_with_deduction.sql
 ## Output snapshots
 - `double_deduct_scan_20260422.json`, `pending_with_deduction_scan_20260422.json` — kết quả lúc audit lần đầu.
 
+## Task coverage 2026-04-22
+
+- **Double-deduct scan:** 6 đơn phát hiện → revert qua migration `20260423200300` (bảng `_revert_double_deduct_20260423` giữ snapshot).
+- **PENDING w/ deduction scan:** 0 đơn → skip việc thêm restock logic vào cron `cancel_unpaid_orders_after_24h`. Cron hiện tại an toàn vì không có đơn PENDING nào bị trừ kho sớm.
+
 ## Khi nào rerun?
 - Sau mọi thay đổi flow create_sales_order / confirm_outbound_packing.
 - Mỗi 2 tuần để sanity check regression.
