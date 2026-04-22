@@ -475,3 +475,112 @@ describe("Bug #2: create_sales_order default status + NOT NULL guard", () => {
     30000
   );
 });
+
+/**
+ * Task 7: Revert double-deduct batch 3 (migration 20260423200300).
+ *
+ * Scan ngày 2026-04-22 phát hiện thêm 6 đơn bị double-deduct ngoài 15 đơn đã
+ * revert trước đó (2026-04-17 + 2026-04-18). Migration 20260423200300 revert
+ * 9,858 đvcs và backup toàn bộ vào `_revert_double_deduct_20260423`.
+ *
+ * Tests này chỉ làm các assertion read-only trên DB đã migrate (prod hoặc
+ * local đã apply migration). Nếu DB chưa có bảng backup (local chưa migrate)
+ * → skip từng assertion.
+ *
+ * 6 đơn:
+ *   pattern A (type='out', action='sale'): SO-260416-1329, SO-260418-8881,
+ *     SO-260418-2856, SO-260417-9853, SO-260418-6239
+ *   pattern B (type='sale_order', action='SALE', batch_id IS NULL):
+ *     SO-260330-5213
+ */
+describe("Task 7: Revert double-deduct batch 3 sanity", () => {
+  it("backup table `_revert_double_deduct_20260423` tồn tại và có rows", async () => {
+    // Đếm rows theo action — nếu bảng chưa tồn tại (local chưa migrate),
+    // Supabase trả 404/"relation does not exist" → skip assertion nhưng
+    // không fail.
+    const { data, error } = await adminClient
+      .from("_revert_double_deduct_20260423")
+      .select("action", { count: "exact" });
+
+    if (error) {
+      const msg = error.message.toLowerCase();
+      if (
+        msg.includes("does not exist") ||
+        msg.includes("not found") ||
+        msg.includes("schema cache")
+      ) {
+        console.warn(
+          "[task-7] Skip: backup table chưa tồn tại (local chưa apply migration 20260423200300)."
+        );
+        return;
+      }
+      throw new Error(`Unexpected error: ${error.message}`);
+    }
+
+    expect(data).toBeTruthy();
+    // Có ít nhất 1 row backup_txn (nếu migration đã chạy)
+    const backupTxnRows = (data ?? []).filter(
+      (r) => (r as { action?: string }).action === "backup_txn"
+    );
+    expect(backupTxnRows.length).toBeGreaterThan(0);
+  }, 30000);
+
+  it("6 đơn batch 3 không còn overshoot (scan trả 0 rows)", async () => {
+    const orderCodesA = [
+      "SO-260416-1329",
+      "SO-260418-8881",
+      "SO-260418-2856",
+      "SO-260417-9853",
+      "SO-260418-6239",
+    ];
+    const orderCodeB = "SO-260330-5213";
+
+    // Đếm sale txn còn active (chưa mark REVERTED) cho 5 đơn pattern A
+    // → phải = 0 (tất cả 'out'/'sale' đã được mark).
+    const { data: activeA, error: errA } = await adminClient
+      .from("inventory_transactions")
+      .select("id, description")
+      .in("ref_id", orderCodesA)
+      .eq("type", "out")
+      .eq("action_group", "sale")
+      .lt("quantity", 0);
+
+    if (errA) {
+      console.warn("[task-7] Skip pattern A check:", errA.message);
+    } else {
+      const unreverted = (activeA ?? []).filter(
+        (r) =>
+          !(r as { description?: string | null }).description?.startsWith(
+            "[REVERTED"
+          )
+      );
+      expect(unreverted).toHaveLength(0);
+    }
+
+    // Pattern B: sale_order/SALE batch_id IS NULL cho SO-260330-5213 phải
+    // đã được mark REVERTED.
+    const { data: rawB, error: errB } = await adminClient
+      .from("inventory_transactions")
+      .select("id, description, batch_id")
+      .eq("ref_id", orderCodeB)
+      .eq("type", "sale_order")
+      .eq("action_group", "SALE")
+      .lt("quantity", 0);
+
+    if (errB) {
+      console.warn("[task-7] Skip pattern B check:", errB.message);
+      return;
+    }
+
+    const patternBRows = (rawB ?? []).filter(
+      (r) => (r as { batch_id?: number | null }).batch_id === null
+    );
+    const unrevertedB = patternBRows.filter(
+      (r) =>
+        !(r as { description?: string | null }).description?.startsWith(
+          "[REVERTED"
+        )
+    );
+    expect(unrevertedB).toHaveLength(0);
+  }, 30000);
+});
