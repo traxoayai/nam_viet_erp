@@ -296,6 +296,43 @@ describe("Products RPCs", () => {
     expectNoTypeError(error);
   });
 
+  it("get_batch_valuation_grid", async () => {
+    const { error } = await adminClient.rpc("get_batch_valuation_grid", {
+      p_warehouse_id: null,
+      p_search: "",
+      p_only_missing_price: false,
+      p_limit: 5,
+      p_offset: 0,
+    });
+    expectNoTypeError(error);
+  });
+
+  it("get_inventory_total_value", async () => {
+    const { error } = await adminClient.rpc("get_inventory_total_value", {
+      p_warehouse_id: null,
+    });
+    expectNoTypeError(error);
+  });
+
+  it("search_product_batches_for_stocktake", async () => {
+    const { data: wh } = await adminClient
+      .from("warehouses")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
+    const { data: prod } = await adminClient
+      .from("products")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
+    if (!wh || !prod) return;
+    const { error } = await adminClient.rpc("search_product_batches_for_stocktake", {
+      p_product_id: prod.id,
+      p_warehouse_id: wh.id,
+    });
+    expectNoTypeError(error);
+  });
+
   it("match_products_from_excel", async () => {
     const { error } = await adminClient.rpc("match_products_from_excel", {
       p_data: [{ name: "test", sku: "TEST001" }],

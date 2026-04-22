@@ -314,6 +314,67 @@ export type Database = {
         };
         Relationships: [];
       };
+      batch_revaluations: {
+        Row: {
+          id: number;
+          batch_id: number;
+          product_id: number;
+          warehouse_id: number | null;
+          old_price: number;
+          new_price: number;
+          qty_at_change: number;
+          delta_value: number;
+          reason_code: "data_fix" | "supplier_adjust" | "nrv_writedown";
+          note: string | null;
+          vat_synced: boolean;
+          user_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          batch_id: number;
+          product_id: number;
+          warehouse_id?: number | null;
+          old_price: number;
+          new_price: number;
+          qty_at_change: number;
+          reason_code: "data_fix" | "supplier_adjust" | "nrv_writedown";
+          note?: string | null;
+          vat_synced?: boolean;
+          user_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          batch_id?: number;
+          product_id?: number;
+          warehouse_id?: number | null;
+          old_price?: number;
+          new_price?: number;
+          qty_at_change?: number;
+          reason_code?: "data_fix" | "supplier_adjust" | "nrv_writedown";
+          note?: string | null;
+          vat_synced?: boolean;
+          user_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "batch_revaluations_batch_id_fkey";
+            columns: ["batch_id"];
+            isOneToOne: false;
+            referencedRelation: "batches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "batch_revaluations_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       batches: {
         Row: {
           batch_code: string;
@@ -5206,6 +5267,10 @@ export type Database = {
         Args: { p_check_id: number; p_product_id: number };
         Returns: Json;
       };
+      add_surplus_stocktake_line: {
+        Args: { p_check_id: number; p_product_id: number };
+        Returns: Json;
+      };
       allocate_inbound_costs: { Args: { p_receipt_id: number }; Returns: Json };
       approve_user: { Args: { p_user_id: string }; Returns: undefined };
       auto_create_purchase_orders_min_max: { Args: never; Returns: number };
@@ -5216,6 +5281,10 @@ export type Database = {
           p_note?: string;
           p_order_ids: string[];
         };
+        Returns: Json;
+      };
+      bulk_update_batch_costs: {
+        Args: { p_changes: Json; p_reason: string; p_note?: string };
         Returns: Json;
       };
       bulk_update_product_barcodes: {
@@ -6955,6 +7024,44 @@ export type Database = {
           days_remaining: number;
           expiry_date: string;
           id: number;
+          lot_number: string;
+          quantity: number;
+        }[];
+      };
+      get_batch_valuation_grid: {
+        Args: {
+          p_warehouse_id?: number | null;
+          p_search?: string;
+          p_only_missing_price?: boolean;
+          p_limit?: number;
+          p_offset?: number;
+        };
+        Returns: {
+          inventory_batch_id: number;
+          batch_id: number;
+          product_id: number;
+          sku: string | null;
+          product_name: string;
+          warehouse_id: number | null;
+          warehouse_name: string | null;
+          lot_number: string;
+          expiry_date: string;
+          quantity: number;
+          inbound_price: number;
+          total_value: number;
+          last_revalued_at: string | null;
+          total_count: number;
+        }[];
+      };
+      get_inventory_total_value: {
+        Args: { p_warehouse_id?: number | null };
+        Returns: Json;
+      };
+      search_product_batches_for_stocktake: {
+        Args: { p_product_id: number; p_warehouse_id: number };
+        Returns: {
+          expiry_date: string;
+          inventory_batch_id: number;
           lot_number: string;
           quantity: number;
         }[];

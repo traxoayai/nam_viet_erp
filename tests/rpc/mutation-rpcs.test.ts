@@ -206,6 +206,38 @@ describe("Inventory Mutation RPCs", () => {
     expectValidError(error);
   });
 
+  it("add_surplus_stocktake_line — rejects non-existent check", async () => {
+    const { error } = await adminClient.rpc("add_surplus_stocktake_line", {
+      p_check_id: FAKE_ID,
+      p_product_id: FAKE_ID,
+    });
+    expectValidError(error);
+  });
+
+  it("bulk_update_batch_costs — validates reason_code", async () => {
+    const { data, error } = await adminClient.rpc("bulk_update_batch_costs", {
+      p_changes: [{ batch_id: FAKE_ID, new_price: 1 }],
+      p_reason: "invalid_reason",
+      p_note: null,
+    });
+    expectValidError(error);
+    if (!error) {
+      expect((data as any)?.status).toBe("error");
+    }
+  });
+
+  it("bulk_update_batch_costs — empty changes returns error status", async () => {
+    const { data, error } = await adminClient.rpc("bulk_update_batch_costs", {
+      p_changes: [],
+      p_reason: "data_fix",
+      p_note: null,
+    });
+    expectValidError(error);
+    if (!error) {
+      expect((data as any)?.status).toBe("error");
+    }
+  });
+
   it("cancel_inventory_check — rejects non-existent check", async () => {
     const { error } = await adminClient.rpc("cancel_inventory_check", {
       p_check_id: FAKE_ID,

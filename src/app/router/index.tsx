@@ -33,6 +33,7 @@ import InvoiceVerifyPage from "@/pages/finance/invoices/InvoiceVerifyPage";
 import ReconciliationPage from "@/pages/finance/ReconciliationPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
+import CostAdjustmentPage from "@/pages/inventory/cost-adjustment/CostAdjustmentPage";
 import WarehouseInboundPage from "@/pages/inventory/receipt/WarehouseInboundPage";
 import WarehouseReceiptPage from "@/pages/inventory/receipt/WarehouseReceiptPage";
 import WarehouseOutboundPage from "@/pages/inventory/outbound/WarehouseOutboundPage";
@@ -279,7 +280,7 @@ const routes: RouteObject[] = [
           },
           {
             path: "inventory/cost-adjustment",
-            element: <PagePlaceholder title="Điều chỉnh Giá Vốn" />,
+            element: <CostAdjustmentPage />,
           },
 
           // =========================================================
