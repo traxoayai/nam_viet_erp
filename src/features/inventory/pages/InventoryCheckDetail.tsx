@@ -260,8 +260,11 @@ export const InventoryCheckDetail = () => {
       transcript,
       itemRef,
     }: any) => {
-      // Tính EXIST SYSTEM QTY để xem tham khảo
+      // Tính EXIST SYSTEM QTY để xem tham khảo (theo lô hoặc tổng SP)
       const sysQty = item.system_quantity || 0;
+      const sysLabel = item.batch_code
+        ? "Tồn máy (lô này):"
+        : "Tồn máy (tổng SP):";
       let sysDisplay = `${sysQty} ${item.base_unit_name || item.unit}`;
       
       // Auto-calculate sys display summary if large units exist
@@ -347,7 +350,7 @@ export const InventoryCheckDetail = () => {
                 color: "#888",
               }}
             >
-              <span>Tồn máy:</span>
+              <span>{sysLabel}</span>
               <span>
                 <b>{sysDisplay}</b>
               </span>
@@ -364,7 +367,7 @@ export const InventoryCheckDetail = () => {
               <QuantityInput label={`Lẻ (${item.base_unit_name || item.unit})`} value={item.input_base_qty} onChange={(val: number) => onUpdateQuantity(item.id, { base_qty: val })} max={item.retail_unit_rate > 1 ? item.retail_unit_rate - 1 : 99999} />
             </div>
 
-            {/* Lô / Hạn Sử Dụng - Dàn trên 1 hàng ngang */}
+            {/* Lô / Hạn — đã có sẵn trên phiếu khi thêm SP nhiều lô; chỉnh khi đếm lại hoặc dòng thừa hàng */}
             <div style={{ background: "#f0f5ff", borderRadius: 6, padding: 8, marginTop: 4, display: 'flex', gap: 12, alignItems: 'center' }}>
                <div style={{ flex: 1 }}>
                    <TrackingInput 
@@ -390,7 +393,7 @@ export const InventoryCheckDetail = () => {
             {canDelete && (
                 <div style={{ textAlign: 'right', marginTop: 8 }}>
                     <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); useInventoryCheckStore.getState().splitCheckItem(item.id, item.product_id); }}>
-                       Tách thêm Lô khác
+                       Thêm dòng thừa hàng / lô mới
                     </Button>
                 </div>
             )}
@@ -469,6 +472,8 @@ export const InventoryCheckDetail = () => {
       return (
         prev.item.id === next.item.id &&
         prev.item.actual_quantity === next.item.actual_quantity &&
+        prev.item.system_quantity === next.item.system_quantity &&
+        prev.item.batch_code === next.item.batch_code &&
         prev.isActive === next.isActive &&
         prev.listening === next.listening &&
         prev.transcript === next.transcript
@@ -561,7 +566,7 @@ export const InventoryCheckDetail = () => {
           {/* Chỉ hiện dòng này khi màn hình >= sm (Tablets trở lên) */}
           {screens.sm ? (
             <Text type="secondary" style={{ fontSize: 11, lineHeight: "14px" }}>
-              {items.length} sản phẩm cần kiểm
+              {items.length} dòng cần kiểm
             </Text>
           ) : null}
         </div>
@@ -627,6 +632,9 @@ export const InventoryCheckDetail = () => {
               >
                 <PlusOutlined /> Thêm sản phẩm ngoài danh sách
               </div>
+              <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 8 }}>
+                Mỗi lô còn tồn trong kho được tách thành một dòng riêng trên phiếu. Dòng không gắn lô là kiểm theo tổng sản phẩm.
+              </Text>
 
               <DebounceSelect
                 showSearch
@@ -639,11 +647,32 @@ export const InventoryCheckDetail = () => {
                       activeSession.warehouse_id
                     );
                     if (!res) return [];
-                    return (res as unknown as Array<{ id: number; name: string; sku: string; image_url?: string; system_stock?: number; items_per_carton?: number; retail_unit?: string; unit?: string; wholesale_unit?: string }>).map((p) => {
+                    type PRow = {
+                      id: number;
+                      name: string;
+                      sku: string;
+                      image_url?: string;
+                      system_stock?: number;
+                      items_per_carton?: number;
+                      retail_unit?: string;
+                      unit?: string;
+                      wholesale_unit?: string;
+                    };
+                    const rows = res as unknown as PRow[];
+                    const lotCounts = await Promise.all(
+                      rows.map((p) =>
+                        inventoryService.searchProductBatchesForStocktake(
+                          p.id,
+                          activeSession.warehouse_id!
+                        ).then((b) => (Array.isArray(b) ? b.length : 0))
+                      )
+                    );
+                    return rows.map((p, idx) => {
                       const rate = p.items_per_carton || 1;
                       const stock = Number(p.system_stock || 0);
                       const box = Math.floor(stock / rate);
                       const unit = stock % rate;
+                      const nLots = lotCounts[idx] ?? 0;
 
                       // [FIX] Uu tien hien thi retail_unit ("Vi") thay vi unit mac dinh ("Vien")
                       const retailUnitName = p.retail_unit || p.unit || "Le";
@@ -706,12 +735,20 @@ export const InventoryCheckDetail = () => {
                                 <Text type="secondary" style={{ fontSize: 12 }}>
                                   {p.sku}
                                 </Text>
-                                <Tag
-                                  color={stock > 0 ? "blue" : "red"}
-                                  style={{ marginRight: 0, fontSize: 11 }}
-                                >
-                                  {stockDisplay}
-                                </Tag>
+                                <Space size={4}>
+                                  <Tag
+                                    color={nLots > 0 ? "purple" : "default"}
+                                    style={{ marginRight: 0, fontSize: 11 }}
+                                  >
+                                    {nLots > 0 ? `${nLots} lô` : "Tổng SP"}
+                                  </Tag>
+                                  <Tag
+                                    color={stock > 0 ? "blue" : "red"}
+                                    style={{ marginRight: 0, fontSize: 11 }}
+                                  >
+                                    {stockDisplay}
+                                  </Tag>
+                                </Space>
                               </div>
                             </div>
                           </div>

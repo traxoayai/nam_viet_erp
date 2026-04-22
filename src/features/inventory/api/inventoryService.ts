@@ -274,26 +274,19 @@ export const inventoryService = {
     if (error) throw error;
   },
 
-  // Tách lô mới (Tạo dòng zero quantity trùng product_id)
+  /** Dòng thừa hàng / lô mới (system_quantity = 0, không lô sẵn) — chốt kê sẽ cộng thừa vào lô user nhập */
   async splitCheckItem(checkId: number, productId: number) {
-    const { data: user } = await supabase.auth.getUser();
-    
-    // Tạo record mới toanh với số lượng bằng 0
-    const { data, error } = await supabase
-      .from("inventory_check_items")
-      .insert({
-        check_id: checkId,
-        product_id: productId,
-        system_quantity: 0,
-        actual_quantity: 0,
-        location_snapshot: "Tách lô",
-        created_by: user.user?.id || null,
-      })
-      .select("id")
-      .single();
-
-    if (error) throw error;
-    return data;
+    const { data } = await safeRpc("add_surplus_stocktake_line", {
+      p_check_id: checkId,
+      p_product_id: productId,
+    });
+    const row = data as { status?: string; id?: number; item_id?: number; message?: string };
+    if (row?.status === "error") {
+      throw new Error(row.message || "Không thêm được dòng thừa hàng");
+    }
+    const id = row?.item_id ?? row?.id;
+    if (id == null) throw new Error("Thiếu id dòng kiểm kê");
+    return { id };
   },
 
   // 12. Lấy chi tiết phiếu (Header + Items với Join phức tạp)
@@ -440,6 +433,22 @@ export const inventoryService = {
       }
     );
     return data; // Trả về mảng [{id, name, sku, system_stock, location...}]
+  },
+
+  /** Lô còn tồn > 0 (kể cả hết hạn) — dùng khi cần hiển thị / đối chiếu trước khi thêm phiếu */
+  async searchProductBatchesForStocktake(
+    productId: number,
+    warehouseId: number
+  ) {
+    const { data } = await safeRpc(
+      "search_product_batches_for_stocktake",
+      {
+        p_product_id: productId,
+        p_warehouse_id: warehouseId,
+      },
+      { silent: true }
+    );
+    return data ?? [];
   },
 
   // 16. Thêm sản phẩm vào phiếu (Snapshot tồn kho & giá vốn)

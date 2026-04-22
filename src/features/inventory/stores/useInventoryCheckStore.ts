@@ -193,13 +193,26 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
         );
 
         // 2. Xử lý phản hồi
-        const result = res as unknown as { status: string; item_id: number; message?: string };
+        const result = res as unknown as {
+          status: string;
+          item_id: number;
+          message?: string;
+          inserted_count?: number;
+        };
         if (result.status === "exists") {
           message.info("Sản phẩm đã có trong danh sách! Đang di chuyển tới...");
           // Scroll tới sản phẩm đã có
           set({ activeItemId: result.item_id });
         } else if (result.status === "success") {
-          message.success("Đã thêm sản phẩm mới vào phiếu!");
+          const inserted =
+            typeof result.inserted_count === "number"
+              ? result.inserted_count
+              : 1;
+          message.success(
+            inserted > 1
+              ? `Đã thêm ${inserted} dòng kiểm kê (mỗi lô một dòng)`
+              : "Đã thêm sản phẩm vào phiếu!"
+          );
 
           // 3. Reload lại danh sách items để có dữ liệu đầy đủ (Join Product, Units...)
           // Vì RPC add chỉ trả về ID, ta cần load lại để có full info hiển thị lên Card
@@ -207,6 +220,8 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
 
           // 4. Highlight sản phẩm mới thêm
           set({ activeItemId: result.item_id });
+        } else if (result.status === "error") {
+          message.error(result.message || "Không thể thêm sản phẩm");
         } else {
           message.error(result.message || "Không thể thêm sản phẩm");
         }
@@ -261,7 +276,32 @@ function saveToDbDebounced(itemId: number, payload: Record<string, unknown>) {
       itemId,
       debounce((id: number, p: Record<string, unknown>) => {
         const promise = inventoryService
-          .updateCheckItemQuantity(id, p)
+          .updateCheckItemQuantity(
+            id,
+            p as {
+              wholesale_qty?: number;
+              retail_qty?: number;
+              base_qty?: number;
+              lot_number?: string;
+              expiry_date?: string;
+            }
+          )
+          .then((res: unknown) => {
+            const row = res as { system_quantity?: number } | null;
+            if (row && typeof row.system_quantity === "number") {
+              useInventoryCheckStore.setState((state) => ({
+                items: state.items.map((it) => {
+                  if (it.id !== id) return it;
+                  const actual = it.actual_quantity ?? 0;
+                  return {
+                    ...it,
+                    system_quantity: row.system_quantity!,
+                    diff_quantity: moneySub(actual, row.system_quantity!),
+                  };
+                }),
+              }));
+            }
+          })
           .catch((err) => console.error("Lỗi lưu item", id, err))
           .finally(() => pendingSaves.delete(id));
         pendingSaves.set(id, promise);
