@@ -152,6 +152,7 @@ describe("validate_stock_for_order", () => {
       p_items: [{ product_id: productId, quantity: 1, uom: "Hộp" }],
     });
     expect((data as { ok: boolean }).ok).toBe(true);
+    expect((data as { insufficient: unknown[] }).insufficient).toEqual([]);
   });
 
   it.skipIf(isProduction)(
@@ -187,9 +188,9 @@ describe("validate_stock_for_order", () => {
   );
 
   it.skipIf(isProduction)("Empty items → ok=true", async () => {
-    const whId = await createTestWarehouse(adminClient, {
-      name: `STOCK-EMPTY-${Date.now()}`,
-    });
+    const marker = `STOCK-EMPTY-${Date.now()}`;
+    markers.push(marker);
+    const whId = await createTestWarehouse(adminClient, { name: marker });
     const { data } = await adminClient.rpc("validate_stock_for_order", {
       p_warehouse_id: whId,
       p_items: [],
@@ -237,9 +238,9 @@ describe("validate_stock_for_order", () => {
   it.skipIf(isProduction)(
     "invalid_payload: thiếu key product_id → reason='invalid_payload'",
     async () => {
-      const whId = await createTestWarehouse(adminClient, {
-        name: `STOCK-BAD-${Date.now()}`,
-      });
+      const marker = `STOCK-BAD-${Date.now()}`;
+      markers.push(marker);
+      const whId = await createTestWarehouse(adminClient, { name: marker });
       const { data } = await adminClient.rpc("validate_stock_for_order", {
         p_warehouse_id: whId,
         p_items: [{ quantity: 1, uom: "Hộp" }],
