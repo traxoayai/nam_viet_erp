@@ -124,6 +124,158 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
     },
   );
 
+  // T4: Multi-order split proportional
+  it.skipIf(isProduction)(
+    "Multi-order: tỷ lệ outstanding, tổng phân bổ = p_amount",
+    async () => {
+      const marker = `MULTI-${Date.now()}`;
+      markers.push(marker);
+      const whId = await createTestWarehouse(adminClient, { name: marker });
+      const custId = await createTestB2BCustomer(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+      const code1 = `SO-${yymmdd}-7001`;
+      const code2 = `SO-${yymmdd}-7002`;
+
+      // Đơn 1 outstanding 30k
+      const { orderId: id1 } = await createTestOrder(adminClient, {
+        customerB2bId: custId, warehouseId: whId,
+        code: code1, status: "PENDING",
+        items: [{ productId, quantity: 1, unitPrice: 30000 }],
+      });
+      // Đơn 2 outstanding 70k
+      const { orderId: id2 } = await createTestOrder(adminClient, {
+        customerB2bId: custId, warehouseId: whId,
+        code: code2, status: "PENDING",
+        items: [{ productId, quantity: 1, unitPrice: 70000 }],
+      });
+
+      const { data, error } = await adminClient.rpc(
+        "process_incoming_bank_transfer",
+        {
+          p_amount: 60000,
+          p_memo: `thanh toan ${code1} va ${code2}`,
+          p_bank_ref_id: `TEST-MULTI-${marker}`,
+        },
+      );
+      expect(error).toBeNull();
+      const result = data as { allocated: Array<{ order_code: string; amount: number }>; excess: number };
+      expect(result.allocated.length).toBe(2);
+
+      // Tổng allocated + excess = 60000
+      const total = result.allocated.reduce((s, a) => s + Number(a.amount), 0) + Number(result.excess || 0);
+      expect(total).toBe(60000);
+
+      // Tỷ lệ proportional: 30/100*60 = 18, 70/100*60 = 42
+      await new Promise((r) => setTimeout(r, 300));
+      const { data: o1 } = await adminClient.from("orders").select("paid_amount").eq("id", id1).single();
+      const { data: o2 } = await adminClient.from("orders").select("paid_amount").eq("id", id2).single();
+      expect(Number(o1?.paid_amount)).toBeCloseTo(18000, -2); // ±100đ rounding
+      expect(Number(o2?.paid_amount)).toBeCloseTo(42000, -2);
+    },
+  );
+
+  // T5: CK dư multi-order → phải có pending row cho phần thừa
+  it.skipIf(isProduction)(
+    "Multi-order CK dư → ghi pending tx cho phần thừa (không mất tiền)",
+    async () => {
+      const marker = `MULTI-EXCESS-${Date.now()}`;
+      markers.push(marker);
+      const whId = await createTestWarehouse(adminClient, { name: marker });
+      const custId = await createTestB2BCustomer(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+      const code1 = `SO-${yymmdd}-8001`;
+      const code2 = `SO-${yymmdd}-8002`;
+
+      await createTestOrder(adminClient, {
+        customerB2bId: custId, warehouseId: whId,
+        code: code1, status: "PENDING",
+        items: [{ productId, quantity: 1, unitPrice: 20000 }],
+      });
+      await createTestOrder(adminClient, {
+        customerB2bId: custId, warehouseId: whId,
+        code: code2, status: "PENDING",
+        items: [{ productId, quantity: 1, unitPrice: 30000 }],
+      });
+
+      // CK 80k, tổng outstanding chỉ 50k → dư 30k
+      const bankRef = `TEST-EXCESS-${marker}`;
+      const { data, error } = await adminClient.rpc(
+        "process_incoming_bank_transfer",
+        {
+          p_amount: 80000,
+          p_memo: `${code1} ${code2}`,
+          p_bank_ref_id: bankRef,
+        },
+      );
+      expect(error).toBeNull();
+      expect((data as { excess: number }).excess).toBeGreaterThan(0);
+
+      // Phải có pending tx với bank_ref_id = bankRef || '-remainder'
+      const { data: remainderTx } = await adminClient
+        .from("finance_transactions")
+        .select("amount, status, business_type")
+        .eq("bank_reference_id", `${bankRef}-remainder`)
+        .maybeSingle();
+      expect(remainderTx).toBeDefined();
+      expect(remainderTx?.status).toBe("pending");
+      expect(remainderTx?.business_type).toBe("other");
+    },
+  );
+
+  // B4 regression: single-order overpay → tx amount clamp đúng
+  it.skipIf(isProduction)(
+    "Single-order overpay → tx chính amount=outstanding, tx phụ status=pending",
+    async () => {
+      const marker = `OVERPAY-${Date.now()}`;
+      markers.push(marker);
+      const whId = await createTestWarehouse(adminClient, { name: marker });
+      const custId = await createTestB2BCustomer(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+      const code = `SO-${yymmdd}-7777`;
+
+      await createTestOrder(adminClient, {
+        customerB2bId: custId, warehouseId: whId,
+        code, status: "PENDING",
+        items: [{ productId, quantity: 1, unitPrice: 70000 }],
+      });
+
+      const bankRef = `TEST-OVERPAY-${marker}`;
+      const { data, error } = await adminClient.rpc(
+        "process_incoming_bank_transfer",
+        {
+          p_amount: 100000,
+          p_memo: code,
+          p_bank_ref_id: bankRef,
+        },
+      );
+      expect(error).toBeNull();
+      const result = data as { allocated: Array<{ amount: number }>; excess: number };
+      expect(Number(result.allocated[0].amount)).toBe(70000);
+      expect(Number(result.excess)).toBe(30000);
+
+      // Tx chính completed = 70k
+      const { data: mainTx } = await adminClient
+        .from("finance_transactions")
+        .select("amount, status")
+        .eq("bank_reference_id", bankRef)
+        .single();
+      expect(Number(mainTx?.amount)).toBe(70000);
+      expect(mainTx?.status).toBe("completed");
+
+      // Tx dư pending = 30k
+      const { data: excessTx } = await adminClient
+        .from("finance_transactions")
+        .select("amount, status")
+        .eq("bank_reference_id", `${bankRef}-excess`)
+        .single();
+      expect(Number(excessTx?.amount)).toBe(30000);
+      expect(excessTx?.status).toBe("pending");
+    },
+  );
+
   it.skipIf(isProduction)(
     "Idempotency: cùng bank_ref_id 2 lần → call thứ 2 trả ignored",
     async () => {

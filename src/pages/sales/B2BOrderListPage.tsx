@@ -41,8 +41,8 @@ import { useNavigate } from "react-router-dom";
 import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate";
 import { VatActionButton } from "@/features/pos/components/VatActionButton";
 import { b2bService } from "@/features/sales/api/b2bService";
-import { paymentService } from "@/features/sales/api/paymentService";
 import { salesService } from "@/features/sales/api/salesService";
+import { ConfirmPaidButton } from "@/features/sales/components/ConfirmPaidButton";
 import { useOrderPrint } from "@/features/sales/hooks/useOrderPrint"; // [NEW]
 import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders";
 
@@ -232,82 +232,49 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
       cancelButtonProps: { style: { display: "none" } },
       closable: true,
       maskClosable: true,
-      footer: (_, {}) => {
-        const outstanding = Math.max(
-          0,
-          (order.final_amount || 0) - (order.paid_amount || 0),
-        );
-        const canQuickConfirm =
-          order.status === "PENDING" &&
-          order.payment_status !== "paid" &&
-          outstanding > 0;
-        return (
-          <div style={{ textAlign: "right", marginTop: 10 }}>
-            <Button onClick={() => Modal.destroyAll()} style={{ marginRight: 8 }}>
-              Hủy
-            </Button>
+      footer: (_, {}) => (
+        <div style={{ textAlign: "right", marginTop: 10 }}>
+          <Button onClick={() => Modal.destroyAll()} style={{ marginRight: 8 }}>
+            Hủy
+          </Button>
 
-            {/* Nút "Đã nhận đủ" — 1-click confirm khi bank webhook fail */}
-            {canQuickConfirm && (
-              <Button
-                type="primary"
-                style={{ marginRight: 8, backgroundColor: "#16a34a", borderColor: "#16a34a" }}
-                icon={<CheckCircleOutlined />}
-                onClick={() => {
-                  Modal.destroyAll();
-                  Modal.confirm({
-                    title: `Xác nhận đã nhận tiền đơn ${order.code}`,
-                    content: `Ghi nhận đã nhận ${new Intl.NumberFormat("vi-VN").format(outstanding)} đ? Đơn sẽ tự chuyển CONFIRMED.`,
-                    okText: "Đã nhận",
-                    cancelText: "Hủy",
-                    okButtonProps: { style: { backgroundColor: "#16a34a", borderColor: "#16a34a" } },
-                    onOk: async () => {
-                      try {
-                        message.loading({ content: "Đang ghi nhận...", key: "manualPay" });
-                        const res = await paymentService.recordManualPayment(order.id);
-                        message.success({
-                          content: `Đã ghi nhận ${new Intl.NumberFormat("vi-VN").format(res.amount)} đ cho đơn ${res.order_code}`,
-                          key: "manualPay",
-                        });
-                        refresh();
-                      } catch (e: any) {
-                        message.error({ content: "Lỗi: " + e.message, key: "manualPay" });
-                      }
-                    },
-                  });
-                }}
-              >
-                Đã nhận đủ tiền
-              </Button>
-            )}
+          {/* Nút 1-click "Đã nhận đủ tiền" — extract thành component reusable */}
+          <span style={{ marginRight: 8, display: "inline-block" }}>
+            <ConfirmPaidButton
+              order={order}
+              onSuccess={() => {
+                Modal.destroyAll();
+                refresh();
+              }}
+            />
+          </span>
 
-            {/* Nút CHUYỂN KHOẢN -> Mở Modal, Set type = bank_transfer */}
-            <Button
-              onClick={() => {
-                Modal.destroyAll();
-                setSelectedOrderForPayment(order);
-                setInitialPaymentMethod("bank_transfer");
-                setFinanceModalOpen(true);
-              }}
-              style={{ marginRight: 8, borderColor: "#1890ff", color: "#1890ff" }}
-            >
-              Chuyển khoản
-            </Button>
-            {/* Nút TIỀN MẶT -> Mở Modal, Set type = cash */}
-            <Button
-              type="primary"
-              onClick={() => {
-                Modal.destroyAll();
-                setSelectedOrderForPayment(order);
-                setInitialPaymentMethod("cash");
-                setFinanceModalOpen(true);
-              }}
-            >
-              Tiền mặt
-            </Button>
-          </div>
-        );
-      },
+          {/* Nút CHUYỂN KHOẢN -> Mở Modal, Set type = bank_transfer */}
+          <Button
+            onClick={() => {
+              Modal.destroyAll();
+              setSelectedOrderForPayment(order);
+              setInitialPaymentMethod("bank_transfer");
+              setFinanceModalOpen(true);
+            }}
+            style={{ marginRight: 8, borderColor: "#1890ff", color: "#1890ff" }}
+          >
+            Chuyển khoản
+          </Button>
+          {/* Nút TIỀN MẶT -> Mở Modal, Set type = cash */}
+          <Button
+            type="primary"
+            onClick={() => {
+              Modal.destroyAll();
+              setSelectedOrderForPayment(order);
+              setInitialPaymentMethod("cash");
+              setFinanceModalOpen(true);
+            }}
+          >
+            Tiền mặt
+          </Button>
+        </div>
+      ),
     });
   };
 

@@ -5818,6 +5818,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      _insert_order_payment_tx: {
+        Args: {
+          p_amount: number
+          p_bank_ref?: string
+          p_description: string
+          p_order_id: string
+          p_status?: string
+        }
+        Returns: string
+      }
       _log_rpc_call: {
         Args: { p_action: string; p_data?: Json; p_module: string }
         Returns: undefined
@@ -5829,6 +5839,14 @@ export type Database = {
           p_uom: string
         }
         Returns: number
+      }
+      _resolve_order_partner: {
+        Args: { p_order_id: string }
+        Returns: {
+          partner_id: string
+          partner_name: string
+          partner_type: string
+        }[]
       }
       _validate_stock_availability: {
         Args: { p_items: Json; p_warehouse_id: number }
