@@ -313,6 +313,21 @@ export const useFinanceFormLogic = (
          return true;
       }
 
+      // [OPTION A — user approved 2026-04-23]
+      // Phiếu THU (flow='in', business_type='trade'): default status='completed'
+      // để trigger auto_allocate_payment_to_orders fire ngay → 4 bước PM
+       // (noti KH, chuyển status đơn, chuyển payment_status, noti NV KD/Kho)
+      // chạy tức thời thay vì chờ NV duyệt thủ công.
+      //
+      // Phiếu CHI (flow='out') + các flow='in' khác: GIỮ 'pending' để kế toán
+      // duyệt kép — outflow quan trọng hơn cần kiểm soát kép.
+      const isReceivePaymentForOrder =
+        values.flow === "in" &&
+        values.business_type === "trade" &&
+        values.ref_type === "order" &&
+        !!values.ref_id;
+      const defaultStatus = isReceivePaymentForOrder ? "completed" : "pending";
+
       const payload: CreateTransactionParams = {
         p_flow: values.flow,
         p_business_type: values.business_type,
@@ -323,7 +338,7 @@ export const useFinanceFormLogic = (
           ? values.transaction_date.toISOString()
           : new Date().toISOString(),
         p_description: values.description,
-        p_status: "pending",
+        p_status: defaultStatus,
         p_evidence_url: evidenceUrl || undefined,
         p_cash_tally: values.cash_tally,
         p_ref_advance_id: values.ref_advance_id,

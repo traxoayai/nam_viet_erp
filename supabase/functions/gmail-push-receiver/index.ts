@@ -245,6 +245,24 @@ function decodeBase64Url(data: string): string {
 }
 
 /** Traverse MIME parts, tra ve plain text body */
+/**
+ * Extract exact email address từ From/To header.
+ * Ví dụ:
+ *   'Timo <support@timo.vn>' → 'support@timo.vn'
+ *   'support@timo.vn'         → 'support@timo.vn'
+ *   '"Fake" <evil@x.com>'     → 'evil@x.com'
+ * Return '' nếu không tìm thấy email hợp lệ.
+ */
+function extractEmailFromHeader(headerValue: string): string {
+  if (!headerValue) return "";
+  // Pattern "<email>" hoặc plain email
+  const angled = headerValue.match(/<([^>\s]+)>/);
+  const candidate = angled?.[1] ?? headerValue.trim();
+  // Validate email shape sơ bộ
+  const emailMatch = candidate.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  return emailMatch?.[0] ?? "";
+}
+
 function extractEmailBody(message: GmailMessage): string {
   // Thu lay text/plain truoc
   const plainText = findPartByMime(message.payload, "text/plain");
@@ -463,7 +481,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
           const fromHeader = message.payload.headers.find(
             (h) => h.name.toLowerCase() === "from",
           );
-          if (!fromHeader?.value?.includes("support@timo.vn")) {
+          // SECURITY: Exact match email sau khi extract từ header "Name <email>"
+          // hoặc plain "email". `.includes()` cũ dễ bypass bằng
+          // "Fake <support@timo.vn.attacker.com>".
+          const fromEmail = extractEmailFromHeader(fromHeader?.value ?? "");
+          if (fromEmail.toLowerCase() !== "support@timo.vn") {
+            skippedCount++;
+            continue;
+          }
+
+          // SECURITY: Verify Authentication-Results pass (SPF+DKIM+DMARC)
+          // Gmail tự verify nhưng phải check Pass để chặn spoofed email
+          // được forward hoặc từ MTA kém bảo mật.
+          const authHeader = message.payload.headers.find(
+            (h) => h.name.toLowerCase() === "authentication-results",
+          );
+          const authResult = authHeader?.value ?? "";
+          const spfPass = /\bspf=pass\b/i.test(authResult);
+          const dkimPass = /\bdkim=pass\b/i.test(authResult);
+          if (!spfPass || !dkimPass) {
+            console.warn(
+              `[push] ${account.email} reject msg ${msgId} — SPF/DKIM fail. auth=${authResult.slice(0, 200)}`,
+            );
             skippedCount++;
             continue;
           }
