@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5"
+  }
   public: {
     Tables: {
       _revert_double_deduct_20260417: {
@@ -3014,6 +3019,44 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_status_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          id: number
+          new_status: string
+          old_status: string | null
+          order_id: string
+          reason: string | null
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          id?: number
+          new_status: string
+          old_status?: string | null
+          order_id: string
+          reason?: string | null
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          id?: number
+          new_status?: string
+          old_status?: string | null
+          order_id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_status_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
         ]
@@ -6417,6 +6460,10 @@ export type Database = {
           total_count: number
         }[]
       }
+      extract_order_codes_from_memo: {
+        Args: { p_memo: string }
+        Returns: string[]
+      }
       generate_vaccine_timeline: {
         Args: {
           p_consulted_by?: string
@@ -7559,6 +7606,10 @@ export type Database = {
         }
         Returns: Json
       }
+      record_manual_payment_received: {
+        Args: { p_amount?: number; p_note?: string; p_order_id: string }
+        Returns: Json
+      }
       refresh_segment_members: {
         Args: { p_segment_id: number }
         Returns: undefined
@@ -7773,6 +7824,7 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       split_csv_nonempty: { Args: { p: string }; Returns: string[] }
+      split_words_vn: { Args: { p_text: string }; Returns: string[] }
       submit_cash_remittance: {
         Args: { p_order_ids: string[]; p_user_id: string }
         Returns: Json
@@ -8292,4 +8344,3 @@ export const Constants = {
     },
   },
 } as const
-
