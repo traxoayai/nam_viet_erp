@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# Pre-commit (Layer 1): lint + type check + unit tests.
+#   - ESLint (chỉ file đã stage nếu có)
+#   - tsc --noEmit (~5-15s với incremental)
+#   - vitest unit (~10-20s, không cần DB)
+# Integration tests (test:rpc) chạy ở pre-push vì cần Supabase local.
+# Bỏ qua: git commit --no-verify
+
+set -e
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' || true)
+
+if [ -n "$STAGED" ]; then
+  echo "[pre-commit] 1/3 ESLint (staged files)…"
+  echo "$STAGED" | xargs npx eslint --max-warnings=0
+else
+  echo "[pre-commit] 1/3 ESLint — no staged JS/TS → skip"
+fi
+
+echo "[pre-commit] 2/3 TypeScript check…"
+npm run test:types --silent
+
+echo "[pre-commit] 3/3 Unit tests…"
+npm run test:unit --silent -- --reporter=dot
+
+echo "[pre-commit] ✓ OK"

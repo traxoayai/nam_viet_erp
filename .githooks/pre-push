@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# Pre-push (Layer 2): unit + RPC integration tests.
+#   1. Unit tests (lại, fresh state) — ~15s, không cần DB.
+#   2. RPC integration — chạy nếu Supabase local up (~30-60s).
+# Nếu Supabase DOWN → skip với warning, không block push (CI sẽ catch).
+# Bỏ qua: git push --no-verify
+
+set -e
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
+
+export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=4096"
+
+echo "[pre-push] 1/2 Unit tests…"
+npm run test:unit --silent -- --reporter=dot
+
+SUPA_URL="http://127.0.0.1:54321/rest/v1/"
+echo "[pre-push] 2/2 RPC integration — checking Supabase local…"
+if ! curl -fsS --max-time 3 "$SUPA_URL" >/dev/null 2>&1; then
+  echo "[pre-push]    ⚠ Supabase local @ :54321 DOWN → SKIP integration."
+  echo "[pre-push]      (Khởi động: npx supabase start — hoặc để CI chạy)"
+  exit 0
+fi
+
+echo "[pre-push]    Supabase OK — running RPC tests…"
+npm run test:rpc --silent -- --reporter=dot
+
+echo "[pre-push] ✓ All tests passed"
