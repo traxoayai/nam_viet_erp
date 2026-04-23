@@ -1,6 +1,16 @@
 import { safeRpc } from "@/shared/lib/safeRpc";
 
 /**
+ * Kết quả của RPC record_manual_payment_received.
+ */
+export interface ManualPaymentResult {
+  success: boolean;
+  trans_code: string;
+  amount: number;
+  order_code: string;
+}
+
+/**
  * Service cho xác nhận thanh toán thủ công từ ERP.
  * RPC record_manual_payment_received wrap INSERT finance_transactions →
  * trigger auto_allocate update orders.paid_amount/status → trigger notify
@@ -17,23 +27,13 @@ export const paymentService = {
     orderId: string,
     amount?: number,
     note?: string,
-  ): Promise<{
-    success: boolean;
-    trans_code: string;
-    amount: number;
-    order_code: string;
-  }> {
+  ): Promise<ManualPaymentResult> {
     const { data, error } = await safeRpc("record_manual_payment_received", {
       p_order_id: orderId,
       p_amount: amount ?? null,
       p_note: note ?? null,
     });
     if (error) throw error;
-    return data as {
-      success: boolean;
-      trans_code: string;
-      amount: number;
-      order_code: string;
-    };
+    return data as ManualPaymentResult;
   },
 };

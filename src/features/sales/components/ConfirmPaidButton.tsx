@@ -2,9 +2,8 @@ import { CheckCircleOutlined } from "@ant-design/icons";
 import { Button, message, Modal } from "antd";
 
 import { paymentService } from "@/features/sales/api/paymentService";
-
-const fmtVnd = (n: number | string) =>
-  new Intl.NumberFormat("vi-VN").format(Number(n)) + " đ";
+import { COLORS } from "@/shared/constants/colors";
+import { formatVnd } from "@/shared/utils/format";
 
 interface ConfirmPaidOrder {
   id: string;
@@ -25,6 +24,11 @@ interface Props {
   style?: React.CSSProperties;
   size?: "small" | "middle" | "large";
 }
+
+const GREEN_STYLE: React.CSSProperties = {
+  backgroundColor: COLORS.actionSuccess,
+  borderColor: COLORS.actionSuccess,
+};
 
 /**
  * Nút 1-click xác nhận NV đã nhận đủ tiền cho đơn.
@@ -56,18 +60,16 @@ export function ConfirmPaidButton({
   const handleClick = () => {
     Modal.confirm({
       title: `Xác nhận đã nhận tiền đơn ${order.code}`,
-      content: `Ghi nhận đã nhận ${fmtVnd(outstanding)} cho đơn ${order.code}? Đơn sẽ tự chuyển CONFIRMED.`,
+      content: `Ghi nhận đã nhận ${formatVnd(outstanding)} đ cho đơn ${order.code}? Đơn sẽ tự chuyển CONFIRMED.`,
       okText: "Đã nhận",
       cancelText: "Hủy",
-      okButtonProps: {
-        style: { backgroundColor: "#16a34a", borderColor: "#16a34a" },
-      },
+      okButtonProps: { style: GREEN_STYLE },
       onOk: async () => {
         try {
           message.loading({ content: "Đang ghi nhận...", key: "manualPay" });
           const res = await paymentService.recordManualPayment(order.id);
           message.success({
-            content: `Đã ghi nhận ${fmtVnd(res.amount)} cho đơn ${res.order_code}`,
+            content: `Đã ghi nhận ${formatVnd(res.amount)} đ cho đơn ${res.order_code}`,
             key: "manualPay",
           });
           onSuccess();
@@ -85,11 +87,7 @@ export function ConfirmPaidButton({
       size={size}
       icon={<CheckCircleOutlined />}
       onClick={handleClick}
-      style={{
-        backgroundColor: "#16a34a",
-        borderColor: "#16a34a",
-        ...style,
-      }}
+      style={{ ...GREEN_STYLE, ...style }}
     >
       {label}
     </Button>
