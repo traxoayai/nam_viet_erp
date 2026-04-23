@@ -69,3 +69,14 @@ export async function createUserClient(
   if (error) throw new Error(`Login failed for ${email}: ${error.message}`);
   return client;
 }
+
+/**
+ * Test fixture user for RPCs yêu cầu auth.uid() (chỉ chạy local).
+ * Password reset thủ công trong dev DB — không dùng trên prod.
+ */
+export const TEST_USER_EMAIL = "kame.ctb@gmail.com";
+export const TEST_USER_PASSWORD = "Test@123!";
+
+export async function createTestAuthedClient(): Promise<SupabaseClient> {
+  return createUserClient(TEST_USER_EMAIL, TEST_USER_PASSWORD);
+}

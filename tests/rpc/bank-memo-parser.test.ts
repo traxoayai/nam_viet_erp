@@ -1,9 +1,12 @@
 import { describe, it, expect, afterAll } from "vitest";
+
 import { adminClient, isProduction } from "../helpers/supabase";
+
 import {
   createTestWarehouse,
   createTestB2BCustomer,
   createTestProduct,
+  createTestBatch,
   createTestOrder,
   cleanupTestData,
 } from "./helpers/fixtures";
@@ -25,21 +28,27 @@ describe("extract_order_codes_from_memo — unit cases", () => {
     { memo: "SO2604236745", expected: ["SO-260423-6745"] },
     { memo: "thanh toan SO-260423-6745", expected: ["SO-260423-6745"] },
     { memo: "FT25SO260423-6745 TIMO", expected: ["SO-260423-6745"] },
-    { memo: "TT SO260423 6745 VA SO260422 2634", expected: ["SO-260423-6745", "SO-260422-2634"] },
+    {
+      memo: "TT SO260423 6745 VA SO260422 2634",
+      expected: ["SO-260423-6745", "SO-260422-2634"],
+    },
     { memo: "POS-260423-0001", expected: ["POS-260423-0001"] },
     { memo: "so-260423-6745", expected: ["SO-260423-6745"] }, // lowercase
     { memo: "tiền thuê nhà", expected: [] },
     { memo: "", expected: [] },
     { memo: null, expected: [] },
     // Dedupe: 2 lần cùng 1 mã → chỉ giữ 1
-    { memo: "SO-260423-6745 va lai SO-260423-6745", expected: ["SO-260423-6745"] },
+    {
+      memo: "SO-260423-6745 va lai SO-260423-6745",
+      expected: ["SO-260423-6745"],
+    },
   ];
 
   for (const { memo, expected } of cases) {
     it(`parse: ${JSON.stringify(memo)}`, async () => {
       const { data, error } = await adminClient.rpc(
         "extract_order_codes_from_memo",
-        { p_memo: memo },
+        { p_memo: memo }
       );
       expect(error).toBeNull();
       expect(data).toEqual(expected);
@@ -57,11 +66,15 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
 
-      // Code format hợp regex: SO-YYMMDD-NNNN
+      // Code format hợp regex: SO-YYMMDD-NNNN (NNNN random tránh collision khi re-run)
       const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const code = `SO-${yymmdd}-9999`;
+      const rnd = Math.floor(Math.random() * 9000 + 1000);
+      const code = `SO-${yymmdd}-${rnd}`;
       const { orderId } = await createTestOrder(adminClient, {
         customerB2bId: custId,
         warehouseId: whId,
@@ -76,7 +89,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
           p_amount: 100000,
           p_memo: `thanh toan ${code} ok`,
           p_bank_ref_id: `TEST-BANK-REF-${marker}`,
-        },
+        }
       );
       expect(error).toBeNull();
       expect((data as { status: string }).status).toBe("success");
@@ -92,7 +105,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       expect(upd?.status).toBe("CONFIRMED");
       expect(upd?.payment_status).toBe("paid");
       expect(Number(upd?.paid_amount)).toBe(100000);
-    },
+    }
   );
 
   it.skipIf(isProduction)(
@@ -107,7 +120,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
           p_amount: 50000,
           p_memo: "tien thue nha thang 4",
           p_bank_ref_id: `TEST-FB-${marker}`,
-        },
+        }
       );
       expect(error).toBeNull();
       expect((data as { status: string }).status).toBe("saved_unallocated");
@@ -121,7 +134,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       expect(tx?.status).toBe("pending");
       expect(tx?.ref_id).toBeNull();
       expect(tx?.business_type).toBe("other");
-    },
+    }
   );
 
   // T4: Multi-order split proportional
@@ -132,21 +145,29 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const code1 = `SO-${yymmdd}-7001`;
-      const code2 = `SO-${yymmdd}-7002`;
+      const rnd = Math.floor(Math.random() * 8000 + 1000);
+      const code1 = `SO-${yymmdd}-${rnd}`;
+      const code2 = `SO-${yymmdd}-${rnd + 1}`;
 
       // Đơn 1 outstanding 30k
       const { orderId: id1 } = await createTestOrder(adminClient, {
-        customerB2bId: custId, warehouseId: whId,
-        code: code1, status: "PENDING",
+        customerB2bId: custId,
+        warehouseId: whId,
+        code: code1,
+        status: "PENDING",
         items: [{ productId, quantity: 1, unitPrice: 30000 }],
       });
       // Đơn 2 outstanding 70k
       const { orderId: id2 } = await createTestOrder(adminClient, {
-        customerB2bId: custId, warehouseId: whId,
-        code: code2, status: "PENDING",
+        customerB2bId: custId,
+        warehouseId: whId,
+        code: code2,
+        status: "PENDING",
         items: [{ productId, quantity: 1, unitPrice: 70000 }],
       });
 
@@ -156,23 +177,36 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
           p_amount: 60000,
           p_memo: `thanh toan ${code1} va ${code2}`,
           p_bank_ref_id: `TEST-MULTI-${marker}`,
-        },
+        }
       );
       expect(error).toBeNull();
-      const result = data as { allocated: Array<{ order_code: string; amount: number }>; excess: number };
+      const result = data as {
+        allocated: Array<{ order_code: string; amount: number }>;
+        excess: number;
+      };
       expect(result.allocated.length).toBe(2);
 
       // Tổng allocated + excess = 60000
-      const total = result.allocated.reduce((s, a) => s + Number(a.amount), 0) + Number(result.excess || 0);
+      const total =
+        result.allocated.reduce((s, a) => s + Number(a.amount), 0) +
+        Number(result.excess || 0);
       expect(total).toBe(60000);
 
       // Tỷ lệ proportional: 30/100*60 = 18, 70/100*60 = 42
       await new Promise((r) => setTimeout(r, 300));
-      const { data: o1 } = await adminClient.from("orders").select("paid_amount").eq("id", id1).single();
-      const { data: o2 } = await adminClient.from("orders").select("paid_amount").eq("id", id2).single();
+      const { data: o1 } = await adminClient
+        .from("orders")
+        .select("paid_amount")
+        .eq("id", id1)
+        .single();
+      const { data: o2 } = await adminClient
+        .from("orders")
+        .select("paid_amount")
+        .eq("id", id2)
+        .single();
       expect(Number(o1?.paid_amount)).toBeCloseTo(18000, -2); // ±100đ rounding
       expect(Number(o2?.paid_amount)).toBeCloseTo(42000, -2);
-    },
+    }
   );
 
   // T5: CK dư multi-order → phải có pending row cho phần thừa
@@ -183,19 +217,27 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const code1 = `SO-${yymmdd}-8001`;
-      const code2 = `SO-${yymmdd}-8002`;
+      const rnd = Math.floor(Math.random() * 8000 + 1000);
+      const code1 = `SO-${yymmdd}-${rnd}`;
+      const code2 = `SO-${yymmdd}-${rnd + 1}`;
 
       await createTestOrder(adminClient, {
-        customerB2bId: custId, warehouseId: whId,
-        code: code1, status: "PENDING",
+        customerB2bId: custId,
+        warehouseId: whId,
+        code: code1,
+        status: "PENDING",
         items: [{ productId, quantity: 1, unitPrice: 20000 }],
       });
       await createTestOrder(adminClient, {
-        customerB2bId: custId, warehouseId: whId,
-        code: code2, status: "PENDING",
+        customerB2bId: custId,
+        warehouseId: whId,
+        code: code2,
+        status: "PENDING",
         items: [{ productId, quantity: 1, unitPrice: 30000 }],
       });
 
@@ -207,7 +249,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
           p_amount: 80000,
           p_memo: `${code1} ${code2}`,
           p_bank_ref_id: bankRef,
-        },
+        }
       );
       expect(error).toBeNull();
       expect((data as { excess: number }).excess).toBeGreaterThan(0);
@@ -221,7 +263,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       expect(remainderTx).toBeDefined();
       expect(remainderTx?.status).toBe("pending");
       expect(remainderTx?.business_type).toBe("other");
-    },
+    }
   );
 
   // B4 regression: single-order overpay → tx amount clamp đúng
@@ -232,13 +274,18 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const code = `SO-${yymmdd}-7777`;
+      const code = `SO-${yymmdd}-${Math.floor(Math.random() * 9000 + 1000)}`;
 
       await createTestOrder(adminClient, {
-        customerB2bId: custId, warehouseId: whId,
-        code, status: "PENDING",
+        customerB2bId: custId,
+        warehouseId: whId,
+        code,
+        status: "PENDING",
         items: [{ productId, quantity: 1, unitPrice: 70000 }],
       });
 
@@ -249,10 +296,13 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
           p_amount: 100000,
           p_memo: code,
           p_bank_ref_id: bankRef,
-        },
+        }
       );
       expect(error).toBeNull();
-      const result = data as { allocated: Array<{ amount: number }>; excess: number };
+      const result = data as {
+        allocated: Array<{ amount: number }>;
+        excess: number;
+      };
       expect(Number(result.allocated[0].amount)).toBe(70000);
       expect(Number(result.excess)).toBe(30000);
 
@@ -273,7 +323,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
         .single();
       expect(Number(excessTx?.amount)).toBe(30000);
       expect(excessTx?.status).toBe("pending");
-    },
+    }
   );
 
   it.skipIf(isProduction)(
@@ -283,9 +333,12 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const code = `SO-${yymmdd}-8888`;
+      const code = `SO-${yymmdd}-${Math.floor(Math.random() * 9000 + 1000)}`;
       await createTestOrder(adminClient, {
         customerB2bId: custId,
         warehouseId: whId,
@@ -309,7 +362,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
         p_bank_ref_id: bankRef,
       });
       expect((second.data as { status: string }).status).toBe("ignored");
-    },
+    }
   );
 
   afterAll(async () => {

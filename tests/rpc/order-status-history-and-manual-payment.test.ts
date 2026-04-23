@@ -1,10 +1,13 @@
 import { describe, it, expect, afterAll } from "vitest";
+
 import { adminClient, isProduction } from "../helpers/supabase";
+
 import {
   createTestWarehouse,
   createTestB2BCustomer,
   createTestProduct,
   createTestOrder,
+  createTestBatch,
   cleanupTestData,
 } from "./helpers/fixtures";
 
@@ -29,7 +32,10 @@ describe("order_status_history audit", () => {
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const { orderId } = await createTestOrder(adminClient, {
         customerB2bId: custId,
         warehouseId: whId,
@@ -37,7 +43,10 @@ describe("order_status_history audit", () => {
         items: [{ productId, quantity: 1, unitPrice: 1000 }],
       });
 
-      await adminClient.from("orders").update({ status: "CONFIRMED" }).eq("id", orderId);
+      await adminClient
+        .from("orders")
+        .update({ status: "CONFIRMED" })
+        .eq("id", orderId);
 
       const { data } = await adminClient
         .from("order_status_history")
@@ -50,7 +59,7 @@ describe("order_status_history audit", () => {
       expect(last.old_status).toBe("PENDING");
       expect(last.new_status).toBe("CONFIRMED");
       expect(last.reason).toBe("payment_received");
-    },
+    }
   );
 });
 
@@ -62,9 +71,14 @@ describe("notify_payment_received — warehouse notification (B1 regression)", (
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const { orderId } = await createTestOrder(adminClient, {
-        customerB2bId: custId, warehouseId: whId, status: "PENDING",
+        customerB2bId: custId,
+        warehouseId: whId,
+        status: "PENDING",
         items: [{ productId, quantity: 1, unitPrice: 10000 }],
       });
 
@@ -94,7 +108,7 @@ describe("notify_payment_received — warehouse notification (B1 regression)", (
         .eq("reference_id", orderId)
         .eq("type", "warehouse_task");
       expect(nErr).toBeNull();
-    },
+    }
   );
 });
 
@@ -106,7 +120,10 @@ describe("record_manual_payment_received RPC", () => {
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const { orderId } = await createTestOrder(adminClient, {
         customerB2bId: custId,
         warehouseId: whId,
@@ -116,7 +133,7 @@ describe("record_manual_payment_received RPC", () => {
 
       const { data, error } = await adminClient.rpc(
         "record_manual_payment_received",
-        { p_order_id: orderId },
+        { p_order_id: orderId }
       );
       expect(error).toBeNull();
       expect((data as { success: boolean }).success).toBe(true);
@@ -138,7 +155,11 @@ describe("record_manual_payment_received RPC", () => {
         .from("order_status_history")
         .select("old_status, new_status")
         .eq("order_id", orderId);
-      expect(hist?.some((r) => r.old_status === "PENDING" && r.new_status === "CONFIRMED")).toBe(true);
+      expect(
+        hist?.some(
+          (r) => r.old_status === "PENDING" && r.new_status === "CONFIRMED"
+        )
+      ).toBe(true);
 
       // Customer notification
       const { data: notifs } = await adminClient
@@ -148,33 +169,33 @@ describe("record_manual_payment_received RPC", () => {
         .eq("type", "order_status");
       expect(notifs?.length).toBeGreaterThan(0);
       const match = notifs!.find(
-        (n) => (n.data as { order_id: string })?.order_id === orderId,
+        (n) => (n.data as { order_id: string })?.order_id === orderId
       );
       expect(match).toBeDefined();
-    },
+    }
   );
 
-  it.skipIf(isProduction)(
-    "Đơn đã CANCELLED → RAISE EXCEPTION",
-    async () => {
-      const marker = `MANUAL-C-${Date.now()}`;
-      markers.push(marker);
-      const whId = await createTestWarehouse(adminClient, { name: marker });
-      const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
-      const { orderId } = await createTestOrder(adminClient, {
-        customerB2bId: custId,
-        warehouseId: whId,
-        status: "CANCELLED",
-        items: [{ productId, quantity: 1, unitPrice: 10000 }],
-      });
+  it.skipIf(isProduction)("Đơn đã CANCELLED → RAISE EXCEPTION", async () => {
+    const marker = `MANUAL-C-${Date.now()}`;
+    markers.push(marker);
+    const whId = await createTestWarehouse(adminClient, { name: marker });
+    const custId = await createTestB2BCustomer(adminClient, { name: marker });
+    const { productId } = await createTestProduct(adminClient, {
+      name: marker,
+    });
+    await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
+    const { orderId } = await createTestOrder(adminClient, {
+      customerB2bId: custId,
+      warehouseId: whId,
+      status: "CANCELLED",
+      items: [{ productId, quantity: 1, unitPrice: 10000 }],
+    });
 
-      const { error } = await adminClient.rpc("record_manual_payment_received", {
-        p_order_id: orderId,
-      });
-      expect(error?.message).toContain("Đơn đã hủy");
-    },
-  );
+    const { error } = await adminClient.rpc("record_manual_payment_received", {
+      p_order_id: orderId,
+    });
+    expect(error?.message).toContain("Đơn đã hủy");
+  });
 
   it.skipIf(isProduction)(
     "Overpay > outstanding + tolerance → RAISE EXCEPTION",
@@ -183,7 +204,10 @@ describe("record_manual_payment_received RPC", () => {
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const { orderId } = await createTestOrder(adminClient, {
         customerB2bId: custId,
         warehouseId: whId,
@@ -191,12 +215,15 @@ describe("record_manual_payment_received RPC", () => {
         items: [{ productId, quantity: 1, unitPrice: 10000 }],
       });
 
-      const { error } = await adminClient.rpc("record_manual_payment_received", {
-        p_order_id: orderId,
-        p_amount: 999999999,
-      });
+      const { error } = await adminClient.rpc(
+        "record_manual_payment_received",
+        {
+          p_order_id: orderId,
+          p_amount: 999999999,
+        }
+      );
       expect(error?.message).toMatch(/vượt quá|exceed/i);
-    },
+    }
   );
 
   it.skipIf(isProduction)(
@@ -206,7 +233,10 @@ describe("record_manual_payment_received RPC", () => {
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const { orderId } = await createTestOrder(adminClient, {
         customerB2bId: custId,
         warehouseId: whId,
@@ -215,12 +245,15 @@ describe("record_manual_payment_received RPC", () => {
       });
 
       // Overpay 50đ (trong tolerance 100) → phải pass
-      const { error } = await adminClient.rpc("record_manual_payment_received", {
-        p_order_id: orderId,
-        p_amount: 10050,
-      });
+      const { error } = await adminClient.rpc(
+        "record_manual_payment_received",
+        {
+          p_order_id: orderId,
+          p_amount: 10050,
+        }
+      );
       expect(error).toBeNull();
-    },
+    }
   );
 
   // T2 expose B5 cũ (đã fix bằng advisory lock)
@@ -231,7 +264,10 @@ describe("record_manual_payment_received RPC", () => {
       markers.push(marker);
       const whId = await createTestWarehouse(adminClient, { name: marker });
       const custId = await createTestB2BCustomer(adminClient, { name: marker });
-      const { productId } = await createTestProduct(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const { orderId } = await createTestOrder(adminClient, {
         customerB2bId: custId,
         warehouseId: whId,
@@ -241,8 +277,12 @@ describe("record_manual_payment_received RPC", () => {
 
       // Fire 2 call đồng thời
       const [r1, r2] = await Promise.all([
-        adminClient.rpc("record_manual_payment_received", { p_order_id: orderId }),
-        adminClient.rpc("record_manual_payment_received", { p_order_id: orderId }),
+        adminClient.rpc("record_manual_payment_received", {
+          p_order_id: orderId,
+        }),
+        adminClient.rpc("record_manual_payment_received", {
+          p_order_id: orderId,
+        }),
       ]);
 
       // Cả 2 có thể success nếu serialize đúng + call 2 đọc paid_amount=100k → throw "đã paid"
@@ -253,7 +293,9 @@ describe("record_manual_payment_received RPC", () => {
       // Tổng success + error phải = 2; errors phải chứa "đã thanh toán đủ"
       expect(successes.length + errors.length).toBe(2);
       if (errors.length > 0) {
-        expect(errors.some((e) => e!.message.includes("đã thanh toán đủ"))).toBe(true);
+        expect(
+          errors.some((e) => e!.message.includes("đã thanh toán đủ"))
+        ).toBe(true);
       }
 
       // Verify paid_amount không double
@@ -270,10 +312,19 @@ describe("record_manual_payment_received RPC", () => {
       const { data: txs } = await adminClient
         .from("finance_transactions")
         .select("code, amount, status")
-        .eq("ref_id", (await adminClient.from("orders").select("code").eq("id", orderId).single()).data?.code)
+        .eq(
+          "ref_id",
+          (
+            await adminClient
+              .from("orders")
+              .select("code")
+              .eq("id", orderId)
+              .single()
+          ).data?.code
+        )
         .eq("status", "completed");
       expect(txs?.length).toBe(1);
-    },
+    }
   );
 });
 

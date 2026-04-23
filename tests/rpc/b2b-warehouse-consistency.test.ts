@@ -11,21 +11,41 @@
  * 6. _check_b2b_credit_exposure hiện DISABLED (return void)
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
-import { adminClient } from "../helpers/supabase";
+
+import {
+  adminClient,
+  createTestAuthedClient,
+  isProduction,
+} from "../helpers/supabase";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 let b2bWarehouseId: number | null = null;
 let testCustomerId: number | null = null;
 let testProductId: number | null = null;
+let authedClient: SupabaseClient | null = null;
 const createdOrderIds: string[] = [];
 
 beforeAll(async () => {
   // Soft-setup: các test phụ thuộc seed data sẽ tự skip nếu thiếu,
   // thay vì throw làm fail toàn bộ file khi chạy trên DB chưa seed.
+  // authedClient: RPC yêu cầu auth.uid() dùng user fixture test
+  // (kame.ctb@gmail.com). Local-only, không chạy trên prod.
+  if (!isProduction) {
+    try {
+      authedClient = await createTestAuthedClient();
+    } catch {
+      authedClient = null;
+    }
+  }
   const { data: whId } = await adminClient.rpc("get_b2b_warehouse_id");
   b2bWarehouseId = (whId as unknown as number) ?? null;
 
   const { data: customers } = await adminClient
-    .from("customers_b2b").select("id").limit(1).maybeSingle();
+    .from("customers_b2b")
+    .select("id")
+    .limit(1)
+    .maybeSingle();
   testCustomerId = customers?.id ?? null;
 
   if (b2bWarehouseId) {
@@ -77,18 +97,20 @@ describe("_check_b2b_credit_exposure (DISABLED)", () => {
 });
 
 // Các test dưới đây cần user auth (auth.uid() NOT NULL).
-// adminClient (service_role) không pass được check_rpc_access → phải test manual hoặc dùng user client.
-// Skip để không false-positive; logic đã verify manual qua UI + query DB.
-describe.skip("create_sales_order — B2B warehouse override (cần user auth)", () => {
-  it("ignore p_warehouse_id client truyền, ép về kho B2B", async () => {
-    const { data: resp, error } = await adminClient.rpc("create_sales_order", {
-      p_items: [{
-        product_id: testProductId,
-        quantity: 1,
-        unit_price: 1000,
-        uom: "Hộp",
-        discount: 0,
-      }],
+// Dùng authedClient (signed-in với kame.ctb@gmail.com fixture local).
+describe("create_sales_order — B2B warehouse override (cần user auth)", () => {
+  it("ignore p_warehouse_id client truyền, ép về kho B2B", async (ctx) => {
+    if (!authedClient || !testProductId || !testCustomerId) return ctx.skip();
+    const { data: resp, error } = await authedClient.rpc("create_sales_order", {
+      p_items: [
+        {
+          product_id: testProductId,
+          quantity: 1,
+          unit_price: 1000,
+          uom: "Hộp",
+          discount: 0,
+        },
+      ],
       p_customer_b2b_id: testCustomerId,
       p_order_type: "B2B",
       p_warehouse_id: 999, // warehouse không tồn tại → backend phải override
@@ -112,17 +134,25 @@ describe.skip("create_sales_order — B2B warehouse override (cần user auth)",
   });
 });
 
-describe.skip("Trigger orders_deduct_on_confirm (cần order test — skip)", () => {
-  it("đơn B2B DRAFT chuyển CONFIRMED → txn sale được tạo tự động", async () => {
+describe("Trigger orders_deduct_on_confirm (cần order test)", () => {
+  it("đơn B2B DRAFT chuyển CONFIRMED → txn sale được tạo tự động", async (ctx) => {
     const orderId = createdOrderIds[createdOrderIds.length - 1];
-    if (!orderId) return;
+    if (!orderId) return ctx.skip();
 
     // Trước: không có txn
     const { data: txBefore } = await adminClient
       .from("inventory_transactions")
       .select("id")
-      .eq("ref_id",
-        (await adminClient.from("orders").select("code").eq("id", orderId).single()).data!.code);
+      .eq(
+        "ref_id",
+        (
+          await adminClient
+            .from("orders")
+            .select("code")
+            .eq("id", orderId)
+            .single()
+        ).data!.code
+      );
     expect(txBefore!.length).toBe(0);
 
     // UPDATE status → CONFIRMED
@@ -134,7 +164,10 @@ describe.skip("Trigger orders_deduct_on_confirm (cần order test — skip)", ()
 
     // Sau: có txn sale với action_group='sale' (từ _deduct_stock_fefo)
     const { data: order } = await adminClient
-      .from("orders").select("code").eq("id", orderId).single();
+      .from("orders")
+      .select("code")
+      .eq("id", orderId)
+      .single();
     const { data: txAfter } = await adminClient
       .from("inventory_transactions")
       .select("action_group, quantity")
@@ -145,13 +178,16 @@ describe.skip("Trigger orders_deduct_on_confirm (cần order test — skip)", ()
   });
 });
 
-describe.skip("confirm_outbound_packing — idempotent (cần order test — skip)", () => {
-  it("đơn đã trừ qua trigger (action_group='sale') → không trừ lần 2", async () => {
+describe("confirm_outbound_packing — idempotent (cần order test)", () => {
+  it("đơn đã trừ qua trigger (action_group='sale') → không trừ lần 2", async (ctx) => {
     const orderId = createdOrderIds[createdOrderIds.length - 1];
-    if (!orderId) return;
+    if (!orderId || !authedClient) return ctx.skip();
 
     const { data: order } = await adminClient
-      .from("orders").select("code").eq("id", orderId).single();
+      .from("orders")
+      .select("code")
+      .eq("id", orderId)
+      .single();
 
     // Snapshot txn count trước
     const { data: txBefore } = await adminClient
@@ -160,12 +196,19 @@ describe.skip("confirm_outbound_packing — idempotent (cần order test — ski
       .eq("ref_id", order!.code);
     const countBefore = txBefore!.length;
 
-    // Call confirm_outbound_packing
-    const { data: resp, error } = await adminClient.rpc("confirm_outbound_packing", {
-      p_order_id: orderId,
-    });
+    // Call confirm_outbound_packing (cần auth.uid)
+    const { data: resp, error } = await authedClient.rpc(
+      "confirm_outbound_packing",
+      {
+        p_order_id: orderId,
+      }
+    );
     expect(error).toBeNull();
-    const result = resp as { success: boolean; already_deducted: boolean; message: string };
+    const result = resp as {
+      success: boolean;
+      already_deducted: boolean;
+      message: string;
+    };
     expect(result.success).toBe(true);
     expect(result.already_deducted).toBe(true); // ← KEY: phát hiện 'sale' txn
 
@@ -178,14 +221,17 @@ describe.skip("confirm_outbound_packing — idempotent (cần order test — ski
 
     // Status → PACKED
     const { data: afterOrder } = await adminClient
-      .from("orders").select("status").eq("id", orderId).single();
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
     expect(afterOrder!.status).toBe("PACKED");
   });
 
-  it("gọi lại lần 2 → throw vì không còn CONFIRMED", async () => {
+  it("gọi lại lần 2 → throw vì không còn CONFIRMED", async (ctx) => {
     const orderId = createdOrderIds[createdOrderIds.length - 1];
-    if (!orderId) return;
-    const { error } = await adminClient.rpc("confirm_outbound_packing", {
+    if (!orderId || !authedClient) return ctx.skip();
+    const { error } = await authedClient.rpc("confirm_outbound_packing", {
       p_order_id: orderId,
     });
     expect(error).not.toBeNull();
@@ -193,10 +239,10 @@ describe.skip("confirm_outbound_packing — idempotent (cần order test — ski
   });
 });
 
-describe.skip("Trigger orders_restock_on_cancel (cần order test — skip)", () => {
-  it("đơn đã trừ kho chuyển CANCELLED → txn RETURN hoàn kho", async () => {
+describe("Trigger orders_restock_on_cancel (cần order test)", () => {
+  it("đơn đã trừ kho chuyển CANCELLED → txn RETURN hoàn kho", async (ctx) => {
     const orderId = createdOrderIds[createdOrderIds.length - 1];
-    if (!orderId) return;
+    if (!orderId) return ctx.skip();
 
     // Reset về CONFIRMED để được cancel (hoặc skip check nếu cancel_order RPC cho phép mọi status)
     // Thực tế: từ PACKED → CANCELLED cũng cần hoàn kho
@@ -207,7 +253,10 @@ describe.skip("Trigger orders_restock_on_cancel (cần order test — skip)", ()
     expect(error).toBeNull();
 
     const { data: order } = await adminClient
-      .from("orders").select("code, status").eq("id", orderId).single();
+      .from("orders")
+      .select("code, status")
+      .eq("id", orderId)
+      .single();
     expect(order!.status).toBe("CANCELLED");
 
     // Có txn RETURN hoàn
@@ -236,8 +285,13 @@ describe("Portal stock RPCs — filter kho B2B", () => {
       .select("quantity")
       .eq("product_id", testProductId)
       .eq("warehouse_id", b2bWarehouseId);
-    const expectedTotal = (expected ?? []).reduce((s, r) => s + (r.quantity ?? 0), 0);
-    const row = (data as Array<{ product_id: number; total_quantity: number }>)[0];
+    const expectedTotal = (expected ?? []).reduce(
+      (s, r) => s + (r.quantity ?? 0),
+      0
+    );
+    const row = (
+      data as Array<{ product_id: number; total_quantity: number }>
+    )[0];
     expect(row.total_quantity).toBe(expectedTotal);
   });
 
