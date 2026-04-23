@@ -61,6 +61,7 @@ Deno.serve(async (req) => {
       'admin_new_registration', 'admin_new_order', 'admin_payment_received',
       'portal_user_invite', 'portal_user_reset_password',
       'payment_reminder',
+      'payment_received_customer', 'payment_received_internal',
     ]
     if (!validTypes.includes(type)) {
       return new Response(

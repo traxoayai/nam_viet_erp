@@ -2,6 +2,7 @@ export type EmailType = 'registration_received' | 'registration_approved' | 'reg
   | 'admin_new_registration' | 'admin_new_order' | 'admin_payment_received'
   | 'portal_user_invite' | 'portal_user_reset_password'
   | 'payment_reminder'
+  | 'payment_received_customer' | 'payment_received_internal'
 
 export interface EmailData {
   business_name?: string
@@ -23,6 +24,10 @@ export interface EmailData {
   remaining_amount?: number
   hours_left?: number
   milestone_idx?: number
+  // payment_received fields
+  final_amount?: number
+  total_paid?: number
+  status_confirmed?: boolean
 }
 
 export function buildHtmlEmail(
@@ -339,6 +344,86 @@ export function buildHtmlEmail(
         <p style="margin:16px 0 0;color:#6b7280;font-size:13px;">
           Nếu bạn đã chuyển khoản, vui lòng bỏ qua email này — hệ thống sẽ tự động cập nhật trong vài phút.
         </p>`
+      return { subject, html: wrapper(subject, body) }
+    }
+
+    case 'payment_received_customer': {
+      const orderCode = data.order_code || 'N/A'
+      const displayName = data.display_name || data.business_name || 'Quý khách'
+      const amount = data.amount != null
+        ? new Intl.NumberFormat('vi-VN').format(Number(data.amount)) + ' đ'
+        : '0 đ'
+      const totalPaid = data.total_paid != null
+        ? new Intl.NumberFormat('vi-VN').format(data.total_paid) + ' đ'
+        : amount
+      const finalAmt = data.final_amount != null
+        ? new Intl.NumberFormat('vi-VN').format(data.final_amount) + ' đ'
+        : totalPaid
+      const remainAmt = data.remaining_amount != null
+        ? new Intl.NumberFormat('vi-VN').format(data.remaining_amount) + ' đ'
+        : '0 đ'
+      const subject = data.status_confirmed
+        ? `[${brandName}] Đơn ${orderCode} đã thanh toán đủ`
+        : `[${brandName}] Đã nhận ${amount} cho đơn ${orderCode}`
+      const heading = data.status_confirmed
+        ? 'Đơn hàng đã thanh toán đủ'
+        : 'Xác nhận đã nhận thanh toán'
+      const statusRow = data.status_confirmed
+        ? `<tr><td colspan="2" style="padding:8px;background:#dcfce7;color:#166534;border-radius:4px;font-weight:600;">Đơn đã xác nhận, đội kho sẽ sớm chuẩn bị hàng.</td></tr>`
+        : `<tr><td style="padding:4px 8px;font-weight:600;">Còn thiếu:</td><td style="padding:4px 8px;color:#b45309;font-weight:700;">${remainAmt}</td></tr>`
+      const body = `
+        <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">${heading}</h2>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          Xin chào <strong>${displayName}</strong>,
+        </p>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          ${brandName} đã nhận được <strong>${amount}</strong> cho đơn <strong>${orderCode}</strong>.
+        </p>
+        <div style="margin:24px 0;padding:16px;background-color:#f0fdf4;border-left:4px solid #22c55e;border-radius:4px;">
+          <table style="width:100%;font-size:14px;color:#374151;">
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Mã đơn:</td>
+              <td style="padding:4px 8px;">${orderCode}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Số tiền lần này:</td>
+              <td style="padding:4px 8px;">${amount}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 8px;font-weight:600;white-space:nowrap;">Đã thanh toán:</td>
+              <td style="padding:4px 8px;">${totalPaid} / ${finalAmt}</td>
+            </tr>
+            ${statusRow}
+          </table>
+        </div>
+        <p style="margin:16px 0 0;color:#6b7280;font-size:13px;">
+          Cảm ơn Quý khách đã tin tưởng ${brandName}.
+        </p>`
+      return { subject, html: wrapper(subject, body) }
+    }
+
+    case 'payment_received_internal': {
+      const orderCode = data.order_code || 'N/A'
+      const customerName = data.customer_name || 'Khách lẻ'
+      const amount = data.amount != null
+        ? new Intl.NumberFormat('vi-VN').format(Number(data.amount)) + ' đ'
+        : '0 đ'
+      const finalAmt = data.final_amount != null
+        ? new Intl.NumberFormat('vi-VN').format(data.final_amount) + ' đ'
+        : '-'
+      const remainAmt = data.remaining_amount != null
+        ? new Intl.NumberFormat('vi-VN').format(data.remaining_amount) + ' đ'
+        : '0 đ'
+      const subject = `[ERP] ${customerName} đã thanh toán ${amount} — đơn ${orderCode}`
+      const statusLine = data.status_confirmed
+        ? `<p style="margin:0 0 12px;color:#166534;font-weight:600;">Đơn đã chuyển CONFIRMED, sẵn sàng đóng gói.</p>`
+        : `<p style="margin:0 0 12px;color:#b45309;">Đơn vẫn đang chờ đủ tiền. Còn thiếu: <strong>${remainAmt}</strong>.</p>`
+      const body = `
+        <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Thông báo thu tiền nội bộ</h2>
+        <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
+          Khách <strong>${customerName}</strong> đã thanh toán <strong>${amount}</strong> cho đơn <strong>${orderCode}</strong> (tổng đơn ${finalAmt}).
+        </p>
+        ${statusLine}`
       return { subject, html: wrapper(subject, body) }
     }
 
