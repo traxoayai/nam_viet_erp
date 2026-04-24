@@ -237,6 +237,42 @@ const CreateB2BOrderPage = () => {
     // 1. Validate cơ bản (Form)
     if (!validateOrder()) return;
 
+    // [2026-04-25] Verify giá server-side — bỏ qua FE state manipulation.
+    // Tương tự Portal app/api/orders/route.ts:151-182.
+    let verifiedItems = items;
+    if (customer && items.length > 0) {
+      const productIds = items.map((i) => i.id);
+      const { data: pricesData, error: pricesErr } = await supabase.rpc(
+        "get_customer_product_prices",
+        {
+          p_customer_b2b_id: customer.id,
+          p_product_ids: productIds,
+        }
+      );
+      if (pricesErr) {
+        message.error("Không thể xác thực giá sản phẩm từ server");
+        return;
+      }
+      const priceMap = new Map<number, number>(
+        (
+          pricesData as Array<{
+            product_id: number;
+            customer_price: number;
+          }> | null
+        )?.map((p) => [p.product_id, p.customer_price]) ?? []
+      );
+      const mapped = items.map((it) => {
+        const serverPrice = priceMap.get(it.id);
+        if (serverPrice === undefined) return null;
+        return { ...it, price_wholesale: serverPrice };
+      });
+      if (mapped.includes(null)) {
+        message.error("Một số sản phẩm không còn hợp lệ");
+        return;
+      }
+      verifiedItems = mapped as typeof items;
+    }
+
     // [2026-04-25] Validate tồn kho qua RPC chung `validate_stock_for_order`
     // (common với Portal) — server tự lookup conversion_factor từ product_units,
     // quy đổi về base quantity rồi so với SUM(inventory_batches). Tránh bug FE
@@ -312,7 +348,7 @@ const CreateB2BOrderPage = () => {
           p_discount_amount: financials.discountAmount,
           p_shipping_fee: shippingFee,
           p_status: status,
-          p_items: items.map((i) => ({
+          p_items: verifiedItems.map((i) => ({
             product_id: i.id,
             quantity: i.quantity,
             uom: i.wholesale_unit,
@@ -340,7 +376,7 @@ const CreateB2BOrderPage = () => {
           p_warehouse_id: DEFAULT_WAREHOUSE_ID,
           p_payment_method: paymentMethod,
           p_order_type: "B2B",
-          p_items: items.map((i) => ({
+          p_items: verifiedItems.map((i) => ({
             product_id: i.id,
             quantity: i.quantity,
             uom: i.wholesale_unit,
