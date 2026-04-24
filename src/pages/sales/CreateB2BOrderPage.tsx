@@ -14,9 +14,9 @@ import {
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { financeService } from "@/features/finance/api/financeService";
-import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
+import type { CustomerB2B, CartItem } from "@/features/sales/types/b2b_sales";
 
+import { financeService } from "@/features/finance/api/financeService";
 import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate";
 import { salesService } from "@/features/sales/api/salesService";
 import { ActionButtons } from "@/features/sales/components/Footer/ActionButtons";
@@ -27,8 +27,8 @@ import { CustomerSelector } from "@/features/sales/components/Header/CustomerSel
 import { ShippingForm } from "@/features/sales/components/Header/ShippingForm";
 import { SalesOrderTable } from "@/features/sales/components/ProductGrid/SalesOrderTable";
 import { useCreateOrderB2B } from "@/features/sales/hooks/useCreateOrderB2B";
-import type { CustomerB2B, CartItem } from "@/features/sales/types/b2b_sales";
 import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint";
+import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { generateB2BOrderHTML } from "@/shared/utils/printTemplates";
 import { printHTML } from "@/shared/utils/printUtils";
@@ -44,7 +44,9 @@ const CreateB2BOrderPage = () => {
   const { id } = useParams();
   const isEditMode = !!id;
   const [loading, setLoading] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "credit" | "bank_transfer">("credit");
+  const [paymentMethod, setPaymentMethod] = useState<
+    "cash" | "credit" | "bank_transfer"
+  >("credit");
 
   // [NEW] Hook Picking Print
   const { printByData: printPicking, printData: pickingData } =
@@ -127,7 +129,10 @@ const CreateB2BOrderPage = () => {
             tax_code: (cd.tax_code as string) || "",
             vat_address: (cd.vat_address as string) || "",
             shipping_address:
-              (orderData.delivery_address as string) || (cd.shipping_address as string) || (cd.address as string) || "",
+              (orderData.delivery_address as string) ||
+              (cd.shipping_address as string) ||
+              (cd.address as string) ||
+              "",
             phone: (cd.phone as string) || "",
             debt_limit: (cd.debt_limit as number) || 0,
             current_debt: actualDebt,
@@ -146,44 +151,58 @@ const CreateB2BOrderPage = () => {
         const safeItems = orderData.items || [];
 
         // Fetch stock thật cho tất cả sản phẩm trong đơn
-        const productIds = safeItems.map((i: Record<string, unknown>) => i.product_id as number).filter(Boolean);
+        const productIds = safeItems
+          .map((i: Record<string, unknown>) => i.product_id as number)
+          .filter(Boolean);
         const stockMap = new Map<number, number>();
         if (productIds.length > 0) {
-          const { data: stockData } = await supabase.rpc("get_products_stock_status", {
-            p_product_ids: productIds,
-          });
-          for (const s of (stockData || []) as Array<{ product_id: number; total_quantity: number }>) {
+          const { data: stockData } = await supabase.rpc(
+            "get_products_stock_status",
+            {
+              p_product_ids: productIds,
+            }
+          );
+          for (const s of (stockData || []) as Array<{
+            product_id: number;
+            total_quantity: number;
+          }>) {
             stockMap.set(s.product_id, s.total_quantity);
           }
         }
 
-        const mappedItems: CartItem[] = safeItems.map((item: Record<string, unknown>) => {
-          const productInfo = (item.product || {}) as Record<string, unknown>;
-          const pid = item.product_id as number;
+        const mappedItems: CartItem[] = safeItems.map(
+          (item: Record<string, unknown>) => {
+            const productInfo = (item.product || {}) as Record<string, unknown>;
+            const pid = item.product_id as number;
 
-          return {
-            id: pid,
-            key: `${pid}_${Date.now()}_${Math.random()}`,
+            return {
+              id: pid,
+              key: `${pid}_${Date.now()}_${Math.random()}`,
 
-            name:
-              (productInfo.name as string) || (item.product_name as string) || "Sản phẩm (Mất info)",
-            sku: (productInfo.sku as string) || (item.sku as string) || "---",
-            image_url: (productInfo.image_url as string) || null,
+              name:
+                (productInfo.name as string) ||
+                (item.product_name as string) ||
+                "Sản phẩm (Mất info)",
+              sku: (productInfo.sku as string) || (item.sku as string) || "---",
+              image_url: (productInfo.image_url as string) || null,
 
-            price_wholesale: item.unit_price as number,
-            quantity: item.quantity as number,
-            wholesale_unit: (item.uom as string) || "",
+              price_wholesale: item.unit_price as number,
+              quantity: item.quantity as number,
+              wholesale_unit: (item.uom as string) || "",
 
-            discount: (item.discount as number) || 0,
-            stock_quantity: stockMap.get(pid) ?? 0,
-            total: (item.quantity as number) * (item.unit_price as number) - ((item.discount as number) || 0),
+              discount: (item.discount as number) || 0,
+              stock_quantity: stockMap.get(pid) ?? 0,
+              total:
+                (item.quantity as number) * (item.unit_price as number) -
+                ((item.discount as number) || 0),
 
-            shelf_location: (productInfo.shelf_location as string) || "",
-            lot_number: (productInfo.lot_number as string) || null,
-            expiry_date: (productInfo.expiry_date as string) || null,
-            items_per_carton: (productInfo.items_per_carton as number) || 1,
-          };
-        });
+              shelf_location: (productInfo.shelf_location as string) || "",
+              lot_number: (productInfo.lot_number as string) || null,
+              expiry_date: (productInfo.expiry_date as string) || null,
+              items_per_carton: (productInfo.items_per_carton as number) || 1,
+            };
+          }
+        );
 
         if (mappedItems.length > 0) {
           setItems(mappedItems);
@@ -196,49 +215,88 @@ const CreateB2BOrderPage = () => {
         setNote(orderData.note || "");
 
         if (orderData.delivery_method)
-          setDeliveryMethod(orderData.delivery_method as any);
+          setDeliveryMethod(
+            orderData.delivery_method as "internal" | "app" | "coach"
+          );
         if (orderData.shipping_partner_id)
           selectShippingPartner(orderData.shipping_partner_id);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Hydration Error:", err);
-        message.error("Lỗi tải đơn hàng: " + err.message);
+        const msg = err instanceof Error ? err.message : "Lỗi không xác định";
+        message.error("Lỗi tải đơn hàng: " + msg);
       } finally {
         setLoading(false);
       }
     };
 
     fetchOrderForEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleSubmit = async (status: "DRAFT" | "QUOTE" | "CONFIRMED") => {
     // 1. Validate cơ bản (Form)
     if (!validateOrder()) return;
 
-    // [NEW] 2. VALIDATE TỒN KHO (FE GUARD)
-    // Chỉ kiểm tra khi tạo đơn CONFIRMED (Trừ kho thật).
-    // Nếu là DRAFT hoặc QUOTE (Báo giá) thì cho phép nhập thoải mái.
+    // [2026-04-25] Validate tồn kho qua RPC chung `validate_stock_for_order`
+    // (common với Portal) — server tự lookup conversion_factor từ product_units,
+    // quy đổi về base quantity rồi so với SUM(inventory_batches). Tránh bug FE
+    // cast conversion_factor undefined → luôn = 1.
     if (status === "CONFIRMED") {
-      const outOfStockItems = items.filter((item) => {
-        // stock_quantity là base unit (đvcs); quantity là wholesale unit (Hộp/Kiện...)
-        // Phải nhân conversion_factor để so sánh cùng đơn vị.
-        const currentStock = item.stock_quantity || 0;
-        const neededBase = item.quantity * ((item as { conversion_factor?: number }).conversion_factor || 1);
-        return neededBase > currentStock;
-      });
+      type InsufficientRow = {
+        product_id: number | null;
+        product_name: string;
+        uom: string | null;
+        requested_base: number | null;
+        available_base: number | null;
+        deficit_base: number | null;
+        reason: string;
+      };
+      type ValidateResult = { ok: boolean; insufficient: InsufficientRow[] };
 
-      if (outOfStockItems.length > 0) {
-        const errorMsg = outOfStockItems
-          .map((i) => {
-            const cf = (i as { conversion_factor?: number }).conversion_factor || 1;
-            const need = i.quantity * cf;
-            return `${i.name} (cần ${need} đvcs, tồn ${i.stock_quantity || 0} đvcs)`;
+      const { data: whData } = await supabase.rpc("get_b2b_warehouse_id");
+      const warehouseId = (whData as number | null) ?? DEFAULT_WAREHOUSE_ID;
+
+      // supabase.rpc generic chưa có `validate_stock_for_order` trong types.ts
+      // (cần chạy npm run typegen sau khi migration 20260424010100 apply prod).
+      // Cast tạm qua `unknown` để tránh strict error, runtime vẫn gọi đúng.
+      const rpc = supabase.rpc as unknown as (
+        fn: string,
+        args: Record<string, unknown>
+      ) => Promise<{ data: unknown; error: { message: string } | null }>;
+
+      const { data: validateData, error: validateErr } = await rpc(
+        "validate_stock_for_order",
+        {
+          p_warehouse_id: warehouseId,
+          p_items: items.map((i) => ({
+            product_id: i.id,
+            quantity: i.quantity,
+            uom: i.wholesale_unit,
+            conversion_factor: 0, // server lookup product_units
+          })),
+        }
+      );
+
+      if (validateErr) {
+        message.error("Không thể kiểm tra tồn kho. Vui lòng thử lại.");
+        return;
+      }
+
+      const result = validateData as unknown as ValidateResult | null;
+      if (result && !result.ok && result.insufficient.length > 0) {
+        const msg = result.insufficient
+          .map((r) => {
+            if (r.reason === "unknown_uom") {
+              return `${r.product_name}: đơn vị "${r.uom}" chưa cấu hình`;
+            }
+            return `${r.product_name} (cần ${r.requested_base ?? "?"} ĐVCS, tồn ${r.available_base ?? 0} ĐVCS, thiếu ${r.deficit_base ?? 0})`;
           })
-          .join(", ");
+          .join("; ");
         message.error({
-          content: `Không đủ tồn kho để tạo đơn! Vui lòng kiểm tra lại: ${errorMsg}`,
-          duration: 5,
+          content: `Không đủ tồn kho: ${msg}`,
+          duration: 6,
         });
-        return; // CHẶN ĐỨNG TẠI ĐÂY
+        return;
       }
     }
 
@@ -300,8 +358,9 @@ const CreateB2BOrderPage = () => {
         reset();
         navigate("/b2b/orders");
       }
-    } catch (e: any) {
-      message.error(e.message || "Lỗi tạo đơn");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Lỗi tạo đơn";
+      message.error(msg);
     } finally {
       setLoading(false);
     }
@@ -485,7 +544,10 @@ const CreateB2BOrderPage = () => {
                 style={{ marginBottom: 16 }}
               >
                 <div style={{ marginBottom: 12 }}>
-                  <Typography.Text strong style={{ display: "block", marginBottom: 4 }}>
+                  <Typography.Text
+                    strong
+                    style={{ display: "block", marginBottom: 4 }}
+                  >
                     Phương thức thanh toán
                   </Typography.Text>
                   <Select
