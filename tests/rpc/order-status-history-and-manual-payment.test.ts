@@ -244,28 +244,15 @@ describe("record_manual_payment_received RPC", () => {
         items: [{ productId, quantity: 1, unitPrice: 10000 }],
       });
 
-      // Overpay 50đ (trong tolerance 100) → phải pass.
-      // Retry 3 lần vì RPC generate trans_code bằng RANDOM 4-digit → có
-      // chance collision 1/10000 khi parallel test chạy cùng ngày. Fix
-      // root cause cần migration đổi code-gen sang nextval (TODO separate).
-      let lastErr: unknown = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const { error } = await adminClient.rpc(
-          "record_manual_payment_received",
-          {
-            p_order_id: orderId,
-            p_amount: 10050,
-          }
-        );
-        if (!error) {
-          lastErr = null;
-          break;
+      // Overpay 50đ (trong tolerance 100) → phải pass
+      const { error } = await adminClient.rpc(
+        "record_manual_payment_received",
+        {
+          p_order_id: orderId,
+          p_amount: 10050,
         }
-        lastErr = error;
-        // Không retry nếu là lỗi nghiệp vụ (đã paid, v.v.)
-        if ((error as { code?: string }).code !== "23505") break;
-      }
-      expect(lastErr).toBeNull();
+      );
+      expect(error).toBeNull();
     }
   );
 
