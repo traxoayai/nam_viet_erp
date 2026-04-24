@@ -59,6 +59,11 @@ describe("extract_order_codes_from_memo — unit cases", () => {
 describe("process_incoming_bank_transfer — end-to-end với memo variations", () => {
   const markers: string[] = [];
 
+  // Bộ đếm cục bộ để sinh SO code 4-digit unique giữa các test chạy song song
+  // (regex parser yêu cầu đúng 4 digit). Start random 1000-9999, tăng dần.
+  let __orderSeq = Math.floor(Math.random() * 8000 + 1000);
+  const nextRnd = () => (__orderSeq++ % 9000) + 1000;
+
   it.skipIf(isProduction)(
     "Memo có text phụ vẫn match đơn → tx completed + đơn CONFIRMED",
     async () => {
@@ -73,7 +78,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
 
       // Code format hợp regex: SO-YYMMDD-NNNN (NNNN random tránh collision khi re-run)
       const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const rnd = Math.floor(Math.random() * 9000 + 1000);
+      const rnd = nextRnd();
       const code = `SO-${yymmdd}-${rnd}`;
       const { orderId } = await createTestOrder(adminClient, {
         customerB2bId: custId,
@@ -150,7 +155,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       });
       await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const rnd = Math.floor(Math.random() * 8000 + 1000);
+      const rnd = nextRnd();
       const code1 = `SO-${yymmdd}-${rnd}`;
       const code2 = `SO-${yymmdd}-${rnd + 1}`;
 
@@ -222,7 +227,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       });
       await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const rnd = Math.floor(Math.random() * 8000 + 1000);
+      const rnd = nextRnd();
       const code1 = `SO-${yymmdd}-${rnd}`;
       const code2 = `SO-${yymmdd}-${rnd + 1}`;
 
@@ -279,7 +284,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       });
       await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const code = `SO-${yymmdd}-${Math.floor(Math.random() * 9000 + 1000)}`;
+      const code = `SO-${yymmdd}-${nextRnd()}`;
 
       await createTestOrder(adminClient, {
         customerB2bId: custId,
@@ -338,7 +343,7 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       });
       await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
       const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const code = `SO-${yymmdd}-${Math.floor(Math.random() * 9000 + 1000)}`;
+      const code = `SO-${yymmdd}-${nextRnd()}`;
       await createTestOrder(adminClient, {
         customerB2bId: custId,
         warehouseId: whId,
