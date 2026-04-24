@@ -9,6 +9,7 @@ import {
   CartItem,
   VoucherRecord,
 } from "@/features/sales/types/b2b_sales";
+import { moneyMul, moneySub, moneyAdd, moneySum } from "@/shared/utils/money";
 
 interface SalesState {
   // --- STATE ---
@@ -27,7 +28,11 @@ interface SalesState {
   setCustomer: (c: CustomerB2B | null) => void;
   setItems: (items: CartItem[]) => void; // [NEW] Hydration Action
   addItem: (p: ProductB2B, qty?: number) => void;
-  updateItem: (key: string, field: keyof CartItem, value: any) => void;
+  updateItem: (
+    key: string,
+    field: keyof CartItem,
+    value: CartItem[keyof CartItem]
+  ) => void;
   removeItem: (key: string) => void;
   setDeliveryMethod: (method: "internal" | "app" | "coach") => void;
   setShippingPartner: (p: ShippingPartner | null) => void;
@@ -70,7 +75,10 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     const existing = items.find((i) => i.id === p.id);
     if (existing) {
       const newQty = existing.quantity + qty;
-      const newTotal = newQty * existing.price_wholesale - existing.discount;
+      const newTotal = moneySub(
+        moneyMul(newQty, existing.price_wholesale),
+        existing.discount
+      );
       const newItems = items.map((i) =>
         i.id === p.id ? { ...i, quantity: newQty, total: newTotal } : i
       );
@@ -83,7 +91,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
         key: `${p.id}_${Date.now()}`,
         quantity: qty,
         discount: 0,
-        total: qty * p.price_wholesale,
+        total: moneyMul(qty, p.price_wholesale),
       };
       set({ items: [newItem, ...items] });
       message.success(`Đã thêm: ${p.name}`);
@@ -97,8 +105,10 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     const newItems = items.map((item) => {
       if (item.key !== key) return item;
       const updated = { ...item, [field]: value };
-      updated.total =
-        updated.quantity * updated.price_wholesale - updated.discount;
+      updated.total = moneySub(
+        moneyMul(updated.quantity, updated.price_wholesale),
+        updated.discount
+      );
       return updated;
     });
     set({ items: newItems });
@@ -143,7 +153,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
   getSummary: () => {
     const s = get();
-    const subTotal = s.items.reduce((sum, i) => sum + i.total, 0);
+    const subTotal = moneySum(s.items.map((i) => i.total));
     const totalQty = s.items.reduce((sum, i) => sum + i.quantity, 0);
 
     let discountAmount = 0;
@@ -157,16 +167,19 @@ export const useSalesStore = create<SalesState>((set, get) => ({
         discountAmount =
           v.discount_type === "fixed"
             ? v.discount_value
-            : (subTotal * v.discount_value) / 100;
+            : moneyMul(subTotal, v.discount_value / 100);
         if (v.max_discount_value && discountAmount > v.max_discount_value) {
           discountAmount = v.max_discount_value;
         }
       }
     }
 
-    const finalTotal = subTotal + s.shippingFee - discountAmount;
+    const finalTotal = moneySub(
+      moneyAdd(subTotal, s.shippingFee),
+      discountAmount
+    );
     const oldDebt = s.customer?.current_debt || 0;
-    const totalPayable = finalTotal + oldDebt;
+    const totalPayable = moneyAdd(finalTotal, oldDebt);
 
     return {
       totalQty,
