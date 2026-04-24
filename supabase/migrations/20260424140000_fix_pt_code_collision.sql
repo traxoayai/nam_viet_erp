@@ -1,8 +1,8 @@
 -- Fix collision finance_transactions.code do RANDOM 4 digits
 -- ============================================================================
--- STATUS 2026-04-24: CHƯA DEPLOY PROD — hotfix tạm thời bằng retry ở test.
--- Deploy migration này sau khi user approve (tác động: 1 RPC thay code-gen
--- nhưng không đổi contract với caller).
+-- STATUS 2026-04-24: User approved deploy. Tác động: 1 RPC
+-- (record_manual_payment_received) thay code-gen sang sequence-based
+-- nhưng không đổi contract với caller.
 -- ============================================================================
 -- PROBLEM: 7 RPCs generate `'PT-' || YYMMDD || '-' || LPAD(RANDOM*10000, 4)`
 --          → collision 1/10000 per call. Khi parallel test / parallel NV click

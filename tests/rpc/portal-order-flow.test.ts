@@ -1,4 +1,5 @@
 import { describe as _describe, it, expect, beforeAll, afterAll } from "vitest";
+
 import { adminClient, isProduction } from "../helpers/supabase";
 
 // Skip mutation tests on production to avoid side effects
@@ -12,7 +13,7 @@ let testOrderId: string | null = null;
 let testOrderCode: string | null = null;
 
 /** Track notification IDs for cleanup */
-let notificationIdsToClean: string[] = [];
+const notificationIdsToClean: string[] = [];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -58,8 +59,7 @@ async function updateOrderStatus(
     .update({ status: newStatus })
     .eq("id", orderId);
 
-  if (error)
-    throw new Error(`Update order status failed: ${error.message}`);
+  if (error) throw new Error(`Update order status failed: ${error.message}`);
 }
 
 // ─── Setup / Teardown ───────────────────────────────────────────────────────
@@ -135,14 +135,14 @@ describe("B2B Order Notification Trigger", () => {
 
     await updateOrderStatus(testOrderId, "CONFIRMED");
 
-    const notifs = await getNotificationsForOrder(
-      testOrderId,
-      realCustomerId
-    );
+    const notifs = await getNotificationsForOrder(testOrderId, realCustomerId);
     notificationIdsToClean.push(...notifs.map((n) => n.id));
 
+    // Trigger fn_notify_order_status_change dùng separator " — " trong title.
+    // PENDING→CONFIRMED cũng fire trigger notify_payment_received (title
+    // "Đơn X đã thanh toán đủ"), nên filter chặt theo separator.
     const confirmed = notifs.find(
-      (n) => n.data.new_status === "CONFIRMED"
+      (n) => n.data.new_status === "CONFIRMED" && n.title.includes(" — ")
     );
     expect(confirmed).toBeDefined();
     expect(confirmed!.type).toBe("order_status");
@@ -157,15 +157,10 @@ describe("B2B Order Notification Trigger", () => {
 
     await updateOrderStatus(testOrderId, "SHIPPING");
 
-    const notifs = await getNotificationsForOrder(
-      testOrderId,
-      realCustomerId
-    );
+    const notifs = await getNotificationsForOrder(testOrderId, realCustomerId);
     notificationIdsToClean.push(...notifs.map((n) => n.id));
 
-    const shipping = notifs.find(
-      (n) => n.data.new_status === "SHIPPING"
-    );
+    const shipping = notifs.find((n) => n.data.new_status === "SHIPPING");
     expect(shipping).toBeDefined();
     expect(shipping!.type).toBe("order_status");
     expect(shipping!.data.old_status).toBe("CONFIRMED");
@@ -178,15 +173,10 @@ describe("B2B Order Notification Trigger", () => {
 
     await updateOrderStatus(testOrderId, "DELIVERED");
 
-    const notifs = await getNotificationsForOrder(
-      testOrderId,
-      realCustomerId
-    );
+    const notifs = await getNotificationsForOrder(testOrderId, realCustomerId);
     notificationIdsToClean.push(...notifs.map((n) => n.id));
 
-    const delivered = notifs.find(
-      (n) => n.data.new_status === "DELIVERED"
-    );
+    const delivered = notifs.find((n) => n.data.new_status === "DELIVERED");
     expect(delivered).toBeDefined();
     expect(delivered!.type).toBe("order_status");
     expect(delivered!.data.old_status).toBe("SHIPPING");
@@ -197,10 +187,7 @@ describe("B2B Order Notification Trigger", () => {
   it("all trigger notifications have correct structure", async () => {
     if (!testOrderId || !realCustomerId) return;
 
-    const notifs = await getNotificationsForOrder(
-      testOrderId,
-      realCustomerId
-    );
+    const notifs = await getNotificationsForOrder(testOrderId, realCustomerId);
 
     // We should have at least 3 notifications (CONFIRMED, SHIPPING, DELIVERED)
     expect(notifs.length).toBeGreaterThanOrEqual(3);
@@ -221,19 +208,13 @@ describe("B2B Order Notification Trigger", () => {
     if (!testOrderId || !realCustomerId) return;
 
     // Get current count
-    const before = await getNotificationsForOrder(
-      testOrderId,
-      realCustomerId
-    );
+    const before = await getNotificationsForOrder(testOrderId, realCustomerId);
     const countBefore = before.length;
 
     // Update to same status (DELIVERED → DELIVERED)
     await updateOrderStatus(testOrderId, "DELIVERED");
 
-    const after = await getNotificationsForOrder(
-      testOrderId,
-      realCustomerId
-    );
+    const after = await getNotificationsForOrder(testOrderId, realCustomerId);
     notificationIdsToClean.push(...after.map((n) => n.id));
 
     // Count should not increase — trigger checks OLD.status IS NOT DISTINCT FROM NEW.status
