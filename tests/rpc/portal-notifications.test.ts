@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 // ─── Test constants ─────────────────────────────────────────────────────────
@@ -7,7 +8,7 @@ const FAKE_CUSTOMER_ID = 999999;
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 /** IDs of seeded notifications — cleaned up in afterAll */
-let seededIds: string[] = [];
+const seededIds: string[] = [];
 let realCustomerId: number | null = null;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -92,10 +93,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (seededIds.length > 0) {
-    await adminClient
-      .from("b2b_notifications")
-      .delete()
-      .in("id", seededIds);
+    await adminClient.from("b2b_notifications").delete().in("id", seededIds);
   }
 });
 
@@ -338,7 +336,13 @@ describe("Portal Notification RPCs", () => {
     it("returns 0 when all already read", async () => {
       if (!realCustomerId) return;
 
-      // After previous test, all should be read. Call again.
+      // Clear mọi unread tại thời điểm này (kể cả do test khác chen ngang
+      // tạo) — lần gọi này là "trạng thái reset".
+      await adminClient.rpc("mark_all_notifications_read", {
+        p_customer_b2b_id: realCustomerId,
+      });
+
+      // Lần thứ 2 ngay sau: không còn unread → phải trả 0.
       const { data, error } = await adminClient.rpc(
         "mark_all_notifications_read",
         { p_customer_b2b_id: realCustomerId }

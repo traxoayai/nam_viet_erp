@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 /**
@@ -12,7 +13,9 @@ import { adminClient } from "../helpers/supabase";
  * không chỉ check code PGRST.
  */
 describe("B2B Portal catalog RPCs", () => {
-  const expectRpcExecutesCleanly = (error: { code?: string; message: string } | null) => {
+  const expectRpcExecutesCleanly = (
+    error: { code?: string; message: string } | null
+  ) => {
     // Resolution errors
     expect(error?.code).not.toBe("PGRST202");
     expect(error?.code).not.toBe("PGRST203");
@@ -22,7 +25,9 @@ describe("B2B Portal catalog RPCs", () => {
     expect(error?.code).not.toBe("42703"); // undefined_column
     expect(error?.code).not.toBe("42702"); // ambiguous_column
     if (error) {
-      expect(error.message).not.toMatch(/does not exist|Could not find|Ambiguous/i);
+      expect(error.message).not.toMatch(
+        /does not exist|Could not find|Ambiguous/i
+      );
     }
   };
 
@@ -102,9 +107,16 @@ describe("B2B Portal catalog RPCs", () => {
 
   it("get_wholesale_catalog — all sort options execute cleanly", async () => {
     const sorts = [
-      "best-seller", "price-asc", "price-desc", "newest",
-      "name-asc", "name-desc", "stock-asc", "stock-desc",
-      "expiry-asc", "expiry-desc",
+      "best-seller",
+      "price-asc",
+      "price-desc",
+      "newest",
+      "name-asc",
+      "name-desc",
+      "stock-asc",
+      "stock-desc",
+      "expiry-asc",
+      "expiry-desc",
     ];
     for (const sort of sorts) {
       const { error } = await adminClient.rpc("get_wholesale_catalog", {
@@ -119,6 +131,53 @@ describe("B2B Portal catalog RPCs", () => {
       });
       expectRpcExecutesCleanly(error);
       expect(error, `sort=${sort} phải chạy sạch`).toBeNull();
+    }
+  });
+
+  // Regression guard: migration 20260424130000 thêm tier out_of_stock xuống cuối.
+  // Với mọi sort, SP 'out_of_stock' phải xuất hiện SAU các SP còn hàng trong
+  // cùng 1 trang (nếu page chứa đủ cả 2 loại). Test bằng cách lấy page đủ
+  // lớn để bao gồm cả in_stock và out_of_stock.
+  it("get_wholesale_catalog — out_of_stock luôn đẩy xuống cuối bất kể sort", async () => {
+    const sorts = [
+      "best-seller",
+      "price-asc",
+      "price-desc",
+      "name-asc",
+      "name-desc",
+      "stock-asc",
+      "expiry-asc",
+    ];
+    for (const sort of sorts) {
+      const { data, error } = await adminClient.rpc("get_wholesale_catalog", {
+        p_search: "",
+        p_category: "",
+        p_manufacturer: "",
+        p_price_min: 0,
+        p_price_max: 0,
+        p_page: 1,
+        p_page_size: 100,
+        p_sort: sort,
+      });
+      expect(error, `sort=${sort}`).toBeNull();
+      const items =
+        (data as { data?: Array<{ stock_status: string }> })?.data ?? [];
+      if (items.length === 0) continue;
+      const lastInStockIdx = (() => {
+        let last = -1;
+        items.forEach((p, i) => {
+          if (p.stock_status !== "out_of_stock") last = i;
+        });
+        return last;
+      })();
+      const firstOutOfStockIdx = items.findIndex(
+        (p) => p.stock_status === "out_of_stock"
+      );
+      if (lastInStockIdx === -1 || firstOutOfStockIdx === -1) continue; // page 1 loại chỉ 1 kind
+      expect(
+        firstOutOfStockIdx,
+        `sort=${sort}: out_of_stock (${firstOutOfStockIdx}) phải nằm sau SP còn hàng cuối cùng (${lastInStockIdx})`
+      ).toBeGreaterThan(lastInStockIdx);
     }
   });
 

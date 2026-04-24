@@ -353,11 +353,14 @@ export const useFinanceFormLogic = (
       // Nghiệp vụ: mọi phiếu tạo thủ công qua form đều phải status='pending'
       // → Thủ Quỹ vào "Quản lý Thu Chi" bấm "Xác nhận đã thu" mới chuyển
       // 'completed' → trigger auto_allocate_payment_to_orders fire → order
-      // thành 'Đã TT'. Tránh tình trạng NV KD bấm tạo phiếu thu là đơn auto
-      // 'Đã TT' dù tiền chưa thực nộp quỹ.
-      // Ngoại lệ (thu qua quét QR Timo tự động): đi webhook SePay, INSERT
-      // finance_transactions trực tiếp với status='completed', bypass form
-      // này → không cần special-case ở đây.
+      // chuyển payment_status='paid' (đơn 'Đã TT'). Tránh tình trạng NV KD
+      // bấm tạo phiếu thu là đơn auto 'Đã TT' dù tiền chưa thực nộp quỹ.
+      //
+      // Ngoại lệ (thu qua chuyển khoản Timo tự động): đi qua Gmail Pub/Sub
+      // → Edge Function `gmail-push-receiver` → RPC
+      // `process_incoming_bank_transfer` — INSERT finance_transactions với
+      // status='completed' luôn vì tiền đã thực vào tài khoản bank
+      // (email bank xác nhận), bypass form này → không cần special-case.
       const defaultStatus = "pending";
 
       const payload: CreateTransactionParams = {
