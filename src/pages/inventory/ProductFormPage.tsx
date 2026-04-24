@@ -340,7 +340,7 @@ const ProductFormPage: React.FC = () => {
                                 label={`Giá Vốn (theo ${anchorUnitName})*`}
                                 rules={[{ required: true }]}
                                 initialValue={0}
-                                tooltip="Nhập giá vốn của đơn vị Bán buôn (ví dụ: Hộp/Thùng). Hệ thống sẽ tự quy đổi ra giá cơ sở."
+                                tooltip="Nhập giá vốn của ĐV Bán Buôn (ví dụ: Hộp, Thùng). Hệ thống sẽ tự quy đổi ra ĐV Cơ Sở."
                               >
                                 <Access
                                   permission={PERMISSIONS.INVENTORY.VIEW_COST}
@@ -596,15 +596,17 @@ const ProductFormPage: React.FC = () => {
                                       >
                                         <Select
                                           onChange={handleModifyCostOrMargin}
-                                          placeholder="Loại"
+                                          placeholder="Loại đơn vị"
                                         >
-                                          <Option value="base">Cơ sở</Option>
-                                          <Option value="retail">Bán lẻ</Option>
+                                          <Option value="base">ĐV Cơ Sở</Option>
+                                          <Option value="retail">
+                                            ĐV Bán Lẻ
+                                          </Option>
                                           <Option value="wholesale">
-                                            Bán buôn
+                                            ĐV Bán Buôn
                                           </Option>
                                           <Option value="logistics">
-                                            Logistic
+                                            ĐV Logistic
                                           </Option>
                                         </Select>
                                       </Form.Item>

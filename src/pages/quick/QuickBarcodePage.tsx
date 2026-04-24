@@ -301,12 +301,9 @@ const QuickBarcodePage: React.FC = () => {
 
     try {
       // [BATCHING] Reuse logic from QuickPricePage if needed, but for simplicity here:
-      const { data: matches } = await safeRpc(
-        "match_products_from_excel",
-        {
-          p_data: itemsToMatch.map((i) => ({ name: i.name, sku: i.sku })),
-        }
-      );
+      const { data: matches } = await safeRpc("match_products_from_excel", {
+        p_data: itemsToMatch.map((i) => ({ name: i.name, sku: i.sku })),
+      });
 
       const result = itemsToMatch.map((excelItem, idx) => {
         const match = matches?.find(
@@ -465,7 +462,7 @@ const QuickBarcodePage: React.FC = () => {
       ),
     },
     {
-      title: `Mã Lẻ (${products[0]?.base_unit || "Unit"})`,
+      title: `Mã Vạch - ĐV Cơ Sở (${products[0]?.base_unit || "Unit"})`,
       dataIndex: "base_barcode",
       width: 200,
       render: (v: any, r: any) => (
@@ -482,7 +479,7 @@ const QuickBarcodePage: React.FC = () => {
       ),
     },
     {
-      title: `Mã Buôn (${products[0]?.wholesale_unit || "Unit"})`,
+      title: `Mã Vạch - ĐV Bán Buôn (${products[0]?.wholesale_unit || "Unit"})`,
       dataIndex: "wholesale_barcode",
       width: 200,
       render: (v: any, r: any) => (

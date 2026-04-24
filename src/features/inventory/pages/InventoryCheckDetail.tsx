@@ -144,12 +144,14 @@ export const InventoryCheckDetail = () => {
         // Lấy item hiện tại để biết số cũ
         const currentItem = items.find((i) => i.id === activeItemId);
         if (currentItem) {
-          const newBox = cmd.box != null ? cmd.box : currentItem.input_wholesale_qty;
-          const newUnit = cmd.unit != null ? cmd.unit : currentItem.input_base_qty;
+          const newBox =
+            cmd.box != null ? cmd.box : currentItem.input_wholesale_qty;
+          const newUnit =
+            cmd.unit != null ? cmd.unit : currentItem.input_base_qty;
 
           updateItemQuantity(activeItemId, {
-             wholesale_qty: newBox,
-             base_qty: newUnit,
+            wholesale_qty: newBox,
+            base_qty: newUnit,
           });
           message.success(`Đã nhập: ${newBox} chẵn, ${newUnit} lẻ`);
 
@@ -180,16 +182,41 @@ export const InventoryCheckDetail = () => {
     };
 
     return (
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#555', flex: 1 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 8,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#555", flex: 1 }}>
           {label}
         </div>
-        <div style={{ display: "flex", alignItems: "center", border: "1px solid #d9d9d9", borderRadius: 4, overflow: "hidden", background: "#fff", height: 36 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            border: "1px solid #d9d9d9",
+            borderRadius: 4,
+            overflow: "hidden",
+            background: "#fff",
+            height: 36,
+          }}
+        >
           <Button
             type="text"
             icon={<MinusOutlined />}
             onClick={() => onChange(Math.max(0, (value || 0) - 1))}
-            style={{ height: 36, width: 36, background: "#f5f5f5", borderRadius: 0, borderRight: "1px solid #eee", padding: 0 }}
+            style={{
+              height: 36,
+              width: 36,
+              background: "#f5f5f5",
+              borderRadius: 0,
+              borderRight: "1px solid #eee",
+              padding: 0,
+            }}
           />
 
           <InputNumber
@@ -205,7 +232,15 @@ export const InventoryCheckDetail = () => {
             controls={false}
             inputMode="numeric"
             type="number"
-            style={{ width: 55, textAlign: "center", border: "none", boxShadow: "none", fontSize: 16, fontWeight: "bold", paddingTop: 2 }}
+            style={{
+              width: 55,
+              textAlign: "center",
+              border: "none",
+              boxShadow: "none",
+              fontSize: 16,
+              fontWeight: "bold",
+              paddingTop: 2,
+            }}
             onFocus={(e) => e.target.select()}
           />
 
@@ -213,7 +248,14 @@ export const InventoryCheckDetail = () => {
             type="text"
             icon={<PlusOutlined />}
             onClick={() => onChange((value || 0) + 1)}
-            style={{ height: 36, width: 36, background: "#f5f5f5", borderRadius: 0, borderLeft: "1px solid #eee", padding: 0 }}
+            style={{
+              height: 36,
+              width: 36,
+              background: "#f5f5f5",
+              borderRadius: 0,
+              borderLeft: "1px solid #eee",
+              padding: 0,
+            }}
           />
         </div>
       </div>
@@ -225,24 +267,31 @@ export const InventoryCheckDetail = () => {
     const [localValue, setLocalValue] = useState<string | null>(value);
 
     // Sync from props
-    useEffect(() => { setLocalValue(value); }, [value]);
+    useEffect(() => {
+      setLocalValue(value);
+    }, [value]);
 
     const handleBlur = () => {
       if (localValue !== value) onChange(localValue);
     };
 
     return (
-      <div style={{ marginBottom: 12 }} onClick={(e) => e.stopPropagation()}> 
-         <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>{label}</div>
-         <Input
-            size="middle" // Đổi từ large sang middle cho gọn
-            type={type}
-            value={localValue || ""}
-            onChange={(e) => setLocalValue(e.target.value)}
-            onBlur={handleBlur}
-            onPressEnter={(e) => { handleBlur(); (e.target as HTMLInputElement).blur(); }}
-            disabled={disabled}
-         />
+      <div style={{ marginBottom: 12 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>
+          {label}
+        </div>
+        <Input
+          size="middle" // Đổi từ large sang middle cho gọn
+          type={type}
+          value={localValue || ""}
+          onChange={(e) => setLocalValue(e.target.value)}
+          onBlur={handleBlur}
+          onPressEnter={(e) => {
+            handleBlur();
+            (e.target as HTMLInputElement).blur();
+          }}
+          disabled={disabled}
+        />
       </div>
     );
   };
@@ -263,10 +312,10 @@ export const InventoryCheckDetail = () => {
       // Tính EXIST SYSTEM QTY để xem tham khảo (theo lô hoặc tổng SP)
       const sysQty = item.system_quantity || 0;
       const sysLabel = item.batch_code
-        ? "Tồn máy (lô này):"
-        : "Tồn máy (tổng SP):";
+        ? "Tồn hệ thống (lô này):"
+        : "Tồn hệ thống (tổng SP):";
       let sysDisplay = `${sysQty} ${item.base_unit_name || item.unit}`;
-      
+
       // Auto-calculate sys display summary if large units exist
       if (item.wholesale_unit_rate > 1) {
         const sysBox = Math.floor(sysQty / item.wholesale_unit_rate);
@@ -357,45 +406,110 @@ export const InventoryCheckDetail = () => {
             </div>
 
             {/* Vùng Nhập liệu (List View Dàn ngang siêu gọn) */}
-            <div style={{ borderTop: "1px dashed #e8e8e8", margin: "8px -10px 0 -10px", padding: "10px 10px 0 10px" }}>
+            <div
+              style={{
+                borderTop: "1px dashed #e8e8e8",
+                margin: "8px -10px 0 -10px",
+                padding: "10px 10px 0 10px",
+              }}
+            >
               {item.wholesale_unit_name && item.wholesale_unit_rate > 1 && (
-                 <QuantityInput label={`Hộp/Thùng (${item.wholesale_unit_name})`} value={item.input_wholesale_qty} onChange={(val: number) => onUpdateQuantity(item.id, { wholesale_qty: val })} max={99999} />
+                <QuantityInput
+                  label={`ĐV Bán Buôn (${item.wholesale_unit_name})`}
+                  value={item.input_wholesale_qty}
+                  onChange={(val: number) =>
+                    onUpdateQuantity(item.id, { wholesale_qty: val })
+                  }
+                  max={99999}
+                />
               )}
-              {item.retail_unit_name && item.retail_unit_rate > 1 && item.retail_unit_name !== item.wholesale_unit_name && (
-                 <QuantityInput label={`Vỉ/Bịch (${item.retail_unit_name})`} value={item.input_retail_qty} onChange={(val: number) => onUpdateQuantity(item.id, { retail_qty: val })} max={item.wholesale_unit_rate > item.retail_unit_rate ? Math.floor(item.wholesale_unit_rate / item.retail_unit_rate) - 1 : 99999} />
-              )}
-              <QuantityInput label={`Lẻ (${item.base_unit_name || item.unit})`} value={item.input_base_qty} onChange={(val: number) => onUpdateQuantity(item.id, { base_qty: val })} max={item.retail_unit_rate > 1 ? item.retail_unit_rate - 1 : 99999} />
+              {item.retail_unit_name &&
+                item.retail_unit_rate > 1 &&
+                item.retail_unit_name !== item.wholesale_unit_name && (
+                  <QuantityInput
+                    label={`ĐV Bán Lẻ (${item.retail_unit_name})`}
+                    value={item.input_retail_qty}
+                    onChange={(val: number) =>
+                      onUpdateQuantity(item.id, { retail_qty: val })
+                    }
+                    max={
+                      item.wholesale_unit_rate > item.retail_unit_rate
+                        ? Math.floor(
+                            item.wholesale_unit_rate / item.retail_unit_rate
+                          ) - 1
+                        : 99999
+                    }
+                  />
+                )}
+              <QuantityInput
+                label={`ĐV Cơ Sở (${item.base_unit_name || item.unit})`}
+                value={item.input_base_qty}
+                onChange={(val: number) =>
+                  onUpdateQuantity(item.id, { base_qty: val })
+                }
+                max={
+                  item.retail_unit_rate > 1 ? item.retail_unit_rate - 1 : 99999
+                }
+              />
             </div>
 
             {/* Lô / Hạn — đã có sẵn trên phiếu khi thêm SP nhiều lô; chỉnh khi đếm lại hoặc dòng thừa hàng */}
-            <div style={{ background: "#f0f5ff", borderRadius: 6, padding: 8, marginTop: 4, display: 'flex', gap: 12, alignItems: 'center' }}>
-               <div style={{ flex: 1 }}>
-                   <TrackingInput 
-                      label="Số Lô" 
-                      type="text" 
-                      value={item.batch_code} 
-                      onChange={(val: string) => onUpdateQuantity(item.id, {}, { lot_number: val })}
-                      disabled={!canDelete}
-                   />
-               </div>
-               <div style={{ flex: 1 }}>
-                   <TrackingInput 
-                      label="Hạn SD" 
-                      type="date" 
-                      value={item.expiry_date ? item.expiry_date.slice(0, 10) : ""} 
-                      onChange={(val: string) => onUpdateQuantity(item.id, {}, { expiry_date: val ? new Date(val).toISOString() : null })}
-                      disabled={!canDelete}
-                   />
-               </div>
+            <div
+              style={{
+                background: "#f0f5ff",
+                borderRadius: 6,
+                padding: 8,
+                marginTop: 4,
+                display: "flex",
+                gap: 12,
+                alignItems: "center",
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <TrackingInput
+                  label="Số Lô"
+                  type="text"
+                  value={item.batch_code}
+                  onChange={(val: string) =>
+                    onUpdateQuantity(item.id, {}, { lot_number: val })
+                  }
+                  disabled={!canDelete}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <TrackingInput
+                  label="Hạn SD"
+                  type="date"
+                  value={item.expiry_date ? item.expiry_date.slice(0, 10) : ""}
+                  onChange={(val: string) =>
+                    onUpdateQuantity(
+                      item.id,
+                      {},
+                      { expiry_date: val ? new Date(val).toISOString() : null }
+                    )
+                  }
+                  disabled={!canDelete}
+                />
+              </div>
             </div>
-            
+
             {/* NÚT TÁCH LÔ MỚI */}
             {canDelete && (
-                <div style={{ textAlign: 'right', marginTop: 8 }}>
-                    <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); useInventoryCheckStore.getState().splitCheckItem(item.id, item.product_id); }}>
-                       Thêm dòng thừa hàng / lô mới
-                    </Button>
-                </div>
+              <div style={{ textAlign: "right", marginTop: 8 }}>
+                <Button
+                  type="dashed"
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    useInventoryCheckStore
+                      .getState()
+                      .splitCheckItem(item.id, item.product_id);
+                  }}
+                >
+                  Thêm dòng thừa hàng / lô mới
+                </Button>
+              </div>
             )}
 
             {/* Dòng Chênh lệch (Feedback Real-time) */}
@@ -632,8 +746,12 @@ export const InventoryCheckDetail = () => {
               >
                 <PlusOutlined /> Thêm sản phẩm ngoài danh sách
               </div>
-              <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 8 }}>
-                Mỗi lô còn tồn trong kho được tách thành một dòng riêng trên phiếu. Dòng không gắn lô là kiểm theo tổng sản phẩm.
+              <Text
+                type="secondary"
+                style={{ fontSize: 12, display: "block", marginBottom: 8 }}
+              >
+                Mỗi lô còn tồn trong kho được tách thành một dòng riêng trên
+                phiếu. Dòng không gắn lô là kiểm theo tổng sản phẩm.
               </Text>
 
               <DebounceSelect
@@ -661,10 +779,12 @@ export const InventoryCheckDetail = () => {
                     const rows = res as unknown as PRow[];
                     const lotCounts = await Promise.all(
                       rows.map((p) =>
-                        inventoryService.searchProductBatchesForStocktake(
-                          p.id,
-                          activeSession.warehouse_id!
-                        ).then((b) => (Array.isArray(b) ? b.length : 0))
+                        inventoryService
+                          .searchProductBatchesForStocktake(
+                            p.id,
+                            activeSession.warehouse_id!
+                          )
+                          .then((b) => (Array.isArray(b) ? b.length : 0))
                       )
                     );
                     return rows.map((p, idx) => {

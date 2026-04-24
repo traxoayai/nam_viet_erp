@@ -35,13 +35,10 @@ export const PolicyProductModal: React.FC<Props> = ({
     setLoading(true);
     try {
       // [FIX] Dùng RPC chuyên dụng cho B2B để lấy đúng wholesale_unit
-      const { data } = await safeRpc(
-        "search_products_for_b2b_order",
-        {
-          p_keyword: val || "",
-          p_warehouse_id: DEFAULT_WAREHOUSE_ID, // Mặc định kho tổng để lấy thông tin chung
-        }
-      );
+      const { data } = await safeRpc("search_products_for_b2b_order", {
+        p_keyword: val || "",
+        p_warehouse_id: DEFAULT_WAREHOUSE_ID, // Mặc định kho tổng để lấy thông tin chung
+      });
 
       // RPC này trả về mảng trực tiếp, không cần .data wrapper
       setProducts((data ?? []) as unknown as Record<string, unknown>[]);
@@ -74,14 +71,14 @@ export const PolicyProductModal: React.FC<Props> = ({
         <Space direction="vertical" size={0}>
           {/* RPC trả về wholesale_unit nếu có */}
           {r.wholesale_unit ? (
-            <Tag color="blue">{r.wholesale_unit} (Sỉ)</Tag>
+            <Tag color="blue">{r.wholesale_unit} (Bán Buôn)</Tag>
           ) : (
-            <Tag>{r.unit || "Lẻ"}</Tag>
+            <Tag>{r.unit || "Bán Lẻ"}</Tag>
           )}
           {/* Hiển thị quy cách đóng gói nếu có */}
           {r.items_per_carton > 1 && (
             <span style={{ fontSize: 10, color: "#888" }}>
-              1 Thùng = {r.items_per_carton} Lẻ
+              1 Thùng = {r.items_per_carton} ĐV Bán Lẻ
             </span>
           )}
         </Space>

@@ -70,7 +70,7 @@ export const ProductSearchB2B = ({
         <div style={{ fontSize: 11, color: "#666" }}>
           <Tag color="blue">{p.sku}</Tag>
           {/* Hiển thị đơn vị bán buôn */}
-          <Tag color="orange">{p.wholesale_unit || "Lẻ"}</Tag>
+          <Tag color="orange">{p.wholesale_unit || "Bán Lẻ"}</Tag>
           <EnvironmentOutlined /> {p.shelf_location}
         </div>
       </div>

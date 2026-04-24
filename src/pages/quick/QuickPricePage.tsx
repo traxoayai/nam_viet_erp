@@ -1,7 +1,5 @@
 // src/pages/quick/QuickPricePage.tsx
-import {
-
-} from "@ant-design/icons";
+import {} from "@ant-design/icons";
 import {
   Table,
   Input,
@@ -526,7 +524,7 @@ const QuickPricePage: React.FC = () => {
       ),
     },
     {
-      title: `Giá Vốn (${products[0]?.wholesale_unit || "ĐV Buôn"})`,
+      title: `Giá Vốn (${products[0]?.wholesale_unit || "ĐV Bán Buôn"})`,
       key: "actual_cost",
       width: 150,
       render: (_: any, record: ProductPriceRow) => (
@@ -570,7 +568,7 @@ const QuickPricePage: React.FC = () => {
       ),
     },
     {
-      title: `Giá Lẻ (${products[0]?.retail_unit_name || "ĐV Lẻ"})`,
+      title: `Giá Lẻ (${products[0]?.retail_unit_name || "ĐV Bán Lẻ"})`,
       key: "retail_price",
       width: 150,
       render: (_: any, record: ProductPriceRow) => (
@@ -606,7 +604,7 @@ const QuickPricePage: React.FC = () => {
       ),
     },
     {
-      title: `Giá Buôn (${products[0]?.wholesale_unit || "ĐV Buôn"})`,
+      title: `Giá Buôn (${products[0]?.wholesale_unit || "ĐV Bán Buôn"})`,
       key: "wholesale_price",
       width: 150,
       render: (_: any, record: ProductPriceRow) => (
@@ -633,28 +631,49 @@ const QuickPricePage: React.FC = () => {
   ];
 
   const renderMobileCard = (item: ProductPriceRow) => (
-    <Card 
-      key={item.key} 
-      size="small" 
-      style={{ marginBottom: 12, borderRadius: 12, border: item.is_dirty ? '1px solid #1890ff' : '1px solid #f0f0f0' }}
+    <Card
+      key={item.key}
+      size="small"
+      style={{
+        marginBottom: 12,
+        borderRadius: 12,
+        border: item.is_dirty ? "1px solid #1890ff" : "1px solid #f0f0f0",
+      }}
       styles={{ body: { padding: 12 } }}
     >
       {/* Header Card: Ảnh + Tên + Nút Save */}
-      <Row wrap={false} align="middle" justify="space-between" style={{ marginBottom: 12 }}>
+      <Row
+        wrap={false}
+        align="middle"
+        justify="space-between"
+        style={{ marginBottom: 12 }}
+      >
         <Col flex="auto">
           <Space>
-            {item.imageUrl ? <Avatar shape="square" size={40} src={item.imageUrl} /> : <Avatar shape="square" size={40} icon={<FileImageOutlined />} />}
+            {item.imageUrl ? (
+              <Avatar shape="square" size={40} src={item.imageUrl} />
+            ) : (
+              <Avatar shape="square" size={40} icon={<FileImageOutlined />} />
+            )}
             <div>
-              <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.2 }}>{item.name}</div>
-              <div style={{ fontSize: 12, color: '#888' }}>SKU: {item.sku}</div>
+              <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.2 }}>
+                {item.name}
+              </div>
+              <div style={{ fontSize: 12, color: "#888" }}>SKU: {item.sku}</div>
             </div>
           </Space>
         </Col>
         <Col>
-          <Button 
-            type="primary" 
-            shape="circle" 
-            icon={savingId === item.id ? <SyncOutlined spin /> : <CheckCircleOutlined />} 
+          <Button
+            type="primary"
+            shape="circle"
+            icon={
+              savingId === item.id ? (
+                <SyncOutlined spin />
+              ) : (
+                <CheckCircleOutlined />
+              )
+            }
             disabled={!item.is_dirty}
             onClick={() => handleSaveRow(item)}
           />
@@ -662,49 +681,101 @@ const QuickPricePage: React.FC = () => {
       </Row>
 
       {/* Body Card: Các Input xếp dọc 100% width */}
-      <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8 }}>
+      <div style={{ background: "#f8f9fa", padding: 12, borderRadius: 8 }}>
         <Row gutter={[8, 8]}>
           <Col span={24}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Giá Vốn ({item.wholesale_unit || 'ĐV Buôn'})</Text>
-            <InputNumber 
-              style={{ width: '100%' }} 
-              value={item.actual_cost} 
-              formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Giá Vốn ({item.wholesale_unit || "ĐV Bán Buôn"})
+            </Text>
+            <InputNumber
+              style={{ width: "100%" }}
+              value={item.actual_cost}
+              formatter={(value) =>
+                `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+              }
               parser={(value: any) => value?.replace(/\$\s?|(,*)/g, "")}
-              onChange={(val) => handleCellChange(item.key, "actual_cost", val)} 
+              onChange={(val) => handleCellChange(item.key, "actual_cost", val)}
             />
           </Col>
 
           {/* Khối Bán Lẻ */}
           <Col span={12}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Lãi Lẻ</Text>
-            <Space.Compact style={{ width: '100%' }}>
-              <InputNumber style={{ width: '50%' }} value={item.retail_margin} onChange={(val) => handleCellChange(item.key, "retail_margin", val)} />
-              <Select style={{ width: '50%' }} value={item.retail_margin_type} onChange={(val) => handleCellChange(item.key, "retail_margin_type", val)}>
-                <Option value="percent">%</Option><Option value="amount">VNĐ</Option>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Lãi Lẻ
+            </Text>
+            <Space.Compact style={{ width: "100%" }}>
+              <InputNumber
+                style={{ width: "50%" }}
+                value={item.retail_margin}
+                onChange={(val) =>
+                  handleCellChange(item.key, "retail_margin", val)
+                }
+              />
+              <Select
+                style={{ width: "50%" }}
+                value={item.retail_margin_type}
+                onChange={(val) =>
+                  handleCellChange(item.key, "retail_margin_type", val)
+                }
+              >
+                <Option value="percent">%</Option>
+                <Option value="amount">VNĐ</Option>
               </Select>
             </Space.Compact>
           </Col>
           <Col span={12}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Giá Lẻ ({item.retail_unit_name || "ĐV Lẻ"})</Text>
-            <div style={{ fontWeight: "bold", color: "#1677ff", marginTop: 4, fontSize: 16 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Giá Lẻ ({item.retail_unit_name || "ĐV Bán Lẻ"})
+            </Text>
+            <div
+              style={{
+                fontWeight: "bold",
+                color: "#1677ff",
+                marginTop: 4,
+                fontSize: 16,
+              }}
+            >
               {new Intl.NumberFormat("vi-VN").format(item.retail_price)} ₫
             </div>
           </Col>
 
           {/* Khối Bán Buôn */}
           <Col span={12}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Lãi Buôn</Text>
-            <Space.Compact style={{ width: '100%' }}>
-              <InputNumber style={{ width: '50%' }} value={item.wholesale_margin} onChange={(val) => handleCellChange(item.key, "wholesale_margin", val)} />
-              <Select style={{ width: '50%' }} value={item.wholesale_margin_type} onChange={(val) => handleCellChange(item.key, "wholesale_margin_type", val)}>
-                <Option value="percent">%</Option><Option value="amount">VNĐ</Option>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Lãi Buôn
+            </Text>
+            <Space.Compact style={{ width: "100%" }}>
+              <InputNumber
+                style={{ width: "50%" }}
+                value={item.wholesale_margin}
+                onChange={(val) =>
+                  handleCellChange(item.key, "wholesale_margin", val)
+                }
+              />
+              <Select
+                style={{ width: "50%" }}
+                value={item.wholesale_margin_type}
+                onChange={(val) =>
+                  handleCellChange(item.key, "wholesale_margin_type", val)
+                }
+              >
+                <Option value="percent">%</Option>
+                <Option value="amount">VNĐ</Option>
               </Select>
             </Space.Compact>
           </Col>
           <Col span={12}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Giá Buôn ({item.wholesale_unit || "ĐV Buôn"})</Text>
-            <div style={{ fontWeight: "bold", color: "#52c41a", marginTop: 4, fontSize: 16 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Giá Buôn ({item.wholesale_unit || "ĐV Bán Buôn"})
+            </Text>
+            <div
+              style={{
+                fontWeight: "bold",
+                color: "#52c41a",
+                marginTop: 4,
+                fontSize: 16,
+              }}
+            >
               {new Intl.NumberFormat("vi-VN").format(item.wholesale_price)} ₫
             </div>
           </Col>
@@ -715,8 +786,20 @@ const QuickPricePage: React.FC = () => {
 
   return (
     <Card
-      style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}
-      styles={{ body: { display: 'flex', flexDirection: 'column', flex: 1, padding: '16px', overflow: 'hidden' } }}
+      style={{
+        height: "calc(100vh - 64px)",
+        display: "flex",
+        flexDirection: "column",
+      }}
+      styles={{
+        body: {
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          padding: "16px",
+          overflow: "hidden",
+        },
+      }}
     >
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
@@ -753,10 +836,10 @@ const QuickPricePage: React.FC = () => {
       </Row>
 
       {/* Khối Nội Dung */}
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
         {isMobile ? (
           <div style={{ paddingBottom: 60 }}>
-            {products.map(item => renderMobileCard(item))}
+            {products.map((item) => renderMobileCard(item))}
           </div>
         ) : (
           <Table
@@ -765,7 +848,7 @@ const QuickPricePage: React.FC = () => {
             rowKey="key"
             loading={loading}
             pagination={false}
-            scroll={{ x: 1300, y: 'calc(100vh - 280px)' }}
+            scroll={{ x: 1300, y: "calc(100vh - 280px)" }}
             size="small"
             bordered
           />

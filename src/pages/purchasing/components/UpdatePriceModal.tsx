@@ -1,11 +1,22 @@
 // src/pages/purchasing/components/UpdatePriceModal.tsx
 import { ArrowRightOutlined } from "@ant-design/icons";
-import { Modal, Table, InputNumber, Button, message, Tag, Typography } from "antd";
+import {
+  Modal,
+  Table,
+  InputNumber,
+  Button,
+  message,
+  Tag,
+  Typography,
+} from "antd";
 import React, { useEffect, useState } from "react";
 
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
-import { resolveProductUnits, type ProductUnit } from "@/pages/purchasing/utils/resolveProductUnits";
+import {
+  resolveProductUnits,
+  type ProductUnit,
+} from "@/pages/purchasing/utils/resolveProductUnits";
 import { formatCurrency } from "@/shared/utils/format";
 
 const { Text } = Typography;
@@ -90,15 +101,21 @@ export const UpdatePriceModal: React.FC<Props> = ({
       const defaultSelected: React.Key[] = [];
 
       products?.forEach((p: Record<string, unknown>) => {
-        const inputItem = items.find((i) => i.product_id === p.id) as Record<string, unknown> | undefined;
+        const inputItem = items.find((i) => i.product_id === p.id) as
+          | Record<string, unknown>
+          | undefined;
         if (!inputItem) return;
 
-        const poItem = poItems?.find((pi: Record<string, unknown>) => pi.product_id === p.id) as Record<string, unknown> | undefined;
-        const importUnitName = inputItem.unit || poItem?.uom_ordered || poItem?.unit || p.wholesale_unit;
+        const poItem = poItems?.find(
+          (pi: Record<string, unknown>) => pi.product_id === p.id
+        ) as Record<string, unknown> | undefined;
+        const importUnitName =
+          inputItem.unit ||
+          poItem?.uom_ordered ||
+          poItem?.unit ||
+          p.wholesale_unit;
         const units = p.product_units as unknown as ProductUnit[];
-        const importUnit = units.find(
-          (u) => u.unit_name === importUnitName
-        );
+        const importUnit = units.find((u) => u.unit_name === importUnitName);
         const importRate =
           (importUnit?.conversion_rate as number) ||
           (poItem?.conversion_factor as number) ||
@@ -106,16 +123,23 @@ export const UpdatePriceModal: React.FC<Props> = ({
           1;
         const newBaseCost = (inputItem.final_unit_cost as number) / importRate;
 
-        const { wholesaleUnitObj, retailUnitObj, hasWholesale, wholesaleRate, retailRate } =
-          resolveProductUnits({
-            wholesale_unit: p.wholesale_unit as string | null,
-            retail_unit: p.retail_unit as string | null,
-            product_units: units,
-          });
+        const {
+          wholesaleUnitObj,
+          retailUnitObj,
+          hasWholesale,
+          wholesaleRate,
+          retailRate,
+        } = resolveProductUnits({
+          wholesale_unit: p.wholesale_unit as string | null,
+          retail_unit: p.retail_unit as string | null,
+          product_units: units,
+        });
 
         if (!retailUnitObj) return;
 
-        const snapshot = (oldCosts as Record<string, unknown>[]).find((o) => o.id === p.id);
+        const snapshot = (oldCosts as Record<string, unknown>[]).find(
+          (o) => o.id === p.id
+        );
         const oldBaseCost = snapshot
           ? (snapshot.actual_cost as number)
           : (p.actual_cost as number) || 0;
@@ -293,7 +317,8 @@ export const UpdatePriceModal: React.FC<Props> = ({
         <div>
           <b>{text}</b>
           <div style={{ fontSize: 12, color: "#666" }}>
-            Lẻ: {r.retail_unit_name} | Buôn: {r.wholesale_unit_name}
+            ĐV Bán Lẻ: {r.retail_unit_name} | ĐV Bán Buôn:{" "}
+            {r.wholesale_unit_name}
           </div>
         </div>
       ),
@@ -422,7 +447,7 @@ export const UpdatePriceModal: React.FC<Props> = ({
 
   return (
     <Modal
-      title="Cập nhật Giá bán lẻ & Bán buôn (Dựa trên Lợi nhuận cài đặt)"
+      title="Cập nhật Giá ĐV Bán Lẻ & ĐV Bán Buôn (Dựa trên Lợi nhuận cài đặt)"
       open={visible}
       onCancel={onClose}
       width={1300}
