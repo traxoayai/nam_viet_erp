@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 
 import { adminClient, isProduction } from "../helpers/supabase";
 
@@ -64,6 +64,17 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
   let __orderSeq = Math.floor(Math.random() * 8000 + 1000);
   const nextRnd = () => (__orderSeq++ % 9000) + 1000;
 
+  // Cleanup leftover test orders SO-<tomorrow>-XXXX để tránh collision khi
+  // test trước đó fail giữa chừng không cleanup. Chỉ xoá code format test.
+  beforeAll(async () => {
+    if (isProduction) return;
+    const yymmdd = new Date(Date.now() + 86400000)
+      .toISOString()
+      .slice(2, 10)
+      .replace(/-/g, "");
+    await adminClient.from("orders").delete().like("code", `SO-${yymmdd}-%`);
+  });
+
   it.skipIf(isProduction)(
     "Memo có text phụ vẫn match đơn → tx completed + đơn CONFIRMED",
     async () => {
@@ -77,7 +88,11 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
       await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
 
       // Code format hợp regex: SO-YYMMDD-NNNN (NNNN random tránh collision khi re-run)
-      const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+      // Use tomorrow's date để test SO code không va chạm với prod-like data hôm nay
+      const yymmdd = new Date(Date.now() + 86400000)
+        .toISOString()
+        .slice(2, 10)
+        .replace(/-/g, "");
       const rnd = nextRnd();
       const code = `SO-${yymmdd}-${rnd}`;
       const { orderId } = await createTestOrder(adminClient, {
@@ -154,10 +169,13 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
         name: marker,
       });
       await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
-      const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const rnd = nextRnd();
-      const code1 = `SO-${yymmdd}-${rnd}`;
-      const code2 = `SO-${yymmdd}-${rnd + 1}`;
+      // Use tomorrow's date để test SO code không va chạm với prod-like data hôm nay
+      const yymmdd = new Date(Date.now() + 86400000)
+        .toISOString()
+        .slice(2, 10)
+        .replace(/-/g, "");
+      const code1 = `SO-${yymmdd}-${nextRnd()}`;
+      const code2 = `SO-${yymmdd}-${nextRnd()}`;
 
       // Đơn 1 outstanding 30k
       const { orderId: id1 } = await createTestOrder(adminClient, {
@@ -226,10 +244,13 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
         name: marker,
       });
       await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
-      const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const rnd = nextRnd();
-      const code1 = `SO-${yymmdd}-${rnd}`;
-      const code2 = `SO-${yymmdd}-${rnd + 1}`;
+      // Use tomorrow's date để test SO code không va chạm với prod-like data hôm nay
+      const yymmdd = new Date(Date.now() + 86400000)
+        .toISOString()
+        .slice(2, 10)
+        .replace(/-/g, "");
+      const code1 = `SO-${yymmdd}-${nextRnd()}`;
+      const code2 = `SO-${yymmdd}-${nextRnd()}`;
 
       await createTestOrder(adminClient, {
         customerB2bId: custId,
@@ -283,7 +304,11 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
         name: marker,
       });
       await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
-      const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+      // Use tomorrow's date để test SO code không va chạm với prod-like data hôm nay
+      const yymmdd = new Date(Date.now() + 86400000)
+        .toISOString()
+        .slice(2, 10)
+        .replace(/-/g, "");
       const code = `SO-${yymmdd}-${nextRnd()}`;
 
       await createTestOrder(adminClient, {
@@ -342,7 +367,11 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
         name: marker,
       });
       await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
-      const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+      // Use tomorrow's date để test SO code không va chạm với prod-like data hôm nay
+      const yymmdd = new Date(Date.now() + 86400000)
+        .toISOString()
+        .slice(2, 10)
+        .replace(/-/g, "");
       const code = `SO-${yymmdd}-${nextRnd()}`;
       await createTestOrder(adminClient, {
         customerB2bId: custId,
