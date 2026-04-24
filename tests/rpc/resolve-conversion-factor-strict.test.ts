@@ -31,18 +31,18 @@ const markers: string[] = [];
 
 describe("_resolve_conversion_factor_strict", () => {
   it.skipIf(isProduction)(
-    "hint_factor > 0 → trả hint, không lookup product_units",
+    "helper v2: hint > 0 nhưng UOM không tồn tại → RAISE (không dùng hint)",
     async () => {
-      const { data, error } = await adminClient.rpc(
+      const { error } = await adminClient.rpc(
         "_resolve_conversion_factor_strict" as never,
         {
-          p_product_id: 999_999_999, // product không tồn tại
-          p_uom: "Xyz", // UOM không tồn tại
+          p_product_id: 999_999_999,
+          p_uom: "Xyz",
           p_explicit_factor: 42,
         }
       );
-      expect(error).toBeNull();
-      expect(Number(data)).toBe(42);
+      expect(error).not.toBeNull();
+      expect(error?.message).toMatch(/Đơn vị.*không hợp lệ/);
     }
   );
 
