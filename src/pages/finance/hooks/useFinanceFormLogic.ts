@@ -12,11 +12,39 @@ import { CreateTransactionParams } from "@/features/finance/types/finance";
 import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
 import { uploadFile } from "@/shared/api/storageService";
 
+type PartnerOption = {
+  label: string;
+  value: number;
+  original: Record<string, unknown> & { name?: string };
+};
+
+interface FinanceFormValues {
+  flow?: "in" | "out";
+  business_type?: "trade" | "advance" | "reimbursement" | "other";
+  partner_type?: string;
+  partner_id?: number;
+  partner_name?: string;
+  supplier_id?: number;
+  employee_id?: string;
+  fund_account_id?: number;
+  amount?: number;
+  category_id?: number;
+  transaction_date?: { toISOString: () => string };
+  description?: string;
+  cash_tally?: Record<string, number>;
+  ref_advance_id?: number;
+  ref_type?: string;
+  ref_id?: string;
+  advanced_amount?: number;
+  actual_spent?: number;
+  b2b_bulk_allocations?: Array<Record<string, unknown>>;
+}
+
 export const useFinanceFormLogic = (
   open: boolean,
   onCancel: () => void,
   initialFlow: "in" | "out",
-  initialValues?: any
+  initialValues?: Record<string, unknown>
 ) => {
   const { message } = App.useApp();
   const [form] = Form.useForm();
@@ -42,7 +70,7 @@ export const useFinanceFormLogic = (
     holder: "",
   });
 
-  const [partnerOptions, setPartnerOptions] = useState<any[]>([]);
+  const [partnerOptions, setPartnerOptions] = useState<PartnerOption[]>([]);
   const [currentDebt, setCurrentDebt] = useState<number | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
@@ -58,14 +86,20 @@ export const useFinanceFormLogic = (
         form.setFieldsValue(initialValues);
 
         // Update state if business_type changed
-        if (initialValues.business_type) {
-          setBusinessType(initialValues.business_type);
+        const bt = initialValues.business_type;
+        if (
+          bt === "trade" ||
+          bt === "advance" ||
+          bt === "reimbursement" ||
+          bt === "other"
+        ) {
+          setBusinessType(bt);
         }
 
         // Fix: If supplier_id provided -> Load Bank Info
-        if (initialValues.supplier_id && suppliers.length > 0) {
-          // Delay slightly to ensure suppliers loaded? Or just depend on suppliers
-          const s = suppliers.find((x) => x.id === initialValues.supplier_id);
+        const supplierId = initialValues.supplier_id;
+        if (typeof supplierId === "number" && suppliers.length > 0) {
+          const s = suppliers.find((x) => x.id === supplierId);
           if (s) {
             setManualBankInfo({
               bin: s.bank_bin || "",
@@ -103,7 +137,7 @@ export const useFinanceFormLogic = (
     form,
     users.length,
     fetchUsers,
-    suppliers.length,
+    suppliers,
     fetchSuppliers,
     categories.length,
     fetchCategories,
@@ -201,11 +235,10 @@ export const useFinanceFormLogic = (
 
         // Map data cho Select
         setPartnerOptions(
-          dataB2C.map((item: any) => ({
-            label: `${item.name} (${item.phone})`,
-            value: item.id, // ID khách hàng
-            // Lưu object gốc để dùng sau nếu cần
-            original: item,
+          (dataB2C as Array<Record<string, unknown>>).map((item) => ({
+            label: `${String(item.name ?? "")} (${String(item.phone ?? "")})`,
+            value: Number(item.id),
+            original: item as PartnerOption["original"],
           }))
         );
       } else {
@@ -213,10 +246,10 @@ export const useFinanceFormLogic = (
         const dataB2B = await financeService.searchCustomersB2B(keyword);
 
         setPartnerOptions(
-          dataB2B.map((item: any) => ({
-            label: `${item.name} - MST: ${item.tax_code}`,
-            value: item.id,
-            original: item,
+          (dataB2B as Array<Record<string, unknown>>).map((item) => ({
+            label: `${String(item.name ?? "")} - MST: ${String(item.tax_code ?? "")}`,
+            value: Number(item.id),
+            original: item as PartnerOption["original"],
           }))
         );
       }
@@ -274,7 +307,7 @@ export const useFinanceFormLogic = (
     setCashTallyTotal(total);
   };
 
-  const handleFinish = async (values: any) => {
+  const handleFinish = async (values: FinanceFormValues) => {
     setLoading(true);
     try {
       let evidenceUrl = null;
@@ -284,7 +317,7 @@ export const useFinanceFormLogic = (
             fileList[0].originFileObj,
             "finance_evidence"
           );
-        } catch (err: any) {
+        } catch (err) {
           console.warn("Lỗi upload ảnh:", err);
         }
       }
@@ -300,39 +333,38 @@ export const useFinanceFormLogic = (
       }
 
       // [NEW] B2B Bulk Payment Logic (Gọi RPC riêng biệt của Core thay vì tạo phiếu đơn lẻ)
-      if (values.b2b_bulk_allocations && values.b2b_bulk_allocations.length > 0) {
-         await financeService.processBulkPayment({
-             p_customer_id: Number(values.partner_id),
-             p_total_amount: Number(values.amount),
-             p_allocations: values.b2b_bulk_allocations,
-             p_fund_account_id: values.fund_account_id,
-             p_description: values.description
-         });
-         message.success("Phân bổ thanh toán và gạch nợ B2B thành công!");
-         onCancel();
-         return true;
+      if (
+        values.b2b_bulk_allocations &&
+        values.b2b_bulk_allocations.length > 0
+      ) {
+        await financeService.processBulkPayment({
+          p_customer_id: Number(values.partner_id),
+          p_total_amount: Number(values.amount),
+          p_allocations: values.b2b_bulk_allocations,
+          p_fund_account_id: values.fund_account_id,
+          p_description: values.description,
+        });
+        message.success("Phân bổ thanh toán và gạch nợ B2B thành công!");
+        onCancel();
+        return true;
       }
 
-      // [OPTION A — user approved 2026-04-23]
-      // Phiếu THU (flow='in', business_type='trade'): default status='completed'
-      // để trigger auto_allocate_payment_to_orders fire ngay → 4 bước PM
-       // (noti KH, chuyển status đơn, chuyển payment_status, noti NV KD/Kho)
-      // chạy tức thời thay vì chờ NV duyệt thủ công.
-      //
-      // Phiếu CHI (flow='out') + các flow='in' khác: GIỮ 'pending' để kế toán
-      // duyệt kép — outflow quan trọng hơn cần kiểm soát kép.
-      const isReceivePaymentForOrder =
-        values.flow === "in" &&
-        values.business_type === "trade" &&
-        values.ref_type === "order" &&
-        !!values.ref_id;
-      const defaultStatus = isReceivePaymentForOrder ? "completed" : "pending";
+      // [REVERT 2026-04-24] Bỏ auto-completed cho phiếu thu order.
+      // Nghiệp vụ: mọi phiếu tạo thủ công qua form đều phải status='pending'
+      // → Thủ Quỹ vào "Quản lý Thu Chi" bấm "Xác nhận đã thu" mới chuyển
+      // 'completed' → trigger auto_allocate_payment_to_orders fire → order
+      // thành 'Đã TT'. Tránh tình trạng NV KD bấm tạo phiếu thu là đơn auto
+      // 'Đã TT' dù tiền chưa thực nộp quỹ.
+      // Ngoại lệ (thu qua quét QR Timo tự động): đi webhook SePay, INSERT
+      // finance_transactions trực tiếp với status='completed', bypass form
+      // này → không cần special-case ở đây.
+      const defaultStatus = "pending";
 
       const payload: CreateTransactionParams = {
-        p_flow: values.flow,
-        p_business_type: values.business_type,
-        p_fund_id: values.fund_account_id,
-        p_amount: values.amount,
+        p_flow: values.flow as "in" | "out",
+        p_business_type: values.business_type ?? "trade",
+        p_fund_id: Number(values.fund_account_id),
+        p_amount: Number(values.amount),
         p_category_id: values.category_id,
         p_transaction_date: values.transaction_date
           ? values.transaction_date.toISOString()
@@ -349,37 +381,52 @@ export const useFinanceFormLogic = (
       };
 
       // Xử lý đối tượng mặc định từ Select Form
-      if (values.business_type === "advance" || values.business_type === "reimbursement") {
+      if (
+        values.business_type === "advance" ||
+        values.business_type === "reimbursement"
+      ) {
         payload.p_partner_type = "employee";
         payload.p_partner_id = values.employee_id;
       } else if (values.business_type === "trade") {
         // [FIX BỌC THÉP] Truyền chính xác type mà user đã chọn trên Form
-        payload.p_partner_type = values.partner_type; 
-        
+        payload.p_partner_type =
+          values.partner_type as CreateTransactionParams["p_partner_type"];
+
         if (values.partner_type === "supplier") {
           // Fallback id nếu truyền nhầm sang partner_id
-          payload.p_partner_id = values.supplier_id || values.partner_id; 
-          
-          const sup = suppliers.find((s) => s.id === Number(payload.p_partner_id));
+          const rawId = values.supplier_id ?? values.partner_id;
+          payload.p_partner_id = rawId != null ? String(rawId) : undefined;
+
+          const sup = suppliers.find(
+            (s) => s.id === Number(payload.p_partner_id)
+          );
           // Fallback name: Ưu tiên tên trong Store, nếu không có thì lấy tên từ form UI
           payload.p_partner_name = sup ? sup.name : values.partner_name;
-        } else if (values.partner_type === "customer" || values.partner_type === "customer_b2b") {
-          payload.p_partner_id = values.partner_id;
+        } else if (
+          values.partner_type === "customer" ||
+          values.partner_type === "customer_b2b"
+        ) {
+          payload.p_partner_id =
+            values.partner_id != null ? String(values.partner_id) : undefined;
           payload.p_partner_name = values.partner_name;
-        } else if (values.partner_type === "shipping_partner" || values.partner_type === "other") {
+        } else if (
+          values.partner_type === "shipping_partner" ||
+          values.partner_type === "other"
+        ) {
           // Nhà xe hoặc Khác hiện tại chỉ nhập tên tay (Chưa có select ID)
           payload.p_partner_name = values.partner_name;
         }
       } else {
-         payload.p_partner_type = "other";
-         payload.p_partner_name = values.partner_name;
+        payload.p_partner_type = "other";
+        payload.p_partner_name = values.partner_name;
       }
 
       const success = await createTransaction(payload);
       if (success) onCancel();
       return success;
-    } catch (error: any) {
-      message.error(error.message || "Có lỗi xảy ra");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Có lỗi xảy ra";
+      message.error(msg);
       return false;
     } finally {
       setLoading(false);
