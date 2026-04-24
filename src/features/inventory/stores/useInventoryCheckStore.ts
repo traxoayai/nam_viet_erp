@@ -3,12 +3,13 @@ import { message } from "antd";
 import { debounce } from "lodash";
 import { create } from "zustand";
 
-import { moneyMul, moneyAdd, moneySub } from "@/shared/utils/money";
 import { inventoryService } from "../api/inventoryService";
 import {
   InventoryCheckItem,
   InventoryCheckSession,
 } from "../types/inventory.types";
+
+import { moneyMul, moneyAdd, moneySub } from "@/shared/utils/money";
 
 interface InventoryCheckState {
   activeSession: InventoryCheckSession | null;
@@ -24,9 +25,16 @@ interface InventoryCheckState {
   // Hàm update 3 tiers + tracking
   updateItemQuantity: (
     itemId: number,
-    quantities: { wholesale_qty?: number; retail_qty?: number; base_qty?: number },
+    quantities: {
+      wholesale_qty?: number;
+      retail_qty?: number;
+      base_qty?: number;
+    },
     tracking?: { lot_number?: string; expiry_date?: string }
   ) => void;
+
+  // Xác nhận dòng khớp tồn máy (nút "Đủ/OK") — commit actual=system, counted_at=NOW
+  confirmItemMatching: (itemId: number) => Promise<void>;
 
   // Điều hướng
   setActiveItem: (id: number) => void;
@@ -55,7 +63,7 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
         const { session, items } =
           await inventoryService.getCheckSession(checkId);
         set({
-          activeSession: session as any,
+          activeSession: session as unknown as InventoryCheckSession,
           items,
           // Mặc định highlight thằng đầu tiên
           activeItemId: items.length > 0 ? items[0].id : null,
@@ -84,10 +92,21 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
         let total = 0;
         if (item.wholesale_unit_name && item.retail_unit_name) {
           // Always sum all 3 tiers when both units exist
-          total = moneyAdd(moneyAdd(moneyMul(wQty, wRate), moneyMul(rQty, rRate)), bQty);
-        } else if (item.wholesale_unit_name && !item.retail_unit_name && wRate > 1) {
+          total = moneyAdd(
+            moneyAdd(moneyMul(wQty, wRate), moneyMul(rQty, rRate)),
+            bQty
+          );
+        } else if (
+          item.wholesale_unit_name &&
+          !item.retail_unit_name &&
+          wRate > 1
+        ) {
           total = moneyAdd(moneyMul(wQty, wRate), bQty);
-        } else if (!item.wholesale_unit_name && item.retail_unit_name && rRate > 1) {
+        } else if (
+          !item.wholesale_unit_name &&
+          item.retail_unit_name &&
+          rRate > 1
+        ) {
           total = moneyAdd(moneyMul(rQty, rRate), bQty);
         } else if (wRate > 1) {
           total = moneyAdd(moneyMul(wQty, wRate), bQty);
@@ -121,6 +140,65 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
       }
     },
 
+    confirmItemMatching: async (itemId) => {
+      try {
+        // Flush debounce trước để không đè lên update RPC tiếp theo
+        const pending = debouncedSaveMap.get(itemId);
+        if (pending) {
+          pending.flush();
+          const p = pendingSaves.get(itemId);
+          if (p) await p;
+        }
+
+        const res = await inventoryService.confirmCheckItemMatching(itemId);
+        const row = res as {
+          status?: string;
+          message?: string;
+          actual_quantity?: number;
+          system_quantity?: number;
+        } | null;
+
+        if (row?.status === "error") {
+          message.error(row.message || "Không thể xác nhận khớp");
+          return;
+        }
+
+        const system = row?.system_quantity ?? 0;
+        set((state) => ({
+          items: state.items.map((it) => {
+            if (it.id !== itemId) return it;
+            const wRate = it.wholesale_unit_rate || 1;
+            const rRate = it.retail_unit_rate || 1;
+            // Phân rã ngược để UI hiển thị consistent: ưu tiên wholesale > retail > base
+            let remaining = system;
+            let wQty = 0;
+            let rQty = 0;
+            if (it.wholesale_unit_name && wRate > 1) {
+              wQty = Math.floor(remaining / wRate);
+              remaining -= wQty * wRate;
+            }
+            if (it.retail_unit_name && rRate > 1) {
+              rQty = Math.floor(remaining / rRate);
+              remaining -= rQty * rRate;
+            }
+            return {
+              ...it,
+              input_wholesale_qty: wQty,
+              input_retail_qty: rQty,
+              input_base_qty: remaining,
+              actual_quantity: system,
+              system_quantity: system,
+              diff_quantity: 0,
+              counted_at: new Date().toISOString(),
+            };
+          }),
+        }));
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Lỗi xác nhận khớp";
+        message.error(msg);
+      }
+    },
+
     setActiveItem: (id) => set({ activeItemId: id }),
 
     moveToNextItem: () => {
@@ -144,8 +222,9 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
         await flushAllPendingSaves();
         await inventoryService.completeCheck(activeSession.id, userId);
         message.success("Đã hoàn tất kiểm kê!");
-      } catch (err: any) {
-        message.error("Lỗi: " + err.message);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Lỗi hoàn tất";
+        message.error("Lỗi: " + msg);
       }
     },
 
@@ -157,8 +236,9 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
         await inventoryService.updateCheckInfo(activeSession.id, note);
 
         // Cập nhật lại note trong state local
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        set({ activeSession: { ...activeSession, note } as any });
+        set({
+          activeSession: { ...activeSession, note } as InventoryCheckSession,
+        });
 
         message.success({
           content: "Đã lưu thông tin phiếu!",
@@ -175,8 +255,12 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
       if (!activeSession) return;
 
       await inventoryService.cancelCheck(activeSession.id);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      set({ activeSession: { ...activeSession, status: "CANCELLED" } as any });
+      set({
+        activeSession: {
+          ...activeSession,
+          status: "CANCELLED",
+        } as InventoryCheckSession,
+      });
     },
 
     // [IMPLEMENTATION]
@@ -225,9 +309,11 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
         } else {
           message.error(result.message || "Không thể thêm sản phẩm");
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(error);
-        message.error(error.message || "Lỗi thêm sản phẩm");
+        message.error(
+          error instanceof Error ? error.message : "Lỗi thêm sản phẩm"
+        );
       } finally {
         set({ loading: false });
       }
@@ -240,8 +326,11 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
         // Xóa khỏi state local
         set((state) => ({ items: state.items.filter((i) => i.id !== itemId) }));
         message.success("Đã xóa sản phẩm khỏi phiếu");
-      } catch (err: any) {
-        message.error("Lỗi xóa sản phẩm: " + err.message);
+      } catch (err: unknown) {
+        message.error(
+          "Lỗi xóa sản phẩm: " +
+            (err instanceof Error ? err.message : "Lỗi không xác định")
+        );
       } finally {
         set({ loading: false });
       }
@@ -252,13 +341,19 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
       if (!activeSession) return;
       set({ loading: true });
       try {
-        const data = await inventoryService.splitCheckItem(activeSession.id, productId);
-        
+        const data = await inventoryService.splitCheckItem(
+          activeSession.id,
+          productId
+        );
+
         message.success("Đã tách dòng để nhập Lô mới!");
         await get().fetchSessionDetails(activeSession.id);
         set({ activeItemId: data.id });
-      } catch (err: any) {
-        message.error("Lỗi tách lô: " + err.message);
+      } catch (err: unknown) {
+        message.error(
+          "Lỗi tách lô: " +
+            (err instanceof Error ? err.message : "Lỗi không xác định")
+        );
       } finally {
         set({ loading: false });
       }

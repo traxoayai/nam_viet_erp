@@ -32,9 +32,15 @@ export interface InventoryCheckItem {
   product_name: string;
   sku: string;
   image_url?: string;
-  
+
   // Product units
-  product_units?: any[]; // For dynamic rendering of 3 inputs
+  product_units?: Array<{
+    unit_name: string;
+    conversion_rate: number;
+    is_base: boolean;
+    is_direct_sale: boolean;
+    unit_type: string;
+  }>; // For dynamic rendering of 3 inputs
   base_unit_name?: string;
   retail_unit_name?: string;
   retail_unit_rate?: number;

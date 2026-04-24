@@ -33,6 +33,7 @@ import SpeechRecognition, {
 
 import { inventoryService } from "../api/inventoryService";
 import { useInventoryCheckStore } from "../stores/useInventoryCheckStore";
+import { InventoryCheckItem } from "../types/inventory.types";
 
 import { useAuth } from "@/app/contexts/AuthProvider";
 import { DebounceSelect } from "@/shared/ui/common/DebounceSelect";
@@ -53,6 +54,7 @@ export const InventoryCheckDetail = () => {
     activeSession,
     fetchSessionDetails,
     updateItemQuantity,
+    confirmItemMatching,
     activeItemId,
     setActiveItem,
     moveToNextItem,
@@ -72,6 +74,8 @@ export const InventoryCheckDetail = () => {
   // 1. Load dữ liệu khi vào trang
   useEffect(() => {
     if (id) fetchSessionDetails(Number(id));
+    // fetchSessionDetails là stable Zustand action, không cần thêm deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // 2. Logic Auto-Scroll: Khi activeItemId đổi -> Cuộn tới đó
@@ -134,12 +138,22 @@ export const InventoryCheckDetail = () => {
       console.log("Voice Command:", command, "Text:", transcript);
 
       if (command.type === "NEXT" || command.type === "CONFIRM") {
+        // Commit actual=system trước khi next (không thì backend sẽ xuất trắng)
+        if (activeItemId) {
+          confirmItemMatching(activeItemId).finally(() => {
+            moveToNextItem();
+          });
+        } else {
+          moveToNextItem();
+        }
         message.success("Đã xác nhận (Next)");
-        moveToNextItem();
         resetTranscript();
       } else if (command.type === "UPDATE" && activeItemId) {
-        // [FIX 1]: Ép kiểu 'any' để TypeScript nhận diện được box và unit
-        const cmd = command as any;
+        const cmd = command as {
+          type: string;
+          box: number | null;
+          unit: number | null;
+        };
 
         // Lấy item hiện tại để biết số cũ
         const currentItem = items.find((i) => i.id === activeItemId);
@@ -164,11 +178,23 @@ export const InventoryCheckDetail = () => {
     }, 800); // Đợi 800ms sau khi ngừng nói
 
     return () => clearTimeout(timer);
+    // confirmItemMatching/moveToNextItem/resetTranscript/updateItemQuantity là stable Zustand actions
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript, activeItemId, items]);
   // --- VOICE LOGIC END ---
 
   // [FIXED] QuantityInput Optimized for Mobile
-  const QuantityInput = ({ label, value, onChange, max }: any) => {
+  const QuantityInput = ({
+    label,
+    value,
+    onChange,
+    max,
+  }: {
+    label: string;
+    value: number;
+    onChange: (val: number) => void;
+    max?: number;
+  }) => {
     const [localValue, setLocalValue] = useState<number | null>(value);
 
     useEffect(() => {
@@ -189,6 +215,7 @@ export const InventoryCheckDetail = () => {
           alignItems: "center",
           marginBottom: 8,
         }}
+        role="presentation"
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ fontSize: 13, fontWeight: 600, color: "#555", flex: 1 }}>
@@ -263,7 +290,19 @@ export const InventoryCheckDetail = () => {
   };
 
   // [FIXED] TrackingInput with stopPropagation
-  const TrackingInput = ({ label, value, type, onChange, disabled }: any) => {
+  const TrackingInput = ({
+    label,
+    value,
+    type,
+    onChange,
+    disabled,
+  }: {
+    label: string;
+    value: string;
+    type: string;
+    onChange: (val: string) => void;
+    disabled?: boolean;
+  }) => {
     const [localValue, setLocalValue] = useState<string | null>(value);
 
     // Sync from props
@@ -272,11 +311,15 @@ export const InventoryCheckDetail = () => {
     }, [value]);
 
     const handleBlur = () => {
-      if (localValue !== value) onChange(localValue);
+      if (localValue !== value) onChange(localValue ?? "");
     };
 
     return (
-      <div style={{ marginBottom: 12 }} onClick={(e) => e.stopPropagation()}>
+      <div
+        style={{ marginBottom: 12 }}
+        role="presentation"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>
           {label}
         </div>
@@ -308,29 +351,53 @@ export const InventoryCheckDetail = () => {
       listening,
       transcript,
       itemRef,
-    }: any) => {
+    }: {
+      item: InventoryCheckItem;
+      isActive: boolean;
+      canDelete: boolean;
+      onActivate: (id: number) => void;
+      onUpdateQuantity: (
+        itemId: number,
+        quantities: {
+          wholesale_qty?: number;
+          retail_qty?: number;
+          base_qty?: number;
+        },
+        tracking?: { lot_number?: string; expiry_date?: string }
+      ) => void;
+      onRemoveItem: (id: number) => Promise<void>;
+      listening: boolean;
+      transcript: string;
+      itemRef: (el: HTMLDivElement | null) => void;
+    }) => {
       // Tính EXIST SYSTEM QTY để xem tham khảo (theo lô hoặc tổng SP)
       const sysQty = item.system_quantity || 0;
       const sysLabel = item.batch_code
         ? "Tồn hệ thống (lô này):"
         : "Tồn hệ thống (tổng SP):";
-      let sysDisplay = `${sysQty} ${item.base_unit_name || item.unit}`;
+      const baseUnitLabel = item.base_unit_name || "Viên";
+      let sysDisplay = `${sysQty} ${baseUnitLabel}`;
 
       // Auto-calculate sys display summary if large units exist
-      if (item.wholesale_unit_rate > 1) {
-        const sysBox = Math.floor(sysQty / item.wholesale_unit_rate);
-        const sysUnit = sysQty % item.wholesale_unit_rate;
-        sysDisplay = `${sysBox} ${item.wholesale_unit_name} ${sysUnit > 0 ? `- ${sysUnit} ${item.base_unit_name || item.unit}` : ""}`;
-      } else if (item.retail_unit_rate > 1) {
-        const sysBox = Math.floor(sysQty / item.retail_unit_rate);
-        const sysUnit = sysQty % item.retail_unit_rate;
-        sysDisplay = `${sysBox} ${item.retail_unit_name} ${sysUnit > 0 ? `- ${sysUnit} ${item.base_unit_name || item.unit}` : ""}`;
+      if ((item.wholesale_unit_rate ?? 0) > 1) {
+        const wRate = item.wholesale_unit_rate!;
+        const sysBox = Math.floor(sysQty / wRate);
+        const sysUnit = sysQty % wRate;
+        sysDisplay = `${sysBox} ${item.wholesale_unit_name} ${sysUnit > 0 ? `- ${sysUnit} ${baseUnitLabel}` : ""}`;
+      } else if ((item.retail_unit_rate ?? 0) > 1) {
+        const rRate = item.retail_unit_rate!;
+        const sysBox = Math.floor(sysQty / rRate);
+        const sysUnit = sysQty % rRate;
+        sysDisplay = `${sysBox} ${item.retail_unit_name} ${sysUnit > 0 ? `- ${sysUnit} ${baseUnitLabel}` : ""}`;
       }
 
       return (
         <div
           ref={itemRef}
+          role="button"
+          tabIndex={0}
           onClick={() => onActivate(item.id)}
+          onKeyDown={(e) => e.key === "Enter" && onActivate(item.id)}
           style={{
             marginBottom: 16,
             border: isActive ? "2px solid #1890ff" : "1px solid #e8e8e8",
@@ -374,7 +441,7 @@ export const InventoryCheckDetail = () => {
               </Text>
             </div>
             {/* Nút xóa */}
-            {canDelete && (
+            {canDelete ? (
               <Button
                 type="text"
                 danger
@@ -384,7 +451,7 @@ export const InventoryCheckDetail = () => {
                   onRemoveItem(item.id);
                 }}
               />
-            )}
+            ) : null}
           </div>
 
           {/* Phần so sánh & Nhập liệu */}
@@ -413,42 +480,47 @@ export const InventoryCheckDetail = () => {
                 padding: "10px 10px 0 10px",
               }}
             >
-              {item.wholesale_unit_name && item.wholesale_unit_rate > 1 && (
+              {item.wholesale_unit_name &&
+              (item.wholesale_unit_rate ?? 0) > 1 ? (
                 <QuantityInput
                   label={`ĐV Bán Buôn (${item.wholesale_unit_name})`}
-                  value={item.input_wholesale_qty}
+                  value={item.input_wholesale_qty ?? 0}
                   onChange={(val: number) =>
                     onUpdateQuantity(item.id, { wholesale_qty: val })
                   }
                   max={99999}
                 />
-              )}
+              ) : null}
               {item.retail_unit_name &&
-                item.retail_unit_rate > 1 &&
-                item.retail_unit_name !== item.wholesale_unit_name && (
-                  <QuantityInput
-                    label={`ĐV Bán Lẻ (${item.retail_unit_name})`}
-                    value={item.input_retail_qty}
-                    onChange={(val: number) =>
-                      onUpdateQuantity(item.id, { retail_qty: val })
-                    }
-                    max={
-                      item.wholesale_unit_rate > item.retail_unit_rate
-                        ? Math.floor(
-                            item.wholesale_unit_rate / item.retail_unit_rate
-                          ) - 1
-                        : 99999
-                    }
-                  />
-                )}
+              (item.retail_unit_rate ?? 0) > 1 &&
+              item.retail_unit_name !== item.wholesale_unit_name ? (
+                <QuantityInput
+                  label={`ĐV Bán Lẻ (${item.retail_unit_name})`}
+                  value={item.input_retail_qty ?? 0}
+                  onChange={(val: number) =>
+                    onUpdateQuantity(item.id, { retail_qty: val })
+                  }
+                  max={
+                    (item.wholesale_unit_rate ?? 0) >
+                    (item.retail_unit_rate ?? 0)
+                      ? Math.floor(
+                          (item.wholesale_unit_rate ?? 1) /
+                            (item.retail_unit_rate ?? 1)
+                        ) - 1
+                      : 99999
+                  }
+                />
+              ) : null}
               <QuantityInput
-                label={`ĐV Cơ Sở (${item.base_unit_name || item.unit})`}
-                value={item.input_base_qty}
+                label={`ĐV Cơ Sở (${item.base_unit_name || "Viên"})`}
+                value={item.input_base_qty ?? 0}
                 onChange={(val: number) =>
                   onUpdateQuantity(item.id, { base_qty: val })
                 }
                 max={
-                  item.retail_unit_rate > 1 ? item.retail_unit_rate - 1 : 99999
+                  (item.retail_unit_rate ?? 0) > 1
+                    ? (item.retail_unit_rate ?? 1) - 1
+                    : 99999
                 }
               />
             </div>
@@ -485,7 +557,11 @@ export const InventoryCheckDetail = () => {
                     onUpdateQuantity(
                       item.id,
                       {},
-                      { expiry_date: val ? new Date(val).toISOString() : null }
+                      {
+                        expiry_date: val
+                          ? new Date(val).toISOString()
+                          : undefined,
+                      }
                     )
                   }
                   disabled={!canDelete}
@@ -494,7 +570,7 @@ export const InventoryCheckDetail = () => {
             </div>
 
             {/* NÚT TÁCH LÔ MỚI */}
-            {canDelete && (
+            {canDelete ? (
               <div style={{ textAlign: "right", marginTop: 8 }}>
                 <Button
                   type="dashed"
@@ -510,18 +586,18 @@ export const InventoryCheckDetail = () => {
                   Thêm dòng thừa hàng / lô mới
                 </Button>
               </div>
-            )}
+            ) : null}
 
             {/* Dòng Chênh lệch (Feedback Real-time) */}
             <div style={{ marginTop: 8, textAlign: "right", height: 20 }}>
-              {item.diff_quantity !== 0 ? (
+              {(item.diff_quantity ?? 0) !== 0 ? (
                 <Text
-                  type={item.diff_quantity > 0 ? "success" : "danger"}
+                  type={(item.diff_quantity ?? 0) > 0 ? "success" : "danger"}
                   strong
                 >
-                  {item.diff_quantity > 0 ? "Thừa" : "Thiếu"}:{" "}
-                  {item.diff_quantity > 0 ? "+" : ""}
-                  {item.diff_quantity} {item.unit}
+                  {(item.diff_quantity ?? 0) > 0 ? "Thừa" : "Thiếu"}:{" "}
+                  {(item.diff_quantity ?? 0) > 0 ? "+" : ""}
+                  {item.diff_quantity ?? 0} {item.base_unit_name || "Viên"}
                 </Text>
               ) : (
                 <Text type="success" style={{ fontSize: 12 }}>
@@ -594,6 +670,7 @@ export const InventoryCheckDetail = () => {
       );
     }
   );
+  ItemCard.displayName = "ItemCard";
 
   // Hàm xử lý hoàn tất
   const onComplete = () => {
@@ -875,13 +952,21 @@ export const InventoryCheckDetail = () => {
                         ),
                       };
                     });
-                  } catch (e) {
+                  } catch {
                     return [];
                   }
                 }}
                 style={{ width: "100%" }}
-                onChange={(newValue: any) => {
-                  if (newValue) addItemToCheck(Number(newValue.value));
+                onChange={(newValue: unknown) => {
+                  if (
+                    newValue &&
+                    typeof newValue === "object" &&
+                    "value" in newValue
+                  ) {
+                    addItemToCheck(
+                      Number((newValue as { value: number }).value)
+                    );
+                  }
                 }}
                 value={null}
               />
@@ -899,7 +984,7 @@ export const InventoryCheckDetail = () => {
             onRemoveItem={removeItem}
             listening={listening}
             transcript={transcript}
-            itemRef={(el: any) => {
+            itemRef={(el: HTMLDivElement | null) => {
               itemRefs.current[item.id] = el;
             }}
           />
@@ -954,7 +1039,14 @@ export const InventoryCheckDetail = () => {
             color: "#fff",
             fontWeight: "bold",
           }}
-          onClick={moveToNextItem}
+          onClick={async () => {
+            // CRITICAL: commit actual=system xuống DB trước khi next,
+            // không thì backend sẽ xuất TRẮNG toàn bộ tồn (bug 4/2026).
+            if (activeItemId) {
+              await confirmItemMatching(activeItemId);
+            }
+            moveToNextItem();
+          }}
         >
           <CheckCircleOutlined /> Đủ / OK
         </Button>
