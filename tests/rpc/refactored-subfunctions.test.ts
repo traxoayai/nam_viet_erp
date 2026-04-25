@@ -2,6 +2,13 @@ import { describe, it, expect } from "vitest";
 
 import { adminClient } from "../helpers/supabase";
 
+import {
+  createTestWarehouse,
+  createTestProduct,
+  createTestBatch,
+  cleanupTestData,
+} from "./helpers/fixtures";
+
 describe("Refactored sub-functions", () => {
   // === _resolve_conversion_factor ===
   describe("_resolve_conversion_factor", () => {
@@ -51,41 +58,46 @@ describe("Refactored sub-functions", () => {
   });
 
   // === _validate_stock_availability ===
-  // TODO: sau migration 130000 (_strict conversion factor), cần setup product_units
-  // đầy đủ trước khi call; strict RAISE "Đơn vị không hợp lệ" thay vì "Không đủ tồn".
-  describe.skip("_validate_stock_availability", () => {
-    it("rejects when stock insufficient", async () => {
-      const { data: wh } = await adminClient
-        .from("warehouses")
-        .select("id")
-        .limit(1)
-        .maybeSingle();
+  // Setup test product + product_units fixture (UOM "Hộp" rate=1 base) +
+  // inventory_batches qty cố định để tránh strict-resolve throw "Đơn vị không
+  // hợp lệ". Cleanup theo marker.
+  describe("_validate_stock_availability", () => {
+    const marker = `VSA-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    let warehouseId: number;
+    let productId: number;
+    let baseUnitName: string;
 
-      if (!wh) return;
-
-      const { error } = await adminClient.rpc("_validate_stock_availability", {
-        p_warehouse_id: wh.id,
-        p_items: [{ product_id: 1, quantity: 999999, uom: "Viên" }],
+    it("setup fixture: product + base unit + batch qty=10", async () => {
+      warehouseId = await createTestWarehouse(adminClient, { name: marker });
+      const p = await createTestProduct(adminClient, { name: marker });
+      productId = p.productId;
+      baseUnitName = p.baseUnitName;
+      await createTestBatch(adminClient, productId, warehouseId, {
+        quantity: 10,
       });
-      expect(error).toBeDefined();
+    });
+
+    it("rejects when stock insufficient (quantity 999999 > kho 10)", async () => {
+      const { error } = await adminClient.rpc("_validate_stock_availability", {
+        p_warehouse_id: warehouseId,
+        p_items: [
+          { product_id: productId, quantity: 999999, uom: baseUnitName },
+        ],
+      });
+      expect(error).not.toBeNull();
       expect(error!.message).toContain("Không đủ tồn kho");
     });
 
-    it("passes when stock is sufficient", async () => {
-      const { data: batch } = await adminClient
-        .from("inventory_batches")
-        .select("product_id, warehouse_id, quantity")
-        .gt("quantity", 5)
-        .limit(1)
-        .maybeSingle();
-
-      if (!batch) return;
-
+    it("passes when stock is sufficient (quantity 1 ≤ kho 10)", async () => {
       const { error } = await adminClient.rpc("_validate_stock_availability", {
-        p_warehouse_id: batch.warehouse_id,
-        p_items: [{ product_id: batch.product_id, quantity: 1, uom: "Viên" }],
+        p_warehouse_id: warehouseId,
+        p_items: [{ product_id: productId, quantity: 1, uom: baseUnitName }],
       });
       expect(error).toBeNull();
+    });
+
+    it("cleanup fixture", async () => {
+      await cleanupTestData(adminClient, [marker]);
     });
   });
 });

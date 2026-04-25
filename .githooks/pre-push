@@ -23,6 +23,9 @@ if ! curl -fsS --max-time 3 "$SUPA_URL" >/dev/null 2>&1; then
   exit 0
 fi
 
+echo "[pre-push]    Seeding test users (idempotent)…"
+node scripts/seed-test-users.mjs >/dev/null
+
 echo "[pre-push]    Supabase OK — running RPC tests…"
 npm run test:rpc --silent -- --reporter=dot
 

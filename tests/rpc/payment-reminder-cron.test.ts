@@ -28,15 +28,11 @@ import {
 describe("check_pending_payment_reminders", () => {
   const skipOnProd = isProduction;
 
-  // Kiểm tra giờ VN hiện tại — nếu ngoài 08–20 function return sớm → test skip
-  const vnNow = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" })
-  );
-  const vnHour = vnNow.getHours();
-  const inBusinessHours = vnHour >= 8 && vnHour < 20;
-  const skipForHour = !inBusinessHours;
+  // Test dùng p_force=1 để bypass hour-check (migration 310000) → chạy bất kể
+  // giờ VN. Cron mặc định gọi không param (p_force=0) → vẫn giữ business
+  // hour 08-20 VN.
 
-  it.skipIf(skipOnProd || skipForHour)(
+  it.skipIf(skipOnProd)(
     "insert in-app notification cho đơn PENDING age >= 2h (mốc 1)",
     async () => {
       const marker = `PAYREMIND-${Date.now()}`;
@@ -76,9 +72,10 @@ describe("check_pending_payment_reminders", () => {
           .eq("type", "order_status");
         const countBefore = (before ?? []).length;
 
-        // Fire cron function
+        // Fire cron function (force bypass hour-check)
         const { error: rpcErr } = await adminClient.rpc(
-          "check_pending_payment_reminders"
+          "check_pending_payment_reminders",
+          { p_force: 1 }
         );
         expect(rpcErr).toBeNull();
 
@@ -99,7 +96,9 @@ describe("check_pending_payment_reminders", () => {
         expect(d.milestone_idx).toBe(1);
 
         // IDEMPOTENT: gọi lần 2 cùng mốc → KHÔNG insert thêm
-        await adminClient.rpc("check_pending_payment_reminders");
+        await adminClient.rpc("check_pending_payment_reminders", {
+          p_force: 1,
+        });
         const { data: after2 } = await adminClient
           .from("b2b_notifications")
           .select("id")
@@ -114,7 +113,9 @@ describe("check_pending_payment_reminders", () => {
           .update({ created_at: past12h })
           .eq("id", orderId);
 
-        await adminClient.rpc("check_pending_payment_reminders");
+        await adminClient.rpc("check_pending_payment_reminders", {
+          p_force: 1,
+        });
         const { data: after3 } = await adminClient
           .from("b2b_notifications")
           .select("id, data")
@@ -137,7 +138,7 @@ describe("check_pending_payment_reminders", () => {
     60000
   );
 
-  it.skipIf(skipOnProd || skipForHour)(
+  it.skipIf(skipOnProd)(
     "KHÔNG nhắc đơn age < 2h (chưa tới mốc 1)",
     async () => {
       const marker = `PAYREMIND-YOUNG-${Date.now()}`;
@@ -169,7 +170,8 @@ describe("check_pending_payment_reminders", () => {
           .eq("id", orderId);
 
         const { error: rpcErr } = await adminClient.rpc(
-          "check_pending_payment_reminders"
+          "check_pending_payment_reminders",
+          { p_force: 1 }
         );
         expect(rpcErr).toBeNull();
 
@@ -185,11 +187,12 @@ describe("check_pending_payment_reminders", () => {
     60000
   );
 
-  it.skipIf(skipOnProd || !skipForHour)(
-    "SKIP: ngoài giờ 08–20 VN → function return sớm (no-op)",
+  it.skipIf(skipOnProd)(
+    "p_force=0 (cron default) ngoài giờ 08-20 VN: function no-op",
     async () => {
-      // Test này chỉ có ý nghĩa khi VN hour ∉ [08, 20). Ngoài giờ:
-      // function return ngay không làm gì → không error.
+      // Verify default p_force=0 → hour-check active. Test chạy cả trong và
+      // ngoài giờ; trong giờ thì không guarantee no-op (sẽ scan), nhưng
+      // luôn không error. Đó là phần verify backward-compat của cron.
       const { error } = await adminClient.rpc(
         "check_pending_payment_reminders"
       );
