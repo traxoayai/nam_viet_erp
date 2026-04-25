@@ -1,4 +1,5 @@
 // src/pages/sales/B2BOrderListPage.tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   DollarCircleOutlined,
   FileTextOutlined,
@@ -44,28 +45,38 @@ import { b2bService } from "@/features/sales/api/b2bService";
 import { salesService } from "@/features/sales/api/salesService";
 import { ConfirmPaidButton } from "@/features/sales/components/ConfirmPaidButton";
 import { useOrderPrint } from "@/features/sales/hooks/useOrderPrint"; // [NEW]
+import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint";
 import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders";
-
-// import { useSalesOrders } from "@/features/sales/hooks/useSalesOrders"; // Duplicate removed
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
 import { supabase } from "@/shared/lib/supabaseClient";
 import { FilterAction } from "@/shared/ui/listing/FilterAction";
 import { SmartTable } from "@/shared/ui/listing/SmartTable";
 import { StatHeader } from "@/shared/ui/listing/StatHeader";
 import { parseBankStatement } from "@/shared/utils/bankStatementParser";
-
-// --- MODULE HÓA ĐƠN & TÀI CHÍNH ---
 import { generateInvoiceExcel } from "@/shared/utils/invoiceExcelGenerator";
-import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint";
+import { isPaid as isPaidAmount } from "@/shared/utils/money";
+import { parseNumericOrZero } from "@/shared/utils/numeric";
 
 const { Text } = Typography;
+
+const isOrderPaid = (record: {
+  payment_status?: string;
+  paid_amount?: number | string | null;
+  final_amount?: number | string | null;
+}): boolean => {
+  if (record.payment_status === "paid") return true;
+  return isPaidAmount(record.paid_amount, record.final_amount);
+};
 
 interface B2BOrderListPageProps {
   defaultSource?: string;
   hideSourceFilter?: boolean;
 }
 
-const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageProps = {}) => {
+const B2BOrderListPage = ({
+  defaultSource,
+  hideSourceFilter,
+}: B2BOrderListPageProps = {}) => {
   const navigate = useNavigate();
 
   // --- 1. STATE & HOOKS ---
@@ -232,7 +243,7 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
       cancelButtonProps: { style: { display: "none" } },
       closable: true,
       maskClosable: true,
-      footer: (_, {}) => (
+      footer: () => (
         <div style={{ textAlign: "right", marginTop: 10 }}>
           <Button onClick={() => Modal.destroyAll()} style={{ marginRight: 8 }}>
             Hủy
@@ -303,12 +314,17 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
       message.warning("Vui lòng nhập lý do hủy đơn!");
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
-      const rawRes = await b2bService.cancelOrderSafe(selectedOrderToCancel.id, cancelReason);
+      const rawRes = await b2bService.cancelOrderSafe(
+        selectedOrderToCancel.id,
+        cancelReason
+      );
       const res = rawRes as unknown as { message?: string } | null;
-      message.success(res?.message || `Đã hủy đơn hàng ${selectedOrderToCancel.code}`);
+      message.success(
+        res?.message || `Đã hủy đơn hàng ${selectedOrderToCancel.code}`
+      );
       setCancelModalVisible(false);
       setCancelReason("");
       setSelectedOrderToCancel(null);
@@ -328,17 +344,30 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
       cancelText: "Hủy",
       onOk: async () => {
         try {
-          message.loading({ content: "Đang tạo bản sao...", key: "cloneOrder" });
+          message.loading({
+            content: "Đang tạo bản sao...",
+            key: "cloneOrder",
+          });
           const rawClone = await b2bService.cloneOrder(order.id);
-          const cloneRes = rawClone as unknown as { success: boolean; new_code: string; new_order_id: string } | null;
+          const cloneRes = rawClone as unknown as {
+            success: boolean;
+            new_code: string;
+            new_order_id: string;
+          } | null;
 
           if (cloneRes?.success) {
-            message.success({ content: `Đã nhân bản thành công mã: ${cloneRes.new_code}`, key: "cloneOrder" });
+            message.success({
+              content: `Đã nhân bản thành công mã: ${cloneRes.new_code}`,
+              key: "cloneOrder",
+            });
             // Chuyển hướng thẳng vào trang Sửa Đơn của đơn mới tạo
             navigate(`/b2b/orders/edit/${cloneRes.new_order_id}`);
           }
         } catch (e: any) {
-          message.error({ content: "Lỗi nhân bản: " + e.message, key: "cloneOrder" });
+          message.error({
+            content: "Lỗi nhân bản: " + e.message,
+            key: "cloneOrder",
+          });
         }
       },
     });
@@ -356,7 +385,9 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
           returnQty: 0, // Mặc định trả 0
           refundPrice: item.unit_price, // Mặc định giá hoàn = giá gốc
           // [FIX]: Ưu tiên kho xuất hàng của đơn, nếu không có mới lấy kho đầu tiên
-          returnWarehouseId: order.warehouse_id || (warehouses.length > 0 ? warehouses[0].id : null),
+          returnWarehouseId:
+            order.warehouse_id ||
+            (warehouses.length > 0 ? warehouses[0].id : null),
         };
       })
       .filter((i: any) => i.maxReturnable > 0); // Chỉ lấy món nào còn có thể trả
@@ -372,7 +403,7 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
   };
 
   const handleReturnAll = () => {
-    setReturnItemsState((prev) => 
+    setReturnItemsState((prev) =>
       prev.map((item) => ({
         ...item,
         returnQty: item.maxReturnable, // Set max số lượng
@@ -382,27 +413,32 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
 
   const handleSubmitReturn = async () => {
     if (!returnFundId) return message.error("Vui lòng chọn Quỹ hoàn tiền!");
-    
-    const itemsToReturn = returnItemsState.filter(i => i.returnQty > 0);
-    if (itemsToReturn.length === 0) return message.error("Vui lòng nhập số lượng trả cho ít nhất 1 sản phẩm!");
+
+    const itemsToReturn = returnItemsState.filter((i) => i.returnQty > 0);
+    if (itemsToReturn.length === 0)
+      return message.error(
+        "Vui lòng nhập số lượng trả cho ít nhất 1 sản phẩm!"
+      );
 
     // [FIX]: Chặn lỗi 23502 (Not null constraint)
-    const missingWarehouse = itemsToReturn.some(i => !i.returnWarehouseId);
+    const missingWarehouse = itemsToReturn.some((i) => !i.returnWarehouseId);
     if (missingWarehouse) {
-      return message.error("Vui lòng chọn kho nhập về cho tất cả các sản phẩm được trả lại!");
+      return message.error(
+        "Vui lòng chọn kho nhập về cho tất cả các sản phẩm được trả lại!"
+      );
     }
 
     const payload = {
       order_id: orderToReturn.id,
       fund_account_id: returnFundId,
       note: returnNote,
-      items: itemsToReturn.map(i => ({
+      items: itemsToReturn.map((i) => ({
         order_item_id: i.id,
         product_id: i.product_id,
         quantity: i.returnQty,
         refund_price: i.refundPrice,
-        warehouse_id: i.returnWarehouseId
-      }))
+        warehouse_id: i.returnWarehouseId,
+      })),
     };
 
     try {
@@ -484,7 +520,9 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
               )}
 
             {/* NÚT HỦY ĐƠN (Chỉ hiện khi đơn chưa Hủy và chưa Hoàn tất) */}
-            {!["CANCELLED", "DELIVERED", "COMPLETED"].includes(record.status) && (
+            {!["CANCELLED", "DELIVERED", "COMPLETED"].includes(
+              record.status
+            ) && (
               <Button
                 type="text"
                 danger
@@ -620,16 +658,20 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
             CANCELLED: { color: "red", text: "Đã hủy" },
           };
           const s = map[status] || { color: "default", text: status };
-          
+
           // Kiểm tra xem đơn này có mặt hàng nào bị trả lại không
-          const hasReturns = record.order_items?.some((item: any) => (item.quantity_returned || 0) > 0);
+          const hasReturns = record.order_items?.some(
+            (item: any) => (item.quantity_returned || 0) > 0
+          );
 
           return (
             <Space direction="vertical" size={2}>
               <Tag color={s.color}>{s.text}</Tag>
-              {hasReturns && (
-                <Tag color="volcano" style={{ fontSize: 10 }}>Có hàng trả lại</Tag>
-              )}
+              {hasReturns ? (
+                <Tag color="volcano" style={{ fontSize: 10 }}>
+                  Có hàng trả lại
+                </Tag>
+              ) : null}
             </Space>
           );
         },
@@ -669,10 +711,7 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
         key: "payment_status",
         width: 130,
         render: (_: any, record: any) => {
-          const isPaid =
-            record.payment_status === "paid" ||
-            (record.paid_amount >= record.final_amount &&
-              record.final_amount > 0);
+          const isPaid = isOrderPaid(record);
           if (isPaid)
             return (
               <Tag color="success" icon={<CheckCircleOutlined />}>
@@ -722,6 +761,7 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
         ),
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
@@ -738,7 +778,9 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
 
   const totalAmountToCollect = useMemo(() => {
     return selectedOrders.reduce((sum: number, order: any) => {
-      const amount = order.final_amount - (order.paid_amount || 0);
+      const amount =
+        parseNumericOrZero(order.final_amount) -
+        parseNumericOrZero(order.paid_amount);
       return sum + (amount > 0 ? amount : 0);
     }, 0);
   }, [selectedOrders]);
@@ -971,6 +1013,7 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
           </div>
 
           <div style={{ marginTop: 16 }}>
+            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
             <label style={{ fontWeight: 500 }}>
               Chọn Quỹ nhận tiền <span style={{ color: "red" }}>*</span>
             </label>
@@ -987,6 +1030,7 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
           </div>
 
           <div style={{ marginTop: 16 }}>
+            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
             <label style={{ fontWeight: 500 }}>Ghi chú:</label>
             <Input.TextArea
               style={{ marginTop: 8 }}
@@ -1051,7 +1095,10 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
         okButtonProps={{ danger: true }}
         cancelText="Đóng"
       >
-        <Text>Vui lòng nhập lý do hủy đơn hàng này. (Hệ thống sẽ tự động hoàn trả tồn kho và trừ công nợ nếu có).</Text>
+        <Text>
+          Vui lòng nhập lý do hủy đơn hàng này. (Hệ thống sẽ tự động hoàn trả
+          tồn kho và trừ công nợ nếu có).
+        </Text>
         <Input.TextArea
           rows={3}
           style={{ marginTop: 12 }}
@@ -1072,41 +1119,51 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
         okText="Xác nhận Trả hàng & Hoàn tiền"
         okButtonProps={{ danger: true }}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Space direction="vertical" style={{ width: "100%" }} size="large">
           <Row gutter={16}>
             <Col span={12}>
               <Text strong>Quỹ hoàn tiền (Nguồn chi):</Text>
-              <Select 
-                style={{ width: '100%', marginTop: 8 }}
+              <Select
+                style={{ width: "100%", marginTop: 8 }}
                 value={returnFundId}
                 onChange={setReturnFundId}
-                options={fundAccounts.map(f => ({ label: f.name, value: f.id }))}
+                options={fundAccounts.map((f) => ({
+                  label: f.name,
+                  value: f.id,
+                }))}
               />
             </Col>
             <Col span={12}>
               <Text strong>Lý do trả hàng:</Text>
-              <Input.TextArea 
-                rows={2} 
+              <Input.TextArea
+                rows={2}
                 style={{ marginTop: 8 }}
                 placeholder="Ghi rõ lý do (Móp méo, Cận date...)"
                 value={returnNote}
-                onChange={e => setReturnNote(e.target.value)}
+                onChange={(e) => setReturnNote(e.target.value)}
               />
             </Col>
           </Row>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: -8 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: -8,
+            }}
+          >
             <Text strong>Chi tiết mặt hàng trả lại:</Text>
-            <Button 
-              type="dashed" 
+            <Button
+              type="dashed"
               onClick={handleReturnAll}
-              style={{ borderColor: '#fa8c16', color: '#fa8c16' }}
+              style={{ borderColor: "#fa8c16", color: "#fa8c16" }}
             >
               Chọn Trả Toàn Bộ
             </Button>
           </div>
-          
-          <AntTable 
+
+          <AntTable
             dataSource={returnItemsState}
             pagination={false}
             rowKey="id"
@@ -1115,22 +1172,28 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
               {
                 title: "Sản phẩm",
                 dataIndex: "product_name",
-                render: (val, record: any) => <Text strong>{record.product?.name || val}</Text>
+                render: (val, record: any) => (
+                  <Text strong>{record.product?.name || val}</Text>
+                ),
               },
               {
                 title: "Số lượng có thể trả",
                 dataIndex: "maxReturnable",
-                align: 'center',
+                align: "center",
                 width: 150,
-                render: (val, record: any) => <Tag color="blue">{val} {record.uom || record.product?.unit || 'ĐV'}</Tag>
+                render: (val, record: any) => (
+                  <Tag color="blue">
+                    {val} {record.uom || record.product?.unit || "ĐV"}
+                  </Tag>
+                ),
               },
               {
                 title: "Số lượng trả",
                 width: 120,
                 render: (_, record: any, index) => (
-                  <InputNumber 
-                    min={0} 
-                    max={record.maxReturnable} 
+                  <InputNumber
+                    min={0}
+                    max={record.maxReturnable}
                     value={record.returnQty}
                     onChange={(val) => {
                       const newItems = [...returnItemsState];
@@ -1138,17 +1201,19 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
                       setReturnItemsState(newItems);
                     }}
                   />
-                )
+                ),
               },
               {
                 title: "Đơn giá hoàn lại",
                 width: 150,
                 render: (_, record: any, index) => (
-                  <InputNumber 
+                  <InputNumber
                     min={0}
-                    style={{ width: '100%' }}
-                    formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                    parser={value => value!.replace(/\$\s?|(,*)/g, '') as any}
+                    style={{ width: "100%" }}
+                    formatter={(value) =>
+                      `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(value) => value!.replace(/\$\s?|(,*)/g, "") as any}
                     value={record.refundPrice}
                     onChange={(val) => {
                       const newItems = [...returnItemsState];
@@ -1156,31 +1221,40 @@ const B2BOrderListPage = ({ defaultSource, hideSourceFilter }: B2BOrderListPageP
                       setReturnItemsState(newItems);
                     }}
                   />
-                )
+                ),
               },
               {
                 title: "Nhập về Kho",
                 width: 200,
                 render: (_, record: any, index) => (
                   <Select
-                    style={{ width: '100%' }}
+                    style={{ width: "100%" }}
                     value={record.returnWarehouseId}
                     onChange={(val) => {
                       const newItems = [...returnItemsState];
                       newItems[index].returnWarehouseId = val;
                       setReturnItemsState(newItems);
                     }}
-                    options={warehouses.map(w => ({ label: w.name, value: w.id }))}
+                    options={warehouses.map((w) => ({
+                      label: w.name,
+                      value: w.id,
+                    }))}
                   />
-                )
-              }
+                ),
+              },
             ]}
           />
-          <div style={{ textAlign: 'right', marginTop: 16 }}>
+          <div style={{ textAlign: "right", marginTop: 16 }}>
             <Text style={{ fontSize: 16 }}>Tổng tiền hoàn lại: </Text>
-            <Text strong style={{ fontSize: 24, color: '#cf1322' }}>
-              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
-                returnItemsState.reduce((sum, item) => sum + (item.returnQty * item.refundPrice), 0)
+            <Text strong style={{ fontSize: 24, color: "#cf1322" }}>
+              {new Intl.NumberFormat("vi-VN", {
+                style: "currency",
+                currency: "VND",
+              }).format(
+                returnItemsState.reduce(
+                  (sum, item) => sum + item.returnQty * item.refundPrice,
+                  0
+                )
               )}
             </Text>
           </div>

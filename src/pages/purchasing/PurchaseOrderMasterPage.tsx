@@ -12,6 +12,8 @@ import { usePurchaseOrderMaster } from "../../features/purchasing/hooks/usePurch
 import { PurchaseOrderMaster } from "../../features/purchasing/types/purchase";
 import { FinanceFormModal } from "../../pages/finance/components/FinanceFormModal";
 
+import { parseNumericOrZero } from "@/shared/utils/numeric";
+
 const { Content } = Layout;
 const { Title } = Typography;
 
@@ -88,8 +90,10 @@ const PurchaseOrderMasterPage: React.FC = () => {
       const created = res as unknown as { id: number };
       const newId = created.id || res;
       navigate(`/purchase-orders/${newId}`);
-    } catch (error: any) {
-      message.error("Lỗi sao chép: " + error.message);
+    } catch (error: unknown) {
+      const errMsg =
+        error instanceof Error ? error.message : "Lỗi không xác định";
+      message.error("Lỗi sao chép: " + errMsg);
     } finally {
       setCloningId(null); // Tắt loading
     }
@@ -159,8 +163,8 @@ const PurchaseOrderMasterPage: React.FC = () => {
               supplier_id: selectedOrder.supplier_id,
               partner_name: selectedOrder.supplier_name,
               amount:
-                (selectedOrder.final_amount || 0) -
-                (selectedOrder.total_paid || 0),
+                parseNumericOrZero(selectedOrder.final_amount) -
+                parseNumericOrZero(selectedOrder.total_paid),
               description: `Thanh toán đơn hàng ${selectedOrder.code}`,
               ref_type: "purchase_order",
               ref_id: selectedOrder.id,

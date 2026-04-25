@@ -37,7 +37,10 @@ interface FinanceFormValues {
   ref_id?: string;
   advanced_amount?: number;
   actual_spent?: number;
-  b2b_bulk_allocations?: Array<Record<string, unknown>>;
+  b2b_bulk_allocations?: Array<{
+    order_id: string | number;
+    allocated_amount: number;
+  }>;
 }
 
 export const useFinanceFormLogic = (

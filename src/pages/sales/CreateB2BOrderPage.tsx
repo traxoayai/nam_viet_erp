@@ -29,6 +29,8 @@ import { SalesOrderTable } from "@/features/sales/components/ProductGrid/SalesOr
 import { useCreateOrderB2B } from "@/features/sales/hooks/useCreateOrderB2B";
 import { usePickingListPrint } from "@/features/sales/hooks/usePickingListPrint";
 import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
+import { useSubmitLock } from "@/shared/hooks/useSubmitLock";
+import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { generateB2BOrderHTML } from "@/shared/utils/printTemplates";
 import { printHTML } from "@/shared/utils/printUtils";
@@ -43,7 +45,9 @@ const CreateB2BOrderPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = !!id;
-  const [loading, setLoading] = useState(false);
+  const { isLocked: submitLoading, withLock } = useSubmitLock();
+  const [editLoading, setLoading] = useState(false);
+  const loading = submitLoading || editLoading;
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "credit" | "bank_transfer"
   >("credit");
@@ -156,17 +160,26 @@ const CreateB2BOrderPage = () => {
           .filter(Boolean);
         const stockMap = new Map<number, number>();
         if (productIds.length > 0) {
-          const { data: stockData } = await supabase.rpc(
-            "get_products_stock_status",
-            {
-              p_product_ids: productIds,
+          try {
+            const { data: stockData } = await safeRpc(
+              "get_products_stock_status",
+              {
+                p_product_ids: productIds,
+              }
+            );
+            for (const s of (stockData || []) as Array<{
+              product_id: number;
+              total_quantity: number;
+            }>) {
+              stockMap.set(s.product_id, s.total_quantity);
             }
-          );
-          for (const s of (stockData || []) as Array<{
-            product_id: number;
-            total_quantity: number;
-          }>) {
-            stockMap.set(s.product_id, s.total_quantity);
+          } catch (stockErr: unknown) {
+            const msg =
+              stockErr instanceof Error
+                ? stockErr.message
+                : "Lỗi không xác định";
+            message.error(`Không thể tải tồn kho sản phẩm: ${msg}`);
+            return;
           }
         }
 
@@ -233,174 +246,168 @@ const CreateB2BOrderPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const handleSubmit = async (status: "DRAFT" | "QUOTE" | "CONFIRMED") => {
-    // 1. Validate cơ bản (Form)
-    if (!validateOrder()) return;
+  const handleSubmit = (status: "DRAFT" | "QUOTE" | "CONFIRMED") =>
+    withLock(async () => {
+      // 1. Validate cơ bản (Form)
+      if (!validateOrder()) return;
 
-    // [2026-04-25] Verify giá server-side — bỏ qua FE state manipulation.
-    // Tương tự Portal app/api/orders/route.ts:151-182.
-    let verifiedItems = items;
-    if (customer && items.length > 0) {
-      const productIds = items.map((i) => i.id);
-      const { data: pricesData, error: pricesErr } = await supabase.rpc(
-        "get_customer_product_prices",
-        {
-          p_customer_b2b_id: customer.id,
-          p_product_ids: productIds,
+      // [2026-04-25] Verify giá server-side — bỏ qua FE state manipulation.
+      // Tương tự Portal app/api/orders/route.ts:151-182.
+      let verifiedItems = items;
+      if (customer && items.length > 0) {
+        const productIds = items.map((i) => i.id);
+        type PriceRow = { product_id: number; customer_price: number };
+        let pricesData: PriceRow[] | null = null;
+        try {
+          const result = await safeRpc("get_customer_product_prices", {
+            p_customer_b2b_id: customer.id,
+            p_product_ids: productIds,
+          });
+          pricesData = result.data as unknown as PriceRow[] | null;
+        } catch {
+          message.error("Không thể xác thực giá sản phẩm từ server");
+          return;
         }
-      );
-      if (pricesErr) {
-        message.error("Không thể xác thực giá sản phẩm từ server");
-        return;
-      }
-      const priceMap = new Map<number, number>(
-        (
-          pricesData as Array<{
-            product_id: number;
-            customer_price: number;
-          }> | null
-        )?.map((p) => [p.product_id, p.customer_price]) ?? []
-      );
-      const mapped = items.map((it) => {
-        const serverPrice = priceMap.get(it.id);
-        if (serverPrice === undefined) return null;
-        return { ...it, price_wholesale: serverPrice };
-      });
-      if (mapped.includes(null)) {
-        message.error("Một số sản phẩm không còn hợp lệ");
-        return;
-      }
-      verifiedItems = mapped as typeof items;
-    }
-
-    // [2026-04-25] Validate tồn kho qua RPC chung `validate_stock_for_order`
-    // (common với Portal) — server tự lookup conversion_factor từ product_units,
-    // quy đổi về base quantity rồi so với SUM(inventory_batches). Tránh bug FE
-    // cast conversion_factor undefined → luôn = 1.
-    if (status === "CONFIRMED") {
-      type InsufficientRow = {
-        product_id: number | null;
-        product_name: string;
-        uom: string | null;
-        requested_base: number | null;
-        available_base: number | null;
-        deficit_base: number | null;
-        reason: string;
-      };
-      type ValidateResult = { ok: boolean; insufficient: InsufficientRow[] };
-
-      const { data: whData } = await supabase.rpc("get_b2b_warehouse_id");
-      const warehouseId = (whData as number | null) ?? DEFAULT_WAREHOUSE_ID;
-
-      // supabase.rpc generic chưa có `validate_stock_for_order` trong types.ts
-      // (cần chạy npm run typegen sau khi migration 20260424010100 apply prod).
-      // Cast tạm qua `unknown` để tránh strict error, runtime vẫn gọi đúng.
-      const rpc = supabase.rpc as unknown as (
-        fn: string,
-        args: Record<string, unknown>
-      ) => Promise<{ data: unknown; error: { message: string } | null }>;
-
-      const { data: validateData, error: validateErr } = await rpc(
-        "validate_stock_for_order",
-        {
-          p_warehouse_id: warehouseId,
-          p_items: items.map((i) => ({
-            product_id: i.id,
-            quantity: i.quantity,
-            uom: i.wholesale_unit,
-            conversion_factor: 0, // server lookup product_units
-          })),
-        }
-      );
-
-      if (validateErr) {
-        message.error("Không thể kiểm tra tồn kho. Vui lòng thử lại.");
-        return;
-      }
-
-      const result = validateData as unknown as ValidateResult | null;
-      if (result && !result.ok && result.insufficient.length > 0) {
-        const msg = result.insufficient
-          .map((r) => {
-            if (r.reason === "unknown_uom") {
-              return `${r.product_name}: đơn vị "${r.uom}" chưa cấu hình`;
-            }
-            return `${r.product_name} (cần ${r.requested_base ?? "?"} ĐVCS, tồn ${r.available_base ?? 0} ĐVCS, thiếu ${r.deficit_base ?? 0})`;
-          })
-          .join("; ");
-        message.error({
-          content: `Không đủ tồn kho: ${msg}`,
-          duration: 6,
-        });
-        return;
-      }
-    }
-
-    setLoading(true);
-    try {
-      if (isEditMode && id) {
-        await salesService.updateOrder({
-          p_order_id: id,
-          p_customer_id: customer!.id,
-          p_delivery_address: customer!.shipping_address || "",
-          p_delivery_time: estimatedDeliveryText,
-          p_note: note,
-          p_discount_amount: financials.discountAmount,
-          p_shipping_fee: shippingFee,
-          p_status: status,
-          p_items: verifiedItems.map((i) => ({
-            product_id: i.id,
-            quantity: i.quantity,
-            uom: i.wholesale_unit,
-            unit_price: i.price_wholesale,
-            discount: i.discount || 0,
-            is_gift: false,
-            note: "",
-          })),
-        });
-        message.success("Cập nhật đơn hàng thành công!");
-        navigate("/b2b/orders");
-      } else {
-        await salesService.createOrder({
-          p_customer_id: customer!.id,
-          p_delivery_address: customer!.shipping_address,
-          p_note: note,
-          p_discount_amount: financials.discountAmount,
-          p_shipping_fee: shippingFee,
-          p_status: status,
-          p_delivery_method: deliveryMethod,
-          p_shipping_partner_id:
-            deliveryMethod === "internal" ? null : shippingPartnerId,
-          // Backend (create_sales_order) tự resolve kho B2B qua get_b2b_warehouse_id()
-          // khi order_type='B2B'. FE chỉ gửi placeholder nhất quán.
-          p_warehouse_id: DEFAULT_WAREHOUSE_ID,
-          p_payment_method: paymentMethod,
-          p_order_type: "B2B",
-          p_items: verifiedItems.map((i) => ({
-            product_id: i.id,
-            quantity: i.quantity,
-            uom: i.wholesale_unit,
-            unit_price: i.price_wholesale,
-            discount: i.discount,
-            is_gift: false,
-          })),
-        });
-
-        message.success(
-          status === "QUOTE"
-            ? "Đã tạo báo giá thành công"
-            : "Tạo đơn hàng thành công"
+        const priceMap = new Map<number, number>(
+          (pricesData ?? []).map((p) => [p.product_id, p.customer_price])
         );
-        reset();
-        navigate("/b2b/orders");
+        const mapped = items.map((it) => {
+          const serverPrice = priceMap.get(it.id);
+          if (serverPrice === undefined) return null;
+          return { ...it, price_wholesale: serverPrice };
+        });
+        if (mapped.includes(null)) {
+          message.error("Một số sản phẩm không còn hợp lệ");
+          return;
+        }
+        verifiedItems = mapped as typeof items;
       }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Lỗi tạo đơn";
-      message.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
+
+      // [2026-04-25] Validate tồn kho qua RPC chung `validate_stock_for_order`
+      // (common với Portal) — server tự lookup conversion_factor từ product_units,
+      // quy đổi về base quantity rồi so với SUM(inventory_batches). Tránh bug FE
+      // cast conversion_factor undefined → luôn = 1.
+      if (status === "CONFIRMED") {
+        type InsufficientRow = {
+          product_id: number | null;
+          product_name: string;
+          uom: string | null;
+          requested_base: number | null;
+          available_base: number | null;
+          deficit_base: number | null;
+          reason: string;
+        };
+        type ValidateResult = { ok: boolean; insufficient: InsufficientRow[] };
+
+        const { data: whData } = await safeRpc("get_b2b_warehouse_id");
+        const warehouseId = (whData as number | null) ?? DEFAULT_WAREHOUSE_ID;
+
+        // supabase.rpc generic chưa có `validate_stock_for_order` trong types.ts
+        // (cần chạy npm run typegen sau khi migration 20260424010100 apply prod).
+        // Cast tạm qua `unknown` để tránh strict error, runtime vẫn gọi đúng.
+        const rpc = supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>
+        ) => Promise<{ data: unknown; error: { message: string } | null }>;
+
+        const { data: validateData, error: validateErr } = await rpc(
+          "validate_stock_for_order",
+          {
+            p_warehouse_id: warehouseId,
+            p_items: items.map((i) => ({
+              product_id: i.id,
+              quantity: i.quantity,
+              uom: i.wholesale_unit,
+              conversion_factor: 0, // server lookup product_units
+            })),
+          }
+        );
+
+        if (validateErr) {
+          message.error("Không thể kiểm tra tồn kho. Vui lòng thử lại.");
+          return;
+        }
+
+        const result = validateData as unknown as ValidateResult | null;
+        if (result && !result.ok && result.insufficient.length > 0) {
+          const msg = result.insufficient
+            .map((r) => {
+              if (r.reason === "unknown_uom") {
+                return `${r.product_name}: đơn vị "${r.uom}" chưa cấu hình`;
+              }
+              return `${r.product_name} (cần ${r.requested_base ?? "?"} ĐVCS, tồn ${r.available_base ?? 0} ĐVCS, thiếu ${r.deficit_base ?? 0})`;
+            })
+            .join("; ");
+          message.error({
+            content: `Không đủ tồn kho: ${msg}`,
+            duration: 6,
+          });
+          return;
+        }
+      }
+
+      try {
+        if (isEditMode && id) {
+          await salesService.updateOrder({
+            p_order_id: id,
+            p_customer_id: customer!.id,
+            p_delivery_address: customer!.shipping_address || "",
+            p_delivery_time: estimatedDeliveryText,
+            p_note: note,
+            p_discount_amount: financials.discountAmount,
+            p_shipping_fee: shippingFee,
+            p_status: status,
+            p_items: verifiedItems.map((i) => ({
+              product_id: i.id,
+              quantity: i.quantity,
+              uom: i.wholesale_unit,
+              unit_price: i.price_wholesale,
+              discount: i.discount || 0,
+              is_gift: false,
+              note: "",
+            })),
+          });
+          message.success("Cập nhật đơn hàng thành công!");
+          navigate("/b2b/orders");
+        } else {
+          await salesService.createOrder({
+            p_customer_id: customer!.id,
+            p_delivery_address: customer!.shipping_address,
+            p_note: note,
+            p_discount_amount: financials.discountAmount,
+            p_shipping_fee: shippingFee,
+            p_status: status,
+            p_delivery_method: deliveryMethod,
+            p_shipping_partner_id:
+              deliveryMethod === "internal" ? null : shippingPartnerId,
+            // Backend (create_sales_order) tự resolve kho B2B qua get_b2b_warehouse_id()
+            // khi order_type='B2B'. FE chỉ gửi placeholder nhất quán.
+            p_warehouse_id: DEFAULT_WAREHOUSE_ID,
+            p_payment_method: paymentMethod,
+            p_order_type: "B2B",
+            p_items: verifiedItems.map((i) => ({
+              product_id: i.id,
+              quantity: i.quantity,
+              uom: i.wholesale_unit,
+              unit_price: i.price_wholesale,
+              discount: i.discount,
+              is_gift: false,
+            })),
+          });
+
+          message.success(
+            status === "QUOTE"
+              ? "Đã tạo báo giá thành công"
+              : "Tạo đơn hàng thành công"
+          );
+          reset();
+          navigate("/b2b/orders");
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Lỗi tạo đơn";
+        message.error(msg);
+      }
+    });
 
   // Print Preview Logic (Quote/Invoice)
   const handlePrintPreview = () => {

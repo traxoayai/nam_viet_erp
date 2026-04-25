@@ -1,7 +1,7 @@
 // src/features/finance/api/financeService.ts
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/api/safeRpc";
 import { DEFAULT_WAREHOUSE_ID } from "@/shared/constants/defaults";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const financeService = {
   // Tìm khách B2C (Tái sử dụng logic POS)
@@ -29,12 +29,11 @@ export const financeService = {
       .from("b2b_customer_debt_view")
       .select("actual_current_debt")
       .eq("customer_id", customerId)
-      .single();
+      .maybeSingle();
     if (error) {
-       // Nếu không tìm thấy, mặc định là 0
-       return 0;
+      throw new Error(`Không thể tải công nợ B2B: ${error.message}`);
     }
-    return data?.actual_current_debt || 0;
+    return Number(data?.actual_current_debt ?? 0);
   },
 
   getB2BDebtsList: async (customerIds: number[]) => {
@@ -43,9 +42,15 @@ export const financeService = {
       .from("b2b_customer_debt_view")
       .select("customer_id, actual_current_debt")
       .in("customer_id", customerIds);
-    if (error) return {};
-    return data.reduce((acc: any, row: any) => {
-      acc[row.customer_id] = row.actual_current_debt;
+    if (error) {
+      console.error("[getB2BDebtsList]", error.message);
+      throw new Error(`Không thể tải danh sách công nợ B2B: ${error.message}`);
+    }
+    if (!data || data.length === 0) return {};
+    return data.reduce<Record<number, number | null>>((acc, row) => {
+      if (row.customer_id != null) {
+        acc[row.customer_id] = row.actual_current_debt as number | null;
+      }
       return acc;
     }, {});
   },
@@ -54,7 +59,10 @@ export const financeService = {
   processBulkPayment: async (payload: {
     p_customer_id: number;
     p_total_amount: number;
-    p_allocations: any[]; // {order_id, allocated_amount}
+    p_allocations: Array<{
+      order_id: string | number;
+      allocated_amount: number;
+    }>;
     p_fund_account_id?: number;
     p_description?: string;
   }) => {
@@ -72,7 +80,7 @@ export const financeService = {
       .in("status", ["PACKED", "SHIPPING", "DELIVERED", "COMPLETED"])
       .not("payment_status", "eq", "paid")
       .order("created_at", { ascending: true }); // Từ cũ nhất đến mới nhất
-      
+
     if (error) throw error;
     return data || [];
   },
@@ -81,7 +89,7 @@ export const financeService = {
   getPartnerDebt: async (id: number, type: string) => {
     // Nếu là khách hàng B2B, chuyển hướng sang lấy từ View mới
     if (type === "customer_b2b") {
-       return await financeService.getB2BDebt(id);
+      return await financeService.getB2BDebt(id);
     }
     const { data } = await safeRpc("get_partner_debt_live", {
       p_partner_id: id,
@@ -91,18 +99,27 @@ export const financeService = {
   },
 
   // [NEW] Lấy danh sách giao dịch (cho FinanceTransactionPage)
-  getTransactions: async (params: any) => {
+  getTransactions: async (params: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    flow?: string;
+    status?: string;
+    date_from?: string;
+    date_to?: string;
+    creatorId?: string | null;
+    fund_id?: number;
+  }) => {
+    // safeRpc type gen không cho phép null nhưng PG function accept null → cast
     const { data } = await safeRpc("get_transactions", {
-      p_page: params.page,
-      p_page_size: params.pageSize,
-      p_search: params.search || null,
-      p_flow: params.flow || null,
-      p_status: params.status || null,
-      p_date_from: params.date_from || null,
-      p_date_to: params.date_to || null,
-
-      // [NEW] Mapping đúng tham số Core yêu cầu
-      p_creator_id: params.creatorId || null,
+      p_page: params.page ?? 1,
+      p_page_size: params.pageSize ?? 10,
+      p_search: (params.search ?? null) as string,
+      p_flow: (params.flow ?? null) as string,
+      p_status: (params.status ?? null) as string,
+      p_date_from: (params.date_from ?? null) as string,
+      p_date_to: (params.date_to ?? null) as string,
+      p_creator_id: (params.creatorId ?? null) as string | undefined,
     });
 
     // Core trả về mảng, phần tử đầu tiên chứa full_count

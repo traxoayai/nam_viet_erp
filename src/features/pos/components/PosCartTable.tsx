@@ -15,6 +15,8 @@ import {
 
 import { usePosCartStore } from "../stores/usePosCartStore";
 import { CartItem } from "../types/pos.types";
+
+import { moneyLineTotal } from "@/shared/utils/money";
 import { printInstruction } from "@/shared/utils/printTemplates";
 
 const { Text } = Typography;
@@ -30,7 +32,7 @@ export const PosCartTable = () => {
       title: "Sản phẩm",
       dataIndex: "name",
       width: 350,
-      render: (_: any, r: CartItem) => (
+      render: (_: unknown, r: CartItem) => (
         <Space align="center" size="middle">
           <Avatar
             shape="circle"
@@ -39,7 +41,9 @@ export const PosCartTable = () => {
             style={{ backgroundColor: "#f0f2f5", border: "1px solid #e8e8e8" }}
           />
           <div>
-            <div style={{ fontWeight: 600, fontSize: 16, color: "#262626" }}>{r.name}</div>
+            <div style={{ fontWeight: 600, fontSize: 16, color: "#262626" }}>
+              {r.name}
+            </div>
             <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
               <Tag
                 color="blue"
@@ -95,7 +99,7 @@ export const PosCartTable = () => {
                 justifyContent: "center",
                 background: "#52c41a",
                 borderColor: "#52c41a",
-                zIndex: 1
+                zIndex: 1,
               }}
               onClick={() => {
                 if (!t) return message.warning("Chưa nhập liều dùng!");
@@ -112,7 +116,15 @@ export const PosCartTable = () => {
       width: 100,
       align: "center" as const,
       render: (u: string) => (
-        <Tag color="cyan" style={{ fontSize: 13, padding: "4px 10px", borderRadius: 6, fontWeight: 500 }}>
+        <Tag
+          color="cyan"
+          style={{
+            fontSize: 13,
+            padding: "4px 10px",
+            borderRadius: 6,
+            fontWeight: 500,
+          }}
+        >
           {u}
         </Tag>
       ),
@@ -137,10 +149,16 @@ export const PosCartTable = () => {
       title: "Thành tiền",
       width: 140,
       align: "center" as const,
-      render: (_: any, r: CartItem) => (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      render: (_: unknown, r: CartItem) => (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
           <Text strong style={{ fontSize: 16, color: "#fa541c" }}>
-            {(r.price * r.qty).toLocaleString()}
+            {moneyLineTotal(r.price, r.qty).toLocaleString("vi-VN")}
           </Text>
           <Text type="secondary" style={{ fontSize: 11 }}>
             {r.price.toLocaleString()} / {r.unit}
@@ -151,20 +169,20 @@ export const PosCartTable = () => {
     {
       width: 60,
       align: "center" as const,
-      render: (_: any, r: CartItem) => (
+      render: (_: unknown, r: CartItem) => (
         <Button
           type="text"
           size="large"
           danger
           icon={<DeleteOutlined style={{ fontSize: 18 }} />}
           onClick={() => removeFromCart(r.id)}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             borderRadius: 8,
             width: 40,
-            height: 40
+            height: 40,
           }}
           className="hover-danger-bg"
         />
@@ -173,12 +191,14 @@ export const PosCartTable = () => {
   ];
 
   return (
-    <div style={{ 
-      backgroundColor: '#fff', 
-      borderRadius: 12, 
-      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-      overflow: 'hidden'
-    }}>
+    <div
+      style={{
+        backgroundColor: "#fff",
+        borderRadius: 12,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+        overflow: "hidden",
+      }}
+    >
       <Table
         dataSource={items}
         columns={columns}
@@ -192,4 +212,3 @@ export const PosCartTable = () => {
     </div>
   );
 };
-

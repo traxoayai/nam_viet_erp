@@ -127,7 +127,11 @@ export const PosActionToolbar = () => {
       <VatInvoiceModal
         visible={showVatModal}
         onCancel={() => setShowVatModal(false)}
-        orderItems={items}
+        orderItems={
+          items as unknown as Parameters<
+            typeof VatInvoiceModal
+          >[0]["orderItems"]
+        }
         customer={customer}
       />
 

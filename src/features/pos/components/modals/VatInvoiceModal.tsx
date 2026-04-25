@@ -1,20 +1,64 @@
 // src/features/pos/components/modals/VatInvoiceModal.tsx
-import { Modal, Form, Input, Table, InputNumber, Tag, Button, Space, App } from "antd";
 import { FileExcelOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import {
+  Modal,
+  Form,
+  Input,
+  Table,
+  InputNumber,
+  Tag,
+  Button,
+  Space,
+  App,
+} from "antd";
+import dayjs from "dayjs";
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
-import dayjs from "dayjs";
+
+import type { SepayCreateInvoiceRequest } from "@/features/finance/types/sepay.types";
 
 import { sepayService } from "@/features/finance/api/sepayService";
-import type { SepayCreateInvoiceRequest } from "@/features/finance/types/sepay.types";
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { moneyMul, moneyDiv, moneyAdd } from "@/shared/utils/money";
+
+export interface OrderItem {
+  id: number;
+  name: string;
+  sku?: string;
+  barcode?: string;
+  unit?: string;
+  qty: number;
+  price: number;
+  image_url?: string | null;
+  code?: string;
+}
+
+interface VatItem extends OrderItem {
+  max_vat_qty: number;
+  vat_qty: number;
+  vat_rate: number;
+  has_ledger: boolean;
+  status: string;
+}
+
+interface Customer {
+  id?: number;
+  name?: string;
+  buyer_name?: string;
+  tax_code?: string;
+  id_card_number?: string;
+  address?: string;
+  email?: string;
+  phone?: string;
+  payment_method?: string;
+}
 
 interface Props {
   visible: boolean;
   onCancel: () => void;
-  orderItems: any[];
-  customer: any;
+  orderItems: OrderItem[];
+  customer: Customer | null;
   onOk?: () => void;
 }
 
@@ -27,7 +71,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
 }) => {
   const { message } = App.useApp();
   const [form] = Form.useForm();
-  const [vatItems, setVatItems] = useState<any[]>([]);
+  const [vatItems, setVatItems] = useState<VatItem[]>([]);
   const [sepayLoading, setSepayLoading] = useState(false);
 
   // 1. Auto-fill khi mở modal
@@ -50,10 +94,11 @@ export const VatInvoiceModal: React.FC<Props> = ({
       form.resetFields();
       setVatItems([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, customer, orderItems]);
 
   // 2a. Trừ kho VAT sau khi xuất SEPAY thành công (single atomic RPC)
-  const deductVatAfterExport = async (items: any[]) => {
+  const deductVatAfterExport = async (items: VatItem[]) => {
     try {
       const deductItems = items
         .filter((item) => item.vat_qty > 0 && item.has_ledger)
@@ -67,9 +112,9 @@ export const VatInvoiceModal: React.FC<Props> = ({
       if (deductItems.length === 0) return;
 
       await safeRpc("batch_deduct_vat_for_pos", {
-        p_items: deductItems as any,
+        p_items: deductItems as unknown as Record<string, unknown>[],
       });
-    } catch (err: any) {
+    } catch {
       message.warning("Lỗi trừ kho VAT - vui lòng kiểm tra thủ công");
     }
   };
@@ -97,7 +142,11 @@ export const VatInvoiceModal: React.FC<Props> = ({
           vat_qty: hasLedger ? Math.min(item.qty, balance) : 0,
           vat_rate: rate,
           has_ledger: hasLedger,
-          status: !hasLedger ? "no_ledger" : item.qty > balance ? "shortage" : "enough",
+          status: !hasLedger
+            ? "no_ledger"
+            : item.qty > balance
+              ? "shortage"
+              : "enough",
         };
       });
       setVatItems(items);
@@ -112,21 +161,21 @@ export const VatInvoiceModal: React.FC<Props> = ({
   // Đơn giá hóa đơn = Giá bán / (1 + VAT%)
   const totals = vatItems.reduce(
     (acc, item) => {
-      const vatPercent = item.vat_rate / 100;
+      const vatDivisor = 1 + item.vat_rate / 100;
 
-      // Tổng thanh toán (Gross) của dòng này
-      const grossTotalLine = item.price * item.vat_qty;
+      // Tổng thanh toán (Gross) của dòng này — dùng moneyMul tránh float drift
+      const grossTotalLine = moneyMul(item.price, item.vat_qty);
 
       // Thành tiền trước thuế (Net Total) = Gross / (1 + VAT)
-      const netTotalLine = grossTotalLine / (1 + vatPercent);
+      const netTotalLine = moneyDiv(grossTotalLine, vatDivisor);
 
       // Tiền thuế = Gross - Net
-      const taxLine = grossTotalLine - netTotalLine;
+      const taxLine = moneyAdd(grossTotalLine, -netTotalLine);
 
       return {
-        goods: acc.goods + netTotalLine,
-        tax: acc.tax + taxLine,
-        pay: acc.pay + grossTotalLine,
+        goods: moneyAdd(acc.goods, netTotalLine),
+        tax: moneyAdd(acc.tax, taxLine),
+        pay: moneyAdd(acc.pay, grossTotalLine),
       };
     },
     { goods: 0, tax: 0, pay: 0 }
@@ -293,16 +342,19 @@ export const VatInvoiceModal: React.FC<Props> = ({
       if (onOk) onOk();
       message.success("Đã xuất file Excel thành công!");
       onCancel();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      message.error("Lỗi tạo file Excel: " + err.message);
+      const errMsg = err instanceof Error ? err.message : "Lỗi không xác định";
+      message.error("Lỗi tạo file Excel: " + errMsg);
     }
   };
   // SEPAY E-Invoice Export
   const handleSepayExport = async () => {
     const noLedgerItems = vatItems.filter((i) => !i.has_ledger);
     if (noLedgerItems.length > 0) {
-      message.error(`${noLedgerItems.length} sản phẩm chưa nhập kho VAT (chưa có hóa đơn đầu vào). Không thể xuất hóa đơn.`);
+      message.error(
+        `${noLedgerItems.length} sản phẩm chưa nhập kho VAT (chưa có hóa đơn đầu vào). Không thể xuất hóa đơn.`
+      );
       return;
     }
     const invalidItems = vatItems.filter((i) => i.vat_qty > i.max_vat_qty);
@@ -352,7 +404,8 @@ export const VatInvoiceModal: React.FC<Props> = ({
             unit: item.unit || "Cái",
             quantity: item.vat_qty,
             unit_price: Math.round(netPrice),
-            tax_rate: item.vat_rate as any,
+            tax_rate:
+              item.vat_rate as SepayCreateInvoiceRequest["items"][number]["tax_rate"],
           };
         }),
       };
@@ -360,9 +413,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
       const result = await sepayService.createInvoice(payload);
 
       if (result.success) {
-        message.success(
-          `Đã gửi SEPAY! Tracking: ${result.data.tracking_code}`
-        );
+        message.success(`Đã gửi SEPAY! Tracking: ${result.data.tracking_code}`);
 
         // Trừ kho VAT ngay sau khi SEPAY accept
         await deductVatAfterExport(validItems);
@@ -378,16 +429,16 @@ export const VatInvoiceModal: React.FC<Props> = ({
             window.open(pdfUrl, "_blank");
           }
         } catch {
-          message.info(
-            "Hóa đơn đang xử lý. Kiểm tra lại sau."
-          );
+          message.info("Hóa đơn đang xử lý. Kiểm tra lại sau.");
         }
 
         if (onOk) onOk();
         onCancel();
       }
-    } catch (err: any) {
-      message.error(err.message || "Lỗi xuất hóa đơn qua SEPAY");
+    } catch (err: unknown) {
+      const errMsg =
+        err instanceof Error ? err.message : "Lỗi xuất hóa đơn qua SEPAY";
+      message.error(errMsg);
     } finally {
       setSepayLoading(false);
     }
@@ -413,7 +464,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
     {
       title: "SL Xuất VAT",
       width: 120,
-      render: (_: any, r: any, idx: number) => (
+      render: (_: unknown, r: VatItem, idx: number) => (
         <div>
           <InputNumber
             min={0}
@@ -431,7 +482,12 @@ export const VatInvoiceModal: React.FC<Props> = ({
           />
           <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>
             {r.has_ledger ? (
-              <>Kho: {r.max_vat_qty}{r.qty > r.max_vat_qty && <span style={{ color: "#ff4d4f", marginLeft: 4 }}>Thiếu</span>}</>
+              <>
+                Kho: {r.max_vat_qty}
+                {r.qty > r.max_vat_qty && (
+                  <span style={{ color: "#ff4d4f", marginLeft: 4 }}>Thiếu</span>
+                )}
+              </>
             ) : (
               <span style={{ color: "#ff4d4f" }}>Chưa nhập kho VAT</span>
             )}
@@ -450,7 +506,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
     {
       title: "Đơn giá (Net)",
       align: "right" as const,
-      render: (_: any, r: any) => {
+      render: (_: unknown, r: VatItem) => {
         const netPrice = r.price / (1 + r.vat_rate / 100);
         return (
           <div>
@@ -468,7 +524,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
     {
       title: "Thành tiền (Net)",
       align: "right" as const,
-      render: (_: any, r: any) => {
+      render: (_: unknown, r: VatItem) => {
         const netPrice = r.price / (1 + r.vat_rate / 100);
         return (netPrice * r.vat_qty).toLocaleString(undefined, {
           maximumFractionDigits: 0,
@@ -491,10 +547,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
       footer={
         <Space>
           <Button onClick={onCancel}>Hủy</Button>
-          <Button
-            icon={<FileExcelOutlined />}
-            onClick={handleExportExcel}
-          >
+          <Button icon={<FileExcelOutlined />} onClick={handleExportExcel}>
             Tải file Excel
           </Button>
           <Button

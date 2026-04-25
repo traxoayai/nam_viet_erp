@@ -1,6 +1,5 @@
 // src/pages/sales/B2BOrderDetailPage.tsx
-import dayjs from "dayjs";
-import * as XLSX from "xlsx";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   ArrowLeftOutlined,
   PrinterOutlined,
@@ -30,8 +29,10 @@ import {
   Tag,
   Typography,
 } from "antd";
+import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import * as XLSX from "xlsx";
 
 import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate"; // [NEW]
 import { VatActionButton } from "@/features/pos/components/VatActionButton";
@@ -44,6 +45,7 @@ import {
   B2B_STATUS_COLOR,
   B2B_STATUS_LABEL,
 } from "@/shared/utils/b2bConstants";
+import { parseNumericOrZero } from "@/shared/utils/numeric";
 
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
@@ -123,9 +125,12 @@ const B2BOrderDetailPage = () => {
     // --- PHẦN 1: HEADER (Thông tin chung) ---
     // Sử dụng mảng 2 chiều (Array of Arrays) để tự do thiết kế layout
     const excelData: any[][] = [];
-    
+
     excelData.push(["CHI TIẾT ĐƠN HÀNG", order.code]);
-    excelData.push(["Trạng thái", B2B_STATUS_LABEL[order.status as keyof typeof B2B_STATUS_LABEL]]);
+    excelData.push([
+      "Trạng thái",
+      B2B_STATUS_LABEL[order.status as keyof typeof B2B_STATUS_LABEL],
+    ]);
     excelData.push(["Khách hàng", order.customer_name]);
     excelData.push(["Số điện thoại", order.customer_phone || ""]);
     excelData.push(["Địa chỉ giao", order.delivery_address || ""]);
@@ -134,23 +139,23 @@ const B2BOrderDetailPage = () => {
     excelData.push(["Chiết khấu", order.discount_amount]);
     excelData.push(["Phí vận chuyển", order.shipping_fee]);
     excelData.push(["Tổng cộng (Khách cần trả)", order.final_amount]);
-    
+
     // Dòng trống phân cách
-    excelData.push([]); 
-    excelData.push([]); 
+    excelData.push([]);
+    excelData.push([]);
 
     // --- PHẦN 2: TABLE (Danh sách sản phẩm) ---
     // Dòng tiêu đề cột
     excelData.push([
-      "STT", 
-      "SKU", 
-      "Tên Sản Phẩm", 
-      "ĐVT", 
-      "Số Lượng", 
-      "Đơn Giá", 
-      "Thành Tiền", 
-      "Lô", 
-      "HSD"
+      "STT",
+      "SKU",
+      "Tên Sản Phẩm",
+      "ĐVT",
+      "Số Lượng",
+      "Đơn Giá",
+      "Thành Tiền",
+      "Lô",
+      "HSD",
     ]);
 
     // Đổ dữ liệu sản phẩm
@@ -164,7 +169,7 @@ const B2BOrderDetailPage = () => {
         item.unit_price,
         item.total_price,
         item.batch_no || "",
-        item.expiry_date ? dayjs(item.expiry_date).format("DD/MM/YYYY") : ""
+        item.expiry_date ? dayjs(item.expiry_date).format("DD/MM/YYYY") : "",
       ]);
     });
 
@@ -172,7 +177,7 @@ const B2BOrderDetailPage = () => {
     const ws = XLSX.utils.aoa_to_sheet(excelData);
 
     // Căn chỉnh độ rộng cột (Auto-width cơ bản)
-    ws['!cols'] = [
+    ws["!cols"] = [
       { wch: 15 }, // Cột A: Tên trường / STT
       { wch: 15 }, // Cột B: Giá trị / SKU
       { wch: 40 }, // Cột C: Tên SP
@@ -228,15 +233,19 @@ const B2BOrderDetailPage = () => {
       render: (_: any, record: any) => (
         <div>
           {record.batch_no ? (
-             <Tag color="blue" style={{ fontWeight: 'bold', margin: 0 }}>{record.batch_no}</Tag>
+            <Tag color="blue" style={{ fontWeight: "bold", margin: 0 }}>
+              {record.batch_no}
+            </Tag>
           ) : (
-             <Tag color="default" style={{ margin: 0 }}>Chưa xuất</Tag>
+            <Tag color="default" style={{ margin: 0 }}>
+              Chưa xuất
+            </Tag>
           )}
-          {record.expiry_date && (
-            <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-              HSD: {dayjs(record.expiry_date).format('DD/MM/YYYY')}
+          {record.expiry_date ? (
+            <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>
+              HSD: {dayjs(record.expiry_date).format("DD/MM/YYYY")}
             </div>
-          )}
+          ) : null}
         </div>
       ),
     },
@@ -249,10 +258,10 @@ const B2BOrderDetailPage = () => {
       render: (qty: number, record: any) => {
         const returned = record.quantity_returned || 0;
         return (
-          <div style={{ textAlign: 'center' }}>
+          <div style={{ textAlign: "center" }}>
             <Text strong>{qty}</Text>
             {returned > 0 && (
-              <div style={{ fontSize: 12, color: '#cf1322', marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: "#cf1322", marginTop: 4 }}>
                 (Đã trả: {returned})
               </div>
             )}
@@ -354,17 +363,31 @@ const B2BOrderDetailPage = () => {
               <Card title="Thanh toán" size="small" bordered={false}>
                 <Row justify="space-between" style={{ marginBottom: 8 }}>
                   <Text>Tạm tính:</Text>
-                  <Text>{order.sub_total.toLocaleString()} ₫</Text>
+                  <Text>
+                    {parseNumericOrZero(order.sub_total).toLocaleString(
+                      "vi-VN"
+                    )}{" "}
+                    ₫
+                  </Text>
                 </Row>
                 <Row justify="space-between" style={{ marginBottom: 8 }}>
                   <Text>Chiết khấu:</Text>
                   <Text type="success">
-                    -{order.discount_amount.toLocaleString()} ₫
+                    -
+                    {parseNumericOrZero(order.discount_amount).toLocaleString(
+                      "vi-VN"
+                    )}{" "}
+                    ₫
                   </Text>
                 </Row>
                 <Row justify="space-between" style={{ marginBottom: 8 }}>
                   <Text>Phí vận chuyển:</Text>
-                  <Text>{order.shipping_fee.toLocaleString()} ₫</Text>
+                  <Text>
+                    {parseNumericOrZero(order.shipping_fee).toLocaleString(
+                      "vi-VN"
+                    )}{" "}
+                    ₫
+                  </Text>
                 </Row>
                 <div
                   style={{ borderTop: "1px dashed #e8e8e8", margin: "12px 0" }}
@@ -374,7 +397,10 @@ const B2BOrderDetailPage = () => {
                     Tổng cộng:
                   </Text>
                   <Text strong style={{ fontSize: 18, color: "#1890ff" }}>
-                    {order.final_amount.toLocaleString()} ₫
+                    {parseNumericOrZero(order.final_amount).toLocaleString(
+                      "vi-VN"
+                    )}{" "}
+                    ₫
                   </Text>
                 </Row>
                 {order.payment_method ? (
@@ -444,15 +470,26 @@ const B2BOrderDetailPage = () => {
                           </Text>
                           <div style={{ marginBottom: 4 }}>
                             {item.batch_no ? (
-                              <Tag color="blue" style={{ fontSize: 10, lineHeight: '14px' }}>Lô: {item.batch_no}</Tag>
+                              <Tag
+                                color="blue"
+                                style={{ fontSize: 10, lineHeight: "14px" }}
+                              >
+                                Lô: {item.batch_no}
+                              </Tag>
                             ) : (
-                              <Tag color="default" style={{ fontSize: 10, lineHeight: '14px' }}>Chưa xuất kho</Tag>
+                              <Tag
+                                color="default"
+                                style={{ fontSize: 10, lineHeight: "14px" }}
+                              >
+                                Chưa xuất kho
+                              </Tag>
                             )}
-                            {item.expiry_date && (
-                              <span style={{ fontSize: 11, color: '#888' }}>
-                                HSD: {dayjs(item.expiry_date).format('DD/MM/YYYY')}
+                            {item.expiry_date ? (
+                              <span style={{ fontSize: 11, color: "#888" }}>
+                                HSD:{" "}
+                                {dayjs(item.expiry_date).format("DD/MM/YYYY")}
                               </span>
-                            )}
+                            ) : null}
                           </div>
                           <div
                             style={{
@@ -543,7 +580,11 @@ const B2BOrderDetailPage = () => {
           {/* 2. CÁC NÚT IN ẤN (LUÔN HIỆN TRỪ KHI ĐÃ HỦY) */}
           {order?.status !== "CANCELLED" && (
             <>
-              <Button icon={<FileExcelOutlined />} onClick={handleExportExcel} style={{ color: '#52c41a', borderColor: '#52c41a' }}>
+              <Button
+                icon={<FileExcelOutlined />}
+                onClick={handleExportExcel}
+                style={{ color: "#52c41a", borderColor: "#52c41a" }}
+              >
                 Xuất Excel
               </Button>
 
@@ -565,18 +606,18 @@ const B2BOrderDetailPage = () => {
 
           {/* 2.5. NÚT TẠO PHIẾU THU (chỉ hiện khi đơn chưa thanh toán đủ) */}
           {order &&
-            order.status !== "CANCELLED" &&
-            order.status !== "DRAFT" &&
-            order.status !== "QUOTE" &&
-            order.payment_status !== "paid" && (
-              <Button
-                icon={<DollarOutlined />}
-                style={{ color: "#faad14", borderColor: "#faad14" }}
-                onClick={() => setFinanceModalOpen(true)}
-              >
-                Tạo Phiếu Thu
-              </Button>
-            )}
+          order.status !== "CANCELLED" &&
+          order.status !== "DRAFT" &&
+          order.status !== "QUOTE" &&
+          order.payment_status !== "paid" ? (
+            <Button
+              icon={<DollarOutlined />}
+              style={{ color: "#faad14", borderColor: "#faad14" }}
+              onClick={() => setFinanceModalOpen(true)}
+            >
+              Tạo Phiếu Thu
+            </Button>
+          ) : null}
 
           {/* 3. CÁC NÚT THAO TÁC (TÙY TRẠNG THÁI) */}
           {(order?.status === "DRAFT" || order?.status === "QUOTE") && (
@@ -649,7 +690,8 @@ const B2BOrderDetailPage = () => {
                 partner_name: order.customer_name,
                 amount: Math.max(
                   0,
-                  order.final_amount - (order.paid_amount || 0)
+                  parseNumericOrZero(order.final_amount) -
+                    parseNumericOrZero(order.paid_amount)
                 ),
                 ref_type: "order",
                 ref_id: order.code,
