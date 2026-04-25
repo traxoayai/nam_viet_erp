@@ -496,10 +496,16 @@ export const inventoryService = {
 
   // 14. Hoàn tất kiểm kho
   async completeCheck(checkId: number, userId: string) {
-    await safeRpc("complete_inventory_check", {
+    const { data } = await safeRpc("complete_inventory_check", {
       p_check_id: checkId,
       p_user_id: userId,
     });
+    return data as {
+      success: boolean;
+      message: string;
+      items_processed: number;
+      items_skipped: number;
+    } | null;
   },
 
   // =================================================================

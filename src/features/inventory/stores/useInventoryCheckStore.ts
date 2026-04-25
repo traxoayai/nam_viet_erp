@@ -220,8 +220,21 @@ export const useInventoryCheckStore = create<InventoryCheckState>(
       try {
         // Flush tất cả saves đang pending trước khi chốt sổ
         await flushAllPendingSaves();
-        await inventoryService.completeCheck(activeSession.id, userId);
-        message.success("Đã hoàn tất kiểm kê!");
+        const result = await inventoryService.completeCheck(
+          activeSession.id,
+          userId
+        );
+        const skipped = result?.items_skipped ?? 0;
+        if (skipped > 0) {
+          message.warning(
+            "Đã hoàn tất! Có " +
+              skipped +
+              " dòng bỏ qua, kho giữ nguyên cho dòng đó.",
+            6
+          );
+        } else {
+          message.success("Đã hoàn tất kiểm kê!");
+        }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Lỗi hoàn tất";
         message.error("Lỗi: " + msg);

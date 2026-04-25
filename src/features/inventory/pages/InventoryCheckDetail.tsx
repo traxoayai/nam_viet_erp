@@ -24,6 +24,7 @@ import {
   Avatar,
   Grid,
   Input,
+  Tooltip,
 } from "antd";
 import { useEffect, useRef, useState, memo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -674,10 +675,15 @@ export const InventoryCheckDetail = () => {
 
   // Hàm xử lý hoàn tất
   const onComplete = () => {
+    const uncountedCount = items.filter((i) => !i.counted_at).length;
     Modal.confirm({
       title: "Hoàn tất kiểm kê?",
       content:
-        "Hệ thống sẽ cập nhật lại tồn kho theo số liệu bạn đã nhập. Hành động này không thể hoàn tác.",
+        uncountedCount > 0
+          ? `⚠️ Có ${uncountedCount}/${items.length} dòng chưa đếm. Kho sẽ KHÔNG được điều chỉnh cho các dòng này. Tiếp tục hoàn tất?`
+          : `Bạn có chắc muốn hoàn tất phiếu kiểm kê (${items.length} dòng)?`,
+      okText: uncountedCount > 0 ? "Vẫn hoàn tất" : "Hoàn tất",
+      okType: uncountedCount > 0 ? "danger" : "primary",
       onOk: () => user && completeSession(user.id),
     });
   };
@@ -1026,9 +1032,11 @@ export const InventoryCheckDetail = () => {
           zIndex: 100,
         }}
       >
-        <Button size="small" style={{ flex: 1 }} onClick={moveToNextItem}>
-          Bỏ qua (Next)
-        </Button>
+        <Tooltip title="Dòng này sẽ bị bỏ qua, kho giữ nguyên (không điều chỉnh)">
+          <Button size="small" style={{ flex: 1 }} onClick={moveToNextItem}>
+            Bỏ qua (kho giữ nguyên)
+          </Button>
+        </Tooltip>
         <Button
           type="primary"
           size="small"
