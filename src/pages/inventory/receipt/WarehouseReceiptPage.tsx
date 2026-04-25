@@ -17,12 +17,11 @@ import {
   Typography,
   Result,
   Empty,
+  Upload as AntUpload,
   message,
 } from "antd";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-
-dayjs.extend(customParseFormat);
 import {
   ArrowLeft,
   Camera,
@@ -33,6 +32,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+
+dayjs.extend(customParseFormat);
 
 import { inboundService } from "@/features/inventory/api/inboundService"; // [NEW]
 import { PutawayListTemplate } from "@/features/inventory/components/print/PutawayListTemplate";
@@ -45,6 +46,15 @@ import { ScannerListener } from "@/shared/ui/warehouse-tools/ScannerListener"; /
 
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
+
+interface ReceivedBatch {
+  lot_number: string;
+  expiry_date?: string;
+  quantity?: number;
+}
+type ReceivedBatchRecord = InboundDetailItem & {
+  received_batches?: ReceivedBatch[];
+};
 
 const WarehouseReceiptPage = () => {
   const params = useParams();
@@ -63,6 +73,7 @@ const WarehouseReceiptPage = () => {
     loading,
     error,
     isSubmitting,
+    isDocScanning,
     updateWorkingItem,
     handleSubmit,
     handleSaveDraft,
@@ -81,9 +92,10 @@ const WarehouseReceiptPage = () => {
       await inboundService.allocateCosts(parseInt(idStr));
       message.success("Đã phân bổ chi phí và cập nhật giá vốn!");
       refetch();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      message.error("Lỗi phân bổ: " + err.message);
+      const msg = err instanceof Error ? err.message : String(err);
+      message.error("Lỗi phân bổ: " + msg);
     } finally {
       setCostLoading(false);
     }
@@ -103,7 +115,7 @@ const WarehouseReceiptPage = () => {
     if (existingItem) {
       const inputId = `qty-input-${existingItem.product_id}`;
       const wrapperEl = document.getElementById(inputId);
-      const inputEl = wrapperEl?.querySelector('input');
+      const inputEl = wrapperEl?.querySelector("input");
 
       // [LOGIC MỚI]: Kiểm tra xem ô input này có đang được Focus không?
       const isFocused = document.activeElement === inputEl;
@@ -111,11 +123,11 @@ const WarehouseReceiptPage = () => {
       if (!isFocused) {
         // --- QUÉT LẦN 1: TÌM VỊ TRÍ, BÔI ĐEN, KHÔNG CỘNG SỐ LƯỢNG ---
         message.info(`Đã chọn: ${existingItem.product_name}`);
-        flash(existingItem.product_id); 
+        flash(existingItem.product_id);
 
         setTimeout(() => {
           if (wrapperEl && inputEl) {
-            wrapperEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            wrapperEl.scrollIntoView({ behavior: "smooth", block: "center" });
             inputEl.focus();
             inputEl.select(); // Bôi đen để sẵn sàng gõ số đè lên
           }
@@ -126,7 +138,7 @@ const WarehouseReceiptPage = () => {
         updateWorkingItem(existingItem.product_id, { input_quantity: newQty });
         message.success(`+1 ${existingItem.product_name} (Tổng: ${newQty})`);
         flash(existingItem.product_id);
-        
+
         // Giữ bôi đen sau khi cộng để user vẫn có thể gõ đè nếu đổi ý
         setTimeout(() => inputEl?.select(), 50);
       }
@@ -149,19 +161,22 @@ const WarehouseReceiptPage = () => {
         if (item) {
           const inputId = `qty-input-${item.product_id}`;
           const wrapperEl = document.getElementById(inputId);
-          const inputEl = wrapperEl?.querySelector('input');
+          const inputEl = wrapperEl?.querySelector("input");
 
           const isFocused = document.activeElement === inputEl;
 
           if (!isFocused) {
             // --- QUÉT LẦN 1: TÌM VỊ TRÍ, BÔI ĐEN, KHÔNG CỘNG SỐ LƯỢNG ---
             message.info(`Đã chọn: ${product.name}`);
-            flash(item.product_id); 
+            flash(item.product_id);
             setTimeout(() => {
               if (wrapperEl && inputEl) {
-                wrapperEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                wrapperEl.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
                 inputEl.focus();
-                inputEl.select(); 
+                inputEl.select();
               }
             }, 100);
           } else {
@@ -189,7 +204,7 @@ const WarehouseReceiptPage = () => {
     }
   };
 
-  const handleAssignSuccess = (product: any) => {
+  const handleAssignSuccess = (product: { id: number; name: string }) => {
     setAssignModalVisible(false);
     const item = workingItems.find((i) => i.product_id === product.id);
     if (item) {
@@ -202,8 +217,8 @@ const WarehouseReceiptPage = () => {
         const wrapperId = `qty-input-${item.product_id}`;
         const wrapperEl = document.getElementById(wrapperId);
         if (wrapperEl) {
-          wrapperEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          const inputEl = wrapperEl.querySelector('input');
+          wrapperEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          const inputEl = wrapperEl.querySelector("input");
           if (inputEl) {
             inputEl.focus();
             inputEl.select();
@@ -220,7 +235,8 @@ const WarehouseReceiptPage = () => {
   // [NEW] Xác định trạng thái "Đã hoàn tất" để khóa giao diện
   const currentStatus = (detail?.po_info?.status || "").toLowerCase();
   const deliveryStatus = (
-    (detail?.po_info as any)?.delivery_status || ""
+    (detail?.po_info as { delivery_status?: string } | undefined)
+      ?.delivery_status || ""
   ).toLowerCase();
   const isDone =
     currentStatus === "completed" ||
@@ -254,7 +270,8 @@ const WarehouseReceiptPage = () => {
             <div style={{ fontWeight: 600 }}>
               {text}
               {/* THÊM DÒNG NÀY: */}
-              {(record as any).is_bonus ? (
+              {(record as InboundDetailItem & { is_bonus?: boolean })
+                .is_bonus ? (
                 <Tag color="purple" style={{ marginLeft: 8 }}>
                   🎁 Tặng
                 </Tag>
@@ -291,7 +308,7 @@ const WarehouseReceiptPage = () => {
     {
       title: "Tiến độ",
       width: 50,
-      render: (_: any, record: InboundDetailItem) => {
+      render: (_: unknown, record: InboundDetailItem) => {
         const received = record.quantity_received_prev;
         const total = record.quantity_ordered;
         const remaining = record.quantity_remaining;
@@ -324,86 +341,117 @@ const WarehouseReceiptPage = () => {
     {
       title: "Số Lượng Nhập",
       width: 60,
-      render: (_: any, record: InboundDetailItem) => {
-          // [NEW] Nếu đơn đã khóa, hiển thị số lượng ĐÃ NHẬP. Nếu chưa khóa, hiển thị số lượng ĐANG NHẬP.
-          const displayQty = isDone ? record.quantity_received_prev : record.input_quantity;
+      render: (_: unknown, record: InboundDetailItem) => {
+        // [NEW] Nếu đơn đã khóa, hiển thị số lượng ĐÃ NHẬP. Nếu chưa khóa, hiển thị số lượng ĐANG NHẬP.
+        const displayQty = isDone
+          ? record.quantity_received_prev
+          : record.input_quantity;
 
-          return (
-              <div id={`qty-input-${record.product_id}`}>
-                <InputNumber 
-                    min={0}
-                    value={displayQty}
-                    onChange={(val) => updateWorkingItem(record.product_id, { input_quantity: val || 0 })}
-                    style={{ width: "100%" }}
-                    disabled={isDone} 
-                    placeholder="0"
-                    status={(!isDone && (record.input_quantity || 0) > 0) ? "warning" : ""}
-                />
-              </div>
-          );
-      }
+        return (
+          <div id={`qty-input-${record.product_id}`}>
+            <InputNumber
+              min={0}
+              value={displayQty}
+              onChange={(val) =>
+                updateWorkingItem(record.product_id, {
+                  input_quantity: val || 0,
+                })
+              }
+              style={{ width: "100%" }}
+              disabled={isDone}
+              placeholder="0"
+              status={
+                !isDone && (record.input_quantity || 0) > 0 ? "warning" : ""
+              }
+            />
+          </div>
+        );
+      },
     },
     // THAY THẾ CỘT SỐ LÔ BẰNG LOGIC RENDER MỚI:
     {
-        title: "Số Lô đã nhập",
-        width: 150,
-        render: (_: any, record: any) => {
-            if (record.stock_management_type !== 'lot_date') return <Text disabled>--</Text>;
+      title: "Số Lô đã nhập",
+      width: 150,
+      render: (_: unknown, record: ReceivedBatchRecord) => {
+        if (record.stock_management_type !== "lot_date")
+          return <Text disabled>--</Text>;
 
-            const hasReceivedBatches = record.received_batches && record.received_batches.length > 0;
+        const hasReceivedBatches =
+          record.received_batches && record.received_batches.length > 0;
 
-            // 1. Chế độ Xem (Khi đơn đã có lịch sử nhập lô)
-            if (hasReceivedBatches) {
-                return (
-                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                        {record.received_batches.map((batch: any, idx: number) => (
-                            <Tag color="geekblue" key={idx} style={{ margin: 0, display: 'block', whiteSpace: 'normal' }}>
-                                <b>Lô:</b> {batch.lot_number} <br/>
-                                <span style={{ fontSize: 11 }}>
-                                  <b>HSD:</b> {batch.expiry_date ? dayjs(batch.expiry_date).format("DD/MM/YY") : "N/A"} - ({batch.quantity} {record.unit})
-                                </span>
-                            </Tag>
-                        ))}
-                    </Space>
-                );
-            }
-
-            // 2. Chế độ Nhập (Khi đang thực hiện nhập kho)
-            const displayLot = record.input_lot || "";
-            return (
-                <Input 
-                    placeholder="Nhập số lô"
-                    value={displayLot}
-                    onChange={(e) => updateWorkingItem(record.product_id, { input_lot: e.target.value })}
-                    disabled={isDone} 
-                />
-            );
+        // 1. Chế độ Xem (Khi đơn đã có lịch sử nhập lô)
+        if (hasReceivedBatches) {
+          return (
+            <Space direction="vertical" size={4} style={{ width: "100%" }}>
+              {record.received_batches?.map((batch, idx: number) => (
+                <Tag
+                  color="geekblue"
+                  key={idx}
+                  style={{ margin: 0, display: "block", whiteSpace: "normal" }}
+                >
+                  <b>Lô:</b> {batch.lot_number} <br />
+                  <span style={{ fontSize: 11 }}>
+                    <b>HSD:</b>{" "}
+                    {batch.expiry_date
+                      ? dayjs(batch.expiry_date).format("DD/MM/YY")
+                      : "N/A"}{" "}
+                    - ({batch.quantity} {record.unit})
+                  </span>
+                </Tag>
+              ))}
+            </Space>
+          );
         }
+
+        // 2. Chế độ Nhập (Khi đang thực hiện nhập kho)
+        const displayLot = record.input_lot || "";
+        return (
+          <Input
+            placeholder="Nhập số lô"
+            value={displayLot}
+            onChange={(e) =>
+              updateWorkingItem(record.product_id, {
+                input_lot: e.target.value,
+              })
+            }
+            disabled={isDone}
+          />
+        );
+      },
     },
     // THAY THẾ CỘT HẠN SỬ DỤNG BẰNG LOGIC MỚI:
     {
-        title: "Hạn Sử Dụng",
-        width: 180,
-        render: (_: any, record: any) => {
-             if (record.stock_management_type !== 'lot_date') return <Text disabled>--</Text>;
-             
-             // Nếu đã có mảng lô thì ẩn ô chọn ngày (vì đã hiển thị gộp ở cột Lô)
-             if (record.received_batches && record.received_batches.length > 0) {
-                 return <Text type="secondary" italic style={{ fontSize: 12 }}>Đã lưu theo lô</Text>;
-             }
+      title: "Hạn Sử Dụng",
+      width: 180,
+      render: (_: unknown, record: ReceivedBatchRecord) => {
+        if (record.stock_management_type !== "lot_date")
+          return <Text disabled>--</Text>;
 
-             const displayExpiry = record.input_expiry;
-             return (
-                 <DatePicker 
-                    placeholder="VD: 140228"
-                    style={{ width: "100%" }}
-                    format={["DD/MM/YYYY", "DDMMYY", "DDMMYYYY", "D/M/YY", "D/M/YYYY"]}
-                    value={displayExpiry ? dayjs(displayExpiry) : null}
-                    onChange={(date) => updateWorkingItem(record.product_id, { input_expiry: date ? date.toISOString() : undefined })}
-                    disabled={isDone} 
-                 />
-             );
+        // Nếu đã có mảng lô thì ẩn ô chọn ngày (vì đã hiển thị gộp ở cột Lô)
+        if (record.received_batches && record.received_batches.length > 0) {
+          return (
+            <Text type="secondary" italic style={{ fontSize: 12 }}>
+              Đã lưu theo lô
+            </Text>
+          );
         }
+
+        const displayExpiry = record.input_expiry;
+        return (
+          <DatePicker
+            placeholder="VD: 140228"
+            style={{ width: "100%" }}
+            format={["DD/MM/YYYY", "DDMMYY", "DDMMYYYY", "D/M/YY", "D/M/YYYY"]}
+            value={displayExpiry ? dayjs(displayExpiry) : null}
+            onChange={(date) =>
+              updateWorkingItem(record.product_id, {
+                input_expiry: date ? date.toISOString() : undefined,
+              })
+            }
+            disabled={isDone}
+          />
+        );
+      },
     },
   ];
 
@@ -486,29 +534,41 @@ const WarehouseReceiptPage = () => {
           </Col>
           <Col>
             <Space>
-              <Tooltip title="Đọc lệnh: 'Số lượng 50, Lô A123'">
+              <Tooltip title="Đọc lệnh giọng nói (Sắp ra mắt)">
                 <Button
                   icon={<Mic size={16} />}
                   onClick={handleVoiceCommand}
                   shape="circle"
                   size="large"
+                  disabled
                 />
               </Tooltip>
-              <Tooltip title="Quét Camera AI">
+              <Tooltip title="Quét Camera AI (Sắp ra mắt)">
                 <Button
                   icon={<Camera size={16} />}
                   onClick={handleCameraScan}
                   shape="circle"
                   size="large"
+                  disabled
                 />
               </Tooltip>
-              <Tooltip title="Upload phiếu giao hàng">
-                <Button
-                  icon={<Upload size={16} />}
-                  onClick={() => handleDocUpload(new File([], ""))}
-                  shape="circle"
-                  size="large"
-                />
+              <Tooltip title="Upload phiếu xuất kho NCC (Ảnh/PDF) → AI tự điền Lô + HSD">
+                <AntUpload
+                  accept="image/*,application/pdf"
+                  maxCount={1}
+                  showUploadList={false}
+                  beforeUpload={(file) => {
+                    handleDocUpload(file);
+                    return false; // ngăn upload mặc định, hook tự upload qua storage
+                  }}
+                >
+                  <Button
+                    icon={<Upload size={16} />}
+                    shape="circle"
+                    size="large"
+                    loading={isDocScanning}
+                  />
+                </AntUpload>
               </Tooltip>
             </Space>
           </Col>
@@ -555,10 +615,10 @@ const WarehouseReceiptPage = () => {
             <Button onClick={() => navigate("/inventory/inbound")}>
               Thoát
             </Button>
-            <Button 
-              onClick={handleSaveDraft} 
+            <Button
+              onClick={handleSaveDraft}
               disabled={isDone}
-              style={{ borderColor: '#faad14', color: '#faad14' }}
+              style={{ borderColor: "#faad14", color: "#faad14" }}
             >
               Lưu Nháp (F3)
             </Button>

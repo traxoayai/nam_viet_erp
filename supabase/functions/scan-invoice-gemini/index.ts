@@ -28,7 +28,7 @@ serve(async (req) => {
     try {
       body = JSON.parse(rawBody);
       if (typeof body === "string") body = JSON.parse(body);
-    } catch (e) {
+    } catch {
       throw new Error("Invalid JSON");
     }
 
@@ -41,8 +41,12 @@ serve(async (req) => {
     }
 
     // 4. Main Logic
-    const { file_url, mime_type } = body;
+    const { file_url, mime_type, mode } = body;
     if (!file_url) throw new Error("Missing file_url");
+    // mode='extract_only' → chỉ scan + trả parsed_data, KHÔNG insert/update
+    // finance_invoices. Dùng cho phiếu xuất kho NCC ở trang nhập kho/mua hàng
+    // (mục đích chỉ auto-fill lot/expiry, không phải hóa đơn VAT).
+    const extractOnly = mode === "extract_only";
 
     // Download & Convert
     const fileResp = await fetch(file_url);
@@ -112,7 +116,22 @@ serve(async (req) => {
     );
 
     // ==================================================================
-    // 5. DEDUPLICATION LOGIC (CHỐNG TRÙNG LẶP) - THEO YÊU CẦU AURA
+    // 5. EXTRACT-ONLY SHORT-CIRCUIT (cho flow nhập kho từ phiếu xuất NCC)
+    // ==================================================================
+    if (extractOnly) {
+      console.log(`[ExtractOnly] Skip DB insert, return parsed only`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: parsedInvoice,
+          action: "EXTRACT_ONLY",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ==================================================================
+    // 6. DEDUPLICATION LOGIC (CHỐNG TRÙNG LẶP) - THEO YÊU CẦU AURA
     // ==================================================================
     const supabase = createClient(supabaseUrl, supabaseKey);
     let targetId;
@@ -210,14 +229,12 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error: any) {
-    console.error("Fatal:", error.message);
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("Fatal:", errMsg);
+    return new Response(JSON.stringify({ success: false, error: errMsg }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
