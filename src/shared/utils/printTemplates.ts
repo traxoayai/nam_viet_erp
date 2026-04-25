@@ -1,6 +1,127 @@
 // src/shared/utils/printTemplates.ts
 import dayjs from "dayjs";
 
+import { formatVnd } from "./format";
+
+// ─── Local types (print-only, không export) ──────────────────────────────────
+
+interface PrintItem {
+  product_name?: string;
+  name?: string;
+  uom?: string;
+  unit?: string;
+  uom_ordered?: string;
+  quantity?: number;
+  quantity_ordered?: number;
+  quantity_returned?: number;
+  unit_price?: number;
+  total_line?: number;
+  batch_no?: string;
+  expiry_date?: string;
+  note?: string;
+  is_bonus?: boolean;
+  product?: { name?: string };
+  product_sku?: string;
+  usage_note?: string;
+  unit_name?: string;
+}
+
+interface PrintOrder {
+  code?: string;
+  created_at?: string;
+  customer_name?: string;
+  customer_phone?: string;
+  delivery_address?: string;
+  note?: string;
+  sub_total?: number;
+  total_amount?: number;
+  discount_amount?: number;
+  shipping_fee?: number;
+  final_amount?: number;
+  old_debt?: number;
+  total_payable_display?: number;
+  loyalty_points?: number;
+  supplier_name?: string;
+  supplier_phone?: string;
+  supplier_address?: string;
+  created_by_name?: string;
+  items?: PrintItem[];
+}
+
+interface PrintTransaction {
+  code?: string;
+  flow?: string;
+  amount?: number;
+  description?: string;
+  partner_name_cache?: string;
+  partner_name?: string;
+}
+
+interface PrintAppointment {
+  appointment_time?: string;
+  customer_name?: string;
+  customer_yob?: string | number;
+  customer_gender?: string;
+  customer_phone?: string;
+  service_names_mapped?: string[];
+  room_name?: string;
+}
+
+interface PatientInfo {
+  full_name?: string;
+  name?: string;
+  gender?: string;
+  dob?: string;
+  address?: string;
+}
+
+interface PrintMedicalData {
+  patientInfo: PatientInfo;
+  vitals?: {
+    weight?: string | number;
+    height?: string | number;
+    bp_systolic?: string | number;
+    bp_diastolic?: string | number;
+    pulse?: string | number;
+  };
+  clinical?: {
+    reason?: string;
+    symptoms?: string;
+    diagnosis?: string;
+    note?: string;
+    doctor_notes?: string;
+  };
+  prescriptionItems?: PrintItem[];
+  doctorName?: string;
+  reExamDate?: string;
+}
+
+interface LabResultItem {
+  name?: string;
+  value?: string | number;
+  unit?: string;
+  ref?: string;
+  eval?: string;
+}
+
+interface PrintLabData {
+  patientInfo: PatientInfo;
+  serviceName?: string;
+  results?: LabResultItem[];
+  doctorName?: string;
+  date?: string;
+}
+
+interface PrintImagingData {
+  patientInfo: PatientInfo;
+  serviceName?: string;
+  descriptionHtml?: string;
+  conclusionHtml?: string;
+  recommendation?: string;
+  doctorName?: string;
+  date?: string;
+}
+
 // Config tài khoản ngân hàng nhận tiền (Sau này đưa vào Setting)
 const BANK_ID = "Timo"; // Ví dụ: MB, VCB, TPB
 const BANK_ACCOUNT = "0965637788";
@@ -19,20 +140,20 @@ const triggerPrint = (htmlContent: string) => {
 };
 
 // 1. IN BILL K80 (CÓ QR CODE)
-export const printPosBill = (order: any) => {
+export const printPosBill = (order: PrintOrder) => {
   // Tạo link VietQR động
   const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-compact.png?amount=${order.final_amount}&addInfo=TT ${dayjs().format("DDMMYYHHmm")}`;
 
-  const itemsHtml = order.items
+  const itemsHtml = (order.items ?? [])
     .map(
-      (item: any, index: number) => `
+      (item: PrintItem, index: number) => `
      <div class="grid grid-cols-12 items-start mb-2">
         <div class="col-span-6 font-semibold">
            ${index + 1}. ${item.product_name}
            <div class="text-[10px] text-gray-400 font-light">${item.uom}</div>
         </div>
         <div class="col-span-2 text-center">${item.quantity}</div>
-        <div class="col-span-4 text-right">${(item.unit_price * item.quantity).toLocaleString()}</div>
+        <div class="col-span-4 text-right">${formatVnd((item.unit_price ?? 0) * (item.quantity ?? 0))}</div>
      </div>
   `
     )
@@ -64,12 +185,16 @@ export const printPosBill = (order: any) => {
                 <div>Mã: <b>PREVIEW</b></div>
                 <div>${dayjs().format("HH:mm:ss DD/MM/YYYY")}</div>
             </div>
-            ${order.customer_name ? `
+            ${
+              order.customer_name
+                ? `
             <div class="text-[10px] mt-1">
                 <div>KH: <b>${order.customer_name}</b>${order.customer_phone ? ` - ${order.customer_phone}` : ""}</div>
-                ${order.loyalty_points != null ? `<div>Điểm tích lũy: <b>${order.loyalty_points?.toLocaleString() || 0}</b></div>` : ""}
+                ${order.loyalty_points != null ? `<div>Điểm tích lũy: <b>${formatVnd(order.loyalty_points ?? 0)}</b></div>` : ""}
             </div>
-            ` : ""}
+            `
+                : ""
+            }
             <div class="dashed-line"></div>
             
             <div class="grid grid-cols-12 font-bold uppercase mb-2 text-[10px]">
@@ -83,10 +208,10 @@ export const printPosBill = (order: any) => {
             <div class="dashed-line"></div>
             
             <div class="space-y-1 receipt-font text-[11px]">
-                 <div class="flex justify-between"><span>Tạm tính:</span><span>${order.sub_total?.toLocaleString()}</span></div>
-                 <div class="flex justify-between"><span>Giảm giá:</span><span>-${order.discount_amount?.toLocaleString()}</span></div>
+                 <div class="flex justify-between"><span>Tạm tính:</span><span>${formatVnd(order.sub_total ?? 0)}</span></div>
+                 <div class="flex justify-between"><span>Giảm giá:</span><span>-${formatVnd(order.discount_amount ?? 0)}</span></div>
                  <div class="flex justify-between font-bold text-sm mt-2 border-t pt-1">
-                    <span>TỔNG CỘNG:</span><span>${order.final_amount?.toLocaleString()}</span>
+                    <span>TỔNG CỘNG:</span><span>${formatVnd(order.final_amount ?? 0)}</span>
                  </div>
             </div>
 
@@ -163,7 +288,7 @@ export const printInstruction = (
 };
 
 // 3. IN ĐƠN HÀNG B2B (A4) - Layout 2 Cột
-export const generateB2BOrderHTML = (order: any) => {
+export const generateB2BOrderHTML = (order: PrintOrder) => {
   const companyInfo = {
     name: "CÔNG TY TNHH DƯỢC - TBYT NAM VIỆT",
     address: "Số 17, Đường Bắc Sơn, Xã Hữu Lũng, Lạng Sơn",
@@ -187,7 +312,7 @@ export const generateB2BOrderHTML = (order: any) => {
   const rows =
     order.items
       ?.map(
-        (item: any, index: number) => `
+        (item: PrintItem, index: number) => `
     <tr>
       <td style="text-align: center;">${index + 1}</td>
       <td>
@@ -203,8 +328,8 @@ export const generateB2BOrderHTML = (order: any) => {
         ${item.quantity}
         ${(item.quantity_returned || 0) > 0 ? `<div style="font-size: 10px; font-style: italic; color: #cf1322; margin-top: 2px;">- Trả: ${item.quantity_returned}</div>` : ""}
       </td>
-      <td style="text-align: right;">${Number(item.unit_price).toLocaleString()}</td>
-      <td style="text-align: right;">${Number(item.total_line).toLocaleString()}</td>
+      <td style="text-align: right;">${formatVnd(item.unit_price ?? 0)}</td>
+      <td style="text-align: right;">${formatVnd(item.total_line ?? 0)}</td>
     </tr>
   `
       )
@@ -294,20 +419,20 @@ export const generateB2BOrderHTML = (order: any) => {
                 </div>
             </div>
             <div class="total-col" style="width: 60%;">
-               <div class="total-row"><span>Cộng tiền hàng:</span> <span>${Number(order.sub_total ?? order.total_amount ?? 0).toLocaleString()} ₫</span></div>
-               <div class="total-row"><span>Chiết khấu:</span> <span>- ${Number(order.discount_amount || 0).toLocaleString()} ₫</span></div>
-               <div class="total-row"><span>Phí vận chuyển:</span> <span>+ ${Number(order.shipping_fee || 0).toLocaleString()} ₫</span></div>
+               <div class="total-row"><span>Cộng tiền hàng:</span> <span>${formatVnd(order.sub_total ?? order.total_amount ?? 0)} ₫</span></div>
+               <div class="total-row"><span>Chiết khấu:</span> <span>- ${formatVnd(order.discount_amount || 0)} ₫</span></div>
+               <div class="total-row"><span>Phí vận chuyển:</span> <span>+ ${formatVnd(order.shipping_fee || 0)} ₫</span></div>
 
                <div style="border-top: 1px dashed #ccc; margin: 5px 0;"></div>
 
-               <div class="total-row"><span>Thanh toán đơn này:</span> <b>${currentTotal.toLocaleString()} ₫</b></div>
+               <div class="total-row"><span>Thanh toán đơn này:</span> <b>${formatVnd(currentTotal)} ₫</b></div>
 
                ${
                  oldDebt !== 0
                    ? `
                    <div class="total-row" style="color: ${oldDebt > 0 ? "#d4380d" : "#389e0d"};">
                        <span>${oldDebt > 0 ? "Nợ cũ (Cộng dồn):" : "Khách đã trả trước (Trừ vào tổng):"}</span>
-                       <span>${oldDebt > 0 ? "" : "- "}${Math.abs(oldDebt).toLocaleString()} ₫</span>
+                       <span>${oldDebt > 0 ? "" : "- "}${formatVnd(Math.abs(oldDebt))} ₫</span>
                    </div>
                `
                    : ""
@@ -315,7 +440,7 @@ export const generateB2BOrderHTML = (order: any) => {
 
                <div class="total-row final-row">
                    <span>TỔNG CỘNG PHẢI TRẢ:</span> 
-                   <span>${totalPayable.toLocaleString()} ₫</span>
+                   <span>${formatVnd(totalPayable)} ₫</span>
                </div>
             </div>
          </div>
@@ -338,7 +463,7 @@ export const generateB2BOrderHTML = (order: any) => {
 };
 
 // 4. IN PHIẾU THU / CHI
-export const generatePaymentVoucherHTML = (trans: any) => {
+export const generatePaymentVoucherHTML = (trans: PrintTransaction) => {
   const isReceipt = trans.flow === "in";
   const title = isReceipt ? "PHIẾU THU TIỀN" : "PHIẾU CHI TIỀN";
 
@@ -370,7 +495,7 @@ export const generatePaymentVoucherHTML = (trans: any) => {
         <div class="row"><div class="label">${isReceipt ? "Người nộp tiền" : "Người nhận tiền"}:</div><div class="value">${trans.partner_name_cache || trans.partner_name || "..."}</div></div>
         <div class="row"><div class="label">Địa chỉ:</div><div class="value">...</div></div>
         <div class="row"><div class="label">Lý do:</div><div class="value">${trans.description}</div></div>
-        <div class="row"><div class="label">Số tiền:</div><div class="value" style="font-weight: bold; font-size: 16px;">${Number(trans.amount).toLocaleString()} VNĐ</div></div>
+        <div class="row"><div class="label">Số tiền:</div><div class="value" style="font-weight: bold; font-size: 16px;">${formatVnd(trans.amount ?? 0)} VNĐ</div></div>
         <div class="row"><div class="label">Bằng chữ:</div><div class="value">...</div></div>
         <div class="row"><div class="label">Kèm theo:</div><div class="value">... chứng từ gốc</div></div>
 
@@ -386,7 +511,7 @@ export const generatePaymentVoucherHTML = (trans: any) => {
 };
 
 // 5. IN PHIẾU HẸN KHÁM / SỐ THỨ TỰ (K80)
-export const printAppointmentSlip = (appt: any) => {
+export const printAppointmentSlip = (appt: PrintAppointment) => {
   const html = `
     <!DOCTYPE html>
     <html lang="vi">
@@ -451,14 +576,14 @@ export const printAppointmentSlip = (appt: any) => {
 };
 
 // 6. IN PHIẾU KHÁM BỆNH (A4)
-export const printMedicalVisit = (data: any) => {
+export const printMedicalVisit = (data: PrintMedicalData) => {
   // data bao gồm: patientInfo, vitals, clinical, prescriptionItems, doctorName
   const win = window.open("", "", "height=700,width=900");
   if (!win) return;
 
   const rows = data.prescriptionItems
     ?.map(
-      (item: any, idx: number) => `
+      (item: PrintItem, idx: number) => `
     <tr>
         <td style="text-align: center">${idx + 1}</td>
         <td>
@@ -490,7 +615,7 @@ export const printMedicalVisit = (data: any) => {
         
         <div class="section">
           <div><span class="label">Họ tên:</span> ${data.patientInfo.full_name || data.patientInfo.name} (${data.patientInfo.gender === "male" ? "Nam" : "Nữ"})</div>
-          <div><span class="label">Năm sinh:</span> ${new Date(data.patientInfo.dob).getFullYear()} (${new Date().getFullYear() - new Date(data.patientInfo.dob).getFullYear()} tuổi)</div>
+          <div><span class="label">Năm sinh:</span> ${data.patientInfo.dob ? `${new Date(data.patientInfo.dob).getFullYear()} (${new Date().getFullYear() - new Date(data.patientInfo.dob).getFullYear()} tuổi)` : "..."}</div>
           <div><span class="label">Địa chỉ:</span> ${data.patientInfo.address || "..."}</div>
         </div>
 
@@ -540,7 +665,7 @@ export const printMedicalVisit = (data: any) => {
 };
 
 // 7. IN KẾT QUẢ CHẨN ĐOÁN HÌNH ẢNH (A4/A5)
-export const printImagingResult = (data: any) => {
+export const printImagingResult = (data: PrintImagingData) => {
   // data: { patientInfo, serviceName, descriptionHtml, conclusionHtml, recommendation, doctorName, date }
   const win = window.open("", "", "height=700,width=900");
   if (!win) return;
@@ -619,13 +744,13 @@ export const printImagingResult = (data: any) => {
 };
 
 // 8. IN KẾT QUẢ XÉT NGHIỆM (A4)
-export const printLabResult = (data: any) => {
+export const printLabResult = (data: PrintLabData) => {
   // data: { patientInfo, serviceName, results: [{ name, value, unit, ref, eval }], doctorName, date }
   const win = window.open("", "", "height=700,width=900");
   if (!win) return;
 
   const rows = data.results
-    ?.map((item: any, idx: number) => {
+    ?.map((item: LabResultItem, idx: number) => {
       const isAbnormal =
         item.eval === "High" || item.eval === "Low" || item.eval === "Positive";
       return `
@@ -708,7 +833,7 @@ export const printLabResult = (data: any) => {
 };
 
 // 9. IN ĐƠN MUA HÀNG (PURCHASE ORDER - A4)
-export const printPurchaseOrder = (order: any) => {
+export const printPurchaseOrder = (order: PrintOrder) => {
   const companyInfo = {
     name: "CÔNG TY TNHH DƯỢC - TBYT NAM VIỆT",
     address: "Số 17, Đường Bắc Sơn, Xã Hữu Lũng, Lạng Sơn",
@@ -716,23 +841,24 @@ export const printPurchaseOrder = (order: any) => {
     phone: "0585.123.888",
   };
 
-  const rows = order.items
-    ?.map(
-      (item: any, index: number) => `
+  const rows =
+    order.items
+      ?.map(
+        (item: PrintItem, index: number) => `
     <tr>
       <td style="text-align: center;">${index + 1}</td>
       <td>
         <div style="font-weight: bold;">${item.product_name || item.name || item.product?.name || "Tên sản phẩm"}</div>
-        ${item.is_bonus ? '<div style="font-size: 11px; color: #cf1322;">(Hàng tặng/KM)</div>' : ''}
+        ${item.is_bonus ? '<div style="font-size: 11px; color: #cf1322;">(Hàng tặng/KM)</div>' : ""}
       </td>
       <td style="text-align: center;">${item.uom || item.unit || item.uom_ordered || "-"}</td>
       <td style="text-align: center; font-weight: bold;">${item.quantity_ordered || item.quantity || 0}</td>
-      <td style="text-align: right;">${Number(item.unit_price || 0).toLocaleString()}</td>
-      <td style="text-align: right;">${Number((item.unit_price || 0) * (item.quantity_ordered || item.quantity || 0)).toLocaleString()}</td>
+      <td style="text-align: right;">${formatVnd(item.unit_price || 0)}</td>
+      <td style="text-align: right;">${formatVnd((item.unit_price || 0) * (item.quantity_ordered || item.quantity || 0))}</td>
     </tr>
   `
-    )
-    .join("") || "";
+      )
+      .join("") || "";
 
   const html = `
     <!DOCTYPE html>
@@ -805,12 +931,12 @@ export const printPurchaseOrder = (order: any) => {
         </table>
 
         <div class="total-section">
-           <div class="total-row"><span>Cộng tiền hàng:</span> <span>${Number(order.sub_total || 0).toLocaleString()} ₫</span></div>
-           <div class="total-row"><span>Chiết khấu:</span> <span>- ${Number(order.discount_amount || 0).toLocaleString()} ₫</span></div>
-           <div class="total-row"><span>Phí vận chuyển:</span> <span>+ ${Number(order.shipping_fee || 0).toLocaleString()} ₫</span></div>
+           <div class="total-row"><span>Cộng tiền hàng:</span> <span>${formatVnd(order.sub_total || 0)} ₫</span></div>
+           <div class="total-row"><span>Chiết khấu:</span> <span>- ${formatVnd(order.discount_amount || 0)} ₫</span></div>
+           <div class="total-row"><span>Phí vận chuyển:</span> <span>+ ${formatVnd(order.shipping_fee || 0)} ₫</span></div>
            <div class="total-row final-row" style="margin-top: 10px;">
-               <span>TỔNG CỘNG:</span> 
-               <span>${Number(order.final_amount || 0).toLocaleString()} ₫</span>
+               <span>TỔNG CỘNG:</span>
+               <span>${formatVnd(order.final_amount || 0)} ₫</span>
            </div>
         </div>
         
@@ -826,7 +952,7 @@ export const printPurchaseOrder = (order: any) => {
       </body>
     </html>
   `;
-  
+
   // Gọi hàm triggerPrint có sẵn ở đầu file printTemplates.ts
   triggerPrint(html);
 };
