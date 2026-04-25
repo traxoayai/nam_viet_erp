@@ -53,6 +53,8 @@ export interface B2BOrderDetailItem {
   unit_price: number;
   total_price: number;
   unit_name?: string;
+  /** Vị trí kệ tại kho xuất bán — lookup từ product_inventory.shelf_location */
+  shelf_location?: string;
 }
 
 export interface B2BOrderDetail {

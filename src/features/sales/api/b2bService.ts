@@ -46,24 +46,99 @@ export const b2bService = {
       throw error;
     }
 
-    const orderData = data as any;
+    interface RawOrderItem {
+      id: string;
+      uom?: string;
+      quantity?: number;
+      unit_price?: number;
+      total_line?: number;
+      batch_no?: string;
+      expiry_date?: string;
+      product?: {
+        id?: number;
+        sku?: string;
+        name?: string;
+        image_url?: string;
+        wholesale_unit?: string;
+      };
+    }
+    interface RawCustomer {
+      id?: string | number;
+      name?: string;
+      phone?: string;
+      address?: string;
+      shipping_address?: string;
+      tax_code?: string;
+      email?: string;
+    }
+    interface RawOrderRow {
+      id: string;
+      code: string;
+      status: string;
+      created_at: string;
+      note?: string;
+      payment_method?: string;
+      delivery_address?: string;
+      total_amount?: number;
+      discount_amount?: number;
+      shipping_fee?: number;
+      final_amount?: number;
+      paid_amount?: number;
+      payment_status?: string;
+      warehouse_id?: number;
+      customer_b2b?: RawCustomer;
+      customer_b2c?: RawCustomer;
+      order_items?: RawOrderItem[];
+      sales_invoices?: Array<{
+        id: number;
+        status: string;
+        invoice_number?: string;
+        created_at: string;
+      }>;
+    }
+    const orderData = data as unknown as RawOrderRow;
     const customerData = orderData.customer_b2b || orderData.customer_b2c;
+
+    // Lookup vị trí kệ (shelf_location) cho từng sản phẩm tại kho xuất bán
+    // của đơn — phục vụ in phiếu giao hàng để dược sĩ nhặt theo trật tự kệ.
+    const productIds: number[] = (orderData.order_items || [])
+      .map((it: { product?: { id?: number } }) => it.product?.id)
+      .filter((v: unknown): v is number => typeof v === "number");
+    const shelfMap = new Map<number, string>();
+    if (orderData.warehouse_id && productIds.length > 0) {
+      const { data: invRows } = await supabase
+        .from("product_inventory")
+        .select("product_id, shelf_location")
+        .eq("warehouse_id", orderData.warehouse_id)
+        .in("product_id", productIds);
+      for (const r of (invRows ?? []) as Array<{
+        product_id: number;
+        shelf_location: string | null;
+      }>) {
+        if (r.shelf_location) shelfMap.set(r.product_id, r.shelf_location);
+      }
+    }
 
     // Transform response to match B2BOrderDetail interface
     return {
       id: orderData.id,
       code: orderData.code,
-      status: orderData.status,
+      status: orderData.status as B2BOrderDetail["status"],
       created_at: orderData.created_at,
       note: orderData.note,
-      payment_method: orderData.payment_method || "COD", // Fallback nếu null
+      payment_method:
+        (orderData.payment_method as B2BOrderDetail["payment_method"]) ||
+        "cash", // Fallback nếu null
 
       // Map Customer Info (Fix cột name, phone, shipping_address)
-      customer_id: customerData?.id,
+      customer_id: String(customerData?.id ?? ""),
       customer_name: customerData?.name || "Khách lẻ",
       customer_phone: customerData?.phone,
       delivery_address:
-        orderData.delivery_address || customerData?.shipping_address || customerData?.address,
+        orderData.delivery_address ||
+        customerData?.shipping_address ||
+        customerData?.address ||
+        "",
       tax_code: customerData?.tax_code,
       customer_email: customerData?.email,
 
@@ -73,26 +148,35 @@ export const b2bService = {
       shipping_fee: orderData.shipping_fee || 0,
       final_amount: orderData.final_amount || 0, // DB: final_amount là khách phải trả
       paid_amount: orderData.paid_amount || 0,
-      payment_status: orderData.payment_status || "unpaid",
+      payment_status:
+        (orderData.payment_status as B2BOrderDetail["payment_status"]) ||
+        "unpaid",
 
       // Map Items
-      items: (orderData.order_items || []).map((item: any) => ({
+      items: (orderData.order_items || []).map((item) => ({
         id: item.id,
-        product_id: item.product?.id,
+        product_id: String(item.product?.id ?? ""),
         sku: item.product?.sku,
         batch_no: item.batch_no,
         expiry_date: item.expiry_date,
         product_name: item.product?.name || "Sản phẩm đã xóa",
         product_image: item.product?.image_url,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
+        quantity: Number(item.quantity ?? 0),
+        unit_price: Number(item.unit_price ?? 0),
         // Lưu ý: total_line trong DB là cột generated, hoặc tính tay
-        total_price: item.total_line || item.quantity * item.unit_price,
+        total_price:
+          Number(item.total_line ?? 0) ||
+          Number(item.quantity ?? 0) * Number(item.unit_price ?? 0),
         // [FIX] Ưu tiên lấy uom của đơn hàng, nếu không có mới fallback về wholesale_unit
-        unit_name: item.uom || item.product?.wholesale_unit || "ĐV", 
+        unit_name: item.uom || item.product?.wholesale_unit || "ĐV",
         uom: item.uom || item.product?.wholesale_unit || "ĐV", // Cung cấp biến uom cho printTemplates
+        shelf_location:
+          (item.product?.id !== undefined && shelfMap.get(item.product.id)) ||
+          undefined,
       })),
-      sales_invoices: orderData.sales_invoices?.[0] || null, // Map invoice info
+      sales_invoices: (orderData.sales_invoices?.[0] ?? null) as
+        | B2BOrderDetail["sales_invoices"]
+        | null,
     };
   },
 
@@ -121,7 +205,7 @@ export const b2bService = {
   },
 
   // Gọi RPC Xử lý Trả Hàng Bán
-  async processSalesReturn(payload: any) {
+  async processSalesReturn(payload: Record<string, unknown>) {
     const { data } = await safeRpc("process_sales_return", {
       p_payload: payload,
     });

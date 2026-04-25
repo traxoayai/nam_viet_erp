@@ -24,6 +24,7 @@ interface PrintItem {
   product_sku?: string;
   usage_note?: string;
   unit_name?: string;
+  shelf_location?: string;
 }
 
 interface PrintOrder {
@@ -309,17 +310,31 @@ export const generateB2BOrderHTML = (order: PrintOrder) => {
   const qrContent = `TT ${order.code}`;
   const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-qr_only.png?amount=${qrAmount}&addInfo=${encodeURIComponent(qrContent)}&accountName=${encodeURIComponent(ACCOUNT_NAME)}`;
 
+  // Sort items theo vị trí kệ (shelf_location) A-Z để dược sĩ nhặt theo trật
+  // tự kho. Items thiếu vị trí / "Chưa xếp" / rỗng → đẩy xuống cuối.
+  const sortedItems = [...(order.items ?? [])].sort((a, b) => {
+    const sa = (a.shelf_location ?? "").trim();
+    const sb = (b.shelf_location ?? "").trim();
+    const aEmpty = !sa || sa === "Chưa xếp";
+    const bEmpty = !sb || sb === "Chưa xếp";
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;
+    if (bEmpty) return -1;
+    return sa.localeCompare(sb, "vi", { numeric: true, sensitivity: "base" });
+  });
+
   const rows =
-    order.items
-      ?.map(
+    sortedItems
+      .map(
         (item: PrintItem, index: number) => `
     <tr>
       <td style="text-align: center;">${index + 1}</td>
       <td>
         <div style="font-weight: bold;">${item.product_name}</div>
         <div style="font-size: 10px; color: #444;">
-             ${item.batch_no ? `Lô: ${item.batch_no}` : ""} 
+             ${item.batch_no ? `Lô: ${item.batch_no}` : ""}
              ${item.expiry_date ? `| HSD: ${dayjs(item.expiry_date).format("DD/MM/YY")}` : ""}
+             ${item.shelf_location ? `| <span style="color: #096dd9; font-weight: 600;">📍 ${item.shelf_location}</span>` : ""}
         </div>
         ${item.note ? `<div style="font-style: italic; font-size: 10px;">(${item.note})</div>` : ""}
       </td>
