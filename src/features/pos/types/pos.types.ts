@@ -73,6 +73,19 @@ export interface PosCustomerSearchResult {
   sub_label: string | null; // Quan trọng: "PH: Nguyễn Văn A" hoặc "Người LH: ..."
 }
 
+/**
+ * Type cho customer trong POS cart.
+ * Mở rộng PosCustomerSearchResult với các trường optional
+ * được trả về bởi RPC chi tiết (clinical, lâm sàng).
+ */
+export interface PosCustomer extends PosCustomerSearchResult {
+  buyer_name?: string | null;
+  age_formatted?: string | null;
+  dob?: string | null;
+  allergies?: string | null;
+  medical_history?: string | null;
+}
+
 export interface WarehousePosData {
   id: number;
   name: string;

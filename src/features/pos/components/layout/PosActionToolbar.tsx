@@ -132,7 +132,7 @@ export const PosActionToolbar = () => {
             typeof VatInvoiceModal
           >[0]["orderItems"]
         }
-        customer={customer}
+        customer={customer ?? null}
       />
 
       <Row gutter={[12, 12]}>

@@ -1,6 +1,11 @@
 // src/features/finance/components/invoices/VatExportEntryModal.tsx
 // Modal nhập HĐ VAT đã xuất → Trừ kho hóa đơn VAT
 import {
+  PlusOutlined,
+  DeleteOutlined,
+  MinusCircleOutlined,
+} from "@ant-design/icons";
+import {
   Modal,
   Form,
   Input,
@@ -13,17 +18,18 @@ import {
   App,
   Select,
 } from "antd";
-import {
-  PlusOutlined,
-  DeleteOutlined,
-  MinusCircleOutlined,
-} from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useState, useCallback, useRef } from "react";
 
 import { invoiceService } from "../../api/invoiceService";
-import { moneyLineTotal, moneyMul, moneyAdd, fmtMoney } from "@/shared/utils/money";
+
 import { supabase } from "@/shared/lib/supabaseClient";
+import {
+  moneyLineTotal,
+  moneyMul,
+  moneyAdd,
+  fmtMoney,
+} from "@/shared/utils/money";
 
 const { Text } = Typography;
 
@@ -43,14 +49,21 @@ interface Props {
   onSuccess?: () => void;
 }
 
-const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
+const VatExportEntryModal: React.FC<Props> = ({
+  open,
+  onCancel,
+  onSuccess,
+}) => {
   const { message } = App.useApp();
   const [form] = Form.useForm();
   const [items, setItems] = useState<VatExportItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const submitLockRef = useRef(false);
 
   // Product search state
-  const [productOptions, setProductOptions] = useState<{ value: number; label: string; name: string }[]>([]);
+  const [productOptions, setProductOptions] = useState<
+    { value: number; label: string; name: string }[]
+  >([]);
   const [productSearchLoading, setProductSearchLoading] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -70,11 +83,13 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
           .limit(20);
         if (error) throw error;
         setProductOptions(
-          (data || []).map((p: any) => ({
-            value: p.id,
-            label: `${p.sku ? p.sku + " - " : ""}${p.name}`,
-            name: p.name,
-          }))
+          (data || []).map(
+            (p: { id: number; name: string; sku: string | null }) => ({
+              value: p.id,
+              label: `${p.sku ? p.sku + " - " : ""}${p.name}`,
+              name: p.name,
+            })
+          )
         );
       } catch (err) {
         console.error("Product search error:", err);
@@ -103,7 +118,11 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
     setItems(items.filter((i) => i.key !== key));
   };
 
-  const updateItem = (key: string, field: keyof VatExportItem, value: any) => {
+  const updateItem = (
+    key: string,
+    field: keyof VatExportItem,
+    value: VatExportItem[keyof VatExportItem]
+  ) => {
     setItems(items.map((i) => (i.key === key ? { ...i, [field]: value } : i)));
   };
 
@@ -119,6 +138,8 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
   };
 
   const handleSubmit = async () => {
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
     try {
       const values = await form.validateFields();
       if (items.length === 0) {
@@ -165,10 +186,11 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
       setItems([]);
       onSuccess?.();
       onCancel();
-    } catch (err: any) {
-      message.error(err.message || "Lỗi ghi nhận hóa đơn xuất");
+    } catch (err: unknown) {
+      message.error((err as Error).message || "Lỗi ghi nhận hóa đơn xuất");
     } finally {
       setLoading(false);
+      submitLockRef.current = false;
     }
   };
 
@@ -179,7 +201,7 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
       title: "Sản phẩm",
       dataIndex: "product_name",
       width: 260,
-      render: (_: any, record: VatExportItem) => (
+      render: (_: unknown, record: VatExportItem) => (
         <Select
           showSearch
           value={record.product_id || undefined}
@@ -188,22 +210,37 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
           onSearch={handleProductSearch}
           loading={productSearchLoading}
           options={productOptions}
-          onChange={(value: number, option: any) => {
+          onChange={(
+            value: number,
+            option:
+              | { name: string; label: string }
+              | { name: string; label: string }[]
+              | undefined
+          ) => {
+            const opt = Array.isArray(option) ? option[0] : option;
             setItems((prev) =>
               prev.map((i) =>
                 i.key === record.key
-                  ? { ...i, product_id: value, product_name: option?.name || option?.label || "" }
+                  ? {
+                      ...i,
+                      product_id: value,
+                      product_name: opt?.name || opt?.label || "",
+                    }
                   : i
               )
             );
           }}
           style={{ width: "100%" }}
-          notFoundContent={productSearchLoading ? "Dang tim..." : "Khong tim thay"}
+          notFoundContent={
+            productSearchLoading ? "Dang tim..." : "Khong tim thay"
+          }
           allowClear
           onClear={() => {
             setItems((prev) =>
               prev.map((i) =>
-                i.key === record.key ? { ...i, product_id: null, product_name: "" } : i
+                i.key === record.key
+                  ? { ...i, product_id: null, product_name: "" }
+                  : i
               )
             );
           }}
@@ -214,7 +251,7 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
       title: "ĐVT",
       dataIndex: "unit",
       width: 100,
-      render: (_: any, record: VatExportItem) => (
+      render: (_: unknown, record: VatExportItem) => (
         <Input
           value={record.unit}
           onChange={(e) => updateItem(record.key, "unit", e.target.value)}
@@ -226,7 +263,7 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
       title: "SL",
       dataIndex: "quantity",
       width: 80,
-      render: (_: any, record: VatExportItem) => (
+      render: (_: unknown, record: VatExportItem) => (
         <InputNumber
           value={record.quantity}
           min={1}
@@ -239,7 +276,7 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
       title: "Đơn giá",
       dataIndex: "unit_price",
       width: 140,
-      render: (_: any, record: VatExportItem) => (
+      render: (_: unknown, record: VatExportItem) => (
         <InputNumber
           value={record.unit_price}
           min={0}
@@ -254,7 +291,7 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
       title: "VAT%",
       dataIndex: "vat_rate",
       width: 80,
-      render: (_: any, record: VatExportItem) => (
+      render: (_: unknown, record: VatExportItem) => (
         <InputNumber
           value={record.vat_rate}
           min={0}
@@ -267,14 +304,16 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
     {
       title: "Thành tiền",
       width: 120,
-      render: (_: any, record: VatExportItem) => (
-        <Text strong>{fmtMoney((record.quantity || 0) * (record.unit_price || 0))} ₫</Text>
+      render: (_: unknown, record: VatExportItem) => (
+        <Text strong>
+          {fmtMoney((record.quantity || 0) * (record.unit_price || 0))} ₫
+        </Text>
       ),
     },
     {
       title: "",
       width: 40,
-      render: (_: any, record: VatExportItem) => (
+      render: (_: unknown, record: VatExportItem) => (
         <Button
           danger
           type="text"
@@ -334,10 +373,18 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
           </Form.Item>
         </div>
         <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-          <Form.Item name="buyer_name" label="Tên người mua" style={{ flex: 2 }}>
+          <Form.Item
+            name="buyer_name"
+            label="Tên người mua"
+            style={{ flex: 2 }}
+          >
             <Input placeholder="Tên khách hàng / công ty" />
           </Form.Item>
-          <Form.Item name="buyer_tax_code" label="MST người mua" style={{ flex: 1 }}>
+          <Form.Item
+            name="buyer_tax_code"
+            label="MST người mua"
+            style={{ flex: 1 }}
+          >
             <Input placeholder="MST (nếu có)" />
           </Form.Item>
         </div>
@@ -367,16 +414,30 @@ const VatExportEntryModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => 
           border: "1px solid #ffccc7",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: 4,
+          }}
+        >
           <Text type="secondary">Tổng trước thuế:</Text>
           <Text strong>{fmtMoney(totals.preTax)} ₫</Text>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: 4,
+          }}
+        >
           <Text type="secondary">Thuế VAT:</Text>
           <Text strong>{fmtMoney(totals.tax)} ₫</Text>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <Text strong style={{ fontSize: 15, color: "#ff4d4f" }}>TỔNG CỘNG (Trừ kho):</Text>
+          <Text strong style={{ fontSize: 15, color: "#ff4d4f" }}>
+            TỔNG CỘNG (Trừ kho):
+          </Text>
           <Text strong style={{ fontSize: 15, color: "#ff4d4f" }}>
             {fmtMoney(totals.total)} ₫
           </Text>

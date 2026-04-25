@@ -6,6 +6,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import {
   CartItem,
   CartTotals,
+  PosCustomer,
   PosVoucher,
   PosProductSearchResult,
 } from "../types/pos.types";
@@ -20,7 +21,7 @@ export interface PosOrder {
   id: string; // UUID hoặc Timestamp
   name: string; // "Đơn 1", "Đơn 2"...
   items: CartItem[];
-  customer: any | null;
+  customer: PosCustomer | null;
   selectedVoucher: PosVoucher | null;
   isInvoiceRequested: boolean;
   note?: string; // Ghi chú đơn
@@ -41,8 +42,12 @@ interface PosCartState {
   addToCart: (product: PosProductSearchResult) => void;
   removeFromCart: (itemId: number) => void;
   updateQuantity: (itemId: number, qty: number) => void;
-  updateItemField: (id: number, field: keyof CartItem, value: any) => void;
-  setCustomer: (cust: any) => void;
+  updateItemField: (
+    id: number,
+    field: keyof CartItem,
+    value: CartItem[keyof CartItem]
+  ) => void;
+  setCustomer: (cust: PosCustomer | null) => void;
 
   toggleInvoiceRequest: () => void;
   setAvailableVouchers: (vouchers: PosVoucher[]) => void;
@@ -71,7 +76,8 @@ export const usePosCartStore = create<PosCartState>()(
         },
       ],
       activeOrderId: "default",
-      warehouseId: useAuthStore.getState().profile?.warehouse_id || DEFAULT_WAREHOUSE_ID,
+      warehouseId:
+        useAuthStore.getState().profile?.warehouse_id || DEFAULT_WAREHOUSE_ID,
       availableVouchers: [],
 
       getCurrentOrder: () => {
@@ -125,12 +131,13 @@ export const usePosCartStore = create<PosCartState>()(
         const { orders, activeOrderId } = get();
 
         // [FIX] Map lại vị trí kho từ API (phẳng) sang Object (để UI dùng không bị lỗi)
+        const flat = product as unknown as Record<string, string>;
         const normalizedProduct = {
           ...product,
           location: product.location || {
-            cabinet: (product as any).location_cabinet || "",
-            row: (product as any).location_row || "",
-            slot: (product as any).location_slot || "",
+            cabinet: flat.location_cabinet || "",
+            row: flat.location_row || "",
+            slot: flat.location_slot || "",
           },
         };
 
@@ -275,10 +282,14 @@ export const usePosCartStore = create<PosCartState>()(
         const orderIdBefore = get().activeOrderId;
 
         try {
-          const { data } = await safeRpc("get_pos_usable_promotions", {
-            p_customer_id: customerId,
-            p_order_total: total,
-          }, { silent: true });
+          const { data } = await safeRpc(
+            "get_pos_usable_promotions",
+            {
+              p_customer_id: customerId,
+              p_order_total: total,
+            },
+            { silent: true }
+          );
 
           // [5.2] Discard stale results if order switched during fetch
           if (get().activeOrderId !== orderIdBefore) return;
@@ -331,7 +342,9 @@ export const usePosCartStore = create<PosCartState>()(
         const { items, selectedVoucher, customer } = currentOrder;
 
         // 1. Tổng tiền hàng (dùng safe money arithmetic)
-        const subTotal = moneySum(items.map((i) => moneyLineTotal(i.qty, i.price)));
+        const subTotal = moneySum(
+          items.map((i) => moneyLineTotal(i.qty, i.price))
+        );
 
         // 2. Giảm giá (Voucher)
         let discountVal = 0;
@@ -340,7 +353,10 @@ export const usePosCartStore = create<PosCartState>()(
             if (selectedVoucher.discount_type === "fixed") {
               discountVal = selectedVoucher.discount_value;
             } else {
-              discountVal = moneyMul(subTotal, selectedVoucher.discount_value / 100);
+              discountVal = moneyMul(
+                subTotal,
+                selectedVoucher.discount_value / 100
+              );
               if (
                 selectedVoucher.max_discount_value &&
                 discountVal > selectedVoucher.max_discount_value

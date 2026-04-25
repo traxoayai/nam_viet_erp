@@ -37,6 +37,7 @@ import { useInventoryCheckStore } from "../stores/useInventoryCheckStore";
 import { InventoryCheckItem } from "../types/inventory.types";
 
 import { useAuth } from "@/app/contexts/AuthProvider";
+import { useSubmitLock } from "@/shared/hooks/useSubmitLock";
 import { DebounceSelect } from "@/shared/ui/common/DebounceSelect";
 import { parseVoiceCommand } from "@/shared/utils/voiceUtils";
 
@@ -49,6 +50,7 @@ export const InventoryCheckDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const screens = useBreakpoint(); // [NEW] Hook check màn hình
+  const { isLocked: completing, withLock } = useSubmitLock();
 
   const {
     items,
@@ -684,7 +686,11 @@ export const InventoryCheckDetail = () => {
           : `Bạn có chắc muốn hoàn tất phiếu kiểm kê (${items.length} dòng)?`,
       okText: uncountedCount > 0 ? "Vẫn hoàn tất" : "Hoàn tất",
       okType: uncountedCount > 0 ? "danger" : "primary",
-      onOk: () => user && completeSession(user.id),
+      onOk: () =>
+        withLock(async () => {
+          if (user) await completeSession(user.id);
+        }),
+      okButtonProps: { loading: completing, disabled: completing },
     });
   };
 
