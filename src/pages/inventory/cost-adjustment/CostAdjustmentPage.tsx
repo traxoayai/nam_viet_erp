@@ -42,6 +42,7 @@ import {
 import { useCostAdjustmentStore } from "@/features/inventory/stores/useCostAdjustmentStore";
 import { useWarehouseStore } from "@/features/inventory/stores/warehouseStore";
 import { useDebounce } from "@/shared/hooks/useDebounce";
+import { formatVnd } from "@/shared/utils/format";
 
 const { Title, Text } = Typography;
 
@@ -66,9 +67,6 @@ const REASON_OPTIONS: {
     desc: "Khuyến nghị lập dự phòng TK 2294 thay vì sửa trực tiếp giá gốc",
   },
 ];
-
-const formatMoney = (n: number) =>
-  new Intl.NumberFormat("vi-VN").format(Math.round(n || 0));
 
 const CostAdjustmentPage: React.FC = () => {
   const { warehouses, fetchWarehouses } = useWarehouseStore();
@@ -127,11 +125,8 @@ const CostAdjustmentPage: React.FC = () => {
   }, [debouncedSearch, setSearch, fetchGrid]);
 
   const dirtyCount = pendingChanges.size;
-  const dirtyDelta = useMemo(() => getDirtyDelta(), [pendingChanges, rows]);
-  const dirtyChanges = useMemo(
-    () => getDirtyChanges(),
-    [pendingChanges, rows]
-  );
+  const dirtyDelta = useMemo(() => getDirtyDelta(), [getDirtyDelta]);
+  const dirtyChanges = useMemo(() => getDirtyChanges(), [getDirtyChanges]);
 
   const openHistory = async (filter: typeof historyFilter) => {
     setHistoryFilter(filter);
@@ -170,7 +165,7 @@ const CostAdjustmentPage: React.FC = () => {
       key: "product",
       width: 280,
       fixed: "left" as const,
-      render: (_: any, r: BatchValuationRow) => (
+      render: (_: unknown, r: BatchValuationRow) => (
         <div>
           <div style={{ fontWeight: 500 }}>{r.product_name}</div>
           <Text type="secondary" style={{ fontSize: 12 }}>
@@ -206,7 +201,7 @@ const CostAdjustmentPage: React.FC = () => {
       key: "quantity",
       width: 90,
       align: "right" as const,
-      render: (v: number) => formatMoney(v),
+      render: (v: number) => formatVnd(v),
     },
     {
       title: "Giá vốn hiện tại",
@@ -221,7 +216,7 @@ const CostAdjustmentPage: React.FC = () => {
             fontWeight: v === 0 ? 600 : undefined,
           }}
         >
-          {formatMoney(v)} ₫
+          {formatVnd(v)} ₫
           {v === 0 && (
             <Tooltip title="Lô chưa có giá nhập">
               <WarningOutlined style={{ marginLeft: 6 }} />
@@ -234,7 +229,7 @@ const CostAdjustmentPage: React.FC = () => {
       title: "Giá vốn mới",
       key: "new_price",
       width: 180,
-      render: (_: any, r: BatchValuationRow) => {
+      render: (_: unknown, r: BatchValuationRow) => {
         const pending = pendingChanges.get(r.batch_id);
         const value = pending ?? r.inbound_price;
         const dirty =
@@ -249,9 +244,7 @@ const CostAdjustmentPage: React.FC = () => {
             min={0}
             step={1000}
             value={value}
-            formatter={(v) =>
-              `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-            }
+            formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
             parser={(v) =>
               (v?.replace(/[^\d]/g, "") || "0") as unknown as number
             }
@@ -267,7 +260,7 @@ const CostAdjustmentPage: React.FC = () => {
       key: "delta",
       width: 130,
       align: "right" as const,
-      render: (_: any, r: BatchValuationRow) => {
+      render: (_: unknown, r: BatchValuationRow) => {
         const pending = pendingChanges.get(r.batch_id);
         if (pending === undefined) return "—";
         const delta = r.quantity * (pending - r.inbound_price);
@@ -275,7 +268,7 @@ const CostAdjustmentPage: React.FC = () => {
         return (
           <Text type={delta > 0 ? "success" : "danger"}>
             {delta > 0 ? "+" : ""}
-            {formatMoney(delta)} ₫
+            {formatVnd(delta)} ₫
           </Text>
         );
       },
@@ -285,19 +278,17 @@ const CostAdjustmentPage: React.FC = () => {
       key: "new_value",
       width: 140,
       align: "right" as const,
-      render: (_: any, r: BatchValuationRow) => {
+      render: (_: unknown, r: BatchValuationRow) => {
         const pending = pendingChanges.get(r.batch_id);
         const price = pending ?? r.inbound_price;
-        return (
-          <strong>{formatMoney(r.quantity * price)} ₫</strong>
-        );
+        return <strong>{formatVnd(r.quantity * price)} ₫</strong>;
       },
     },
     {
       title: "",
       key: "action",
       width: 60,
-      render: (_: any, r: BatchValuationRow) => (
+      render: (_: unknown, r: BatchValuationRow) => (
         <Tooltip title="Xem lịch sử định giá của lô này">
           <Button
             type="text"
@@ -317,17 +308,14 @@ const CostAdjustmentPage: React.FC = () => {
             <DollarOutlined /> Điều chỉnh Giá Vốn theo Lô
           </Title>
           <Text type="secondary">
-            Sửa giá vốn (<code>batches.inbound_price</code>) — ghi audit
-            trail và đồng bộ sổ cái tồn kho VAT. Không ảnh hưởng báo cáo
-            COGS/đơn hàng đã xuất.
+            Sửa giá vốn (<code>batches.inbound_price</code>) — ghi audit trail
+            và đồng bộ sổ cái tồn kho VAT. Không ảnh hưởng báo cáo COGS/đơn hàng
+            đã xuất.
           </Text>
         </Col>
         <Col>
           <Space>
-            <Button
-              icon={<HistoryOutlined />}
-              onClick={() => openHistory({})}
-            >
+            <Button icon={<HistoryOutlined />} onClick={() => openHistory({})}>
               Lịch sử
             </Button>
             <Button
@@ -352,7 +340,7 @@ const CostAdjustmentPage: React.FC = () => {
               precision={0}
               suffix="₫"
               valueStyle={{ color: "#1677ff" }}
-              formatter={(v) => formatMoney(Number(v))}
+              formatter={(v) => formatVnd(Number(v))}
             />
           </Card>
         </Col>
@@ -382,7 +370,7 @@ const CostAdjustmentPage: React.FC = () => {
             {dirtyCount > 0 && (
               <Text type={dirtyDelta >= 0 ? "success" : "danger"}>
                 Δ tổng: {dirtyDelta > 0 ? "+" : ""}
-                {formatMoney(dirtyDelta)} ₫
+                {formatVnd(dirtyDelta)} ₫
               </Text>
             )}
           </Card>
@@ -398,7 +386,7 @@ const CostAdjustmentPage: React.FC = () => {
               placeholder="Chọn kho (tất cả)"
               value={warehouseId ?? undefined}
               onChange={(v) => setWarehouse(v ?? null)}
-              options={warehouses.map((w: any) => ({
+              options={warehouses.map((w) => ({
                 value: w.id,
                 label: w.name,
               }))}
@@ -469,7 +457,7 @@ const CostAdjustmentPage: React.FC = () => {
             <Text strong>{dirtyCount} lô đang sửa</Text>
             <Text type={dirtyDelta >= 0 ? "success" : "danger"}>
               Δ tổng: {dirtyDelta > 0 ? "+" : ""}
-              {formatMoney(dirtyDelta)} ₫
+              {formatVnd(dirtyDelta)} ₫
             </Text>
           </Space>
           <Space>
@@ -508,7 +496,7 @@ const CostAdjustmentPage: React.FC = () => {
           </Text>
           <Text type={dirtyDelta >= 0 ? "success" : "danger"}>
             {dirtyDelta > 0 ? "+" : ""}
-            {formatMoney(dirtyDelta)} ₫
+            {formatVnd(dirtyDelta)} ₫
           </Text>
         </div>
 
@@ -584,7 +572,7 @@ const CostAdjustmentPage: React.FC = () => {
             {
               title: "Sản phẩm / Lô",
               key: "pl",
-              render: (_: any, r: RevaluationHistoryRow) => (
+              render: (_: unknown, r: RevaluationHistoryRow) => (
                 <div>
                   <div>{r.product?.name || `#${r.product_id}`}</div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
@@ -596,10 +584,10 @@ const CostAdjustmentPage: React.FC = () => {
             {
               title: "Cũ → Mới",
               key: "change",
-              render: (_: any, r: RevaluationHistoryRow) => (
+              render: (_: unknown, r: RevaluationHistoryRow) => (
                 <span>
-                  {formatMoney(r.old_price)} →{" "}
-                  <strong>{formatMoney(r.new_price)}</strong>
+                  {formatVnd(r.old_price)} →{" "}
+                  <strong>{formatVnd(r.new_price)}</strong>
                 </span>
               ),
             },
@@ -610,7 +598,7 @@ const CostAdjustmentPage: React.FC = () => {
               render: (v: number) => (
                 <Text type={v >= 0 ? "success" : "danger"}>
                   {v > 0 ? "+" : ""}
-                  {formatMoney(v)} ₫
+                  {formatVnd(v)} ₫
                 </Text>
               ),
             },
@@ -618,7 +606,10 @@ const CostAdjustmentPage: React.FC = () => {
               title: "Lý do",
               dataIndex: "reason_code",
               render: (v: CostAdjustmentReason) => {
-                const map: Record<CostAdjustmentReason, { color: string; label: string }> = {
+                const map: Record<
+                  CostAdjustmentReason,
+                  { color: string; label: string }
+                > = {
                   data_fix: { color: "blue", label: "Sửa sai" },
                   supplier_adjust: { color: "purple", label: "NCC hồi tố" },
                   nrv_writedown: { color: "red", label: "NRV" },

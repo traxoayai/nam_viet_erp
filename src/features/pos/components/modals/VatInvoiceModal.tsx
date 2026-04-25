@@ -45,13 +45,13 @@ interface VatItem extends OrderItem {
 interface Customer {
   id?: number;
   name?: string;
-  buyer_name?: string;
-  tax_code?: string;
-  id_card_number?: string;
-  address?: string;
-  email?: string;
-  phone?: string;
-  payment_method?: string;
+  buyer_name?: string | null;
+  tax_code?: string | null;
+  id_card_number?: string | null;
+  address?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  payment_method?: string | null;
 }
 
 interface Props {

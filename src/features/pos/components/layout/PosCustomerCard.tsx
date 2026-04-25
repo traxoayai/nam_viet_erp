@@ -27,7 +27,7 @@ export const PosCustomerCard = () => {
   const customer = currentOrder?.customer;
 
   // [NEW] Helper tính tuổi gọn cho POS
-  const getCompactAge = (dobString: string) => {
+  const getCompactAge = (dobString?: string | null) => {
     if (!dobString) return null;
     const birth = dayjs(dobString);
     if (!birth.isValid()) return null;
@@ -58,6 +58,7 @@ export const PosCustomerCard = () => {
     } else {
       setAvailableVouchers([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer?.id, debouncedTotal]);
 
   // Hàm hiển thị cảnh báo Y tế (Hoặc nút nhắc cập nhật)

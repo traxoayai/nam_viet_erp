@@ -150,9 +150,7 @@ afterAll(async () => {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-// TODO: fix FK schema mismatch trong setup helper (batches/inventory_transactions)
-// Skip tạm để không block push. Behavior đã verify manual qua migration 030000.
-describe.skip("complete_inventory_check — skip dòng counted_at IS NULL", () => {
+describe("complete_inventory_check — skip dòng counted_at IS NULL", () => {
   it("setup: tạo phiếu DRAFT với 2 dòng (A đã đếm, B chưa đếm)", async () => {
     // Lấy warehouse đầu tiên
     const { data: wh } = await adminClient
@@ -231,7 +229,7 @@ describe.skip("complete_inventory_check — skip dòng counted_at IS NULL", () =
 
     const { data, error } = await adminClient.rpc("complete_inventory_check", {
       p_check_id: cleanup.checkId,
-      p_user_id: "00000000-0000-0000-0000-000000000001",
+      p_user_id: null,
     });
 
     expect(error).toBeNull();
@@ -302,5 +300,109 @@ describe.skip("complete_inventory_check — skip dòng counted_at IS NULL", () =
 
     expect(error).toBeNull();
     expect(data!.status).toBe("COMPLETED");
+  });
+
+  it("giữ số lẻ khi điều chỉnh thiếu fractional quantity", async () => {
+    const local: {
+      checkId?: number;
+      productId?: number;
+      batchId?: number;
+      inventoryBatchId?: number;
+    } = {};
+
+    const { data: wh } = await adminClient
+      .from("warehouses")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
+
+    if (!wh) {
+      console.warn("SKIP: không có warehouse trong DB");
+      return;
+    }
+
+    try {
+      local.productId = await createTestProduct("FRACTION");
+      const stock = await setupInventoryBatch(
+        wh.id,
+        local.productId,
+        1.5,
+        "FRACTION"
+      );
+      local.batchId = stock.batchId;
+      local.inventoryBatchId = stock.inventoryBatchId;
+
+      const { data: check, error: checkErr } = await adminClient
+        .from("inventory_checks")
+        .insert({
+          code: `KK-FRACTION-${Date.now()}`,
+          warehouse_id: wh.id,
+          status: "DRAFT",
+        })
+        .select("id")
+        .single();
+      expect(checkErr).toBeNull();
+      local.checkId = check.id;
+
+      const { error: itemErr } = await adminClient
+        .from("inventory_check_items")
+        .insert({
+          check_id: check.id,
+          product_id: local.productId,
+          system_quantity: 1.5,
+          actual_quantity: 1,
+          counted_at: new Date().toISOString(),
+        });
+      expect(itemErr).toBeNull();
+
+      const { data, error } = await adminClient.rpc(
+        "complete_inventory_check",
+        {
+          p_check_id: check.id,
+          p_user_id: null,
+        }
+      );
+
+      expect(error).toBeNull();
+      expect(Number(data.items_processed)).toBe(1);
+
+      const { data: inv, error: invErr } = await adminClient
+        .from("inventory_batches")
+        .select("quantity")
+        .eq("id", stock.inventoryBatchId)
+        .single();
+
+      expect(invErr).toBeNull();
+      expect(Number(inv!.quantity)).toBe(1);
+    } finally {
+      if (local.checkId) {
+        await adminClient
+          .from("inventory_check_items")
+          .delete()
+          .eq("check_id", local.checkId);
+        await adminClient
+          .from("inventory_checks")
+          .delete()
+          .eq("id", local.checkId);
+      }
+      if (local.productId) {
+        await adminClient
+          .from("inventory_transactions")
+          .delete()
+          .eq("product_id", local.productId);
+      }
+      if (local.inventoryBatchId) {
+        await adminClient
+          .from("inventory_batches")
+          .delete()
+          .eq("id", local.inventoryBatchId);
+      }
+      if (local.batchId) {
+        await adminClient.from("batches").delete().eq("id", local.batchId);
+      }
+      if (local.productId) {
+        await adminClient.from("products").delete().eq("id", local.productId);
+      }
+    }
   });
 });

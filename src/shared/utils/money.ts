@@ -3,11 +3,19 @@
 
 const SCALE = 1_000; // 3 decimal places
 
+/** Tolerance kế toán mặc định: 100đ (đồng bộ với DB payment allocation). */
+export const PAYMENT_TOLERANCE = 100;
+
 /** Chuyển float → integer (nhân SCALE) */
 const toInt = (n: number): number => Math.round(n * SCALE);
 
 /** Chuyển integer → float (chia SCALE) */
 const toFloat = (n: number): number => n / SCALE;
+
+const toMoneyNumber = (n: number | string | null | undefined): number => {
+  const parsed = Number(n ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 /** Cộng */
 export const moneyAdd = (a: number, b: number): number =>
@@ -16,6 +24,25 @@ export const moneyAdd = (a: number, b: number): number =>
 /** Trừ */
 export const moneySub = (a: number, b: number): number =>
   toFloat(toInt(a) - toInt(b));
+
+/** So sánh a >= b với tolerance — tránh lỗi float precision. */
+export const moneyGte = (
+  a: number | string | null | undefined,
+  b: number | string | null | undefined,
+  tolerance = 0
+): boolean =>
+  toInt(toMoneyNumber(a)) + toInt(tolerance) >= toInt(toMoneyNumber(b));
+
+/** Đơn được coi là đã thanh toán: paid + tolerance >= final, và final > 0. */
+export const isPaid = (
+  paid: number | string | null | undefined,
+  final: number | string | null | undefined,
+  tolerance = PAYMENT_TOLERANCE
+): boolean => {
+  const finalAmount = toMoneyNumber(final);
+  if (finalAmount <= 0) return false;
+  return moneyGte(paid, finalAmount, tolerance);
+};
 
 /** Nhân (a * b) — a là tiền, b là hệ số (qty, rate, %) */
 export const moneyMul = (a: number, b: number): number =>
