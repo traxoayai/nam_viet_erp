@@ -32,8 +32,51 @@ import { supabase } from "@/shared/lib/supabaseClient";
 import { FilterAction } from "@/shared/ui/listing/FilterAction";
 import { SmartTable } from "@/shared/ui/listing/SmartTable";
 import { StatHeader } from "@/shared/ui/listing/StatHeader";
+import { parseNumericOrZero } from "@/shared/utils/numeric";
 
 const { Text } = Typography;
+
+interface SalesOrderRow {
+  id: number;
+  code: string;
+  order_type: string;
+  status: string;
+  payment_method: string;
+  payment_status: string;
+  remittance_status: string;
+  final_amount: number | string | null;
+  total_amount: number | string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_email: string | null;
+  tax_code: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  sales_invoice: { id: number; code: string; status: string } | null;
+  order_items: Array<{
+    id: number;
+    product_id: number | null;
+    product_name: string | null;
+    product: { name: string | null; retail_unit: string | null } | null;
+    unit_price: number;
+    quantity: number;
+    total_line: number | null;
+    uom: string | null;
+    unit_name: string | null;
+  }>;
+}
+
+interface UserRow {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  work_state: string | null;
+}
+
+interface WarehouseRow {
+  id: number;
+  name: string;
+}
 
 const B2COrderListPage = () => {
   // Hooks
@@ -43,13 +86,14 @@ const B2COrderListPage = () => {
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [pendingRevenue, setPendingRevenue] = useState<number>(0);
-  const [creators, setCreators] = useState<any[]>([]);
+  const [creators, setCreators] = useState<UserRow[]>([]);
 
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseRow[]>([]);
 
   // [NEW STATE] Modal Chi tiết
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [selectedOrderDetail, setSelectedOrderDetail] = useState<any>(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] =
+    useState<SalesOrderRow | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
   // 1. Load Data bổ trợ (Doanh thu treo & List User & Warehouse)
@@ -77,26 +121,23 @@ const B2COrderListPage = () => {
 
   // 2. Logic Nộp tiền (Giữ nguyên)
   const handleRemitCash = () => {
-    const orders = tableProps.dataSource || [];
-    const selectedOrders = orders.filter((o: any) =>
-      selectedRowKeys.includes(o.id)
-    );
+    const orders = (tableProps.dataSource || []) as SalesOrderRow[];
+    const selectedOrders = orders.filter((o) => selectedRowKeys.includes(o.id));
 
     // Logic nộp tiền: Chỉ nộp Tiền mặt (Cash).
     const cashOrders = selectedOrders.filter(
-      (o: any) =>
-        o.payment_method === "cash" && o.remittance_status === "pending"
+      (o) => o.payment_method === "cash" && o.remittance_status === "pending"
     );
 
     // Tính tổng tiền mặt
     const totalCash = cashOrders.reduce(
-      (sum: number, o: any) => sum + (o.final_amount || 0),
+      (sum: number, o) => sum + parseNumericOrZero(o.final_amount),
       0
     );
 
     // Cảnh báo nếu chọn nhầm đơn CK
     const hasTransfer = selectedOrders.some(
-      (o: any) => o.payment_method === "transfer"
+      (o) => o.payment_method === "transfer"
     );
 
     if (cashOrders.length === 0) {
@@ -197,29 +238,29 @@ const B2COrderListPage = () => {
               refresh();
             },
           });
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error(error);
-          message.error(error.message || "Lỗi khi nộp tiền.");
+          message.error((error as Error).message || "Lỗi khi nộp tiền.");
         }
       },
     });
   };
 
-  const handleViewDetail = async (order: any) => {
+  const handleViewDetail = async (order: SalesOrderRow) => {
     setSelectedOrderDetail(order);
     setDetailModalOpen(true);
     setIsLoadingDetail(true);
     try {
       const detail = await salesService.getOrderDetail(order.id);
-      setSelectedOrderDetail(detail); // Ghi đè bằng data full items
-    } catch (err) {
+      setSelectedOrderDetail(detail as unknown as SalesOrderRow); // Ghi đè bằng data full items
+    } catch {
       message.error("Lỗi lấy chi tiết đơn");
     } finally {
       setIsLoadingDetail(false);
     }
   };
 
-  const handleQuickRemit = (order: any) => {
+  const handleQuickRemit = (order: SalesOrderRow) => {
     if (order.payment_method === "transfer") {
       return message.warning(
         "Đơn này thanh toán chuyển khoản, không thể nộp quỹ tiền mặt."
@@ -236,8 +277,8 @@ const B2COrderListPage = () => {
           message.success("Đã xác nhận thu tiền thành công!");
           setDetailModalOpen(false);
           refresh();
-        } catch (err: any) {
-          message.error(err.message || "Lỗi thu tiền");
+        } catch (err: unknown) {
+          message.error((err as Error).message || "Lỗi thu tiền");
         }
       },
     });
@@ -250,14 +291,20 @@ const B2COrderListPage = () => {
         title: "Mã đơn",
         dataIndex: "code",
         width: 170,
-        render: (text: string, record: any) => (
+        render: (text: string, record: SalesOrderRow) => (
           <Space direction="vertical" size={0}>
-            <a
+            <Button
+              type="link"
               onClick={() => handleViewDetail(record)}
-              style={{ fontWeight: 600, color: "#1890ff", fontSize: 13 }}
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                padding: 0,
+                height: "auto",
+              }}
             >
               {text}
-            </a>
+            </Button>
             {record.order_type === "POS" && (
               <Tag color="blue" style={{ fontSize: 10 }}>
                 [Thuốc]
@@ -304,7 +351,7 @@ const B2COrderListPage = () => {
         title: "Khách hàng",
         dataIndex: "customer_name",
         width: 200,
-        render: (name: string, r: any) => (
+        render: (name: string, r: SalesOrderRow) => (
           <div>
             <div style={{ fontWeight: 500 }}>{name || "Khách lẻ"}</div>
             <div style={{ fontSize: 11, color: "#888" }}>
@@ -360,13 +407,15 @@ const B2COrderListPage = () => {
         key: "invoice_action",
         width: 120,
         align: "center" as const,
-        render: (_: any, record: any) => (
+        render: (_: unknown, record: SalesOrderRow) => (
           <VatActionButton
-            invoice={record.sales_invoice || { id: null, status: "pending" }}
+            invoice={
+              record.sales_invoice || { id: 0, code: "", status: "pending" }
+            }
             // Filter & Map ID an toàn
             orderItems={(record.order_items || [])
-              .filter((i: any) => i.product_id) // Ensure product_id exists
-              .map((i: any) => ({
+              .filter((i) => i.product_id) // Ensure product_id exists
+              .map((i) => ({
                 ...i,
                 // [FIX CRITICAL] Map id = product_id (BigInt) cho Modal kho
                 id: Number(i.product_id),
@@ -392,7 +441,7 @@ const B2COrderListPage = () => {
         render: () => <Button type="text" icon={<PrinterOutlined />} />,
       },
     ],
-    []
+    [refresh]
   );
 
   // 4. Stat Items
@@ -478,8 +527,8 @@ const B2COrderListPage = () => {
             options: creators.map((u) => ({
               label:
                 u.work_state === "resigned"
-                  ? `${u.full_name || u.email} (Đã nghỉ)`
-                  : u.full_name || u.email,
+                  ? `${u.full_name || u.email || "N/A"} (Đã nghỉ)`
+                  : u.full_name || u.email || "N/A",
               value: u.id,
             })),
           },
@@ -504,7 +553,7 @@ const B2COrderListPage = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
           preserveSelectedRowKeys: true,
-          getCheckboxProps: (r: any) => ({
+          getCheckboxProps: (r: SalesOrderRow) => ({
             // Vẫn chỉ cho chọn đơn chưa nộp
             disabled: r.remittance_status !== "pending",
           }),
@@ -528,7 +577,13 @@ const B2COrderListPage = () => {
             <div className="flex flex-col gap-4">
               {/* Bảng Danh Sách Thuốc / Dịch Vụ */}
               <Table
-                dataSource={selectedOrderDetail.items || []}
+                dataSource={
+                  (
+                    selectedOrderDetail as unknown as {
+                      items?: SalesOrderRow["order_items"];
+                    }
+                  ).items || []
+                }
                 rowKey="id"
                 pagination={false}
                 size="small"
@@ -538,15 +593,20 @@ const B2COrderListPage = () => {
                     title: "Sản phẩm / Dịch vụ",
                     dataIndex: ["product", "name"],
                     key: "name",
-                    render: (txt, r: any) =>
-                      txt || r.product_name || "Không rõ",
+                    render: (
+                      txt: string | null,
+                      r: SalesOrderRow["order_items"][number]
+                    ) => txt || r.product_name || "Không rõ",
                   },
                   {
                     title: "ĐVT",
                     dataIndex: ["product", "retail_unit"],
                     width: 80,
                     align: "center",
-                    render: (txt, r: any) => txt || r.unit_name || "Liều",
+                    render: (
+                      txt: string | null,
+                      r: SalesOrderRow["order_items"][number]
+                    ) => txt || r.unit_name || "Liều",
                   },
                   {
                     title: "Số lượng",
