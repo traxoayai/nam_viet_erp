@@ -12,7 +12,8 @@
 --     2. Verify memo mới parse ra mã đơn TỒN TẠI.
 --     3. Lưu bank_ref_id gốc, rename pending tx → '<orig>__superseded_<id>' để
 --        gỡ idempotent guard (LIKE '<orig>-%' không match vì __ ≠ -).
---     4. Mark tx pending: status='voided', append note backfill.
+--     4. Mark tx pending: status='cancelled' (enum không có 'voided'; dùng
+--        'cancelled' + note backfill để audit).
 --     5. Gọi process_incoming_bank_transfer(amount, memo_goc, ref_goc).
 --     6. Nếu lỗi → rollback exception block, log vào v_errors.
 --   - Idempotent: filter description NOT LIKE '%[BACKFILL%' và status='pending'.
@@ -97,7 +98,7 @@ BEGIN
       v_orig_ref := v_tx.bank_reference_id;
 
       UPDATE public.finance_transactions
-      SET status = 'voided',
+      SET status = 'cancelled',
           bank_reference_id = v_orig_ref || '__superseded_' || v_tx.id,
           description = description || E'\n[BACKFILL 2026-04-28] Voided + reprocessed.'
       WHERE id = v_tx.id;
