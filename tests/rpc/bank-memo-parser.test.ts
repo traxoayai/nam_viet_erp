@@ -42,6 +42,23 @@ describe("extract_order_codes_from_memo — unit cases", () => {
       memo: "SO-260423-6745 va lai SO-260423-6745",
       expected: ["SO-260423-6745"],
     },
+    // Format mới 8-digit (từ migration 20260424140000_fix_pt_code_collision)
+    { memo: "SO-260425-00006840", expected: ["SO-260425-00006840"] },
+    { memo: "SO26042500006840", expected: ["SO-260425-00006840"] },
+    { memo: "SO260425 00006840", expected: ["SO-260425-00006840"] },
+    {
+      memo: "thanh toan SO26042500006840 timo",
+      expected: ["SO-260425-00006840"],
+    },
+    { memo: "POS-260425-00001234", expected: ["POS-260425-00001234"] },
+    { memo: "FT25SO26042500006840 TIMO", expected: ["SO-260425-00006840"] },
+    // Mixed: 1 đơn mới + 1 đơn cũ trong cùng memo
+    {
+      memo: "TT SO26042500006840 VA SO-260422-2634",
+      expected: ["SO-260425-00006840", "SO-260422-2634"],
+    },
+    // Greedy check: 12 digits liền → bắt 8 đầu, không 4
+    { memo: "SO260425000068400000", expected: ["SO-260425-00006840"] },
   ];
 
   for (const { memo, expected } of cases) {
