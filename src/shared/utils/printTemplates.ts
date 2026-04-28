@@ -2,6 +2,7 @@
 import dayjs from "dayjs";
 
 import { formatVnd } from "./format";
+import { buildOrderQrMemo } from "./qrMemo";
 
 // ─── Local types (print-only, không export) ──────────────────────────────────
 
@@ -142,8 +143,12 @@ const triggerPrint = (htmlContent: string) => {
 
 // 1. IN BILL K80 (CÓ QR CODE)
 export const printPosBill = (order: PrintOrder) => {
-  // Tạo link VietQR động
-  const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-compact.png?amount=${order.final_amount}&addInfo=TT ${dayjs().format("DDMMYYHHmm")}`;
+  // Tạo link VietQR động — addInfo dùng order code rút gọn để parser tự gạch nợ.
+  // Fallback `POS${DDMMYYHHmm}` cho bill preview chưa có code.
+  const posMemo = order.code
+    ? buildOrderQrMemo(order.code)
+    : `POS${dayjs().format("DDMMYYHHmm")}`;
+  const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-compact.png?amount=${order.final_amount}&addInfo=${encodeURIComponent(posMemo)}`;
 
   const itemsHtml = (order.items ?? [])
     .map(
@@ -307,7 +312,7 @@ export const generateB2BOrderHTML = (order: PrintOrder) => {
       : currentTotal + oldDebt;
 
   const qrAmount = totalPayable > 0 ? totalPayable : currentTotal;
-  const qrContent = `TT ${order.code}`;
+  const qrContent = buildOrderQrMemo(order.code);
   const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-qr_only.png?amount=${qrAmount}&addInfo=${encodeURIComponent(qrContent)}&accountName=${encodeURIComponent(ACCOUNT_NAME)}`;
 
   // Sort items theo vị trí kệ (shelf_location) A-Z để dược sĩ nhặt theo trật

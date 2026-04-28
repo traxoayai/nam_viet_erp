@@ -21,7 +21,7 @@ import {
  * Fix regex-based extraction: extract_order_codes_from_memo(text) → text[]
  */
 
-describe("extract_order_codes_from_memo — unit cases", () => {
+describe("extract_order_codes_from_memo — unit cases (full form, no DB resolve)", () => {
   const cases: Array<{ memo: string | null; expected: string[] }> = [
     { memo: "SO-260423-6745", expected: ["SO-260423-6745"] },
     { memo: "SO260423 6745", expected: ["SO-260423-6745"] },
@@ -416,7 +416,61 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
     }
   );
 
-  // Format 8-digit (sau migration 20260424140000_fix_pt_code_collision)
+  // Short form QR memo (sau migration 20260428100200_extract_short_order_codes):
+  // QR memo `SO00006840` (10 chars, không YYMMDD) phải resolve qua DB.
+  it.skipIf(isProduction)(
+    "Short form: memo 'SO{8-digit}' → DB resolve order → CONFIRMED",
+    async () => {
+      const marker = `SHORT-${Date.now()}`;
+      markers.push(marker);
+      const whId = await createTestWarehouse(adminClient, { name: marker });
+      const custId = await createTestB2BCustomer(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
+
+      const yymmdd = new Date(Date.now() + 86400000)
+        .toISOString()
+        .slice(2, 10)
+        .replace(/-/g, "");
+      const seq8 = String((Date.now() + 7) % 100000000).padStart(8, "0");
+      const code = `SO-${yymmdd}-${seq8}`;
+      const shortMemo = `SO${seq8}`; // QR memo dạng mới (không YYMMDD)
+
+      const { orderId } = await createTestOrder(adminClient, {
+        customerB2bId: custId,
+        warehouseId: whId,
+        code,
+        status: "PENDING",
+        items: [{ productId, quantity: 1, unitPrice: 80000 }],
+      });
+
+      const { data, error } = await adminClient.rpc(
+        "process_incoming_bank_transfer",
+        {
+          p_amount: 80000,
+          p_memo: `tang 80.000 VND ND ${shortMemo}`,
+          p_bank_ref_id: `TEST-SHORT-${marker}`,
+        }
+      );
+      expect(error).toBeNull();
+      expect((data as { status: string }).status).toBe("success");
+
+      await new Promise((r) => setTimeout(r, 300));
+
+      const { data: upd } = await adminClient
+        .from("orders")
+        .select("status, payment_status, paid_amount")
+        .eq("id", orderId)
+        .single();
+      expect(upd?.status).toBe("CONFIRMED");
+      expect(upd?.payment_status).toBe("paid");
+      expect(Number(upd?.paid_amount)).toBe(80000);
+    }
+  );
+
+  // Format 8-digit full (sau migration 20260424140000_fix_pt_code_collision)
   it.skipIf(isProduction)(
     "Format 8-digit: memo strip dash 'SO26042500006840' → match đơn → CONFIRMED",
     async () => {
