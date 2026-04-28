@@ -416,6 +416,60 @@ describe("process_incoming_bank_transfer — end-to-end với memo variations", 
     }
   );
 
+  // Format 8-digit (sau migration 20260424140000_fix_pt_code_collision)
+  it.skipIf(isProduction)(
+    "Format 8-digit: memo strip dash 'SO26042500006840' → match đơn → CONFIRMED",
+    async () => {
+      const marker = `PARSE-8D-${Date.now()}`;
+      markers.push(marker);
+      const whId = await createTestWarehouse(adminClient, { name: marker });
+      const custId = await createTestB2BCustomer(adminClient, { name: marker });
+      const { productId } = await createTestProduct(adminClient, {
+        name: marker,
+      });
+      await createTestBatch(adminClient, productId, whId, { quantity: 1000 });
+
+      const yymmdd = new Date(Date.now() + 86400000)
+        .toISOString()
+        .slice(2, 10)
+        .replace(/-/g, "");
+      // Code 8-digit format: dùng timestamp tránh collision
+      const seq8 = String(Date.now() % 100000000).padStart(8, "0");
+      const code = `SO-${yymmdd}-${seq8}`;
+      const memoStripped = `SO${yymmdd}${seq8}`; // banking app strip dash
+
+      const { orderId } = await createTestOrder(adminClient, {
+        customerB2bId: custId,
+        warehouseId: whId,
+        code,
+        status: "PENDING",
+        items: [{ productId, quantity: 1, unitPrice: 100000 }],
+      });
+
+      const { data, error } = await adminClient.rpc(
+        "process_incoming_bank_transfer",
+        {
+          p_amount: 100000,
+          p_memo: `tang 100.000 VND ND ${memoStripped}`,
+          p_bank_ref_id: `TEST-8D-${marker}`,
+        }
+      );
+      expect(error).toBeNull();
+      expect((data as { status: string }).status).toBe("success");
+
+      await new Promise((r) => setTimeout(r, 300));
+
+      const { data: upd } = await adminClient
+        .from("orders")
+        .select("status, payment_status, paid_amount")
+        .eq("id", orderId)
+        .single();
+      expect(upd?.status).toBe("CONFIRMED");
+      expect(upd?.payment_status).toBe("paid");
+      expect(Number(upd?.paid_amount)).toBe(100000);
+    }
+  );
+
   afterAll(async () => {
     if (!isProduction && markers.length > 0) {
       await cleanupTestData(adminClient, markers);
