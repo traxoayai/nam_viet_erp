@@ -9,6 +9,47 @@ import {
   OutboundPickItem,
 } from "@/features/inventory/types/outbound";
 
+type ProductInventoryRow = {
+  warehouse_id?: number | null;
+  shelf_location?: string | null;
+  stock_quantity?: number | null;
+};
+
+type RawOrderItem = {
+  id?: string | number;
+  quantity?: number;
+  product?: {
+    id?: number;
+    sku?: string | null;
+    name?: string | null;
+    image_url?: string | null;
+    wholesale_unit?: string | null;
+    product_inventory?: ProductInventoryRow[];
+  };
+};
+
+// Lấy shelf_location của ĐÚNG kho xuất hàng. Trong cùng kho, ưu tiên record
+// có stock > 0; nếu không có, fallback record đầu tiên. Không có record nào
+// thuộc kho xuất → null (KHÔNG guess sang kho khác).
+export const pickShelfLocation = (
+  invList: ProductInventoryRow[] | null | undefined,
+  warehouseId: number | null | undefined
+): string | null => {
+  if (!Array.isArray(invList) || invList.length === 0) return null;
+  if (warehouseId == null) return null;
+
+  const sameWh = invList.filter(
+    (inv) =>
+      inv?.warehouse_id === warehouseId &&
+      typeof inv.shelf_location === "string" &&
+      inv.shelf_location.length > 0
+  );
+  if (sameWh.length === 0) return null;
+
+  const withStock = sameWh.find((inv) => (inv.stock_quantity ?? 0) > 0);
+  return (withStock ?? sameWh[0]).shelf_location ?? null;
+};
+
 export const usePickingListPrint = () => {
   const [isPrinting, setIsPrinting] = useState(false);
 
@@ -31,33 +72,23 @@ export const usePickingListPrint = () => {
           detail.delivery_address || detail.customer?.shipping_address || "",
         note: detail.note || "",
         status: detail.status || "CONFIRMED",
-        shipping_partner: (detail as unknown as { shipping_partner_name?: string }).shipping_partner_name || "Tự giao",
+        shipping_partner:
+          (detail as unknown as { shipping_partner_name?: string })
+            .shipping_partner_name || "Tự giao",
         shipping_phone: detail.customer?.phone || "",
         cutoff_time: "---",
         package_count: 0,
       };
 
-      const rawItems = detail.items || [];
-      const mappedItems: OutboundPickItem[] = rawItems.map((i: any) => {
+      const orderWarehouseId =
+        (detail as unknown as { warehouse_id?: number | null }).warehouse_id ??
+        null;
+      const rawItems = (detail.items || []) as RawOrderItem[];
+      const mappedItems: OutboundPickItem[] = rawItems.map((i) => {
         const prod = i.product || {};
 
-        // [FIX LOGIC VỊ TRÍ KỆ]
-        // product_inventory là Array. Cần tìm vị trí phù hợp.
-        let locationStr = "---";
-        const invList = prod.product_inventory;
-
-        if (Array.isArray(invList) && invList.length > 0) {
-          // Ưu tiên 1: Lấy kho nào đang có tồn kho > 0
-          const hasStockInv = invList.find(
-            (inv: any) => inv.stock_quantity > 0
-          );
-          // Ưu tiên 2: Nếu không có, lấy cái đầu tiên
-          const target = hasStockInv || invList[0];
-
-          if (target && target.shelf_location) {
-            locationStr = target.shelf_location;
-          }
-        }
+        const locationStr =
+          pickShelfLocation(prod.product_inventory, orderWarehouseId) ?? "---";
 
         return {
           product_id: Number(prod.id || i.id),
@@ -66,7 +97,6 @@ export const usePickingListPrint = () => {
           unit: prod.wholesale_unit || "Cái",
           quantity_ordered: Number(i.quantity),
 
-          // Gán giá trị đã xử lý vào đây
           shelf_location: locationStr,
 
           barcode: "",
@@ -82,9 +112,10 @@ export const usePickingListPrint = () => {
         setIsPrinting(false);
         setPrintData(null);
       }, 800);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Print Error:", error);
-      message.error("Lỗi lấy thông tin đơn: " + error.message);
+      const msg = error instanceof Error ? error.message : String(error);
+      message.error("Lỗi lấy thông tin đơn: " + msg);
       setIsPrinting(false);
     }
   };

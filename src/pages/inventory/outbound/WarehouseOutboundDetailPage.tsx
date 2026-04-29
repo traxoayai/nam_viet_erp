@@ -65,6 +65,7 @@ const WarehouseOutboundDetailPage = () => {
 
   useEffect(() => {
     if (id) fetchDetail(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchDetail = async (orderId: string) => {
@@ -74,12 +75,16 @@ const WarehouseOutboundDetailPage = () => {
       setOrderInfo(data.order_info);
       setInputPackageCount(data.order_info.package_count || 1);
       setItems(
-        data.items.map((item) => ({
-          ...item,
-          quantity_picked: item.quantity_picked || 0,
-        }))
+        [...data.items]
+          .sort((a, b) =>
+            (a.shelf_location || "").localeCompare(b.shelf_location || "")
+          )
+          .map((item) => ({
+            ...item,
+            quantity_picked: item.quantity_picked || 0,
+          }))
       );
-    } catch (error) {
+    } catch {
       message.error("Lỗi tải chi tiết đơn hàng");
       navigate("/inventory/outbound");
     } finally {
@@ -148,7 +153,7 @@ const WarehouseOutboundDetailPage = () => {
       }));
       await outboundService.saveProgress(id, payload);
       message.success("Đã lưu nháp tiến độ!");
-    } catch (error) {
+    } catch {
       message.error("Lỗi lưu nháp");
     }
   };
@@ -165,7 +170,7 @@ const WarehouseOutboundDetailPage = () => {
       await outboundService.cancelTask(id, cancelReason);
       message.success("Đã hủy đơn hàng!");
       navigate("/inventory/outbound");
-    } catch (error) {
+    } catch {
       message.error("Lỗi hủy đơn hàng");
     }
   };
@@ -196,9 +201,9 @@ const WarehouseOutboundDetailPage = () => {
       message.success("Thành công: Đã trừ kho & Đóng gói!");
       // Refetch to see new status (PACKED)
       await fetchDetail(id);
-    } catch (error: any) {
-      // Basic error handling for inventory issues
-      if (error?.message?.includes("Kho không đủ hàng")) {
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "";
+      if (msg.includes("Kho không đủ hàng")) {
         message.error("Lỗi: Kho không đủ hàng để đóng gói!");
       } else {
         message.error("Lỗi xác nhận đóng gói");
@@ -217,7 +222,7 @@ const WarehouseOutboundDetailPage = () => {
       message.success("Thành công: Đơn hàng đã bàn giao vận chuyển!");
       // Refetch to see new status (SHIPPING)
       await fetchDetail(id);
-    } catch (error) {
+    } catch {
       message.error("Lỗi giao vận chuyển");
     } finally {
       setSubmitting(false);
@@ -228,7 +233,7 @@ const WarehouseOutboundDetailPage = () => {
   const columns = [
     {
       title: "#",
-      render: (_: any, __: any, idx: number) => idx + 1,
+      render: (_: unknown, __: unknown, idx: number) => idx + 1,
       width: 50,
     },
     {
@@ -284,7 +289,7 @@ const WarehouseOutboundDetailPage = () => {
       title: "Gợi ý lấy hàng (FEFO)",
       dataIndex: "fefo_suggestion",
       width: 350,
-      render: (fefo: any) =>
+      render: (fefo: OutboundPickItem["fefo_suggestion"]) =>
         fefo ? (
           <div style={{ fontSize: 13 }}>
             <div>
@@ -341,7 +346,7 @@ const WarehouseOutboundDetailPage = () => {
     {
       title: "Trạng thái",
       width: 100,
-      render: (_: any, record: OutboundPickItem) => {
+      render: (_: unknown, record: OutboundPickItem) => {
         if (record.quantity_picked === record.quantity_ordered)
           return <Tag color="success">Đủ</Tag>;
         if (record.quantity_picked > record.quantity_ordered)
@@ -386,7 +391,10 @@ const WarehouseOutboundDetailPage = () => {
         <PickingListTemplate orderInfo={orderInfo} items={items} />
       )}
       {printMode === "label" && (
-        <ShippingLabelTemplate orderInfo={orderInfo} packageCount={inputPackageCount} />
+        <ShippingLabelTemplate
+          orderInfo={orderInfo}
+          packageCount={inputPackageCount}
+        />
       )}
 
       {/* HEADER */}
@@ -467,14 +475,18 @@ const WarehouseOutboundDetailPage = () => {
               In phiếu nhặt
             </Button>
             <Space.Compact>
-              <InputNumber 
-                min={1} 
-                value={inputPackageCount} 
-                onChange={(val) => setInputPackageCount(val || 1)} 
+              <InputNumber
+                min={1}
+                value={inputPackageCount}
+                onChange={(val) => setInputPackageCount(val || 1)}
                 addonBefore="Số kiện"
                 style={{ width: 140 }}
               />
-              <Button type="default" icon={<Package size={16}/>} onClick={handlePrintLabel}>
+              <Button
+                type="default"
+                icon={<Package size={16} />}
+                onClick={handlePrintLabel}
+              >
                 In Vận Đơn
               </Button>
             </Space.Compact>
