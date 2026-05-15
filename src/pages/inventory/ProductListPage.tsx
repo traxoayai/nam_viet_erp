@@ -38,6 +38,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 
+import type { AiExtractedData } from "@/features/product/types/ai.types";
 import type { TableProps, UploadProps } from "antd";
 
 // import * as productService from "@/features/product/api/productService";
@@ -53,6 +54,20 @@ import { Access } from "@/shared/components/auth/Access"; // [NEW]
 import { useDebounce } from "@/shared/hooks/useDebounce";
 
 const { Title, Text } = Typography;
+
+type ProductDependency = {
+  product_name: string;
+  reason: string;
+  ref_source: string;
+};
+
+type ProductRow = Product & {
+  retail_unit?: string | null;
+  estimatedRetailPrice?: number | null;
+};
+
+const getErrorMessage = (err: unknown): string =>
+  err instanceof Error ? err.message : String(err);
 
 const ProductListPage = () => {
   const navigate = useNavigate();
@@ -98,11 +113,13 @@ const ProductListPage = () => {
 
   useEffect(() => {
     fetchCommonData();
-  }, []); // <--- Rỗng: Chỉ chạy 1 lần khi vào trang
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi mount
+  }, []);
 
   useEffect(() => {
     fetchProducts();
-  }, [page, pageSize]); // Xử lý tìm kiếm
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- store action stable, chỉ rerun khi page/pageSize đổi
+  }, [page, pageSize]);
 
   useEffect(() => {
     setFilters({ search_query: debouncedSearch });
@@ -120,7 +137,10 @@ const ProductListPage = () => {
   const hasSelected = selectedRowKeys.length > 0;
 
   // Helper: Show Dependency Warning
-  const showDependencyWarning = (dependencies: any[], action: string) => {
+  const showDependencyWarning = (
+    dependencies: ProductDependency[],
+    action: string
+  ) => {
     antModal.warning({
       title: `Không thể ${action} sản phẩm đang sử dụng`,
       width: 600,
@@ -158,12 +178,12 @@ const ProductListPage = () => {
             setSelectedRowKeys([]);
           } else {
             showDependencyWarning(
-              result.dependencies || [],
+              (result.dependencies as ProductDependency[] | undefined) || [],
               actionText.toLowerCase()
             );
           }
-        } catch (err: any) {
-          antMessage.error("Lỗi cập nhật: " + err.message);
+        } catch (err: unknown) {
+          antMessage.error("Lỗi cập nhật: " + getErrorMessage(err));
         }
       },
     });
@@ -186,12 +206,12 @@ const ProductListPage = () => {
             setSelectedRowKeys([]);
           } else {
             showDependencyWarning(
-              result.dependencies || [],
+              (result.dependencies as ProductDependency[] | undefined) || [],
               actionText.toLowerCase()
             );
           }
-        } catch (err: any) {
-          antMessage.error("Lỗi cập nhật: " + err.message);
+        } catch (err: unknown) {
+          antMessage.error("Lỗi cập nhật: " + getErrorMessage(err));
         }
       },
     });
@@ -215,10 +235,13 @@ const ProductListPage = () => {
             setSelectedRowKeys([]);
           } else {
             // Show Warning Dependencies
-            showDependencyWarning(result.dependencies || [], "xóa");
+            showDependencyWarning(
+              (result.dependencies as ProductDependency[] | undefined) || [],
+              "xóa"
+            );
           }
-        } catch (err: any) {
-          antMessage.error("Lỗi xóa sản phẩm: " + err.message);
+        } catch (err: unknown) {
+          antMessage.error("Lỗi xóa sản phẩm: " + getErrorMessage(err));
         }
       },
     });
@@ -258,9 +281,9 @@ const ProductListPage = () => {
         content: `Đã xuất ${dataToExport.length} sản phẩm.`,
         key: "export",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       antMessage.error({
-        content: `Xuất file thất bại: ${error.message}`,
+        content: `Xuất file thất bại: ${getErrorMessage(error)}`,
         key: "export",
       });
     }
@@ -287,10 +310,11 @@ const ProductListPage = () => {
           key: "import",
         });
         fetchProducts(); // Tải lại danh sách sau khi import
-      } catch (error: any) {
-        if (onError) onError(error);
+      } catch (error: unknown) {
+        if (onError)
+          onError(error instanceof Error ? error : new Error(String(error)));
         antMessage.error({
-          content: `Import thất bại: ${error.message}`,
+          content: `Import thất bại: ${getErrorMessage(error)}`,
           key: "import",
         });
       } finally {
@@ -328,11 +352,11 @@ const ProductListPage = () => {
       key: "name",
       width: 350, // [SENKO FIX]: Cố định độ rộng cột (Nên dùng số pixel thay vì % đối với bảng có scroll ngang)
       render: (text: string, record: Product) => (
-        <div style={{ maxWidth: '100%', overflow: 'hidden' }}>
+        <div style={{ maxWidth: "100%", overflow: "hidden" }}>
           <Text
             strong
-            style={{ 
-              color: "#1890ff", 
+            style={{
+              color: "#1890ff",
               cursor: "pointer",
               /* Nếu tên SP cũng quá dài, có thể mở comment 3 dòng dưới để cắt chữ */
               // display: "block",
@@ -346,25 +370,36 @@ const ProductListPage = () => {
           <br />
           <Text type="secondary">SKU: {record.sku}</Text>
           <br />
-          
-          {/* [SENKO FIX]: Bọc Tooltip để khi di chuột vào sẽ thấy toàn bộ nội dung */}
-          <Tooltip title={record.active_ingredient || record.category_name}>
-            <Tag 
-              color="cyan" 
-              style={{ 
-                fontSize: 10, 
-                marginTop: 4, 
-                maxWidth: '100%', // Ép Tag không được phình to hơn cột
-                overflow: 'hidden', 
-                textOverflow: 'ellipsis', // Thêm dấu ... ở cuối
-                whiteSpace: 'nowrap', // Ép chữ trên 1 dòng
-                display: 'inline-block',
-                verticalAlign: 'bottom'
-              }}
-            >
-              {record.active_ingredient || record.category_name}
-            </Tag>
-          </Tooltip>
+
+          {/* Hoạt chất / Nhóm: cắt text dài ở 50 ký tự, hover xem full qua Tooltip */}
+          {(() => {
+            const fullText = record.active_ingredient || record.category_name;
+            if (!fullText) return null;
+            const MAX_LEN = 50;
+            const shortText =
+              fullText.length > MAX_LEN
+                ? fullText.slice(0, MAX_LEN).trim() + "…"
+                : fullText;
+            return (
+              <Tooltip title={fullText}>
+                <Tag
+                  color="cyan"
+                  style={{
+                    fontSize: 10,
+                    marginTop: 4,
+                    maxWidth: 320,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    display: "inline-block",
+                    verticalAlign: "bottom",
+                  }}
+                >
+                  {shortText}
+                </Tag>
+              </Tooltip>
+            );
+          })()}
         </div>
       ),
     },
@@ -375,7 +410,8 @@ const ProductListPage = () => {
       width: 100,
       align: "center",
       // Nếu RPC trả 'base_unit' thì dùng, nếu ko map từ legacy data
-      render: (text: string, record: any) => record.retail_unit || text || "-",
+      render: (text: string, record: ProductRow) =>
+        record.retail_unit || text || "-",
     },
     {
       title: "Giá Vốn",
@@ -400,13 +436,15 @@ const ProductListPage = () => {
       key: "retail_price",
       width: 120,
       align: "right",
-      render: (val: number, record: any) =>
-        val || record.estimatedRetailPrice
+      render: (val: number, record: ProductRow) => {
+        const price = val || record.estimatedRetailPrice || 0;
+        return price
           ? new Intl.NumberFormat("vi-VN", {
               style: "currency",
               currency: "VND",
-            }).format(val || record.estimatedRetailPrice)
-          : "-",
+            }).format(price)
+          : "-";
+      },
     },
     {
       title: "Tổng Hệ Thống",
@@ -415,10 +453,8 @@ const ProductListPage = () => {
       width: 100,
       align: "center",
       // Fallback vào logic cũ nếu cần, hoặc dùng field RPC
-      render: (val: number, _record: any) => {
+      render: (val: number) => {
         if (val !== undefined) return <b>{val}</b>;
-        // Tạm thời hiển thị sum nếu RPC chưa update
-        // let sum = 0; if(record.inventory_b2b) sum+=record.inventory_b2b; ...
         return "-";
       },
     },
@@ -433,19 +469,23 @@ const ProductListPage = () => {
           return <Tag color="default">Hết hàng</Tag>;
         }
         return (
-          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+          <Space direction="vertical" size={2} style={{ width: "100%" }}>
             {Object.entries(stocks).map(([warehouseName, qtyString]) => (
-              <div 
-                key={warehouseName} 
-                style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  borderBottom: '1px dashed #f0f0f0',
-                  paddingBottom: 2
+              <div
+                key={warehouseName}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  borderBottom: "1px dashed #f0f0f0",
+                  paddingBottom: 2,
                 }}
               >
-                <Text type="secondary" style={{ fontSize: 12 }}>{warehouseName}:</Text>
-                <Text strong style={{ fontSize: 12, color: '#0958d9' }}>{qtyString}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {warehouseName}:
+                </Text>
+                <Text strong style={{ fontSize: 12, color: "#0958d9" }}>
+                  {qtyString}
+                </Text>
               </div>
             ))}
           </Space>
@@ -470,7 +510,7 @@ const ProductListPage = () => {
       align: "center",
       width: 140, // Tăng width để đủ chỗ
       fixed: "right" as const,
-      render: (_: any, record: Product) => (
+      render: (_: unknown, record: Product) => (
         <Space>
           {/* [NEW] Nút AI Scanner */}
           <Tooltip title="Cập nhật thông tin bằng AI (PDF)">
@@ -544,7 +584,7 @@ const ProductListPage = () => {
   ];
 
   // [NEW] Xử lý khi AI Scan thành công
-  const handleAiUpdateSuccess = async (aiData: any) => {
+  const handleAiUpdateSuccess = async (aiData: AiExtractedData) => {
     if (!targetProductForAi) return;
 
     try {
@@ -562,9 +602,9 @@ const ProductListPage = () => {
       antMessage.success({ content: "Cập nhật thành công!", key: "ai_update" });
       fetchProducts(); // Reload bảng
       setIsScannerOpen(false); // Đóng modal
-    } catch (err: any) {
+    } catch (err: unknown) {
       antMessage.error({
-        content: "Lỗi cập nhật: " + err.message,
+        content: "Lỗi cập nhật: " + getErrorMessage(err),
         key: "ai_update",
       });
     }
