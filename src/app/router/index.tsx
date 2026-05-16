@@ -14,75 +14,83 @@ import PendingApprovalPage from "@/pages/auth/PendingApprovalPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import UpdatePasswordPage from "@/pages/auth/UpdatePasswordPage";
 import UpdateProfilePage from "@/pages/auth/UpdateProfilePage";
+import ChatbotAnalyticsPage from "@/pages/chatbot/ChatbotAnalyticsPage"; // [Plan 2]
+import ChatbotComplianceAuditPage from "@/pages/chatbot/ChatbotComplianceAuditPage"; // [Plan 2]
+import ChatbotInboxPage from "@/pages/chatbot/ChatbotInboxPage"; // [Plan 2]
 import CustomerB2BPage from "@/pages/crm/CustomerB2BPage";
 import CustomerB2COrgForm from "@/pages/crm/CustomerB2COrgForm";
 import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
 import CustomerSegmentsPage from "@/pages/crm/CustomerSegmentsPage";
-import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
-import AssetManagementPage from "@/pages/finance/AssetManagementPage";
-import DoctorPage from "@/pages/medical/DoctorPage";
-import ReceptionPage from "@/pages/medical/ReceptionPage"; // [NEW]
 import PortalRegistrationPage from "@/pages/crm/PortalRegistrationPage"; // [NEW]
-import DoctorQueuePage from "@/pages/medical/DoctorQueuePage";
-import ParaclinicalPage from "@/pages/medical/ParaclinicalPage"; // [NEW]
-import NurseExecutionPage from "@/pages/medical/NurseExecutionPage"; // [NEW]
+import VoucherDistributionPage from "@/pages/crm/VoucherDistributionPage";
+// (chatbot pages đã import phía trên — group @/pages/chatbot)
+import AssetManagementPage from "@/pages/finance/AssetManagementPage";
 import ChartOfAccountsPage from "@/pages/finance/ChartOfAccountsPage";
 import FinanceTransactionPage from "@/pages/finance/FinanceTransactionPage";
 import InvoiceListPage from "@/pages/finance/invoices/InvoiceListPage";
 import InvoiceVerifyPage from "@/pages/finance/invoices/InvoiceVerifyPage";
 import ReconciliationPage from "@/pages/finance/ReconciliationPage";
+import TaskKanbanPage from "@/pages/hr/TaskKanbanPage";
+import CostAdjustmentPage from "@/pages/inventory/cost-adjustment/CostAdjustmentPage";
+import WarehouseOutboundDetailPage from "@/pages/inventory/outbound/WarehouseOutboundDetailPage";
+import WarehouseOutboundPage from "@/pages/inventory/outbound/WarehouseOutboundPage";
 import ProductFormPage from "@/pages/inventory/ProductFormPage";
 import ProductListPage from "@/pages/inventory/ProductListPage";
-import CostAdjustmentPage from "@/pages/inventory/cost-adjustment/CostAdjustmentPage";
 import WarehouseInboundPage from "@/pages/inventory/receipt/WarehouseInboundPage";
 import WarehouseReceiptPage from "@/pages/inventory/receipt/WarehouseReceiptPage";
-import WarehouseOutboundPage from "@/pages/inventory/outbound/WarehouseOutboundPage";
-import WarehouseOutboundDetailPage from "@/pages/inventory/outbound/WarehouseOutboundDetailPage";
+import TransferCreatePage from "@/pages/inventory/transfer/TransferCreatePage"; // [NEW]
+import TransferDetailPage from "@/pages/inventory/transfer/TransferDetailPage";
+import TransferListPage from "@/pages/inventory/transfer/TransferListPage";
 import DiscountCodeManagement from "@/pages/marketing/DiscountCodeManagement";
 import LoyaltyPolicyPage from "@/pages/marketing/LoyaltyPolicyPage";
+import DoctorPage from "@/pages/medical/DoctorPage";
+import DoctorQueuePage from "@/pages/medical/DoctorQueuePage";
+import NurseExecutionPage from "@/pages/medical/NurseExecutionPage"; // [NEW]
+import ParaclinicalPage from "@/pages/medical/ParaclinicalPage"; // [NEW]
+import ReceptionPage from "@/pages/medical/ReceptionPage"; // [NEW]
+import NotificationManagementPage from "@/pages/notifications/NotificationManagementPage";
 import ShippingPartnerPage from "@/pages/partner/ShippingPartnerPage";
+import SupplierPolicyFormPage from "@/pages/partners/policies/SupplierPolicyFormPage"; // [NEW]
 import SupplierPolicyListPage from "@/pages/partners/policies/SupplierPolicyListPage"; // [NEW]
 import SupplierDetailPage from "@/pages/partners/SupplierDetailPage";
 import SupplierListPage from "@/pages/partners/SupplierListPage";
-import SupplierPolicyFormPage from "@/pages/partners/policies/SupplierPolicyFormPage"; // [NEW]
+import PortalDashboardPage from "@/pages/portal/PortalDashboardPage"; // [Plan 2]
+import PortalUsersPage from "@/pages/portal/PortalUsersPage"; // [Plan 2]
+import PosPage from "@/pages/pos/PosPage";
 import PurchaseCostingPage from "@/pages/purchasing/PurchaseCostingPage"; // [NEW]
 import PurchaseOrderDetail from "@/pages/purchasing/PurchaseOrderDetail";
 import PurchaseOrderMasterPage from "@/pages/purchasing/PurchaseOrderMasterPage";
 import PrescriptionTemplatePage from "@/pages/quick/PrescriptionTemplatePage";
+import QuickBarcodePage from "@/pages/quick/QuickBarcodePage";
 import QuickLocationUpdate from "@/pages/quick/QuickLocationUpdate";
+import QuickMinMaxPage from "@/pages/quick/QuickMinMaxPage";
+import QuickPricePage from "@/pages/quick/QuickPricePage";
+import QuickUnitPage from "@/pages/quick/QuickUnitPage";
 import VaccinationTemplatePage from "@/pages/quick/VaccinationTemplatePage";
-import B2BOrderListPage from "@/pages/sales/B2BOrderListPage";
+import SystemAuditLogPage from "@/pages/reports/SystemAuditLogPage"; // [NEW]
 import B2BOrderDetailPage from "@/pages/sales/B2BOrderDetailPage";
+import B2BOrderListPage from "@/pages/sales/B2BOrderListPage";
+import B2COrderListPage from "@/pages/sales/B2COrderListPage";
 import CreateB2BOrderPage from "@/pages/sales/CreateB2BOrderPage";
 import ServicePackagePage from "@/pages/services/ServicePackagePage";
 import BankListPage from "@/pages/settings/BankListPage";
 import CompanyInfoPage from "@/pages/settings/CompanyInfoPage";
+import ProductMasterDataPage from "@/pages/settings/data/ProductMasterDataPage"; // [NEW]
 import FundAccountPage from "@/pages/settings/FundAccountPage";
 import PermissionPage from "@/pages/settings/PermissionPage";
 import SystemSettingsHub from "@/pages/settings/SystemSettingsHub";
 import TemplateManagerPage from "@/pages/settings/TemplateManagerPage";
 import TransactionCategoryPage from "@/pages/settings/TransactionCategoryPage";
 import WarehouseListPage from "@/pages/settings/WarehouseListPage";
+import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
 import BlankLayout from "@/shared/ui/layouts/BlankLayout";
 import MainLayout from "@/shared/ui/layouts/MainLayout";
 import OnboardingLayout from "@/shared/ui/layouts/OnboardingLayout";
-import TransferListPage from "@/pages/inventory/transfer/TransferListPage";
-import TransferDetailPage from "@/pages/inventory/transfer/TransferDetailPage";
-import TransferCreatePage from "@/pages/inventory/transfer/TransferCreatePage"; // [NEW]
-import PosPage from "@/pages/pos/PosPage";
-import B2COrderListPage from "@/pages/sales/B2COrderListPage";
-import ProductMasterDataPage from "@/pages/settings/data/ProductMasterDataPage"; // [NEW]
-import QuickUnitPage from "@/pages/quick/QuickUnitPage";
-import QuickMinMaxPage from "@/pages/quick/QuickMinMaxPage";
-import QuickPricePage from "@/pages/quick/QuickPricePage";
-import QuickBarcodePage from "@/pages/quick/QuickBarcodePage";
-import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
-import SystemAuditLogPage from "@/pages/reports/SystemAuditLogPage"; // [NEW]
-import TaskKanbanPage from "@/pages/hr/TaskKanbanPage";
-import NotificationManagementPage from "@/pages/notifications/NotificationManagementPage";
-const NotificationsPage = lazy(() => import("@/pages/notifications/NotificationsPage"));
-import PortalDashboardPage from "@/pages/portal/PortalDashboardPage";
-import PortalUsersPage from "@/pages/portal/PortalUsersPage";
+
+// Lazy import (giữ tách riêng để chunk-split — không tham gia eslint import/order)
+const NotificationsPage = lazy(
+  () => import("@/pages/notifications/NotificationsPage")
+);
 
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
@@ -561,7 +569,31 @@ const routes: RouteObject[] = [
           },
           {
             path: "marketing/chatbot",
-            element: <PagePlaceholder title="Quản lý Chatbot AI" />,
+            element: <Navigate to="/marketing/chatbot/inbox" replace />,
+          },
+          {
+            path: "marketing/chatbot/inbox",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.CHATBOT.HANDLE}>
+                <ChatbotInboxPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "marketing/chatbot/analytics",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.CHATBOT.VIEW_ANALYTICS}>
+                <ChatbotAnalyticsPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "marketing/chatbot/compliance",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.CHATBOT.AUDIT}>
+                <ChatbotComplianceAuditPage />
+              </PermissionGuard>
+            ),
           },
 
           // 11. Quản lý Nhân sự
@@ -714,7 +746,9 @@ const routes: RouteObject[] = [
               {
                 path: "settings/users-roles",
                 element: (
-                  <PermissionGuard permission={PERMISSIONS.SETTINGS.PERMISSIONS}>
+                  <PermissionGuard
+                    permission={PERMISSIONS.SETTINGS.PERMISSIONS}
+                  >
                     <PermissionPage />
                   </PermissionGuard>
                 ),
