@@ -36,15 +36,26 @@ async function main() {
   });
 
   for (const u of TEST_USERS) {
-    // Tìm user bằng email qua listUsers (Admin API không có getUserByEmail v1)
-    const { data: list, error: listErr } = await admin.auth.admin.listUsers({
-      perPage: 1000,
-    });
-    if (listErr) {
-      console.error(`listUsers fail:`, listErr.message);
-      process.exit(1);
+    // listUsers SDK đôi khi "Database error finding users" trên local Postgres
+    // — dùng RPC _test_find_auth_user_by_email (SECURITY DEFINER, service_role)
+    // làm primary; fallback listUsers nếu RPC chưa migrate trên DB cũ.
+    let existing = null;
+    const { data: foundId, error: rpcErr } = await admin.rpc(
+      "_test_find_auth_user_by_email",
+      { p_email: u.email },
+    );
+    if (!rpcErr && typeof foundId === "string" && foundId.length > 0) {
+      existing = { id: foundId, email: u.email };
+    } else {
+      const { data: list, error: listErr } = await admin.auth.admin.listUsers({
+        perPage: 1000,
+      });
+      if (listErr) {
+        console.error(`listUsers fail:`, listErr.message);
+        process.exit(1);
+      }
+      existing = list.users.find((x) => x.email === u.email);
     }
-    const existing = list.users.find((x) => x.email === u.email);
 
     if (!existing) {
       const { error: createErr } = await admin.auth.admin.createUser({
