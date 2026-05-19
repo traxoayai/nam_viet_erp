@@ -465,8 +465,12 @@ const finalMenuItems: MenuItem[] = [
           "/marketing/chatbot/analytics"
         ),
         getItem(
-          <Link to="/marketing/chatbot/compliance">Audit tuân thủ</Link>,
-          "/marketing/chatbot/compliance"
+          <Link to="/chat-compliance">Compliance Chatbot</Link>,
+          "/chat-compliance"
+        ),
+        getItem(
+          <Link to="/marketing/chatbot/synonyms">Từ đồng nghĩa</Link>,
+          "/marketing/chatbot/synonyms"
         ),
       ]),
     ]
@@ -684,6 +688,8 @@ const MENU_PERMISSIONS: Record<string, string> = {
   "/marketing/chatbot/inbox": "crm.chatbot.handle",
   "/marketing/chatbot/analytics": "crm.chatbot.view_analytics",
   "/marketing/chatbot/compliance": "crm.chatbot.audit",
+  "/chat-compliance": "crm.chatbot.audit", // [G3] alias route
+  "/marketing/chatbot/synonyms": "crm.chatbot.admin",
 
   // --- CẤU HÌNH ---
   "settings-group": "settings",

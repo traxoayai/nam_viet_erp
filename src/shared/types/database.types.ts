@@ -6237,6 +6237,10 @@ export type Database = {
         Args: { p_check_id: number; p_product_id: number };
         Returns: Json;
       };
+      add_product_synonym: {
+        Args: { p_product_id: number; p_synonym: string; p_weight?: number };
+        Returns: number;
+      };
       add_surplus_stocktake_line: {
         Args: { p_check_id: number; p_product_id: number };
         Returns: Json;
@@ -6274,6 +6278,7 @@ export type Database = {
       };
       auto_create_purchase_orders_min_max: { Args: never; Returns: number };
       batch_deduct_vat_for_pos: { Args: { p_items: Json }; Returns: undefined };
+      bulk_import_synonyms: { Args: { p_rows: Json }; Returns: Json };
       bulk_pay_orders: {
         Args: {
           p_fund_account_id: number;
@@ -6805,6 +6810,7 @@ export type Database = {
         Args: { p_id: number };
         Returns: boolean;
       };
+      delete_product_synonym: { Args: { p_id: number }; Returns: undefined };
       delete_products: { Args: { p_ids: number[] }; Returns: undefined };
       delete_purchase_order: { Args: { p_po_id: number }; Returns: undefined };
       delete_service_packages: {
@@ -8023,6 +8029,15 @@ export type Database = {
           user_id: string;
         }[];
       };
+      list_product_synonyms: {
+        Args: { p_product_id: number };
+        Returns: {
+          created_at: string;
+          id: number;
+          synonym: string;
+          weight: number;
+        }[];
+      };
       mark_all_my_notifications_read: { Args: never; Returns: number };
       mark_all_notifications_read: {
         Args: { p_customer_b2b_id: number };
@@ -8268,6 +8283,16 @@ export type Database = {
           system_stock: number;
           unit: string;
           wholesale_unit: string;
+        }[];
+      };
+      search_products_for_synonym_admin: {
+        Args: { p_limit?: number; p_query: string };
+        Returns: {
+          active_ingredient: string;
+          id: number;
+          name: string;
+          sku: string;
+          synonym_count: number;
         }[];
       };
       search_products_for_transfer: {

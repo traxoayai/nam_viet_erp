@@ -58,6 +58,14 @@ export function InboxThread({ session }: InboxThreadProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [busy, setBusy] = useState(false);
+  // Optimistic local status: parent's `selected` không tự refresh sau action,
+  // nên track local để nút action + reply box ăn theo state thật ngay sau RPC.
+  const [localStatus, setLocalStatus] = useState<
+    InboxSessionRow["status"] | null
+  >(session?.status ?? null);
+  useEffect(() => {
+    setLocalStatus(session?.status ?? null);
+  }, [session?.id, session?.status]);
 
   const len = data?.length ?? 0;
   useEffect(() => {
@@ -102,21 +110,30 @@ export function InboxThread({ session }: InboxThreadProps) {
 
   const onAssign = () =>
     runAction(
-      () => assignSelfToSession(session.id),
+      async () => {
+        await assignSelfToSession(session.id);
+        setLocalStatus("human");
+      },
       "Đã nhận phiên",
       "Không nhận được phiên"
     );
 
   const onReturn = () =>
     runAction(
-      () => returnToBot(session.id),
+      async () => {
+        await returnToBot(session.id);
+        setLocalStatus("bot");
+      },
       "Đã chuyển về bot",
       "Không chuyển được"
     );
 
   const onClose = () =>
     runAction(
-      () => closeSession(session.id),
+      async () => {
+        await closeSession(session.id);
+        setLocalStatus("closed");
+      },
       "Đã đóng phiên",
       "Không đóng được phiên"
     );
@@ -144,14 +161,15 @@ export function InboxThread({ session }: InboxThreadProps) {
       >
         <div style={{ minWidth: 0 }}>
           <Title level={5} style={{ margin: 0 }}>
-            {session.customer_name ?? "Khách lạ"} {statusTag(session.status)}
+            {session.customer_name ?? "Khách lạ"}{" "}
+            {statusTag(localStatus ?? session.status)}
           </Title>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {session.customer_phone ?? "Chưa có SĐT"}
           </Text>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {session.status === "handoff_pending" && (
+          {(localStatus ?? session.status) === "handoff_pending" && (
             <Button
               type="primary"
               loading={busy}
@@ -162,7 +180,7 @@ export function InboxThread({ session }: InboxThreadProps) {
               Nhận phiên
             </Button>
           )}
-          {session.status === "human" && (
+          {(localStatus ?? session.status) === "human" && (
             <Popconfirm
               title="Chuyển về bot?"
               description="Bot sẽ tiếp tục trả lời khách."
@@ -175,7 +193,7 @@ export function InboxThread({ session }: InboxThreadProps) {
               <Button loading={busy}>Chuyển bot</Button>
             </Popconfirm>
           )}
-          {session.status !== "closed" && (
+          {(localStatus ?? session.status) !== "closed" && (
             <Popconfirm
               title="Đóng phiên này?"
               description="Khách sẽ không thể gửi thêm tin vào phiên này."
@@ -212,7 +230,7 @@ export function InboxThread({ session }: InboxThreadProps) {
       {/* Footer */}
       <InboxReplyBox
         sessionId={session.id}
-        disabled={session.status !== "human"}
+        disabled={(localStatus ?? session.status) !== "human"}
       />
     </div>
   );

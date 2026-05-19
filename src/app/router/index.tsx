@@ -17,6 +17,7 @@ import UpdateProfilePage from "@/pages/auth/UpdateProfilePage";
 import ChatbotAnalyticsPage from "@/pages/chatbot/ChatbotAnalyticsPage"; // [Plan 2]
 import ChatbotComplianceAuditPage from "@/pages/chatbot/ChatbotComplianceAuditPage"; // [Plan 2]
 import ChatbotInboxPage from "@/pages/chatbot/ChatbotInboxPage"; // [Plan 2]
+import ChatbotSynonymsPage from "@/pages/chatbot/ChatbotSynonymsPage"; // [Gap 1 P2.5]
 import CustomerB2BPage from "@/pages/crm/CustomerB2BPage";
 import CustomerB2COrgForm from "@/pages/crm/CustomerB2COrgForm";
 import CustomerB2CPage from "@/pages/crm/CustomerB2CPage";
@@ -592,6 +593,23 @@ const routes: RouteObject[] = [
             element: (
               <PermissionGuard permission={PERMISSIONS.CHATBOT.AUDIT}>
                 <ChatbotComplianceAuditPage />
+              </PermissionGuard>
+            ),
+          },
+          // [G3] Alias route — shortcut top-level cho compliance officer.
+          {
+            path: "chat-compliance",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.CHATBOT.AUDIT}>
+                <ChatbotComplianceAuditPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: "marketing/chatbot/synonyms",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.CHATBOT.ADMIN}>
+                <ChatbotSynonymsPage />
               </PermissionGuard>
             ),
           },
