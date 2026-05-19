@@ -12,10 +12,10 @@ export const PERMISSIONS = {
     VIEW_MARGIN_WHOLESALE: "inventory.product.view_margin_wholesale",
   },
   PURCHASING: {
-    VIEW: "inv-po-create",         // Legacy key — ai có quyền tạo PO cũng xem được
+    VIEW: "inv-po-create", // Legacy key — ai có quyền tạo PO cũng xem được
     CREATE: "inv-po-create",
     EDIT: "inv-po-create",
-    COSTING: "inv-po-approve",     // Approve = được tính giá vốn
+    COSTING: "inv-po-approve", // Approve = được tính giá vốn
   },
   MEDICAL: {
     VIEW: "clinic",
@@ -25,12 +25,18 @@ export const PERMISSIONS = {
   MARKETING: {
     EDIT_CONTENT: "marketing.content.edit",
   },
+  CHATBOT: {
+    HANDLE: "crm.chatbot.handle",
+    ADMIN: "crm.chatbot.admin",
+    VIEW_ANALYTICS: "crm.chatbot.view_analytics",
+    AUDIT: "crm.chatbot.audit",
+  },
   ORDER: {
     DELETE_COMPLETED: "order.delete_completed",
   },
   SETTINGS: {
-    VIEW: "setting-view",          // Legacy key
-    PERMISSIONS: "setting-users",  // Legacy key
+    VIEW: "setting-view", // Legacy key
+    PERMISSIONS: "setting-users", // Legacy key
   },
   QUICK: {
     UNIT_SETUP: "quick.unit_setup",

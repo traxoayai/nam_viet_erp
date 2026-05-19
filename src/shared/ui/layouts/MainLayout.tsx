@@ -83,6 +83,7 @@ import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 
 import Logo from "@/assets/logo.png";
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
+import { useHandoffNotifications } from "@/features/chatbot/hooks/useHandoffNotifications"; // [NEW] Plan 2 Task 21
 import { NotificationBell } from "@/features/notifications/components/NotificationBell"; // [NEW]
 import { useAutoLogout } from "@/shared/hooks/useAutoLogout"; // [NEW]
 
@@ -454,11 +455,24 @@ const finalMenuItems: MenuItem[] = [
           "/marketing/tools/library"
         ),
       ]),
-      getItem(
-        <Link to="/marketing/chatbot">Quản lý Chatbot AI</Link>,
-        "/marketing/chatbot",
-        <GlobalOutlined />
-      ),
+      getItem("Quản lý Chatbot AI", "marketing-chatbot", <GlobalOutlined />, [
+        getItem(
+          <Link to="/marketing/chatbot/inbox">Inbox Sales</Link>,
+          "/marketing/chatbot/inbox"
+        ),
+        getItem(
+          <Link to="/marketing/chatbot/analytics">Báo cáo</Link>,
+          "/marketing/chatbot/analytics"
+        ),
+        getItem(
+          <Link to="/chat-compliance">Compliance Chatbot</Link>,
+          "/chat-compliance"
+        ),
+        getItem(
+          <Link to="/marketing/chatbot/synonyms">Từ đồng nghĩa</Link>,
+          "/marketing/chatbot/synonyms"
+        ),
+      ]),
     ]
   ),
 
@@ -670,6 +684,13 @@ const MENU_PERMISSIONS: Record<string, string> = {
   "/portal/notifications": "portal.manage",
   "/portal/users": "portal.manage",
 
+  // --- CHATBOT (P2) ---
+  "/marketing/chatbot/inbox": "crm.chatbot.handle",
+  "/marketing/chatbot/analytics": "crm.chatbot.view_analytics",
+  "/marketing/chatbot/compliance": "crm.chatbot.audit",
+  "/chat-compliance": "crm.chatbot.audit", // [G3] alias route
+  "/marketing/chatbot/synonyms": "crm.chatbot.admin",
+
   // --- CẤU HÌNH ---
   "settings-group": "settings",
 };
@@ -685,42 +706,57 @@ const MainLayout: React.FC = () => {
   const location = useLocation(); // Để active menu đúng
   const { user, profile, logout, permissions } = useAuthStore();
 
+  // [Plan 2 Task 21] Push notification handoff cho Sales — chỉ bật khi user có quyền xử lý chatbot.
+  const canHandleChatbot =
+    permissions.includes("crm.chatbot.handle") ||
+    permissions.includes("admin-all");
+  useHandoffNotifications(canHandleChatbot);
+
   // 2. HÀM LỌC MENU ĐỆ QUY (QUAN TRỌNG)
-  const filterMenuItems = (items: MenuItem[]): MenuItem[] => {
-    return items
-      .map((item) => {
-        // 1. Copy item để tránh mutate
-        const newItem = { ...item } as any;
+  // Bọc bằng useCallback để cố định reference, tránh warning exhaustive-deps
+  // ở useMemo bên dưới khi `permissions` thay đổi.
+  const filterMenuItems = React.useCallback(
+    (items: MenuItem[]): MenuItem[] => {
+      type FilterableMenuItem = MenuItem & {
+        key?: React.Key;
+        children?: MenuItem[];
+      };
+      return items
+        .map((item) => {
+          // 1. Copy item để tránh mutate
+          const newItem = { ...item } as FilterableMenuItem;
 
-        // 2. Nếu có con, lọc con trước (Đệ quy)
-        if (newItem.children && newItem.children.length > 0) {
-          newItem.children = filterMenuItems(newItem.children);
+          // 2. Nếu có con, lọc con trước (Đệ quy)
+          if (newItem.children && newItem.children.length > 0) {
+            newItem.children = filterMenuItems(newItem.children);
 
-          // [QUAN TRỌNG] Nếu lọc xong mà rỗng con -> Ẩn luôn cha
-          if (newItem.children.length === 0) {
-            return null;
+            // [QUAN TRỌNG] Nếu lọc xong mà rỗng con -> Ẩn luôn cha
+            if (newItem.children.length === 0) {
+              return null;
+            }
           }
-        }
 
-        // 3. Check quyền của chính item này (Nếu có quy định trong MENU_PERMISSIONS)
-        const requiredPerm = MENU_PERMISSIONS[newItem.key as string];
-        if (requiredPerm) {
-          const hasPerm =
-            permissions.includes(requiredPerm) ||
-            permissions.includes("admin-all");
-          if (!hasPerm) return null; // Không có quyền -> Ẩn
-        }
+          // 3. Check quyền của chính item này (Nếu có quy định trong MENU_PERMISSIONS)
+          const requiredPerm = MENU_PERMISSIONS[newItem.key as string];
+          if (requiredPerm) {
+            const hasPerm =
+              permissions.includes(requiredPerm) ||
+              permissions.includes("admin-all");
+            if (!hasPerm) return null; // Không có quyền -> Ẩn
+          }
 
-        // 4. Mặc định hiển thị (nếu không dính các case trên)
-        return newItem;
-      })
-      .filter(Boolean) as MenuItem[]; // Loại bỏ các item null
-  };
+          // 4. Mặc định hiển thị (nếu không dính các case trên)
+          return newItem;
+        })
+        .filter(Boolean) as MenuItem[]; // Loại bỏ các item null
+    },
+    [permissions]
+  );
 
   // Tính toán menu hiển thị thực tế
   const visibleMenuItems = React.useMemo(() => {
     return filterMenuItems(finalMenuItems);
-  }, [permissions]); // Chỉ tính lại khi quyền thay đổi
+  }, [filterMenuItems]); // Chỉ tính lại khi quyền (qua filterMenuItems) thay đổi
 
   // Tự động đóng Drawer khi chuyển trang trên mobile
   useEffect(() => {
