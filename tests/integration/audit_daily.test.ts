@@ -10,7 +10,11 @@
 
 import { afterAll, beforeAll, describe as _describe, expect, it } from "vitest";
 
-import { adminClient, isProduction } from "../helpers/supabase";
+import {
+  adminClient,
+  findUserIdByEmail,
+  isProduction,
+} from "../helpers/supabase";
 
 const describe = isProduction ? _describe.skip : _describe;
 
@@ -37,20 +41,7 @@ describe("audit_chat_messages_daily() — batch compliance audit", () => {
   beforeAll(async () => {
     // Lấy 1 user bất kỳ làm chủ session (RPC không gate quyền theo user_id).
     const CUSTOMER_EMAIL = "kame.ctb@gmail.com";
-    let customerId: string | undefined;
-    for (let page = 1; page <= 20; page++) {
-      const { data, error } = await adminClient.auth.admin.listUsers({
-        page,
-        perPage: 200,
-      });
-      if (error) break;
-      const u = data?.users?.find((x) => x.email === CUSTOMER_EMAIL);
-      if (u?.id) {
-        customerId = u.id;
-        break;
-      }
-      if (!data?.users?.length || data.users.length < 200) break;
-    }
+    const customerId = await findUserIdByEmail(CUSTOMER_EMAIL);
     if (!customerId)
       throw new Error(`Customer fixture ${CUSTOMER_EMAIL} không tồn tại`);
     seed.customerUserId = customerId;

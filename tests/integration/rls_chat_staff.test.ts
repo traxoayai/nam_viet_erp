@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe as _describe, expect, it } from "vitest";
 import {
   adminClient,
   createUserClient,
+  findUserIdByEmail,
   isProduction,
 } from "../helpers/supabase";
 
@@ -44,27 +45,15 @@ let anonClient: SupabaseClient;
 
 describe("RLS chat_sessions + is_chat_staff()", () => {
   beforeAll(async () => {
-    // 1. Lấy id của 2 user fixture
-    const userMap: Record<string, string> = {};
-    for (let page = 1; page <= 20; page++) {
-      const { data, error } = await adminClient.auth.admin.listUsers({
-        page,
-        perPage: 200,
-      });
-      if (error) break;
-      for (const u of data?.users ?? []) {
-        if (u.email === STAFF_EMAIL && u.id) userMap.staff = u.id;
-        if (u.email === CUSTOMER_EMAIL && u.id) userMap.customer = u.id;
-      }
-      if (userMap.staff && userMap.customer) break;
-      if (!data?.users?.length || data.users.length < 200) break;
-    }
-    if (!userMap.staff)
+    // 1. Lấy id của 2 user fixture qua helper
+    const staffId = await findUserIdByEmail(STAFF_EMAIL);
+    const customerId = await findUserIdByEmail(CUSTOMER_EMAIL);
+    if (!staffId)
       throw new Error(`Staff fixture user ${STAFF_EMAIL} not found`);
-    if (!userMap.customer)
+    if (!customerId)
       throw new Error(`Customer fixture user ${CUSTOMER_EMAIL} not found`);
-    seed.staffUserId = userMap.staff;
-    seed.customerUserId = userMap.customer;
+    seed.staffUserId = staffId;
+    seed.customerUserId = customerId;
 
     // 2. Tạo role test có permission crm.chatbot.handle
     const roleName = `__test_chatbot_staff_${Date.now()}`;

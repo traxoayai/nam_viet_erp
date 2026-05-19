@@ -77,24 +77,15 @@ export async function createUserClient(
     throw new Error(`Login failed for ${email}: ${error.message}`);
   }
 
-  // Local: tìm user qua phân trang admin.listUsers (default page-size 50, có thể >50 user).
-  let user: { id: string; email?: string | null } | undefined;
-  for (let page = 1; page <= 20; page++) {
-    const { data: list, error: listErr } =
-      await adminClient.auth.admin.listUsers({
-        page,
-        perPage: 200,
-      });
-    if (listErr) break;
-    user = list?.users?.find((u) => u.email === email);
-    if (user) break;
-    if (!list?.users?.length || list.users.length < 200) break;
-  }
-  if (!user) {
+  // Local: tìm user. Ưu tiên RPC _test_find_auth_user_by_email (deterministic);
+  // fallback listUsers paginate cho DB cũ chưa migrate.
+  const userId = await findUserIdByEmail(email);
+  if (!userId) {
     throw new Error(
       `Login failed for ${email}: user không tồn tại trong auth.users`
     );
   }
+  const user = { id: userId };
   const { error: resetErr } = await adminClient.auth.admin.updateUserById(
     user.id,
     {
@@ -127,4 +118,30 @@ export const TEST_USER_PASSWORD = "Test@123!";
 
 export async function createTestAuthedClient(): Promise<SupabaseClient> {
   return createUserClient(TEST_USER_EMAIL, TEST_USER_PASSWORD);
+}
+
+/**
+ * Lookup auth.users.id theo email. RPC `_test_find_auth_user_by_email`
+ * (SECURITY DEFINER, service_role) làm primary; fallback listUsers paginate
+ * cho DB cũ chưa apply migration `20260518000009_test_find_auth_user_helper`.
+ * Trả null nếu không có user.
+ */
+export async function findUserIdByEmail(email: string): Promise<string | null> {
+  const { data: foundId, error: rpcErr } = await adminClient.rpc(
+    "_test_find_auth_user_by_email",
+    { p_email: email }
+  );
+  if (!rpcErr && typeof foundId === "string" && foundId.length > 0) {
+    return foundId;
+  }
+  // Fallback listUsers
+  for (let page = 1; page <= 20; page++) {
+    const { data: list, error: listErr } =
+      await adminClient.auth.admin.listUsers({ page, perPage: 200 });
+    if (listErr) break;
+    const found = list?.users?.find((u) => u.email === email);
+    if (found) return found.id;
+    if (!list?.users?.length || list.users.length < 200) break;
+  }
+  return null;
 }
