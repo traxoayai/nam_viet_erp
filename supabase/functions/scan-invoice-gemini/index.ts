@@ -6,16 +6,75 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
 };
+// Helper: log mỗi attempt vào llm_request_log để track cost/quota (memory rule
+// project_llm_free_tier_models — luôn check llm_request_log khi user kêu scan fail)
+async function logLlmAttempt(supabase, payload) {
+  try {
+    await supabase.from("llm_request_log").insert(payload);
+  } catch (e) {
+    console.warn("[llm_request_log] insert failed (non-fatal):", e?.message ?? e);
+  }
+}
+// Gọi Gemini với 1 model cụ thể — tách function để fallback chain dễ retry
+async function callGemini(model, geminiApiKey, prompt, base64Data, mimeType) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+  const started = Date.now();
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            {
+              text: prompt
+            },
+            {
+              inline_data: {
+                mime_type: mimeType || "image/jpeg",
+                data: base64Data
+              }
+            }
+          ]
+        }
+      ]
+    })
+  });
+  const latencyMs = Date.now() - started;
+  const data = await resp.json();
+  if (!resp.ok) {
+    const errMsg = data?.error?.message ?? `HTTP ${resp.status}`;
+    const status = resp.status === 429 ? "rate_limit" : "error";
+    const err = new Error(`Gemini ${model} fail: ${errMsg}`);
+    err.latencyMs = latencyMs;
+    err.status = status;
+    err.providerStatus = resp.status;
+    throw err;
+  }
+  return {
+    data,
+    latencyMs
+  };
+}
 serve(async (req)=>{
   if (req.method === "OPTIONS") return new Response("ok", {
     headers: corsHeaders
   });
+  // Khởi tạo client sớm để log được cả case fail trước khi vào main logic
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
   try {
     // 1. Config & Validation
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiApiKey) throw new Error("Missing GEMINI_API_KEY");
+    // Model config qua env var — rollback không cần redeploy. Pin snapshot cụ thể
+    // (gemini-2.5-flash-002) thay vì alias rolling để chống silent break khi Google
+    // xoay underlying version. Fallback xuống 2.0-flash khi primary fail/quota.
+    const primaryModel = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash-002";
+    const fallbackModel = Deno.env.get("GEMINI_MODEL_FALLBACK") ?? "gemini-2.0-flash";
     // 2. Parse Payload (Robust V9)
     const rawBody = await req.text();
     if (!rawBody) throw new Error("Empty Request Body");
@@ -51,9 +110,6 @@ serve(async (req)=>{
     if (!fileResp.ok) throw new Error("Download failed");
     const arrayBuffer = await fileResp.arrayBuffer();
     const base64Data = encodeBase64(arrayBuffer);
-    // Call Gemini
-    const modelVersion = "gemini-2.5-flash";
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelVersion}:generateContent?key=${geminiApiKey}`;
     // Prompt (V12 - Date Fixed)
     const prompt = `
       Bạn là chuyên gia OCR hóa đơn thuốc. Nhiệm vụ: Trích xuất dữ liệu JSON (tuyệt đối không markdown).
@@ -80,35 +136,70 @@ serve(async (req)=>{
         ]
       }
     `;
-    console.log(`[Gemini] Scanning...`);
-    const aiResp = await fetch(geminiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt
-              },
-              {
-                inline_data: {
-                  mime_type: mime_type || "image/jpeg",
-                  data: base64Data
-                }
-              }
-            ]
-          }
-        ]
-      })
-    });
-    const aiData = await aiResp.json();
-    if (!aiResp.ok) throw new Error(`Gemini Error: ${aiData.error?.message}`);
-    // Parse Result
-    const rawText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    console.log(`[Gemini] Scanning with primary=${primaryModel}...`);
+    // Fallback chain: thử primary → catch → retry fallback. Mỗi attempt log riêng
+    // vào llm_request_log để debug cost spike và phân biệt fail vì model nào.
+    const attempted = [];
+    let aiData;
+    let usedModel = primaryModel;
+    try {
+      const r = await callGemini(primaryModel, geminiApiKey, prompt, base64Data, mime_type);
+      aiData = r.data;
+      attempted.push(primaryModel);
+      if (supabase) {
+        const usage = aiData?.usageMetadata ?? {};
+        await logLlmAttempt(supabase, {
+          provider: "gemini",
+          model: primaryModel,
+          status: "success",
+          latency_ms: r.latencyMs,
+          tokens_in: usage.promptTokenCount ?? null,
+          tokens_out: usage.candidatesTokenCount ?? null,
+          attempted_providers: [
+            primaryModel
+          ]
+        });
+      }
+    } catch (primaryErr) {
+      attempted.push(primaryModel);
+      console.warn(`[Gemini] Primary ${primaryModel} fail, fallback ${fallbackModel}:`, primaryErr.message);
+      if (supabase) {
+        await logLlmAttempt(supabase, {
+          provider: "gemini",
+          model: primaryModel,
+          status: primaryErr.status ?? "error",
+          latency_ms: primaryErr.latencyMs ?? null,
+          error_message: primaryErr.message,
+          attempted_providers: [
+            primaryModel
+          ]
+        });
+      }
+      // Nếu primary === fallback (env override) thì không retry tránh loop
+      if (primaryModel === fallbackModel) throw primaryErr;
+      const r = await callGemini(fallbackModel, geminiApiKey, prompt, base64Data, mime_type);
+      aiData = r.data;
+      usedModel = fallbackModel;
+      attempted.push(fallbackModel);
+      if (supabase) {
+        const usage = aiData?.usageMetadata ?? {};
+        await logLlmAttempt(supabase, {
+          provider: "gemini",
+          model: fallbackModel,
+          status: "success",
+          latency_ms: r.latencyMs,
+          tokens_in: usage.promptTokenCount ?? null,
+          tokens_out: usage.candidatesTokenCount ?? null,
+          attempted_providers: attempted
+        });
+      }
+    }
+    // Parse Result — 2.5-flash có thể trả thêm `thinking` parts; lọc đúng text part
+    const parts = aiData.candidates?.[0]?.content?.parts ?? [];
+    const textPart = parts.find((p)=>typeof p?.text === "string" && p.text.trim().length > 0);
+    const rawText = textPart?.text ?? "{}";
     const parsedInvoice = JSON.parse(rawText.replace(/```json|```/g, "").trim());
+    console.log(`[Gemini] Parsed via ${usedModel} (attempts=${attempted.join("→")})`);
     // ==================================================================
     // 5. EXTRACT-ONLY SHORT-CIRCUIT (cho flow nhập kho từ phiếu xuất NCC)
     // ==================================================================
@@ -128,7 +219,7 @@ serve(async (req)=>{
     // ==================================================================
     // 6. DEDUPLICATION LOGIC (CHỐNG TRÙNG LẶP) - THEO YÊU CẦU AURA
     // ==================================================================
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    if (!supabase) throw new Error("Missing Supabase credentials for DB write");
     let targetId;
     let actionType = "INSERT";
     // Chỉ check trùng nếu AI đọc được Số hóa đơn (Nếu AI ko đọc được thì đành tạo mới)

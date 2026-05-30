@@ -11,6 +11,11 @@ import {
   InboundDetailItem,
 } from "../types/inbound";
 
+// ID kho tổng B2B — ưu tiên hiển thị vị trí kệ của kho này nếu product có ở nhiều kho.
+// TODO: di chuyển sang config/warehouse_settings table khi multi-tenant.
+const WAREHOUSE_B2B_MAIN_ID = 1;
+const UNSHELVED_LABEL = "Chưa xếp";
+
 interface InboundState {
   // List State
   tasks: InboundTask[];
@@ -128,30 +133,45 @@ export const useInboundStore = create<InboundState>((set, get) => ({
         const { data: invData, error: invError } = await supabase
           .from("product_inventory")
           .select("product_id, shelf_location, warehouse_id")
-          .in("product_id", productIds);
+          .in("product_id", productIds)
+          .order("warehouse_id", { ascending: true })
+          .order("shelf_location", { ascending: true });
 
-        if (!invError && invData) {
-          const locationMap = new Map();
+        if (invError) {
+          console.warn(
+            "[useInboundStore] RLS block product_inventory:",
+            invError.message
+          );
+        } else if (invData) {
+          const locationMap = new Map<
+            number,
+            { shelf_location: string; warehouse_id: number }
+          >();
           for (const row of invData) {
-            if (row.shelf_location) {
-              const current = locationMap.get(row.product_id);
-              // Ưu tiên:
-              // 1. Kho tổng B2B (warehouse_id === 1)
-              // 2. Các kho khác nếu trước đó chưa có hoặc trước đó là "Chưa xếp"
-              if (
-                !current ||
-                row.warehouse_id === 1 ||
-                (current.shelf_location === "Chưa xếp" && row.shelf_location !== "Chưa xếp")
-              ) {
-                // Nếu current đã là kho 1 và khác "Chưa xếp", thì không đè bằng kho khác
-                if (current && current.warehouse_id === 1 && current.shelf_location !== "Chưa xếp" && row.warehouse_id !== 1) {
-                  continue;
-                }
-                locationMap.set(row.product_id, {
-                  shelf_location: row.shelf_location,
-                  warehouse_id: row.warehouse_id
-                });
-              }
+            if (!row.shelf_location) continue;
+            const current = locationMap.get(row.product_id);
+
+            // Đã có vị trí từ kho B2B chính và không phải "Chưa xếp" → giữ nguyên
+            if (
+              current &&
+              current.warehouse_id === WAREHOUSE_B2B_MAIN_ID &&
+              current.shelf_location !== UNSHELVED_LABEL
+            ) {
+              continue;
+            }
+
+            // Ưu tiên: chưa có | row là kho chính | đang "Chưa xếp" mà row mới có vị trí thật
+            const shouldReplace =
+              !current ||
+              row.warehouse_id === WAREHOUSE_B2B_MAIN_ID ||
+              (current.shelf_location === UNSHELVED_LABEL &&
+                row.shelf_location !== UNSHELVED_LABEL);
+
+            if (shouldReplace) {
+              locationMap.set(row.product_id, {
+                shelf_location: row.shelf_location,
+                warehouse_id: row.warehouse_id,
+              });
             }
           }
           workingItems = workingItems.map(item => ({

@@ -310,6 +310,25 @@ const WarehouseReceiptPage = () => {
           <Text type="secondary">N/A</Text>
         ),
     },
+    // [RESTORED] Landed Cost Columns — phí phân bổ + giá vốn cuối (dual-ledger actual_cost)
+    {
+      title: "Phí PB",
+      dataIndex: "allocated_cost",
+      width: 100,
+      align: "right" as const,
+      responsive: ["lg" as const],
+      render: (val: number) =>
+        val ? <Text type="secondary">{val.toLocaleString()}</Text> : "-",
+    },
+    {
+      title: "Giá Vốn",
+      dataIndex: "final_unit_cost",
+      width: 110,
+      align: "right" as const,
+      responsive: ["lg" as const],
+      render: (val: number) =>
+        val ? <Text strong>{val.toLocaleString()}</Text> : "-",
+    },
     {
       title: "Tiến độ",
       width: 50,
@@ -586,7 +605,7 @@ const WarehouseReceiptPage = () => {
             dataSource={workingItems}
             rowKey="product_id"
             pagination={false}
-            scroll={{ x: 1000 }}
+            scroll={{ x: 1210 }}
             // [NEW] Highlight row animation
             rowClassName={(record) =>
               String(record.product_id) === highlightedKey ? "flash-row" : ""
