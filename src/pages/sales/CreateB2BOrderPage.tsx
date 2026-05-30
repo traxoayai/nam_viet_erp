@@ -6,7 +6,6 @@ import {
   Col,
   Typography,
   Card,
-  Input,
   Select,
   message,
   Alert,
@@ -39,7 +38,6 @@ import { printHTML } from "@/shared/utils/printUtils";
 
 const { Content } = Layout;
 const { Title } = Typography;
-const { TextArea } = Input;
 
 const CreateB2BOrderPage = () => {
   const navigate = useNavigate();
@@ -80,6 +78,37 @@ const CreateB2BOrderPage = () => {
     reset,
     validateOrder,
   } = useCreateOrderB2B();
+
+  // [NEW] Fetch full B2B customer info via Edge Function
+  const handleCustomerSelect = async (partialCustomer: CustomerB2B) => {
+    try {
+      const hide = message.loading("Đang tải thông tin chi tiết khách hàng...", 0);
+      const { data, error } = await supabase.functions.invoke("get-info-customer-b2b", {
+        body: { id: partialCustomer.id }
+      });
+      hide();
+      
+      if (error) throw error;
+      const res = data.data;
+
+      const mappedCustomer: CustomerB2B = {
+        ...partialCustomer,
+        id: res.customer.id,
+        name: res.customer.name,
+        tax_code: res.customer.tax_code,
+        shipping_address: res.customer.shipping_address,
+        debt_limit: res.customer.debt_limit,
+        current_debt: res.debt.actual_current_debt,
+        contacts: res.contacts || [],
+      };
+      
+      setCustomer(mappedCustomer);
+    } catch (err) {
+      console.error(err);
+      message.error("Lỗi lấy chi tiết thông tin khách hàng. Sử dụng thông tin cơ bản.");
+      setCustomer(partialCustomer);
+    }
+  };
 
   // Load Edit Data
   useEffect(() => {
@@ -284,67 +313,8 @@ const CreateB2BOrderPage = () => {
       }
 
       // [2026-04-25] Validate tồn kho qua RPC chung `validate_stock_for_order`
-      // (common với Portal) — server tự lookup conversion_factor từ product_units,
-      // quy đổi về base quantity rồi so với SUM(inventory_batches). Tránh bug FE
-      // cast conversion_factor undefined → luôn = 1.
-      if (status === "CONFIRMED") {
-        type InsufficientRow = {
-          product_id: number | null;
-          product_name: string;
-          uom: string | null;
-          requested_base: number | null;
-          available_base: number | null;
-          deficit_base: number | null;
-          reason: string;
-        };
-        type ValidateResult = { ok: boolean; insufficient: InsufficientRow[] };
-
-        const { data: whData } = await safeRpc("get_b2b_warehouse_id");
-        const warehouseId = (whData as number | null) ?? DEFAULT_WAREHOUSE_ID;
-
-        // supabase.rpc generic chưa có `validate_stock_for_order` trong types.ts
-        // (cần chạy npm run typegen sau khi migration 20260424010100 apply prod).
-        // Cast tạm qua `unknown` để tránh strict error, runtime vẫn gọi đúng.
-        const rpc = supabase.rpc as unknown as (
-          fn: string,
-          args: Record<string, unknown>
-        ) => Promise<{ data: unknown; error: { message: string } | null }>;
-
-        const { data: validateData, error: validateErr } = await rpc(
-          "validate_stock_for_order",
-          {
-            p_warehouse_id: warehouseId,
-            p_items: items.map((i) => ({
-              product_id: i.id,
-              quantity: i.quantity,
-              uom: i.wholesale_unit,
-              conversion_factor: 0, // server lookup product_units
-            })),
-          }
-        );
-
-        if (validateErr) {
-          message.error("Không thể kiểm tra tồn kho. Vui lòng thử lại.");
-          return;
-        }
-
-        const result = validateData as unknown as ValidateResult | null;
-        if (result && !result.ok && result.insufficient.length > 0) {
-          const msg = result.insufficient
-            .map((r) => {
-              if (r.reason === "unknown_uom") {
-                return `${r.product_name}: đơn vị "${r.uom}" chưa cấu hình`;
-              }
-              return `${r.product_name} (cần ${r.requested_base ?? "?"} ĐVCS, tồn ${r.available_base ?? 0} ĐVCS, thiếu ${r.deficit_base ?? 0})`;
-            })
-            .join("; ");
-          message.error({
-            content: `Không đủ tồn kho: ${msg}`,
-            duration: 6,
-          });
-          return;
-        }
-      }
+      // Backend (create_sales_order) đã tự động validate khi status='CONFIRMED'.
+      // Không cần validate ở FE để tránh bug.
 
       try {
         if (isEditMode && id) {
@@ -524,49 +494,51 @@ const CreateB2BOrderPage = () => {
       >
         <Row gutter={24}>
           <Col span={16}>
-            <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: 0 }}>
+            {/* KHỐI A: THÔNG TIN KHÁCH HÀNG */}
+            <div style={{ marginBottom: 16 }}>
               {!customer ? (
-                <div style={{ padding: 20 }}>
-                  <CustomerSelector onSelect={setCustomer} />
-                </div>
-              ) : (
-                <>
-                  <CustomerInfoCard
-                    customer={customer}
-                    onClear={() => setCustomer(null)}
-                    currentDebt={customer.current_debt}
-                    newDebt={financials.finalTotal}
-                    isOverLimit={financials.isOverLimit}
-                  />
-                  <div style={{ padding: "0 20px 20px 20px" }}>
-                    <ShippingForm
-                      deliveryMethod={deliveryMethod}
-                      setDeliveryMethod={setDeliveryMethod}
-                      shippingPartnerId={shippingPartnerId}
-                      setShippingPartner={selectShippingPartner}
-                      estimatedDeliveryText={estimatedDeliveryText}
-                    />
+                <Card style={{ width: "100%", borderTop: "3px solid #1890ff" }} bodyStyle={{ padding: 20 }}>
+                  <div style={{ marginBottom: 12 }}>
+                    <Typography.Text strong style={{ fontSize: 16 }}>Khách hàng</Typography.Text>
                   </div>
-                </>
+                  <CustomerSelector onSelect={handleCustomerSelect} />
+                </Card>
+              ) : (
+                <CustomerInfoCard
+                  customer={customer}
+                  onClear={() => setCustomer(null)}
+                  currentDebt={customer.current_debt}
+                  newDebt={financials.finalTotal}
+                  isOverLimit={financials.isOverLimit}
+                  note={note}
+                  setNote={setNote}
+                />
               )}
-            </Card>
+            </div>
 
+            {/* KHỐI B: THÔNG TIN GIAO HÀNG */}
+            <div style={{ marginBottom: 16 }}>
+              <Card style={{ width: "100%", borderTop: "3px solid #52c41a" }} bodyStyle={{ padding: "16px" }}>
+                <div style={{ marginBottom: 12 }}>
+                  <Typography.Text strong style={{ fontSize: 16 }}>Giao hàng</Typography.Text>
+                </div>
+                <ShippingForm
+                  deliveryMethod={deliveryMethod}
+                  setDeliveryMethod={setDeliveryMethod}
+                  shippingPartnerId={shippingPartnerId}
+                  setShippingPartner={selectShippingPartner}
+                  estimatedDeliveryText={estimatedDeliveryText}
+                />
+              </Card>
+            </div>
+
+            {/* KHỐI C: SẢN PHẨM */}
             <SalesOrderTable
               items={items}
               onAddItem={addItem}
               onUpdateItem={updateItem}
               onRemoveItem={removeItem}
             />
-
-            <Card size="small" style={{ marginTop: 16 }}>
-              <TextArea
-                placeholder="Ghi chú đơn hàng (VD: Giao giờ hành chính, gọi trước khi giao)..."
-                rows={2}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={500}
-              />
-            </Card>
           </Col>
 
           <Col span={8}>

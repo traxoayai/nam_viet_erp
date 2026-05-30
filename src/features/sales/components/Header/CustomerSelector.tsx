@@ -15,7 +15,7 @@ interface Props {
 
 export const CustomerSelector = ({ onSelect }: Props) => {
   const [options, setOptions] = useState<
-    { label: React.ReactNode; value: number; customer: CustomerB2B }[]
+    { label: React.ReactNode; value: number; customer: CustomerB2B; displayNode?: React.ReactNode }[]
   >([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -30,7 +30,10 @@ export const CustomerSelector = ({ onSelect }: Props) => {
       try {
         const data = await salesService.searchCustomers(debouncedSearch);
         const newOptions = data.map((c) => ({
-          label: (
+          label: `${c.name} - SĐT: ${c.phone}${c.tax_code ? ` - MST: ${c.tax_code}` : ""}`,
+          value: c.id,
+          customer: c,
+          displayNode: (
             <div
               style={{
                 display: "flex",
@@ -56,9 +59,7 @@ export const CustomerSelector = ({ onSelect }: Props) => {
               </div>
               {c.is_bad_debt ? <Tag color="red">Nợ xấu</Tag> : null}
             </div>
-          ),
-          value: c.id,
-          customer: c,
+          )
         }));
         setOptions(newOptions);
       } catch (e) {
@@ -82,6 +83,7 @@ export const CustomerSelector = ({ onSelect }: Props) => {
       style={{ width: "100%" }}
       size="large"
       suffixIcon={loading ? <LoadingOutlined /> : <UserOutlined />}
+      optionRender={(option) => option.data.displayNode}
       onChange={(_, option: any) => {
         if (option?.customer) onSelect(option.customer);
       }}

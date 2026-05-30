@@ -30,7 +30,7 @@ export const useCreateOrderB2B = () => {
 
     return {
       ...summary,
-      newTotalDebt: summary.totalPayable,
+      newTotalDebt: (Number(store.customer?.current_debt) || 0) + (Number(summary.totalPayable) || 0),
       isOverLimit,
     };
   }, [store.items, store.shippingFee, store.selectedVoucher, store.customer]);

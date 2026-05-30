@@ -72,7 +72,7 @@ export const PaymentSummary = ({
 
       <div style={{ ...rowStyle, color: "#faad14" }}>
         <Text type="warning">Nợ cũ:</Text>
-        <Text>{(oldDebt || 0).toLocaleString()} ₫</Text>
+        <Text>{Number(oldDebt || 0).toLocaleString()} ₫</Text>
       </div>
 
       <div

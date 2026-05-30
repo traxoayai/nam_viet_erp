@@ -43,6 +43,7 @@
     "lodash": "^4.17.21",
     "lucide-react": "^0.562.0",
     "pdfjs-dist": "^5.4.530",
+    "postgres": "^3.4.9",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.5",

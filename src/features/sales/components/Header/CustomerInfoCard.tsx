@@ -19,6 +19,7 @@ import {
   Space,
   Button,
   Descriptions,
+  Input,
 } from "antd";
 
 import { CustomerB2B } from "@/features/sales/types/b2b_sales";
@@ -31,6 +32,8 @@ interface Props {
   currentDebt: number;
   newDebt: number;
   isOverLimit: boolean;
+  note: string;
+  setNote: (note: string) => void;
 }
 
 export const CustomerInfoCard = ({
@@ -39,6 +42,8 @@ export const CustomerInfoCard = ({
   currentDebt,
   newDebt,
   isOverLimit,
+  note,
+  setNote,
 }: Props) => {
   // Lấy người liên hệ chính (hoặc người đầu tiên)
   const contacts = customer.contacts || [];
@@ -159,7 +164,7 @@ export const CustomerInfoCard = ({
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Text type="secondary">Đang nợ:</Text>
-              <Text>{currentDebt.toLocaleString()} ₫</Text>
+              <Text>{Number(currentDebt || 0).toLocaleString()} ₫</Text>
             </div>
 
             <div
@@ -173,7 +178,7 @@ export const CustomerInfoCard = ({
                 strong
                 style={{ fontSize: 15 }}
               >
-                {(currentDebt + newDebt).toLocaleString()} ₫
+                {(Number(currentDebt || 0) + Number(newDebt || 0)).toLocaleString()} ₫
               </Text>
             </div>
 
@@ -207,6 +212,19 @@ export const CustomerInfoCard = ({
           </div>
         </Col>
       </Row>
+
+      {/* KHỐI GHI CHÚ */}
+      <div style={{ marginTop: 16 }}>
+        <Typography.Text strong style={{ display: "block", marginBottom: 4 }}>
+          Ghi chú đơn hàng:
+        </Typography.Text>
+        <Input.TextArea
+          placeholder="Nhập ghi chú (VD: giao giờ hành chính)..."
+          rows={2}
+          value={note}
+          onChange={(e: any) => setNote(e.target.value)}
+        />
+      </div>
     </Card>
   );
 };
