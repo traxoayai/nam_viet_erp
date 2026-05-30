@@ -19,6 +19,7 @@ import {
   Empty,
   Upload as AntUpload,
   message,
+  List,
 } from "antd";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
@@ -29,6 +30,7 @@ import {
   Mic,
   Printer,
   Upload,
+  Package,
 } from "lucide-react";
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -276,7 +278,6 @@ const WarehouseReceiptPage = () => {
           <div>
             <div style={{ fontWeight: 600 }}>
               {text}
-              {/* THÊM DÒNG NÀY: */}
               {(record as InboundDetailItem & { is_bonus?: boolean })
                 .is_bonus ? (
                 <Tag color="purple" style={{ marginLeft: 8 }}>
@@ -295,22 +296,19 @@ const WarehouseReceiptPage = () => {
       width: 80,
       align: "center" as const,
     },
-    // [NEW] Landed Cost Columns
+    // [NEW] Vị trí sản phẩm
     {
-      title: "Phí PB",
-      dataIndex: "allocated_cost",
-      width: 100,
-      align: "right" as const,
-      render: (val: number) =>
-        val ? <Text type="secondary">{val.toLocaleString()}</Text> : "-",
-    },
-    {
-      title: "Giá Vốn",
-      dataIndex: "final_unit_cost",
-      width: 110,
-      align: "right" as const,
-      render: (val: number) =>
-        val ? <Text strong>{val.toLocaleString()}</Text> : "-",
+      title: "Vị trí",
+      dataIndex: "shelf_location",
+      width: 120,
+      render: (val: string) =>
+        val ? (
+          <Tag color="geekblue" style={{ margin: 0 }}>
+            {val}
+          </Tag>
+        ) : (
+          <Text type="secondary">N/A</Text>
+        ),
     },
     {
       title: "Tiến độ",
@@ -349,7 +347,6 @@ const WarehouseReceiptPage = () => {
       title: "Số Lượng Nhập",
       width: 60,
       render: (_: unknown, record: InboundDetailItem) => {
-        // [NEW] Nếu đơn đã khóa, hiển thị số lượng ĐÃ NHẬP. Nếu chưa khóa, hiển thị số lượng ĐANG NHẬP.
         const displayQty = isDone
           ? record.quantity_received_prev
           : record.input_quantity;
@@ -375,7 +372,6 @@ const WarehouseReceiptPage = () => {
         );
       },
     },
-    // THAY THẾ CỘT SỐ LÔ BẰNG LOGIC RENDER MỚI:
     {
       title: "Số Lô đã nhập",
       width: 150,
@@ -386,7 +382,6 @@ const WarehouseReceiptPage = () => {
         const hasReceivedBatches =
           record.received_batches && record.received_batches.length > 0;
 
-        // 1. Chế độ Xem (Khi đơn đã có lịch sử nhập lô)
         if (hasReceivedBatches) {
           return (
             <Space direction="vertical" size={4} style={{ width: "100%" }}>
@@ -410,7 +405,6 @@ const WarehouseReceiptPage = () => {
           );
         }
 
-        // 2. Chế độ Nhập (Khi đang thực hiện nhập kho)
         const displayLot = record.input_lot || "";
         return (
           <Input
@@ -426,7 +420,6 @@ const WarehouseReceiptPage = () => {
         );
       },
     },
-    // THAY THẾ CỘT HẠN SỬ DỤNG BẰNG LOGIC MỚI:
     {
       title: "Hạn Sử Dụng",
       width: 180,
@@ -434,7 +427,6 @@ const WarehouseReceiptPage = () => {
         if (record.stock_management_type !== "lot_date")
           return <Text disabled>--</Text>;
 
-        // Nếu đã có mảng lô thì ẩn ô chọn ngày (vì đã hiển thị gộp ở cột Lô)
         if (record.received_batches && record.received_batches.length > 0) {
           return (
             <Text type="secondary" italic style={{ fontSize: 12 }}>
@@ -559,46 +551,189 @@ const WarehouseReceiptPage = () => {
                   disabled
                 />
               </Tooltip>
-              <Tooltip title="Upload phiếu xuất kho NCC (Ảnh/PDF) → AI tự điền Lô + HSD">
-                <AntUpload
-                  accept="image/*,application/pdf"
-                  maxCount={1}
-                  showUploadList={false}
-                  beforeUpload={(file) => {
-                    handleDocUpload(file);
-                    return false; // ngăn upload mặc định, hook tự upload qua storage
+              <AntUpload
+                accept="image/*,application/pdf"
+                maxCount={1}
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  handleDocUpload(file);
+                  return false; // ngăn upload mặc định, hook tự upload qua storage
+                }}
+              >
+                <Button 
+                  type="primary"
+                  icon={<Upload size={16} />} 
+                  loading={isDocScanning}
+                  style={{ 
+                    background: 'linear-gradient(90deg, #1890ff, #722ed1)', 
+                    borderColor: 'transparent',
+                    boxShadow: '0 2px 4px rgba(114, 46, 209, 0.2)'
                   }}
                 >
-                  <Button
-                    icon={<Upload size={16} />}
-                    shape="circle"
-                    size="large"
-                    loading={isDocScanning}
-                  />
-                </AntUpload>
-              </Tooltip>
+                  Upload Hóa Đơn / Phiếu Xuất
+                </Button>
+              </AntUpload>
             </Space>
           </Col>
         </Row>
       </Card>
 
       {/* MAIN TABLE */}
-      <Card
-        bodyStyle={{ padding: 0 }}
-        title="Danh sách hàng nhập"
-        bordered={false}
-      >
-        <Table
-          columns={columns}
-          dataSource={workingItems}
-          rowKey="product_id"
-          pagination={false}
-          scroll={{ x: 1000 }}
-          // [NEW] Highlight row animation
-          rowClassName={(record) =>
-            String(record.product_id) === highlightedKey ? "flash-row" : ""
-          }
-        />
+      <Card bodyStyle={{ padding: screens.md ? 0 : 8 }} bordered={false} style={{ background: "transparent" }}>
+        {screens.md ? (
+          <Table
+            columns={columns}
+            dataSource={workingItems}
+            rowKey="product_id"
+            pagination={false}
+            scroll={{ x: 1000 }}
+            // [NEW] Highlight row animation
+            rowClassName={(record) =>
+              String(record.product_id) === highlightedKey ? "flash-row" : ""
+            }
+          />
+        ) : (
+          <List
+            dataSource={workingItems}
+            renderItem={(item) => {
+              const remains = item.quantity_remaining;
+              const input = item.input_quantity || 0;
+              let tagColor = "default";
+              let tagText = "Chờ nhập";
+              if (input === remains && remains > 0) {
+                tagColor = "success";
+                tagText = "Đủ";
+              } else if (input > 0 && input < remains) {
+                tagColor = "warning";
+                tagText = "Thiếu";
+              } else if (input > remains) {
+                tagColor = "error";
+                tagText = "Vượt";
+              }
+
+              return (
+                <Card 
+                  size="small" 
+                  style={{ 
+                    marginBottom: 12, 
+                    borderLeft: `4px solid ${tagColor === 'success' ? '#52c41a' : tagColor === 'warning' ? '#faad14' : tagColor === 'error' ? '#ff4d4f' : '#d9d9d9'}`,
+                    borderRadius: 8,
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}
+                  className={String(item.product_id) === highlightedKey ? "flash-row" : ""}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Space>
+                      <Tag color="geekblue" style={{ margin: 0 }}>
+                        {item.shelf_location || "N/A"}
+                      </Tag>
+                    </Space>
+                    <Tag color={tagColor}>{tagText}</Tag>
+                  </div>
+                  
+                  <Space style={{ marginBottom: 12, alignItems: 'flex-start', width: '100%' }}>
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        background: "#f0f0f0",
+                        borderRadius: 6,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {item.image_url ? (
+                        <img src={item.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <Package size={24} color="#ccc" />
+                      )}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Text strong style={{ fontSize: 15 }}>{item.product_name}</Text>
+                      <br />
+                      <Text type="secondary">{item.sku}</Text>
+                    </div>
+                  </Space>
+
+                  {/* Quantity Block */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f5f5f5', padding: '8px 12px', borderRadius: 6, marginBottom: 8 }}>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Cần nhập</Text>
+                      <div style={{ fontSize: 16, fontWeight: 'bold' }}>{remains} <Text type="secondary" style={{ fontSize: 13, fontWeight: 'normal' }}>{item.unit}</Text></div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Nhập Đợt Này</Text>
+                      <div id={`qty-input-${item.product_id}`}>
+                        <InputNumber
+                          min={0}
+                          value={item.input_quantity}
+                          onChange={(val) =>
+                            updateWorkingItem(item.product_id, {
+                              input_quantity: val || 0,
+                            })
+                          }
+                          status={input > remains ? "error" : ""}
+                          style={{ width: 100 }}
+                          disabled={isDone}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lot / Date Block */}
+                  {item.stock_management_type === "lot_date" && input > 0 && (
+                    <div style={{ background: '#e6f7ff', padding: '8px 12px', borderRadius: 6 }}>
+                      <Row gutter={[8, 8]}>
+                        <Col span={12}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>Số Lô</Text>
+                          <Input
+                            placeholder="Số lô..."
+                            value={item.input_lot}
+                            onChange={(e) =>
+                              updateWorkingItem(item.product_id, {
+                                input_lot: e.target.value,
+                              })
+                            }
+                            status={!item.input_lot ? "error" : ""}
+                            disabled={isDone}
+                          />
+                        </Col>
+                        <Col span={12}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>Hạn sử dụng</Text>
+                          <DatePicker
+                            style={{ width: "100%" }}
+                            placeholder="HSD"
+                            format="DD/MM/YYYY"
+                            value={
+                              item.input_expiry
+                                ? dayjs(item.input_expiry, [
+                                    "DD/MM/YYYY",
+                                    "YYYY-MM-DD",
+                                    "YYYY-MM-DDTHH:mm:ss.SSSZ"
+                                  ])
+                                : null
+                            }
+                            onChange={(date) =>
+                              updateWorkingItem(item.product_id, {
+                                input_expiry: date
+                                  ? date.toISOString()
+                                  : undefined,
+                              })
+                            }
+                            status={!item.input_expiry ? "error" : ""}
+                            disabled={isDone}
+                          />
+                        </Col>
+                      </Row>
+                    </div>
+                  )}
+                </Card>
+              );
+            }}
+          />
+        )}
       </Card>
 
       {/* FOOTER ACTIONS */}

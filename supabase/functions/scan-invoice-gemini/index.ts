@@ -52,7 +52,7 @@ serve(async (req)=>{
     const arrayBuffer = await fileResp.arrayBuffer();
     const base64Data = encodeBase64(arrayBuffer);
     // Call Gemini
-    const modelVersion = "gemini-2.0-flash";
+    const modelVersion = "gemini-2.5-flash";
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelVersion}:generateContent?key=${geminiApiKey}`;
     // Prompt (V12 - Date Fixed)
     const prompt = `

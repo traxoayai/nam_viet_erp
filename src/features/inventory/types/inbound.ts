@@ -28,6 +28,7 @@ export interface InboundDetailItem {
   quantity_ordered: number;
   quantity_received_prev: number;
   quantity_remaining: number;
+  shelf_location?: string;
 
   // Client-side inputs for receiving
   input_quantity?: number;

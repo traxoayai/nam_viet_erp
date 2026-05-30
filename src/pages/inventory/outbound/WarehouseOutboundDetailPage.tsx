@@ -13,6 +13,7 @@ import {
   Spin,
   Modal,
   Input,
+  List,
 } from "antd";
 import dayjs from "dayjs";
 import {
@@ -35,6 +36,7 @@ import {
   OutboundOrderInfo,
   OutboundPickItem,
 } from "@/features/inventory/types/outbound";
+import { useOrderPrint } from "@/features/sales/hooks/useOrderPrint";
 import { useRowFlasher } from "@/shared/hooks/useRowFlasher";
 import { ScannerListener } from "@/shared/ui/warehouse-tools/ScannerListener";
 
@@ -58,6 +60,7 @@ const WarehouseOutboundDetailPage = () => {
 
   // Print State
   const [printMode, setPrintMode] = useState<"picking" | "label" | null>(null);
+  const { printOrder } = useOrderPrint();
 
   // Cancel Modal State
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
@@ -404,6 +407,8 @@ const WarehouseOutboundDetailPage = () => {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-start",
+            flexWrap: "wrap",
+            gap: "12px",
           }}
         >
           <Space>
@@ -422,7 +427,7 @@ const WarehouseOutboundDetailPage = () => {
             <Tag color="blue" style={{ fontSize: 14, padding: "4px 8px" }}>
               {orderInfo.status}
             </Tag>
-            <Space>
+            <Space style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
               {orderInfo.shipping_partner ? (
                 <Tag icon={<Truck size={12} />} color="geekblue">
                   {orderInfo.shipping_partner}
@@ -439,17 +444,108 @@ const WarehouseOutboundDetailPage = () => {
       </Card>
 
       {/* CONTENT */}
-      <Card bodyStyle={{ padding: 0 }}>
-        <Table
-          columns={columns}
-          dataSource={items}
-          rowKey="product_id"
-          pagination={false}
-          rowClassName={(record) =>
-            String(record.product_id) === highlightedKey ? "flash-row" : ""
-          }
-          scroll={{ x: 800 }}
-        />
+      <Card bodyStyle={{ padding: screens.md ? 0 : 8 }} bordered={false} style={{ background: "transparent" }}>
+        {screens.md ? (
+          <Table
+            columns={columns}
+            dataSource={items}
+            rowKey="product_id"
+            pagination={false}
+            rowClassName={(record) =>
+              String(record.product_id) === highlightedKey ? "flash-row" : ""
+            }
+            scroll={{ x: 800 }}
+          />
+        ) : (
+          <List
+            dataSource={items}
+            renderItem={(item, idx) => (
+              <Card 
+                size="small" 
+                style={{ 
+                  marginBottom: 12, 
+                  borderLeft: `4px solid ${item.quantity_picked >= item.quantity_ordered ? '#52c41a' : '#faad14'}`,
+                  borderRadius: 8,
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}
+                className={String(item.product_id) === highlightedKey ? "flash-row" : ""}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Space>
+                    <Tag color="geekblue" icon={<MapPin size={12} />}>
+                      {item.shelf_location || "N/A"}
+                    </Tag>
+                  </Space>
+                  {item.quantity_picked === item.quantity_ordered ? (
+                    <Tag color="success">Đủ</Tag>
+                  ) : item.quantity_picked > item.quantity_ordered ? (
+                    <Tag color="error">Thừa</Tag>
+                  ) : (
+                    <Tag color="warning">Thiếu</Tag>
+                  )}
+                </div>
+                
+                <Space style={{ marginBottom: 12, alignItems: 'flex-start' }}>
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      background: "#f0f0f0",
+                      borderRadius: 6,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {item.image_url ? (
+                      <img src={item.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <Package size={24} color="#ccc" />
+                    )}
+                  </div>
+                  <div>
+                    <Text strong style={{ fontSize: 15 }}>{item.product_name}</Text>
+                    <br />
+                    <Text type="secondary">{item.sku}</Text>
+                  </div>
+                </Space>
+
+                {item.fefo_suggestion && (
+                  <div style={{ background: '#fafafa', padding: 8, borderRadius: 6, marginBottom: 12 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Gợi ý (FEFO):</Text>
+                    <div style={{ fontSize: 13 }}>
+                      Lô: <b>{item.fefo_suggestion.batch_code}</b> |{" "}
+                      <span style={{ color: dayjs(item.fefo_suggestion.expiry_date).diff(dayjs(), "day") < 30 ? "#faad14" : "inherit" }}>
+                        HSD: {dayjs(item.fefo_suggestion.expiry_date).format("DD/MM/YYYY")}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f5f5f5', padding: '8px 12px', borderRadius: 6 }}>
+                  <div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Yêu cầu</Text>
+                    <div style={{ fontSize: 16, fontWeight: 'bold' }}>{item.quantity_ordered} <Text type="secondary" style={{ fontSize: 13, fontWeight: 'normal' }}>{item.unit}</Text></div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Đã nhặt</Text>
+                    <div>
+                      <InputNumber
+                        min={0}
+                        value={item.quantity_picked}
+                        onChange={(v) => handleManualChange(idx, v)}
+                        status={item.quantity_picked > item.quantity_ordered ? "error" : ""}
+                        style={{ width: 100 }}
+                        disabled={orderInfo?.status !== "CONFIRMED"}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+          />
+        )}
       </Card>
 
       {/* FOOTER ACTION BAR */}
@@ -461,26 +557,36 @@ const WarehouseOutboundDetailPage = () => {
             boxShadow: "0 -2px 8px rgba(0,0,0,0.1)",
             display: "flex",
             justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px",
             zIndex: 999,
           }}
         >
-          <Space>
-            {/* Hủy allowed in CONFIRMED and PACKED */}
+          <Space style={{ flexWrap: "wrap" }}>
             {isConfirmed || isPacked ? (
               <Button danger onClick={handleCancelClick}>
                 Hủy
               </Button>
             ) : null}
+            <Button 
+              type="primary" 
+              ghost 
+              icon={<Printer size={16} />} 
+              onClick={() => printOrder({ id: orderInfo.id })}
+            >
+              In Đơn
+            </Button>
             <Button icon={<Printer size={16} />} onClick={handlePrintPicking}>
               In phiếu nhặt
             </Button>
-            <Space.Compact>
+            <Space.Compact style={{ width: screens.xs ? "100%" : "auto" }}>
               <InputNumber
                 min={1}
                 value={inputPackageCount}
                 onChange={(val) => setInputPackageCount(val || 1)}
                 addonBefore="Số kiện"
-                style={{ width: 140 }}
+                style={{ width: screens.xs ? 120 : 140 }}
               />
               <Button
                 type="default"
@@ -492,7 +598,7 @@ const WarehouseOutboundDetailPage = () => {
             </Space.Compact>
           </Space>
 
-          <Space>
+          <Space style={{ flexWrap: "wrap" }}>
             {isConfirmed ? (
               <>
                 <Button icon={<Save size={16} />} onClick={handleSaveDraft}>

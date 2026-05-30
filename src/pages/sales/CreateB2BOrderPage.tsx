@@ -397,6 +397,9 @@ const CreateB2BOrderPage = () => {
         quantity: i.quantity,
         unit_price: i.price_wholesale,
         total_line: i.quantity * i.price_wholesale - (i.discount || 0),
+        shelf_location: i.shelf_location || "",
+        batch_no: i.lot_number || "",
+        expiry_date: i.expiry_date || "",
       })),
       total_amount: financials.subTotal,
       discount_amount: financials.discountAmount,
@@ -433,7 +436,7 @@ const CreateB2BOrderPage = () => {
       product_name: i.name,
       unit: i.wholesale_unit,
       quantity_ordered: i.quantity,
-      shelf_location: "",
+      shelf_location: i.shelf_location || "",
       barcode: "", // [NEW]
       quantity_picked: 0, // [NEW]
       image_url: i.image_url || "", // [NEW]
