@@ -19,9 +19,9 @@ export async function listComplianceAudits(
   filters: ListAuditsFilters
 ): Promise<ComplianceAuditRow[]> {
   const { data, error } = await safeRpc("list_chat_compliance_audits", {
-    p_from: filters.from || null,
-    p_to: filters.to || null,
-    p_severity: filters.severity ?? null,
+    p_from: (filters.from || null) as any,
+    p_to: (filters.to || null) as any,
+    p_severity: filters.severity ?? undefined,
     p_limit: filters.limit ?? 100,
     p_offset: filters.offset ?? 0,
   });
@@ -51,8 +51,8 @@ export async function getComplianceAuditStats(
   to: string
 ): Promise<ComplianceStats> {
   const { data, error } = await safeRpc("get_compliance_audit_stats", {
-    p_from: from || null,
-    p_to: to || null,
+    p_from: (from || null) as any,
+    p_to: (to || null) as any,
   });
   if (error) throw error;
   return data as unknown as ComplianceStats;

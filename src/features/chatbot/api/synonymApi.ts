@@ -83,7 +83,7 @@ export async function bulkImportSynonyms(
   rows: BulkImportRow[]
 ): Promise<BulkImportResult> {
   const { data, error } = await safeRpc("bulk_import_synonyms", {
-    p_rows: rows as unknown as Record<string, unknown>[],
+    p_rows: rows as any,
   });
   if (error) throw error;
   return data as unknown as BulkImportResult;
