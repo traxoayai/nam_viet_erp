@@ -4,12 +4,12 @@ import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useCallback, useMemo } from "react";
 
-import { isOverCreditLimit } from "@/shared/lib/creditLimitCheck";
 import { useShippingPartnerStore } from "@/features/partners/stores/useShippingPartnerStore";
 // QUAN TRỌNG: Import Type chuẩn từ shippingPartner để đồng bộ với Store
 import { ShippingPartner } from "@/features/partners/types/shippingPartner";
 import { useSalesStore } from "@/features/sales/stores/useSalesStore";
 import { DELIVERY_METHODS } from "@/shared/constants/b2b";
+import { isOverCreditLimit } from "@/shared/lib/creditLimitCheck";
 
 dayjs.extend(customParseFormat);
 
@@ -30,9 +30,12 @@ export const useCreateOrderB2B = () => {
 
     return {
       ...summary,
-      newTotalDebt: (Number(store.customer?.current_debt) || 0) + (Number(summary.totalPayable) || 0),
+      // LƯU Ý: summary.totalPayable = finalTotal + oldDebt (đã bao gồm current_debt rồi).
+      // KHÔNG cộng current_debt thêm lần nữa — sẽ bị double-count (2 × current_debt + finalTotal).
+      newTotalDebt: Number(summary.totalPayable) || 0,
       isOverLimit,
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Zustand store ref ổn định, không cần trong deps
   }, [store.items, store.shippingFee, store.selectedVoucher, store.customer]);
 
   // --- 2. LOGIC VẬN CHUYỂN (SMART DELIVERY ESTIMATOR) ---
@@ -91,6 +94,7 @@ export const useCreateOrderB2B = () => {
         store.setShippingPartner(fullPartner);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Zustand store ref ổn định, không cần trong deps
     [shippingStore.partners, store.setShippingPartner]
   );
 

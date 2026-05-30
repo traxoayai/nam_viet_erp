@@ -79,34 +79,65 @@ const CreateB2BOrderPage = () => {
     validateOrder,
   } = useCreateOrderB2B();
 
-  // [NEW] Fetch full B2B customer info via Edge Function
+  // [REFACTOR] Fetch full B2B customer info qua Supabase client (bỏ Edge Function get-info-customer-b2b)
+  // Song song 3 query: base info, debt (qua financeService.getB2BDebt), contacts.
   const handleCustomerSelect = async (partialCustomer: CustomerB2B) => {
+    const hide = message.loading(
+      "Đang tải thông tin chi tiết khách hàng...",
+      0
+    );
     try {
-      const hide = message.loading("Đang tải thông tin chi tiết khách hàng...", 0);
-      const { data, error } = await supabase.functions.invoke("get-info-customer-b2b", {
-        body: { id: partialCustomer.id }
-      });
-      hide();
-      
-      if (error) throw error;
-      const res = data.data;
+      const [customerRes, actualDebt, contactsRes] = await Promise.all([
+        supabase
+          .from("customers_b2b")
+          .select(
+            "id, name, tax_code, vat_address, shipping_address, phone, debt_limit, loyalty_points"
+          )
+          .eq("id", partialCustomer.id)
+          .maybeSingle(),
+        financeService.getB2BDebt(partialCustomer.id),
+        supabase
+          .from("customer_b2b_contacts")
+          .select("name, phone, position, is_primary")
+          .eq("customer_b2b_id", partialCustomer.id),
+      ]);
 
+      if (customerRes.error) throw customerRes.error;
+      if (contactsRes.error) throw contactsRes.error;
+      if (!customerRes.data) throw new Error("Không tìm thấy khách hàng");
+
+      const c = customerRes.data;
       const mappedCustomer: CustomerB2B = {
         ...partialCustomer,
-        id: res.customer.id,
-        name: res.customer.name,
-        tax_code: res.customer.tax_code,
-        shipping_address: res.customer.shipping_address,
-        debt_limit: res.customer.debt_limit,
-        current_debt: res.debt.actual_current_debt,
-        contacts: res.contacts || [],
+        id: c.id,
+        name: c.name ?? partialCustomer.name,
+        tax_code: c.tax_code ?? "",
+        vat_address: c.vat_address ?? "",
+        shipping_address:
+          c.shipping_address ?? partialCustomer.shipping_address ?? "",
+        phone: c.phone ?? partialCustomer.phone ?? "",
+        debt_limit: (c.debt_limit as number) ?? 0,
+        current_debt: actualDebt,
+        loyalty_points: (c.loyalty_points as number) ?? 0,
+        // is_bad_debt không có cột trực tiếp trên customers_b2b — giữ giá trị từ search RPC.
+        is_bad_debt: partialCustomer.is_bad_debt ?? false,
+        contacts: (contactsRes.data ?? []).map((ct) => ({
+          name: ct.name ?? "",
+          phone: ct.phone ?? "",
+          position: ct.position ?? "",
+          is_primary: ct.is_primary ?? false,
+        })),
       };
-      
+
       setCustomer(mappedCustomer);
     } catch (err) {
       console.error(err);
-      message.error("Lỗi lấy chi tiết thông tin khách hàng. Sử dụng thông tin cơ bản.");
+      message.error(
+        "Lỗi lấy chi tiết thông tin khách hàng. Sử dụng thông tin cơ bản."
+      );
       setCustomer(partialCustomer);
+    } finally {
+      hide();
     }
   };
 
@@ -497,9 +528,14 @@ const CreateB2BOrderPage = () => {
             {/* KHỐI A: THÔNG TIN KHÁCH HÀNG */}
             <div style={{ marginBottom: 16 }}>
               {!customer ? (
-                <Card style={{ width: "100%", borderTop: "3px solid #1890ff" }} bodyStyle={{ padding: 20 }}>
+                <Card
+                  style={{ width: "100%", borderTop: "3px solid #1890ff" }}
+                  bodyStyle={{ padding: 20 }}
+                >
                   <div style={{ marginBottom: 12 }}>
-                    <Typography.Text strong style={{ fontSize: 16 }}>Khách hàng</Typography.Text>
+                    <Typography.Text strong style={{ fontSize: 16 }}>
+                      Khách hàng
+                    </Typography.Text>
                   </div>
                   <CustomerSelector onSelect={handleCustomerSelect} />
                 </Card>
@@ -518,9 +554,14 @@ const CreateB2BOrderPage = () => {
 
             {/* KHỐI B: THÔNG TIN GIAO HÀNG */}
             <div style={{ marginBottom: 16 }}>
-              <Card style={{ width: "100%", borderTop: "3px solid #52c41a" }} bodyStyle={{ padding: "16px" }}>
+              <Card
+                style={{ width: "100%", borderTop: "3px solid #52c41a" }}
+                bodyStyle={{ padding: "16px" }}
+              >
                 <div style={{ marginBottom: 12 }}>
-                  <Typography.Text strong style={{ fontSize: 16 }}>Giao hàng</Typography.Text>
+                  <Typography.Text strong style={{ fontSize: 16 }}>
+                    Giao hàng
+                  </Typography.Text>
                 </div>
                 <ShippingForm
                   deliveryMethod={deliveryMethod}

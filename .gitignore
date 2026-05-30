@@ -51,6 +51,9 @@ prod_public.sql
 tmp/
 docs/
 .claude/
+scratch/
+check_schema*.cjs
+check_schema*.ts
 
 # Deployment
 .vercel
