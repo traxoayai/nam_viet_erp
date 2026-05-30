@@ -56,7 +56,11 @@ export const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   global: { fetch: retryFetch },
 });
 
-/** Create an authenticated client for a specific user */
+/** Create an authenticated client for a specific user.
+ * Local: nếu login fail → reset password via admin API rồi retry (memo
+ * feedback_no_direct_auth_password_update — KHÔNG UPDATE encrypted_password trực tiếp;
+ * supabase.auth.admin.updateUserById là Admin API gọi gotrue đúng cách).
+ */
 export async function createUserClient(
   email: string,
   password: string
@@ -66,7 +70,42 @@ export async function createUserClient(
     global: { fetch: retryFetch },
   });
   const { error } = await client.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(`Login failed for ${email}: ${error.message}`);
+  if (!error) return client;
+
+  // Login fail. Trên prod KHÔNG retry/reset → throw luôn.
+  if (isProd) {
+    throw new Error(`Login failed for ${email}: ${error.message}`);
+  }
+
+  // Local: tìm user. Ưu tiên RPC _test_find_auth_user_by_email (deterministic);
+  // fallback listUsers paginate cho DB cũ chưa migrate.
+  const userId = await findUserIdByEmail(email);
+  if (!userId) {
+    throw new Error(
+      `Login failed for ${email}: user không tồn tại trong auth.users`
+    );
+  }
+  const user = { id: userId };
+  const { error: resetErr } = await adminClient.auth.admin.updateUserById(
+    user.id,
+    {
+      password,
+    }
+  );
+  if (resetErr) {
+    throw new Error(
+      `Login failed for ${email}: reset password failed (${resetErr.message})`
+    );
+  }
+  const { error: retryErr } = await client.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (retryErr) {
+    throw new Error(
+      `Login failed for ${email} after password reset: ${retryErr.message}`
+    );
+  }
   return client;
 }
 
@@ -79,4 +118,30 @@ export const TEST_USER_PASSWORD = "Test@123!";
 
 export async function createTestAuthedClient(): Promise<SupabaseClient> {
   return createUserClient(TEST_USER_EMAIL, TEST_USER_PASSWORD);
+}
+
+/**
+ * Lookup auth.users.id theo email. RPC `_test_find_auth_user_by_email`
+ * (SECURITY DEFINER, service_role) làm primary; fallback listUsers paginate
+ * cho DB cũ chưa apply migration `20260518000009_test_find_auth_user_helper`.
+ * Trả null nếu không có user.
+ */
+export async function findUserIdByEmail(email: string): Promise<string | null> {
+  const { data: foundId, error: rpcErr } = await adminClient.rpc(
+    "_test_find_auth_user_by_email",
+    { p_email: email }
+  );
+  if (!rpcErr && typeof foundId === "string" && foundId.length > 0) {
+    return foundId;
+  }
+  // Fallback listUsers
+  for (let page = 1; page <= 20; page++) {
+    const { data: list, error: listErr } =
+      await adminClient.auth.admin.listUsers({ page, perPage: 200 });
+    if (listErr) break;
+    const found = list?.users?.find((u) => u.email === email);
+    if (found) return found.id;
+    if (!list?.users?.length || list.users.length < 200) break;
+  }
+  return null;
 }
