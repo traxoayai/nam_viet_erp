@@ -3,17 +3,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSafeRpc = vi.fn();
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/api/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {
     from: () => ({
       update: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }),
       delete: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }),
-      select: () => ({ eq: () => ({ single: vi.fn() }), in: vi.fn().mockResolvedValue({ data: [], error: null }) }),
+      select: () => ({
+        eq: () => ({ single: vi.fn() }),
+        in: vi.fn().mockResolvedValue({ data: [], error: null }),
+      }),
     }),
   },
 }));
@@ -30,7 +33,9 @@ describe("salesService", () => {
     it("calls search_customers_b2b_v2 with keyword", async () => {
       mockSafeRpc.mockResolvedValue({ data: [{ id: 1, name: "ABC Corp" }] });
       const result = await salesService.searchCustomers("ABC");
-      expect(mockSafeRpc).toHaveBeenCalledWith("search_customers_b2b_v2", { p_keyword: "ABC" });
+      expect(mockSafeRpc).toHaveBeenCalledWith("search_customers_b2b_v2", {
+        p_keyword: "ABC",
+      });
       expect(result).toEqual([{ id: 1, name: "ABC Corp" }]);
     });
 
@@ -83,7 +88,7 @@ describe("salesService", () => {
         p_customer_id: 5,
         p_items: [{ product_id: 1, quantity: 2 }],
         p_delivery_method: "self",
-      } as any;
+      } as unknown as Parameters<typeof salesService.createOrder>[0];
       mockSafeRpc.mockResolvedValue({ data: "uuid-123" });
       const result = await salesService.createOrder(payload);
       expect(mockSafeRpc).toHaveBeenCalledWith("create_sales_order", payload);
@@ -151,7 +156,11 @@ describe("salesService", () => {
       expect(result).toEqual({
         data: [],
         total: 0,
-        stats: { total_sales: 0, count_pending_remittance: 0, total_cash_pending: 0 },
+        stats: {
+          total_sales: 0,
+          count_pending_remittance: 0,
+          total_cash_pending: 0,
+        },
       });
     });
 
@@ -170,14 +179,23 @@ describe("salesService", () => {
         pageSize: 10,
         source: "portal",
       });
-      expect(mockSafeRpc).toHaveBeenCalledWith("get_sales_orders_view",
+      expect(mockSafeRpc).toHaveBeenCalledWith(
+        "get_sales_orders_view",
         expect.objectContaining({ p_source: "portal" })
       );
     });
 
     it("converts empty string filters to undefined (prevents UUID cast error)", async () => {
       mockSafeRpc.mockResolvedValue({
-        data: { data: [], total: 0, stats: { total_sales: 0, count_pending_remittance: 0, total_cash_pending: 0 } },
+        data: {
+          data: [],
+          total: 0,
+          stats: {
+            total_sales: 0,
+            count_pending_remittance: 0,
+            total_cash_pending: 0,
+          },
+        },
       });
       await salesService.getOrders({
         page: 1,
@@ -211,11 +229,11 @@ describe("salesService", () => {
 
   // --- confirmPayment ---
   describe("confirmPayment", () => {
-    it("calls confirm_order_payment with order ids and fund account", async () => {
+    it("calls confirm_order_payment with numeric bigint order ids and fund account", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
-      const result = await salesService.confirmPayment(["uuid-1", "uuid-2"], 3);
+      const result = await salesService.confirmPayment([1, 2], 3);
       expect(mockSafeRpc).toHaveBeenCalledWith("confirm_order_payment", {
-        p_order_ids: ["uuid-1", "uuid-2"],
+        p_order_ids: [1, 2],
         p_fund_account_id: 3,
       });
       expect(result).toBe(true);

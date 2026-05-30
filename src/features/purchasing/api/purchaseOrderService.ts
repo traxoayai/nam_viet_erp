@@ -1,11 +1,14 @@
 // src/services/purchaseOrderService.ts
 import dayjs from "dayjs";
 
-import { supabase } from "@/shared/lib/supabaseClient";
+import type { Database } from "@/shared/lib/database.types";
+
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const purchaseOrderService = {
   // 1. Lấy danh sách PO
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy filters shape, refactor riêng PR
   async getPOs(filters: any, page: number, pageSize: number) {
     const { data } = await safeRpc("get_purchase_orders_master", {
       p_page: page,
@@ -37,6 +40,7 @@ export const purchaseOrderService = {
     delivery_method?: string;
     shipping_partner_id?: number;
     shipping_fee?: number;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy createPO items shape, refactor riêng PR
     items: any[];
     status: "DRAFT" | "PENDING";
   }) {
@@ -65,14 +69,16 @@ export const purchaseOrderService = {
       })),
     };
 
-    const { data } = await safeRpc(
-      "create_purchase_order",
-      { ...rpcPayload, p_items: rpcPayload.p_items as unknown as import("@/shared/lib/database.types").Json }
-    );
+    const { data } = await safeRpc("create_purchase_order", {
+      ...rpcPayload,
+      p_items:
+        rpcPayload.p_items as unknown as import("@/shared/lib/database.types").Json,
+    });
     return data; // Trả về { id, code, status, message }
   },
 
   // 4. Cập nhật Đơn Nháp (Update)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy updatePO shape, refactor riêng PR
   async updatePO(id: number, payload: any, items: any[]) {
     // [LOGIC] Combine Date + Time for p_expected_delivery_time
     let fullDateTime = null;
@@ -87,9 +93,7 @@ export const purchaseOrderService = {
     const itemsJson = items.map((item: Record<string, unknown>) => ({
       product_id: item.product_id,
       quantity_ordered:
-        item.quantity && Number(item.quantity) > 0
-          ? Number(item.quantity)
-          : 1,
+        item.quantity && Number(item.quantity) > 0 ? Number(item.quantity) : 1,
       uom_ordered: item.uom,
       unit_price: item.unit_price || 0,
       is_bonus: item.is_bonus || false,
@@ -98,7 +102,8 @@ export const purchaseOrderService = {
 
     const params = {
       p_po_id: id,
-      p_items: itemsJson as unknown as import("@/shared/lib/database.types").Json,
+      p_items:
+        itemsJson as unknown as import("@/shared/lib/database.types").Json,
       p_supplier_id: payload.supplier_id,
       p_expected_date: payload.expected_delivery_date || null,
       p_expected_delivery_time: fullDateTime ?? undefined,
@@ -142,23 +147,28 @@ export const purchaseOrderService = {
   },
 
   // 6c. Cập nhật vận chuyển (KHÔNG đụng items)
-  async updateLogistics(id: number, payload: {
-    delivery_method?: string;
-    shipping_partner_id?: number;
-    shipping_fee?: number;
-    total_packages?: number;
-    expected_delivery_date?: string;
-    note?: string;
-  }) {
+  async updateLogistics(
+    id: number,
+    payload: {
+      delivery_method?: string;
+      shipping_partner_id?: number;
+      shipping_fee?: number;
+      total_packages?: number;
+      expected_delivery_date?: string;
+      note?: string;
+    }
+  ) {
+    // CLAUDE.md rule: bigint/timestamptz/varchar nullable params phải ?? null
+    // (undefined bị supabase-js strip → PG nhận missing thay vì NULL).
     await safeRpc("update_purchase_order_logistics", {
       p_po_id: id,
-      p_delivery_method: payload.delivery_method || undefined,
-      p_shipping_partner_id: payload.shipping_partner_id || undefined,
-      p_shipping_fee: payload.shipping_fee ?? undefined,
-      p_total_packages: payload.total_packages ?? undefined,
-      p_expected_delivery_date: payload.expected_delivery_date || undefined,
+      p_delivery_method: payload.delivery_method ?? null,
+      p_shipping_partner_id: payload.shipping_partner_id ?? null,
+      p_shipping_fee: payload.shipping_fee ?? null,
+      p_total_packages: payload.total_packages ?? null,
+      p_expected_delivery_date: payload.expected_delivery_date ?? null,
       p_note: payload.note ?? "",
-    });
+    } as never as Database["public"]["Functions"]["update_purchase_order_logistics"]["Args"]);
     return true;
   },
 
@@ -213,6 +223,7 @@ export const purchaseOrderService = {
       if (!groups || groups.length === 0) return { groups: [], items: [] };
 
       // 2. Lấy danh sách Group IDs
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- supabase select * type loose
       const groupIds = groups.map((g: any) => g.id);
 
       // 3. Fetch Products theo Group IDs
@@ -231,14 +242,12 @@ export const purchaseOrderService = {
   },
 
   // 10. Chốt nhập kho & Tính giá vốn (V34)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy itemsData shape, refactor riêng PR
   async confirmPOFinancials(poId: number, itemsData: any[]) {
-    const { data } = await safeRpc(
-      "confirm_purchase_order_financials",
-      {
-        p_po_id: poId,
-        p_items_data: itemsData,
-      }
-    );
+    const { data } = await safeRpc("confirm_purchase_order_financials", {
+      p_po_id: poId,
+      p_items_data: itemsData,
+    });
     return data;
   },
 
@@ -264,10 +273,7 @@ export const purchaseOrderService = {
       unit_name: string;
     }[];
   }) {
-    const { data } = await safeRpc(
-      "confirm_purchase_costing",
-      payload
-    );
+    const { data } = await safeRpc("confirm_purchase_costing", payload);
     return data;
   },
 

@@ -1,6 +1,8 @@
 // src/features/inventory/api/costAdjustmentService.ts
 // Service cho màn "Điều chỉnh Giá Vốn" (Batch Cost Adjustment / Revaluation)
 
+import type { Database } from "@/shared/lib/database.types";
+
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
@@ -78,12 +80,12 @@ export const costAdjustmentService = {
     const { data } = await safeRpc(
       "get_batch_valuation_grid",
       {
-        p_warehouse_id: params.warehouseId ?? undefined,
+        p_warehouse_id: params.warehouseId ?? null,
         p_search: params.search ?? "",
         p_only_missing_price: params.onlyMissingPrice ?? false,
         p_limit: params.limit ?? 50,
         p_offset: params.offset ?? 0,
-      },
+      } as never as Database["public"]["Functions"]["get_batch_valuation_grid"]["Args"],
       { silent: true }
     );
     return (data ?? []) as BatchValuationRow[];
@@ -95,7 +97,9 @@ export const costAdjustmentService = {
   async getTotalValue(warehouseId?: number | null) {
     const { data } = await safeRpc(
       "get_inventory_total_value",
-      { p_warehouse_id: warehouseId ?? undefined },
+      {
+        p_warehouse_id: warehouseId ?? null,
+      } as never as Database["public"]["Functions"]["get_inventory_total_value"]["Args"],
       { silent: true }
     );
     const raw = (data ?? {}) as Partial<InventoryTotalValue>;
@@ -121,10 +125,10 @@ export const costAdjustmentService = {
     }
 
     const { data } = await safeRpc("bulk_update_batch_costs", {
-      p_changes: changes as any,
+      p_changes: changes as never,
       p_reason: reason,
       p_note: note ?? undefined,
-    });
+    } as never as Database["public"]["Functions"]["bulk_update_batch_costs"]["Args"]);
 
     const row = (data ?? {}) as unknown as BulkUpdateResult;
     if (row?.status === "error") {

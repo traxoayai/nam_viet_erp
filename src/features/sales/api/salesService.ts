@@ -1,4 +1,6 @@
 // src/services/salesService.ts
+import type { Database, Json } from "@/shared/lib/database.types";
+
 import {
   CustomerB2B,
   ProductB2B,
@@ -7,7 +9,6 @@ import {
   CreateSalesOrderPayload,
 } from "@/features/sales/types/b2b_sales"; // Import Type mới nhất
 import { safeRpc } from "@/shared/lib/safeRpc";
-import type { Json } from "@/shared/lib/database.types";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 // [NEW] Interface cho Update Order
@@ -90,7 +91,10 @@ export const salesService = {
   // 5. Tạo đơn hàng (QUAN TRỌNG: Mapping Payload Mới)
   async createOrder(payload: CreateSalesOrderPayload) {
     // Payload lúc này đã bao gồm: p_delivery_method, p_shipping_partner_id
-    const { data } = await safeRpc("create_sales_order", payload as any);
+    const { data } = await safeRpc(
+      "create_sales_order",
+      payload as unknown as Database["public"]["Functions"]["create_sales_order"]["Args"]
+    );
 
     return data; // Trả về UUID đơn hàng
   },
@@ -141,7 +145,15 @@ export const salesService = {
       });
 
       // Data trả về từ RPC đã bao gồm total và stats
-      const res = data as unknown as { data: unknown[]; total: number; stats: { total_sales: number; count_pending_remittance: number; total_cash_pending: number } } | null;
+      const res = data as unknown as {
+        data: unknown[];
+        total: number;
+        stats: {
+          total_sales: number;
+          count_pending_remittance: number;
+          total_cash_pending: number;
+        };
+      } | null;
       return {
         data: res?.data || [],
         total: res?.total || 0,
@@ -157,7 +169,10 @@ export const salesService = {
   },
 
   // 7. [NEW] Cập nhật Yêu cầu Xuất Hóa Đơn
-  async updateInvoiceRequest(orderId: string, invoiceData: Record<string, unknown>) {
+  async updateInvoiceRequest(
+    orderId: string,
+    invoiceData: Record<string, unknown>
+  ) {
     // invoiceData: { companyName, taxCode, address, email, ... }
     const { error } = await supabase
       .from("orders")
@@ -202,9 +217,10 @@ export const salesService = {
   },
 
   // 9. [NEW] Xác nhận thu tiền đơn hàng (Bulk Action)
+  // NOTE: prod signature confirm_order_payment(p_order_ids bigint[], ...) — phải Number() coerce
   async confirmPayment(orderIds: (string | number)[], fundAccountId: number) {
     await safeRpc("confirm_order_payment", {
-      p_order_ids: orderIds.map(Number),
+      p_order_ids: orderIds.map((id) => Number(id)),
       p_fund_account_id: fundAccountId,
     });
     return true;
@@ -251,7 +267,10 @@ export const salesService = {
 
   // 11. [NEW] Xóa đơn hàng (Admin Only)
   async deleteOrder(orderId: string | number) {
-    const { error } = await supabase.from("orders").delete().eq("id", String(orderId));
+    const { error } = await supabase
+      .from("orders")
+      .delete()
+      .eq("id", String(orderId));
     if (error) throw error;
     return true;
   },

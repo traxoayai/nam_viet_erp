@@ -7,6 +7,11 @@ export type Json =
   | Json[];
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5";
+  };
   public: {
     Tables: {
       _revert_double_deduct_20260417: {
@@ -396,6 +401,13 @@ export type Database = {
             foreignKeyName: "assets_supplier_id_fkey";
             columns: ["supplier_id"];
             isOneToOne: false;
+            referencedRelation: "supplier_debt_view";
+            referencedColumns: ["supplier_id"];
+          },
+          {
+            foreignKeyName: "assets_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
             referencedRelation: "suppliers";
             referencedColumns: ["id"];
           },
@@ -590,6 +602,13 @@ export type Database = {
             foreignKeyName: "batch_revaluations_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "batch_revaluations_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -631,6 +650,13 @@ export type Database = {
           product_id?: number | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "batches_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
           {
             foreignKeyName: "batches_product_id_fkey";
             columns: ["product_id"];
@@ -850,6 +876,33 @@ export type Database = {
           },
         ];
       };
+      chat_feedback_weekly_clusters: {
+        Row: {
+          created_at: string;
+          feedback_count: number;
+          id: number;
+          pattern_keyword: string;
+          sample_message_ids: string[];
+          week_start: string;
+        };
+        Insert: {
+          created_at?: string;
+          feedback_count: number;
+          id?: number;
+          pattern_keyword: string;
+          sample_message_ids: string[];
+          week_start: string;
+        };
+        Update: {
+          created_at?: string;
+          feedback_count?: number;
+          id?: number;
+          pattern_keyword?: string;
+          sample_message_ids?: string[];
+          week_start?: string;
+        };
+        Relationships: [];
+      };
       chat_handoffs: {
         Row: {
           created_at: string;
@@ -1006,6 +1059,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "clinical_prescriptions";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clinical_prescription_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
           },
           {
             foreignKeyName: "clinical_prescription_items_product_id_fkey";
@@ -1204,6 +1264,63 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      companies: {
+        Row: {
+          address: string;
+          business_license_url: string[] | null;
+          created_at: string | null;
+          deleted_at: string | null;
+          email: string;
+          id: string;
+          logo_url: string | null;
+          mission: string | null;
+          name: string;
+          phone: string;
+          representative_name: string;
+          short_name: string | null;
+          status: string | null;
+          tax_code: string;
+          updated_at: string | null;
+          vision: string | null;
+        };
+        Insert: {
+          address: string;
+          business_license_url?: string[] | null;
+          created_at?: string | null;
+          deleted_at?: string | null;
+          email: string;
+          id?: string;
+          logo_url?: string | null;
+          mission?: string | null;
+          name: string;
+          phone: string;
+          representative_name: string;
+          short_name?: string | null;
+          status?: string | null;
+          tax_code: string;
+          updated_at?: string | null;
+          vision?: string | null;
+        };
+        Update: {
+          address?: string;
+          business_license_url?: string[] | null;
+          created_at?: string | null;
+          deleted_at?: string | null;
+          email?: string;
+          id?: string;
+          logo_url?: string | null;
+          mission?: string | null;
+          name?: string;
+          phone?: string;
+          representative_name?: string;
+          short_name?: string | null;
+          status?: string | null;
+          tax_code?: string;
+          updated_at?: string | null;
+          vision?: string | null;
+        };
+        Relationships: [];
       };
       connect_comments: {
         Row: {
@@ -1464,6 +1581,13 @@ export type Database = {
             foreignKeyName: "customer_favorites_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "customer_favorites_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -1640,6 +1764,13 @@ export type Database = {
             foreignKeyName: "customer_service_wallets_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "customer_service_wallets_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -1735,6 +1866,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "service_packages";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "customer_vaccination_records_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
           },
           {
             foreignKeyName: "customer_vaccination_records_product_id_fkey";
@@ -2011,6 +2149,13 @@ export type Database = {
             foreignKeyName: "deal_items_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "deal_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -2223,6 +2368,13 @@ export type Database = {
             foreignKeyName: "finance_invoices_supplier_id_fkey";
             columns: ["supplier_id"];
             isOneToOne: false;
+            referencedRelation: "supplier_debt_view";
+            referencedColumns: ["supplier_id"];
+          },
+          {
+            foreignKeyName: "finance_invoices_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
             referencedRelation: "suppliers";
             referencedColumns: ["id"];
           },
@@ -2424,6 +2576,13 @@ export type Database = {
             foreignKeyName: "inventory_batches_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "inventory_batches_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -2498,6 +2657,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "inventory_checks";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "inventory_check_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
           },
           {
             foreignKeyName: "inventory_check_items_product_id_fkey";
@@ -2617,6 +2783,13 @@ export type Database = {
           vat_rate?: number | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "inventory_receipt_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
           {
             foreignKeyName: "inventory_receipt_items_product_id_fkey";
             columns: ["product_id"];
@@ -2766,6 +2939,13 @@ export type Database = {
             foreignKeyName: "inventory_transactions_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "inventory_transactions_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -2855,6 +3035,13 @@ export type Database = {
           unit?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "inventory_transfer_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
           {
             foreignKeyName: "inventory_transfer_items_product_id_fkey";
             columns: ["product_id"];
@@ -3019,6 +3206,59 @@ export type Database = {
             columns: ["service_package_id"];
             isOneToOne: false;
             referencedRelation: "service_packages";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      llm_request_log: {
+        Row: {
+          attempted_providers: string[] | null;
+          created_at: string;
+          error_message: string | null;
+          id: number;
+          latency_ms: number | null;
+          model: string | null;
+          provider: string;
+          session_id: string | null;
+          status: string;
+          tokens_in: number | null;
+          tokens_out: number | null;
+          user_id: string | null;
+        };
+        Insert: {
+          attempted_providers?: string[] | null;
+          created_at?: string;
+          error_message?: string | null;
+          id?: number;
+          latency_ms?: number | null;
+          model?: string | null;
+          provider: string;
+          session_id?: string | null;
+          status: string;
+          tokens_in?: number | null;
+          tokens_out?: number | null;
+          user_id?: string | null;
+        };
+        Update: {
+          attempted_providers?: string[] | null;
+          created_at?: string;
+          error_message?: string | null;
+          id?: number;
+          latency_ms?: number | null;
+          model?: string | null;
+          provider?: string;
+          session_id?: string | null;
+          status?: string;
+          tokens_in?: number | null;
+          tokens_out?: number | null;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "llm_request_log_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "chat_sessions";
             referencedColumns: ["id"];
           },
         ];
@@ -3314,6 +3554,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "orders";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
           },
           {
             foreignKeyName: "order_items_product_id_fkey";
@@ -3653,6 +3900,13 @@ export type Database = {
             foreignKeyName: "portal_cart_items_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "portal_cart_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -3741,6 +3995,13 @@ export type Database = {
           usage_instruction?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "prescription_template_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
           {
             foreignKeyName: "prescription_template_items_product_id_fkey";
             columns: ["product_id"];
@@ -3881,6 +4142,13 @@ export type Database = {
             foreignKeyName: "product_contents_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "product_contents_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -3976,6 +4244,13 @@ export type Database = {
             foreignKeyName: "product_inventory_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "product_inventory_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -4011,6 +4286,13 @@ export type Database = {
           weight?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "product_synonyms_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
           {
             foreignKeyName: "product_synonyms_product_id_fkey";
             columns: ["product_id"];
@@ -4071,6 +4353,13 @@ export type Database = {
             foreignKeyName: "product_units_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "product_units_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -4098,6 +4387,7 @@ export type Database = {
           manufacturer_name: string | null;
           name: string;
           packing_spec: string | null;
+          product_images: string[] | null;
           purchasing_policy: string | null;
           registration_number: string | null;
           retail_margin_rate: number | null;
@@ -4139,6 +4429,7 @@ export type Database = {
           manufacturer_name?: string | null;
           name: string;
           packing_spec?: string | null;
+          product_images?: string[] | null;
           purchasing_policy?: string | null;
           registration_number?: string | null;
           retail_margin_rate?: number | null;
@@ -4180,6 +4471,7 @@ export type Database = {
           manufacturer_name?: string | null;
           name?: string;
           packing_spec?: string | null;
+          product_images?: string[] | null;
           purchasing_policy?: string | null;
           registration_number?: string | null;
           retail_margin_rate?: number | null;
@@ -4207,6 +4499,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "categories";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "products_distributor_id_fkey";
+            columns: ["distributor_id"];
+            isOneToOne: false;
+            referencedRelation: "supplier_debt_view";
+            referencedColumns: ["supplier_id"];
           },
           {
             foreignKeyName: "products_distributor_id_fkey";
@@ -4277,6 +4576,13 @@ export type Database = {
           unit_name?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "promotion_gifts_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "supplier_debt_view";
+            referencedColumns: ["supplier_id"];
+          },
           {
             foreignKeyName: "promotion_gifts_supplier_id_fkey";
             columns: ["supplier_id"];
@@ -4507,6 +4813,13 @@ export type Database = {
             foreignKeyName: "purchase_order_items_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "purchase_order_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -4601,6 +4914,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "shipping_partners";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "purchase_orders_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "supplier_debt_view";
+            referencedColumns: ["supplier_id"];
           },
           {
             foreignKeyName: "purchase_orders_supplier_id_fkey";
@@ -4938,6 +5258,13 @@ export type Database = {
             foreignKeyName: "sales_return_items_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "sales_return_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -5034,8 +5361,22 @@ export type Database = {
             foreignKeyName: "service_consumables_consumable_product_id_fkey";
             columns: ["consumable_product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "service_consumables_consumable_product_id_fkey";
+            columns: ["consumable_product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "service_consumables_service_product_id_fkey";
+            columns: ["service_product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
           },
           {
             foreignKeyName: "service_consumables_service_product_id_fkey";
@@ -5072,6 +5413,13 @@ export type Database = {
           schedule_days?: number | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "service_package_items_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
           {
             foreignKeyName: "service_package_items_item_id_fkey";
             columns: ["item_id"];
@@ -5392,6 +5740,13 @@ export type Database = {
             foreignKeyName: "supplier_program_products_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "supplier_program_products_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -5451,6 +5806,13 @@ export type Database = {
             foreignKeyName: "supplier_programs_supplier_id_fkey";
             columns: ["supplier_id"];
             isOneToOne: false;
+            referencedRelation: "supplier_debt_view";
+            referencedColumns: ["supplier_id"];
+          },
+          {
+            foreignKeyName: "supplier_programs_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
             referencedRelation: "suppliers";
             referencedColumns: ["id"];
           },
@@ -5489,6 +5851,13 @@ export type Database = {
             foreignKeyName: "supplier_wallet_transactions_supplier_id_fkey";
             columns: ["supplier_id"];
             isOneToOne: false;
+            referencedRelation: "supplier_debt_view";
+            referencedColumns: ["supplier_id"];
+          },
+          {
+            foreignKeyName: "supplier_wallet_transactions_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
             referencedRelation: "suppliers";
             referencedColumns: ["id"];
           },
@@ -5514,6 +5883,13 @@ export type Database = {
           updated_at?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "supplier_wallets_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: true;
+            referencedRelation: "supplier_debt_view";
+            referencedColumns: ["supplier_id"];
+          },
           {
             foreignKeyName: "supplier_wallets_supplier_id_fkey";
             columns: ["supplier_id"];
@@ -5818,6 +6194,7 @@ export type Database = {
           cccd_back_url: string | null;
           cccd_front_url: string | null;
           cccd_issue_date: string | null;
+          company_id: string | null;
           created_at: string | null;
           dob: string | null;
           education_level: string | null;
@@ -5833,10 +6210,12 @@ export type Database = {
           phone: string | null;
           position: string | null;
           profile_updated_at: string | null;
+          role_id: string | null;
           specialization: string | null;
           status: Database["public"]["Enums"]["employee_status"];
           strengths: string | null;
           updated_at: string | null;
+          warehouse_id: number | null;
           work_state: string | null;
         };
         Insert: {
@@ -5849,6 +6228,7 @@ export type Database = {
           cccd_back_url?: string | null;
           cccd_front_url?: string | null;
           cccd_issue_date?: string | null;
+          company_id?: string | null;
           created_at?: string | null;
           dob?: string | null;
           education_level?: string | null;
@@ -5864,10 +6244,12 @@ export type Database = {
           phone?: string | null;
           position?: string | null;
           profile_updated_at?: string | null;
+          role_id?: string | null;
           specialization?: string | null;
           status?: Database["public"]["Enums"]["employee_status"];
           strengths?: string | null;
           updated_at?: string | null;
+          warehouse_id?: number | null;
           work_state?: string | null;
         };
         Update: {
@@ -5880,6 +6262,7 @@ export type Database = {
           cccd_back_url?: string | null;
           cccd_front_url?: string | null;
           cccd_issue_date?: string | null;
+          company_id?: string | null;
           created_at?: string | null;
           dob?: string | null;
           education_level?: string | null;
@@ -5895,13 +6278,30 @@ export type Database = {
           phone?: string | null;
           position?: string | null;
           profile_updated_at?: string | null;
+          role_id?: string | null;
           specialization?: string | null;
           status?: Database["public"]["Enums"]["employee_status"];
           strengths?: string | null;
           updated_at?: string | null;
+          warehouse_id?: number | null;
           work_state?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "users_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "users_warehouse_id_fkey";
+            columns: ["warehouse_id"];
+            isOneToOne: false;
+            referencedRelation: "warehouses";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       vaccination_template_items: {
         Row: {
@@ -5929,6 +6329,13 @@ export type Database = {
           template_id?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "vaccination_template_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
           {
             foreignKeyName: "vaccination_template_items_product_id_fkey";
             columns: ["product_id"];
@@ -6008,6 +6415,13 @@ export type Database = {
             foreignKeyName: "vat_inventory_ledger_product_id_fkey";
             columns: ["product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "vat_inventory_ledger_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -6052,6 +6466,13 @@ export type Database = {
             foreignKeyName: "vendor_product_mappings_internal_product_id_fkey";
             columns: ["internal_product_id"];
             isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "vendor_product_mappings_internal_product_id_fkey";
+            columns: ["internal_product_id"];
+            isOneToOne: false;
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
@@ -6061,6 +6482,7 @@ export type Database = {
         Row: {
           address: string | null;
           code: string | null;
+          company_id: string | null;
           created_at: string | null;
           id: number;
           key: string;
@@ -6076,6 +6498,7 @@ export type Database = {
         Insert: {
           address?: string | null;
           code?: string | null;
+          company_id?: string | null;
           created_at?: string | null;
           id?: number;
           key: string;
@@ -6091,6 +6514,7 @@ export type Database = {
         Update: {
           address?: string | null;
           code?: string | null;
+          company_id?: string | null;
           created_at?: string | null;
           id?: number;
           key?: string;
@@ -6119,6 +6543,22 @@ export type Database = {
         };
         Relationships: [];
       };
+      product_monthly_sales_view: {
+        Row: {
+          monthly_sales_qty: number | null;
+          product_id: number | null;
+        };
+        Relationships: [];
+      };
+      supplier_debt_view: {
+        Row: {
+          current_debt: number | null;
+          supplier_id: number | null;
+          total_invoiced: number | null;
+          total_paid: number | null;
+        };
+        Relationships: [];
+      };
       v_active_deals: {
         Row: {
           deal_id: number | null;
@@ -6131,6 +6571,13 @@ export type Database = {
           start_date: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "deal_items_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
           {
             foreignKeyName: "deal_items_product_id_fkey";
             columns: ["product_id"];
@@ -6229,6 +6676,10 @@ export type Database = {
           partner_type: string;
         }[];
       };
+      _test_find_auth_user_by_email: {
+        Args: { p_email: string };
+        Returns: string;
+      };
       _validate_stock_availability: {
         Args: { p_items: Json; p_warehouse_id: number };
         Returns: undefined;
@@ -6246,6 +6697,10 @@ export type Database = {
         Returns: Json;
       };
       allocate_inbound_costs: { Args: { p_receipt_id: number }; Returns: Json };
+      analyze_chat_feedback_weekly: {
+        Args: { p_week_start?: string };
+        Returns: Json;
+      };
       approve_portal_registration:
         | { Args: { p_request_id: string }; Returns: Json }
         | {
@@ -6388,6 +6843,7 @@ export type Database = {
         Args: { p_number: string; p_symbol: string; p_tax_code: string };
         Returns: boolean;
       };
+      check_pending_cart: { Args: { p_user_id: string }; Returns: Json };
       check_pending_payment_reminders: {
         Args: { p_force?: number };
         Returns: undefined;
@@ -6426,6 +6882,7 @@ export type Database = {
             };
             Returns: Json;
           };
+      cleanup_old_chat_messages: { Args: never; Returns: Json };
       cleanup_rpc_rate_log: { Args: never; Returns: undefined };
       clone_sales_order: { Args: { p_old_order_id: string }; Returns: Json };
       close_chat_session: {
@@ -7067,12 +7524,24 @@ export type Database = {
         }[];
       };
       get_chat_customer_summary: { Args: { p_user_id: string }; Returns: Json };
+      get_chat_session_old_summary: {
+        Args: { p_keep_recent?: number; p_session_id: string };
+        Returns: Json;
+      };
       get_columns: {
         Args: { table_name: string };
         Returns: {
           column_name: string;
           data_type: string;
         }[];
+      };
+      get_compliance_audit_detail: {
+        Args: { p_audit_id: string };
+        Returns: Json;
+      };
+      get_compliance_audit_stats: {
+        Args: { p_from: string; p_to: string };
+        Returns: Json;
       };
       get_connect_posts: {
         Args: {
@@ -7637,6 +8106,7 @@ export type Database = {
           cccd_back_url: string | null;
           cccd_front_url: string | null;
           cccd_issue_date: string | null;
+          company_id: string | null;
           created_at: string | null;
           dob: string | null;
           education_level: string | null;
@@ -7652,10 +8122,12 @@ export type Database = {
           phone: string | null;
           position: string | null;
           profile_updated_at: string | null;
+          role_id: string | null;
           specialization: string | null;
           status: Database["public"]["Enums"]["employee_status"];
           strengths: string | null;
           updated_at: string | null;
+          warehouse_id: number | null;
           work_state: string | null;
         }[];
         SetofOptions: {
@@ -8009,6 +8481,28 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean };
       is_authenticated: { Args: never; Returns: boolean };
       is_chat_staff: { Args: never; Returns: boolean };
+      list_chat_compliance_audits: {
+        Args: {
+          p_from: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_severity?: string;
+          p_to: string;
+        };
+        Returns: {
+          audit_created_at: string;
+          audit_id: string;
+          customer_email: string;
+          customer_name: string;
+          excerpt: string;
+          matched_keywords: string[];
+          message_id: string;
+          rule_code: string;
+          session_id: string;
+          severity: string;
+          status: string;
+        }[];
+      };
       list_inbox_sessions: {
         Args: { p_limit?: number; p_tab: string };
         Returns: {
@@ -8036,6 +8530,18 @@ export type Database = {
           id: number;
           synonym: string;
           weight: number;
+        }[];
+      };
+      llm_log_daily_usage: {
+        Args: { p_day?: string };
+        Returns: {
+          error: number;
+          provider: string;
+          rate_limit: number;
+          success: number;
+          total: number;
+          total_tokens_in: number;
+          total_tokens_out: number;
         }[];
       };
       mark_all_my_notifications_read: { Args: never; Returns: number };

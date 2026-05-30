@@ -8,6 +8,7 @@ import type {
   ComplianceStats,
   ListAuditsFilters,
 } from "../types";
+import type { Database } from "@/shared/lib/database.types";
 
 import { safeRpc } from "@/shared/lib/safeRpc";
 
@@ -19,12 +20,12 @@ export async function listComplianceAudits(
   filters: ListAuditsFilters
 ): Promise<ComplianceAuditRow[]> {
   const { data, error } = await safeRpc("list_chat_compliance_audits", {
-    p_from: (filters.from || null) as any,
-    p_to: (filters.to || null) as any,
-    p_severity: filters.severity ?? undefined,
+    p_from: (filters.from || null) as never,
+    p_to: (filters.to || null) as never,
+    p_severity: filters.severity ?? null,
     p_limit: filters.limit ?? 100,
     p_offset: filters.offset ?? 0,
-  });
+  } as never as Database["public"]["Functions"]["list_chat_compliance_audits"]["Args"]);
   if (error) throw error;
   return (data ?? []) as unknown as ComplianceAuditRow[];
 }
@@ -51,8 +52,8 @@ export async function getComplianceAuditStats(
   to: string
 ): Promise<ComplianceStats> {
   const { data, error } = await safeRpc("get_compliance_audit_stats", {
-    p_from: (from || null) as any,
-    p_to: (to || null) as any,
+    p_from: (from || null) as never,
+    p_to: (to || null) as never,
   });
   if (error) throw error;
   return data as unknown as ComplianceStats;

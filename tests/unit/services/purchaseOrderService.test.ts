@@ -4,20 +4,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSafeRpc = vi.fn();
 
 vi.mock("@/shared/api/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {
-    from: () => ({ delete: () => ({ in: vi.fn() }), update: () => ({ in: vi.fn() }), select: () => ({ eq: vi.fn() }) }),
+    from: () => ({
+      delete: () => ({ in: vi.fn() }),
+      update: () => ({ in: vi.fn() }),
+      select: () => ({ eq: vi.fn() }),
+    }),
     storage: { from: () => ({ upload: vi.fn(), getPublicUrl: vi.fn() }) },
     auth: { getUser: vi.fn() },
   },
 }));
 vi.mock("dayjs", () => {
-  const d = (val?: any) => ({
+  const d = () => ({
     format: () => "2026-03-25",
     toISOString: () => "2026-03-25T00:00:00.000Z",
   });
@@ -36,7 +40,11 @@ describe("purchaseOrderService", () => {
   describe("getPOs", () => {
     it("calls get_purchase_orders_master with correct params", async () => {
       mockSafeRpc.mockResolvedValue({ data: [{ id: 1, full_count: 5 }] });
-      await purchaseOrderService.getPOs({ search: "test", delivery_status: "PENDING" }, 2, 10);
+      await purchaseOrderService.getPOs(
+        { search: "test", delivery_status: "PENDING" },
+        2,
+        10
+      );
       expect(mockSafeRpc).toHaveBeenCalledWith("get_purchase_orders_master", {
         p_page: 2,
         p_page_size: 10,
@@ -67,7 +75,9 @@ describe("purchaseOrderService", () => {
     it("calls get_purchase_order_detail with p_po_id", async () => {
       mockSafeRpc.mockResolvedValue({ data: { id: 5, code: "PO-001" } });
       const result = await purchaseOrderService.getPODetail(5);
-      expect(mockSafeRpc).toHaveBeenCalledWith("get_purchase_order_detail", { p_po_id: 5 });
+      expect(mockSafeRpc).toHaveBeenCalledWith("get_purchase_order_detail", {
+        p_po_id: 5,
+      });
       expect(result).toEqual({ id: 5, code: "PO-001" });
     });
   });
@@ -85,7 +95,14 @@ describe("purchaseOrderService", () => {
         shipping_fee: 50000,
         status: "DRAFT",
         items: [
-          { product_id: 1, quantity: 10, unit_price: 5000, unit: "Hop", is_bonus: false, bonus_quantity: 0 },
+          {
+            product_id: 1,
+            quantity: 10,
+            unit_price: 5000,
+            unit: "Hop",
+            is_bonus: false,
+            bonus_quantity: 0,
+          },
         ],
       });
       expect(mockSafeRpc).toHaveBeenCalledWith("create_purchase_order", {
@@ -97,17 +114,33 @@ describe("purchaseOrderService", () => {
         p_shipping_fee: 50000,
         p_status: "DRAFT",
         p_items: [
-          { product_id: 1, quantity: 10, unit_price: 5000, unit: "Hop", is_bonus: false, bonus_quantity: 0 },
+          {
+            product_id: 1,
+            quantity: 10,
+            unit_price: 5000,
+            unit: "Hop",
+            is_bonus: false,
+            bonus_quantity: 0,
+          },
         ],
       });
     });
 
     it("returns created PO data", async () => {
-      mockSafeRpc.mockResolvedValue({ data: { id: 10, code: "PO-NEW", status: "DRAFT", message: "ok" } });
-      const result = await purchaseOrderService.createPO({
-        supplier_id: 1, status: "DRAFT", items: [],
+      mockSafeRpc.mockResolvedValue({
+        data: { id: 10, code: "PO-NEW", status: "DRAFT", message: "ok" },
       });
-      expect(result).toEqual({ id: 10, code: "PO-NEW", status: "DRAFT", message: "ok" });
+      const result = await purchaseOrderService.createPO({
+        supplier_id: 1,
+        status: "DRAFT",
+        items: [],
+      });
+      expect(result).toEqual({
+        id: 10,
+        code: "PO-NEW",
+        status: "DRAFT",
+        message: "ok",
+      });
     });
 
     it("sends 0 when shipping_partner_id is undefined", async () => {
@@ -163,10 +196,12 @@ describe("purchaseOrderService", () => {
 
   // --- deletePO ---
   describe("deletePO", () => {
-    it("calls delete_purchase_order with p_id", async () => {
+    it("calls delete_purchase_order with p_po_id", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
       const result = await purchaseOrderService.deletePO(9);
-      expect(mockSafeRpc).toHaveBeenCalledWith("delete_purchase_order", { p_id: 9 });
+      expect(mockSafeRpc).toHaveBeenCalledWith("delete_purchase_order", {
+        p_po_id: 9,
+      });
       expect(result).toBe(true);
     });
   });
@@ -176,7 +211,9 @@ describe("purchaseOrderService", () => {
     it("calls cancel_purchase_order with p_po_id", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
       const result = await purchaseOrderService.cancelPO(12);
-      expect(mockSafeRpc).toHaveBeenCalledWith("cancel_purchase_order", { p_po_id: 12 });
+      expect(mockSafeRpc).toHaveBeenCalledWith("cancel_purchase_order", {
+        p_po_id: 12,
+      });
       expect(result).toBe(true);
     });
   });
@@ -185,23 +222,31 @@ describe("purchaseOrderService", () => {
   describe("updatePO", () => {
     it("sends null (not undefined) when shipping_partner_id is missing", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
-      await purchaseOrderService.updatePO(5, {
-        supplier_id: 1,
-        delivery_method: "internal",
-        note: "",
-        status: "DRAFT",
-      }, [{ product_id: 1, quantity: 10, uom: "Hop", unit_price: 5000 }]);
+      await purchaseOrderService.updatePO(
+        5,
+        {
+          supplier_id: 1,
+          delivery_method: "internal",
+          note: "",
+          status: "DRAFT",
+        },
+        [{ product_id: 1, quantity: 10, uom: "Hop", unit_price: 5000 }]
+      );
       const call = mockSafeRpc.mock.calls[0];
       expect(call[1].p_shipping_partner_id).toBeNull();
     });
 
     it("preserves valid shipping_partner_id when provided", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
-      await purchaseOrderService.updatePO(5, {
-        supplier_id: 1,
-        shipping_partner_id: 7,
-        status: "DRAFT",
-      }, [{ product_id: 1, quantity: 10, uom: "Hop", unit_price: 5000 }]);
+      await purchaseOrderService.updatePO(
+        5,
+        {
+          supplier_id: 1,
+          shipping_partner_id: 7,
+          status: "DRAFT",
+        },
+        [{ product_id: 1, quantity: 10, uom: "Hop", unit_price: 5000 }]
+      );
       const call = mockSafeRpc.mock.calls[0];
       expect(call[1].p_shipping_partner_id).toBe(7);
     });
@@ -210,7 +255,9 @@ describe("purchaseOrderService", () => {
   // --- confirmCosting ---
   describe("confirmCosting", () => {
     it("calls confirm_purchase_costing with correct payload", async () => {
-      mockSafeRpc.mockResolvedValue({ data: { success: true, rebate_earned: 0 } });
+      mockSafeRpc.mockResolvedValue({
+        data: { success: true, rebate_earned: 0 },
+      });
       const payload = {
         p_po_id: 10,
         p_total_shipping_fee: 30000,
@@ -228,7 +275,10 @@ describe("purchaseOrderService", () => {
         p_gifts_data: [],
       };
       const result = await purchaseOrderService.confirmCosting(payload);
-      expect(mockSafeRpc).toHaveBeenCalledWith("confirm_purchase_costing", payload);
+      expect(mockSafeRpc).toHaveBeenCalledWith(
+        "confirm_purchase_costing",
+        payload
+      );
       expect(result).toEqual({ success: true, rebate_earned: 0 });
     });
 
@@ -263,12 +313,20 @@ describe("purchaseOrderService", () => {
         p_total_shipping_fee: 0,
         p_items_data: [],
         p_gifts_data: [
-          { name: "Qua tang", code: "GIFT-001", quantity: 1, estimated_value: 0, unit_name: "Cai" },
+          {
+            name: "Qua tang",
+            code: "GIFT-001",
+            quantity: 1,
+            estimated_value: 0,
+            unit_name: "Cai",
+          },
         ],
       };
       await purchaseOrderService.confirmCosting(payload);
       expect(mockSafeRpc.mock.calls[0][1].p_gifts_data).toHaveLength(1);
-      expect(mockSafeRpc.mock.calls[0][1].p_gifts_data[0].name).toBe("Qua tang");
+      expect(mockSafeRpc.mock.calls[0][1].p_gifts_data[0].name).toBe(
+        "Qua tang"
+      );
     });
   });
 
@@ -284,30 +342,36 @@ describe("purchaseOrderService", () => {
         expected_delivery_date: "2026-04-10",
         note: "Fragile",
       });
-      expect(mockSafeRpc).toHaveBeenCalledWith("update_purchase_order_logistics", {
-        p_po_id: 7,
-        p_delivery_method: "partner_shipping",
-        p_shipping_partner_id: 2,
-        p_shipping_fee: 30000,
-        p_total_packages: 5,
-        p_expected_delivery_date: "2026-04-10",
-        p_note: "Fragile",
-      });
+      expect(mockSafeRpc).toHaveBeenCalledWith(
+        "update_purchase_order_logistics",
+        {
+          p_po_id: 7,
+          p_delivery_method: "partner_shipping",
+          p_shipping_partner_id: 2,
+          p_shipping_fee: 30000,
+          p_total_packages: 5,
+          p_expected_delivery_date: "2026-04-10",
+          p_note: "Fragile",
+        }
+      );
       expect(result).toBe(true);
     });
 
     it("passes null/empty defaults for missing fields", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
       await purchaseOrderService.updateLogistics(7, {});
-      expect(mockSafeRpc).toHaveBeenCalledWith("update_purchase_order_logistics", {
-        p_po_id: 7,
-        p_delivery_method: null,
-        p_shipping_partner_id: null,
-        p_shipping_fee: null,
-        p_total_packages: null,
-        p_expected_delivery_date: null,
-        p_note: "",
-      });
+      expect(mockSafeRpc).toHaveBeenCalledWith(
+        "update_purchase_order_logistics",
+        {
+          p_po_id: 7,
+          p_delivery_method: null,
+          p_shipping_partner_id: null,
+          p_shipping_fee: null,
+          p_total_packages: null,
+          p_expected_delivery_date: null,
+          p_note: "",
+        }
+      );
     });
   });
 });
