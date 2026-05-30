@@ -20,7 +20,10 @@ import {
 const describe = isProduction ? _describe.skip : _describe;
 
 const STAFF_EMAIL = "admin@test.com";
-const STAFF_PASSWORD = "Admin@938!";
+const STAFF_PASSWORD = process.env.TEST_STAFF_PASSWORD;
+if (!STAFF_PASSWORD && !isProduction) {
+  throw new Error("TEST_STAFF_PASSWORD env var required (do not hardcode)");
+}
 const CUSTOMER_EMAIL = "kame.ctb@gmail.com";
 const CUSTOMER_PASSWORD = "Test@123!";
 

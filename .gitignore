@@ -10,6 +10,9 @@ dist-ssr
 .env.*
 *.local
 
+# MCP local config (chứa Supabase PAT thật — KHÔNG commit)
+.mcp.local.json
+
 # Logs
 logs
 *.log

@@ -1,5 +1,13 @@
 import { BankOutlined, PhoneOutlined, UserOutlined } from "@ant-design/icons";
-import { Card, Descriptions, Typography, Space, Spin, Alert, Input } from "antd";
+import {
+  Card,
+  Descriptions,
+  Typography,
+  Space,
+  Spin,
+  Alert,
+  Input,
+} from "antd";
 import React from "react";
 
 const { Text } = Typography;
@@ -11,6 +19,13 @@ interface SupplierInfoProps {
   error?: string;
   note: string;
   onNoteChange: (val: string) => void;
+  /**
+   * Công nợ NCC lấy từ `supplier_debt_view` (single source of truth).
+   * Caller nên truyền số này (qua `financeService.getSupplierDebt`) để mọi UI
+   * công nợ NCC hiển thị đồng nhất; nếu omit, fallback về `supplier.current_debt`
+   * giữ tương thích ngược cho các flow cũ.
+   */
+  currentDebt?: number | null;
 }
 
 export const SupplierInfoCard: React.FC<SupplierInfoProps> = ({
@@ -19,7 +34,14 @@ export const SupplierInfoCard: React.FC<SupplierInfoProps> = ({
   error,
   note,
   onNoteChange,
+  currentDebt,
 }) => {
+  // Ưu tiên prop currentDebt (đã đi qua view); fallback về supplier.current_debt
+  // để 2 V2 page chưa migrate vẫn chạy được.
+  const debtToShow =
+    currentDebt !== undefined && currentDebt !== null
+      ? Number(currentDebt)
+      : Number(supplier?.current_debt ?? 0);
   if (error) {
     return <Alert type="error" message="Lỗi" description={error} showIcon />;
   }
@@ -64,14 +86,14 @@ export const SupplierInfoCard: React.FC<SupplierInfoProps> = ({
                 {new Intl.NumberFormat("vi-VN", {
                   style: "currency",
                   currency: "VND",
-                }).format(supplier.current_debt || 0)}
+                }).format(debtToShow)}
               </Text>
             </Space>
           </Descriptions.Item>
         </Descriptions>
       ) : null}
-      
-      {supplier && (
+
+      {supplier ? (
         <div style={{ marginTop: 12 }}>
           <Text type="secondary" style={{ display: "block", marginBottom: 4 }}>
             Ghi chú vận chuyển:
@@ -83,7 +105,7 @@ export const SupplierInfoCard: React.FC<SupplierInfoProps> = ({
             onChange={(e) => onNoteChange(e.target.value)}
           />
         </div>
-      )}
+      ) : null}
     </Card>
   );
 };

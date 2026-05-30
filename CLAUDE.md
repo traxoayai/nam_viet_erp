@@ -14,6 +14,32 @@ Vite + React 19 + TypeScript strict + Ant Design 5 + Zustand 5 + TanStack Query 
 - Database types auto-gen: `src/shared/types/database.types.ts` (`npm run typegen`)
 - KHÔNG sửa `.env`, KHÔNG sửa lock files
 - Max 300 dòng/file
+- KHÔNG hardcode secret (SERVICE_ROLE_KEY, Supabase PAT, JWT) trong source — phải đọc từ env var
+
+## Setup secrets (lần đầu clone)
+
+### MCP server (Supabase Personal Access Token)
+`.mcp.json` là placeholder dùng `${MCP_SUPABASE_TOKEN}` — KHÔNG chứa token thật.
+Để Claude Code / IDE chạy được Supabase MCP, copy file example rồi paste PAT thực vào file local (đã gitignore):
+
+```bash
+cp .mcp.local.json.example .mcp.local.json
+# Mở .mcp.local.json, thay sbp_YOUR_... bằng PAT từ Supabase Dashboard → Account → Access Tokens
+```
+
+Hoặc set env var `MCP_SUPABASE_TOKEN` ở shell/profile để `.mcp.json` resolve trực tiếp.
+
+### Scripts & test helpers (Service role key)
+`scripts/*` và `tests/helpers/supabase.ts` đọc key qua env. Set trước khi chạy:
+
+```bash
+export SUPABASE_SERVICE_ROLE_KEY="<prod service role key>"
+export SUPABASE_ANON_KEY="<prod anon key>"          # chỉ cần khi TEST_TARGET=prod
+export SUPABASE_LOCAL_SERVICE_ROLE_KEY="<local demo>"  # tuỳ chọn — fallback về SUPABASE_SERVICE_ROLE_KEY
+export SUPABASE_LOCAL_ANON_KEY="<local demo>"          # tuỳ chọn — fallback về SUPABASE_ANON_KEY
+```
+
+Lấy key từ Supabase Dashboard → Project Settings → API. Local demo keys nằm trong output `supabase status`.
 
 ## Regression Prevention (BẮT BUỘC)
 

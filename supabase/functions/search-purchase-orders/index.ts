@@ -1,21 +1,41 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import postgres from "https://deno.land/x/postgresjs/mod.js";
 
-const connectionString = Deno.env.get("SUPABASE_DB_URL") || Deno.env.get("DATABASE_URL") || "postgresql://postgres.iudkexocalqdhxuyjacu:Longlong123%40a@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres";
-
-const sql = postgres(connectionString, {
-  max: 5,           
-  idle_timeout: 10, 
-});
+const connectionString =
+  Deno.env.get("SUPABASE_DB_URL") || Deno.env.get("DATABASE_URL");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
+
+const sql = connectionString
+  ? postgres(connectionString, {
+      max: 5,
+      idle_timeout: 10,
+    })
+  : null;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (!sql) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Database connection not configured (SUPABASE_DB_URL or DATABASE_URL missing)",
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
   }
 
   try {
@@ -46,14 +66,19 @@ serve(async (req) => {
         LIMIT 200
       `;
     } else {
-      const words = searchTerm.trim().split(/\s+/).filter(w => w.length > 0);
-      
-      const conditions = words.map(word => {
+      const words = searchTerm
+        .trim()
+        .split(/\s+/)
+        .filter((w) => w.length > 0);
+
+      const conditions = words.map((word) => {
         const pattern = `%${word}%`;
         return sql`(unaccent(s.name) ILIKE unaccent(${pattern}) OR unaccent(p.name) ILIKE unaccent(${pattern}) OR po.code ILIKE ${pattern})`;
       });
 
-      const combinedCondition = conditions.reduce((acc, curr) => sql`${acc} AND ${curr}`);
+      const combinedCondition = conditions.reduce(
+        (acc, curr) => sql`${acc} AND ${curr}`
+      );
 
       rows = await sql`
         SELECT po.id, po.code, po.supplier_id, po.shipping_partner_id, po.status, po.delivery_status,
@@ -76,7 +101,7 @@ serve(async (req) => {
       `;
     }
 
-    const formattedData = rows.map(row => ({
+    const formattedData = rows.map((row) => ({
       id: row.id,
       code: row.code,
       supplier_id: row.supplier_id,
@@ -90,13 +115,12 @@ serve(async (req) => {
       created_at: row.created_at,
       creator_name: row.creator_name,
       suppliers: { name: row.supplier_name },
-      shipping_partners: { name: row.shipping_partner_name }
+      shipping_partners: { name: row.shipping_partner_name },
     }));
 
     return new Response(JSON.stringify({ data: formattedData }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error) {
     console.error("Error searching purchase orders:", error);
     return new Response(JSON.stringify({ error: error.message }), {

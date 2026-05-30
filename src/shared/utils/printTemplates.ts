@@ -39,7 +39,12 @@ interface PrintOrder {
   discount_amount?: number;
   shipping_fee?: number;
   final_amount?: number;
+  // current_total = tiền hàng đơn này (subtotal - discount), KHÔNG bao gồm nợ cũ.
+  // Khi truyền vào printPosBill, đây là số tiền dùng cho QR thanh toán đơn này.
+  current_total?: number;
   old_debt?: number;
+  // grand_total = current_total + old_debt = tổng KH phải trả nếu trả luôn cả nợ cũ.
+  grand_total?: number;
   total_payable_display?: number;
   loyalty_points?: number;
   supplier_name?: string;
@@ -142,8 +147,22 @@ const triggerPrint = (htmlContent: string) => {
 
 // 1. IN BILL K80 (CÓ QR CODE)
 export const printPosBill = (order: PrintOrder) => {
-  // Tạo link VietQR động
-  const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-compact.png?amount=${order.final_amount}&addInfo=TT ${dayjs().format("DDMMYYHHmm")}`;
+  // 3 con số tách biệt để bill không bị lệch và KH biết mình trả cho cái gì:
+  //   - currentTotal = tiền hàng đơn này (KHÔNG gộp nợ cũ)
+  //   - oldDebt      = nợ cũ (có thể âm nếu KH đã trả trước)
+  //   - grandTotal   = currentTotal + oldDebt
+  // Fallback giữ tương thích ngược: code cũ chỉ truyền final_amount → khi đó
+  // current_total = final_amount, old_debt = 0, grand_total = final_amount.
+  const currentTotal = Number(order.current_total ?? order.final_amount ?? 0);
+  const oldDebt = Number(order.old_debt ?? 0);
+  const grandTotal = Number(
+    order.grand_total ?? order.total_payable_display ?? currentTotal + oldDebt
+  );
+
+  // QR CHỈ thanh toán tiền hàng đơn này — nợ cũ là giao dịch finance riêng,
+  // không được gộp vào 1 lần chuyển khoản (sẽ không phân bổ được).
+  const qrAmount = currentTotal;
+  const qrUrl = `https://img.vietqr.io/image/${BANK_ID}-${BANK_ACCOUNT}-compact.png?amount=${qrAmount}&addInfo=TT ${dayjs().format("DDMMYYHHmm")}`;
 
   const itemsHtml = (order.items ?? [])
     .map(
@@ -211,15 +230,31 @@ export const printPosBill = (order: PrintOrder) => {
             <div class="space-y-1 receipt-font text-[11px]">
                  <div class="flex justify-between"><span>Tạm tính:</span><span>${formatVnd(order.sub_total ?? 0)}</span></div>
                  <div class="flex justify-between"><span>Giảm giá:</span><span>-${formatVnd(order.discount_amount ?? 0)}</span></div>
+                 <div class="flex justify-between"><span>Thanh toán đơn này:</span><span>${formatVnd(currentTotal)}</span></div>
+                 ${
+                   oldDebt !== 0
+                     ? `
+                 <div class="flex justify-between" style="color: ${oldDebt > 0 ? "#d4380d" : "#389e0d"};">
+                    <span>${oldDebt > 0 ? "Nợ cũ (Cộng dồn):" : "Khách đã trả trước:"}</span>
+                    <span>${oldDebt > 0 ? "+" : "-"}${formatVnd(Math.abs(oldDebt))}</span>
+                 </div>`
+                     : ""
+                 }
                  <div class="flex justify-between font-bold text-sm mt-2 border-t pt-1">
-                    <span>TỔNG CỘNG:</span><span>${formatVnd(order.final_amount ?? 0)}</span>
+                    <span>TỔNG CỘNG:</span><span>${formatVnd(grandTotal)}</span>
                  </div>
             </div>
 
             <div class="text-center mt-4">
-                <div class="font-bold mb-1">QUÉT QR THANH TOÁN</div>
+                <div class="font-bold mb-1">QUÉT QR THANH TOÁN ĐƠN NÀY</div>
                 <img src="${qrUrl}" alt="QR Payment" class="w-32 h-32 mx-auto border border-gray-300 rounded"/>
-                <p class="text-[9px] mt-1">${ACCOUNT_NAME}</p>
+                <p class="text-[10px] mt-1 font-semibold">${formatVnd(qrAmount)}</p>
+                <p class="text-[9px]">${ACCOUNT_NAME}</p>
+                ${
+                  oldDebt > 0
+                    ? `<p class="text-[9px] mt-1 italic" style="color:#d4380d;">* QR chỉ thanh toán tiền hàng đơn này. Nợ cũ ${formatVnd(oldDebt)} thanh toán riêng.</p>`
+                    : ""
+                }
             </div>
 
             <div class="mt-4 text-center italic text-[9px]">Cảm ơn quý khách! Hẹn gặp lại.</div>

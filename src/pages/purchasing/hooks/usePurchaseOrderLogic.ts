@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { financeService } from "@/features/finance/api/financeService";
 import { useProductStore } from "@/features/product/stores/productStore";
 import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
 import { POItem } from "@/features/purchasing/types/purchaseOrderTypes";
@@ -37,7 +38,9 @@ export const usePurchaseOrderLogic = () => {
   const [itemsList, setItemsList] = useState<POItem[]>([]);
   const [poCode, setPoCode] = useState<string>("");
   const [poStatus, setPoStatus] = useState<string>("");
-  const [costingConfirmedAt, setCostingConfirmedAt] = useState<string | null>(null);
+  const [costingConfirmedAt, setCostingConfirmedAt] = useState<string | null>(
+    null
+  );
   const [financials, setFinancials] = useState({
     subtotal: 0,
     shippingFee: 0,
@@ -93,13 +96,27 @@ export const usePurchaseOrderLogic = () => {
 
       const supplier = po.supplier as Record<string, unknown> | undefined;
       if (supplier?.id) {
-        const { data: richInfo } = await safeRpc(
-          "get_supplier_quick_info",
-          { p_supplier_id: supplier.id as number }
-        );
-        // Merge: thông tin cơ bản từ PO supplier + debt từ RPC
+        // Song song: thông tin tổng quát NCC + công nợ thực từ view (single source).
+        const [{ data: richInfo }, currentDebt] = await Promise.all([
+          safeRpc("get_supplier_quick_info", {
+            p_supplier_id: supplier.id as number,
+          }),
+          financeService
+            .getSupplierDebt(supplier.id as number)
+            .catch((err: unknown) => {
+              console.error("[loadOrderDetail] getSupplierDebt failed", err);
+              return null;
+            }),
+        ]);
+        // Merge: thông tin cơ bản từ PO supplier + RPC; cuối cùng override
+        // current_debt bằng giá trị view (nếu fetch thành công) để mọi UI hiển thị
+        // đồng nhất với supplier_debt_view.
         const richObj = richInfo as unknown as Record<string, unknown> | null;
-        setSupplierInfo({ ...supplier, ...richObj });
+        setSupplierInfo({
+          ...supplier,
+          ...richObj,
+          ...(currentDebt !== null ? { current_debt: currentDebt } : {}),
+        });
       }
 
       // [FIX] Lấy thông tin Lô/Hạn sử dụng từ receipt_draft để hiển thị lại
@@ -110,19 +127,29 @@ export const usePurchaseOrderLogic = () => {
           .select("receipt_draft")
           .eq("id", poId)
           .single();
-          
+
         if (fetchErr) {
           console.warn("Could not fetch receipt_draft:", fetchErr);
         } else if (poExtra?.receipt_draft) {
           let parsed = poExtra.receipt_draft;
-          if (typeof parsed === 'string') {
-            try { parsed = JSON.parse(parsed); } catch(e) {}
+          if (typeof parsed === "string") {
+            try {
+              parsed = JSON.parse(parsed);
+            } catch (e) {}
           }
           if (Array.isArray(parsed)) {
             receiptDraft = parsed;
-          } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).items)) {
+          } else if (
+            parsed &&
+            typeof parsed === "object" &&
+            Array.isArray((parsed as any).items)
+          ) {
             receiptDraft = (parsed as any).items;
-          } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).draft_data)) {
+          } else if (
+            parsed &&
+            typeof parsed === "object" &&
+            Array.isArray((parsed as any).draft_data)
+          ) {
             receiptDraft = (parsed as any).draft_data;
           }
         }
@@ -130,47 +157,56 @@ export const usePurchaseOrderLogic = () => {
         console.warn("Could not fetch receipt_draft:", err);
       }
 
-      const mappedItems: POItem[] = ((po.items as unknown[]) || []).map((item: unknown) => {
-        const i = item as Record<string, unknown>;
-        // [FIX] Normalize Data Keys (Phòng trường hợp RPC trả về biến thể khác)
-        const wholesaleUnit =
-          (i.wholesale_unit as string) || (i.wholesaleUnit as string) || "Hộp";
-        const retailUnit = (i.retail_unit as string) || (i.retailUnit as string) || "Vỉ";
-        const itemsPerCarton =
-          (i.items_per_carton as number) || (i.itemsPerCarton as number) || 1;
+      const mappedItems: POItem[] = ((po.items as unknown[]) || []).map(
+        (item: unknown) => {
+          const i = item as Record<string, unknown>;
+          // [FIX] Normalize Data Keys (Phòng trường hợp RPC trả về biến thể khác)
+          const wholesaleUnit =
+            (i.wholesale_unit as string) ||
+            (i.wholesaleUnit as string) ||
+            "Hộp";
+          const retailUnit =
+            (i.retail_unit as string) || (i.retailUnit as string) || "Vỉ";
+          const itemsPerCarton =
+            (i.items_per_carton as number) || (i.itemsPerCarton as number) || 1;
 
-        // [FIX] Lấy lại draft lot & expiry (An toàn hơn bằng Array.isArray)
-        const draftItem = Array.isArray(receiptDraft) ? receiptDraft.find((d) => d.product_id === i.product_id) : undefined;
+          // [FIX] Lấy lại draft lot & expiry (An toàn hơn bằng Array.isArray)
+          const draftItem = Array.isArray(receiptDraft)
+            ? receiptDraft.find((d) => d.product_id === i.product_id)
+            : undefined;
 
-        return {
-          id: i.id as number,
-          product_id: i.product_id as number,
-          sku: i.sku as string,
-          name: i.product_name as string,
-          image_url: i.image_url as string,
-          quantity: i.quantity_ordered as number,
-          available_units: (i.available_units as POItem["available_units"]) || [],
-          // [LOGIC] Ưu tiên lấy đơn vị đã lưu trong đơn hàng
-          uom: (i.uom_ordered as string) || (i.unit as string) || wholesaleUnit,
-          unit_price: Number(i.unit_price),
-          discount: 0,
-          _items_per_carton: itemsPerCarton,
-          _wholesale_unit: wholesaleUnit,
-          _retail_unit: retailUnit,
-          // [LOGIC] Tính lại giá gốc (Wholesale Price) để dùng khi đổi ĐVT
-          _base_price:
-            Number(i.unit_price) /
-            (i.uom_ordered === wholesaleUnit ? 1 : 1 / itemsPerCarton),
-          vat_rate: (i.vat_rate as number) || 0,
-          rebate_rate: (i.rebate_rate as number) || 0,
-          allocated_shipping_fee: (i.allocated_shipping_fee as number) || 0,
-          bonus_quantity: (i.bonus_quantity as number) || 0,
-          is_bonus: (i.is_bonus as boolean) || false,
-          
-          input_lot: draftItem?.input_lot || undefined,
-          input_expiry: draftItem?.input_expiry || undefined,
-        };
-      });
+          return {
+            id: i.id as number,
+            product_id: i.product_id as number,
+            sku: i.sku as string,
+            name: i.product_name as string,
+            image_url: i.image_url as string,
+            quantity: i.quantity_ordered as number,
+            available_units:
+              (i.available_units as POItem["available_units"]) || [],
+            // [LOGIC] Ưu tiên lấy đơn vị đã lưu trong đơn hàng
+            uom:
+              (i.uom_ordered as string) || (i.unit as string) || wholesaleUnit,
+            unit_price: Number(i.unit_price),
+            discount: 0,
+            _items_per_carton: itemsPerCarton,
+            _wholesale_unit: wholesaleUnit,
+            _retail_unit: retailUnit,
+            // [LOGIC] Tính lại giá gốc (Wholesale Price) để dùng khi đổi ĐVT
+            _base_price:
+              Number(i.unit_price) /
+              (i.uom_ordered === wholesaleUnit ? 1 : 1 / itemsPerCarton),
+            vat_rate: (i.vat_rate as number) || 0,
+            rebate_rate: (i.rebate_rate as number) || 0,
+            allocated_shipping_fee: (i.allocated_shipping_fee as number) || 0,
+            bonus_quantity: (i.bonus_quantity as number) || 0,
+            is_bonus: (i.is_bonus as boolean) || false,
+
+            input_lot: draftItem?.input_lot || undefined,
+            input_expiry: draftItem?.input_expiry || undefined,
+          };
+        }
+      );
 
       setItemsList(mappedItems);
 
@@ -207,12 +243,20 @@ export const usePurchaseOrderLogic = () => {
   const handleSupplierChange = async (supplierId: number) => {
     const found = suppliers.find((s) => s.id === supplierId);
     if (found) {
-      const { data } = await safeRpc("get_supplier_quick_info", {
-        p_supplier_id: supplierId,
-      });
-      // Merge: thông tin cơ bản từ suppliers list + debt từ RPC
+      // Song song: quick info (lead_time, contact...) + công nợ từ view (single source).
+      const [{ data }, currentDebt] = await Promise.all([
+        safeRpc("get_supplier_quick_info", { p_supplier_id: supplierId }),
+        financeService.getSupplierDebt(supplierId).catch((err: unknown) => {
+          console.error("[handleSupplierChange] getSupplierDebt failed", err);
+          return null;
+        }),
+      ]);
       const info = data as unknown as Record<string, unknown> | null;
-      setSupplierInfo({ ...found, ...info });
+      setSupplierInfo({
+        ...found,
+        ...info,
+        ...(currentDebt !== null ? { current_debt: currentDebt } : {}),
+      });
       if (info?.lead_time) {
         form.setFieldsValue({
           expected_delivery_date: dayjs().add(info.lead_time as number, "day"),
@@ -287,7 +331,12 @@ export const usePurchaseOrderLogic = () => {
     const itemsPerCarton = p.items_per_carton || p.itemsPerCarton || 1;
     // Giá cost: Ưu tiên giá nhập gần nhất -> giá vốn thực tế -> 0
     const basePrice =
-      p.latest_purchase_price || p.latestPurchasePrice || p.last_price || p.actual_cost || p.price || 0;
+      p.latest_purchase_price ||
+      p.latestPurchasePrice ||
+      p.last_price ||
+      p.actual_cost ||
+      p.price ||
+      0;
 
     // 2. Logic tạo dropdown Units
     const unitsData = p.available_units || p.units || [];
@@ -393,19 +442,28 @@ export const usePurchaseOrderLogic = () => {
     try {
       const base64_data = await fileToBase64(file);
       const mime_type = file.type;
-      
-      const expected_items = itemsList.map(i => ({ product_id: i.product_id, name: i.name }));
 
-      const { data, error } = await supabase.functions.invoke("scan-po-invoice-gemini", {
-        body: { base64_data, mime_type, expected_items },
-      });
+      const expected_items = itemsList.map((i) => ({
+        product_id: i.product_id,
+        name: i.name,
+      }));
+
+      const { data, error } = await supabase.functions.invoke(
+        "scan-po-invoice-gemini",
+        {
+          body: { base64_data, mime_type, expected_items },
+        }
+      );
 
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Lỗi khi trích xuất hóa đơn");
+      if (!data?.success)
+        throw new Error(data?.error || "Lỗi khi trích xuất hóa đơn");
 
       const extractedItems = data.data?.items || [];
       if (extractedItems.length === 0) {
-        message.warning("Không tìm thấy thông tin sản phẩm, lô và hạn sử dụng trong file.");
+        message.warning(
+          "Không tìm thấy thông tin sản phẩm, lô và hạn sử dụng trong file."
+        );
         return;
       }
 
@@ -413,7 +471,9 @@ export const usePurchaseOrderLogic = () => {
         const newItems = [...prev];
         let matchCount = 0;
         newItems.forEach((item) => {
-          const match = extractedItems.find((e: any) => e.product_id === item.product_id);
+          const match = extractedItems.find(
+            (e: any) => e.product_id === item.product_id
+          );
           if (match) {
             if (match.lot_number) item.input_lot = match.lot_number;
             if (match.expiry_date) item.input_expiry = match.expiry_date;
@@ -422,9 +482,13 @@ export const usePurchaseOrderLogic = () => {
         });
         form.setFieldsValue({ items: newItems });
         if (matchCount > 0) {
-          message.success(`Đã tự động điền Lô/Hạn sử dụng cho ${matchCount} sản phẩm!`);
+          message.success(
+            `Đã tự động điền Lô/Hạn sử dụng cho ${matchCount} sản phẩm!`
+          );
         } else {
-          message.warning("Đã trích xuất dữ liệu nhưng không khớp với sản phẩm nào trong đơn.");
+          message.warning(
+            "Đã trích xuất dữ liệu nhưng không khớp với sản phẩm nào trong đơn."
+          );
         }
         return newItems;
       });
@@ -494,7 +558,7 @@ export const usePurchaseOrderLogic = () => {
 
     // [NEW] Lưu draft Lô/Date vào receipt_draft cho Kho
     try {
-      const constructedDraftData = itemsList.map(item => ({
+      const constructedDraftData = itemsList.map((item) => ({
         sku: item.sku,
         unit: item.uom,
         image_url: item.image_url,
@@ -508,7 +572,7 @@ export const usePurchaseOrderLogic = () => {
         received_batches: [],
         quantity_remaining: item.quantity,
         stock_management_type: "lot_date",
-        quantity_received_prev: 0
+        quantity_received_prev: 0,
       }));
 
       await safeRpc("save_inbound_draft", {

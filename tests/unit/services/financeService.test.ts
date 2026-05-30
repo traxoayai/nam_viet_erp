@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockSafeRpc = vi.fn();
+// Hoisted holder để mỗi test có thể tuỳ chỉnh giá trị trả về cho .maybeSingle()
+// (dùng cho supplier_debt_view & b2b_customer_debt_view). vi.hoisted đảm bảo
+// các biến này đã tồn tại trước khi vi.mock chạy.
+const mockSupabaseState = vi.hoisted(() => ({
+  maybeSingle: { data: null as any, error: null as any },
+  lastFromTable: null as string | null,
+}));
 
 vi.mock("@/shared/api/safeRpc", () => ({
   safeRpc: (...args: any[]) => mockSafeRpc(...args),
@@ -10,16 +17,25 @@ vi.mock("@/shared/lib/safeRpc", () => ({
 }));
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: { actual_current_debt: 500000 }, error: null }),
+    from: vi.fn().mockImplementation((table: string) => {
+      mockSupabaseState.lastFromTable = table;
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { actual_current_debt: 500000 },
+              error: null,
+            }),
+            maybeSingle: vi
+              .fn()
+              .mockResolvedValue(mockSupabaseState.maybeSingle),
+          }),
+          in: vi.fn().mockResolvedValue({ data: [], error: null }),
+          not: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
         }),
-        in: vi.fn().mockResolvedValue({ data: [], error: null }),
-        not: vi.fn().mockReturnValue({
-          order: vi.fn().mockResolvedValue({ data: [], error: null }),
-        }),
-      }),
+      };
     }),
   },
 }));
@@ -32,6 +48,8 @@ import { financeService } from "@/features/finance/api/financeService";
 describe("financeService", () => {
   beforeEach(() => {
     mockSafeRpc.mockReset();
+    mockSupabaseState.maybeSingle = { data: null, error: null };
+    mockSupabaseState.lastFromTable = null;
   });
 
   // --- searchCustomersB2C ---
@@ -59,7 +77,9 @@ describe("financeService", () => {
     it("calls search_customers_b2b_v2 with keyword", async () => {
       mockSafeRpc.mockResolvedValue({ data: [{ id: 2, name: "Corp B2B" }] });
       const result = await financeService.searchCustomersB2B("Corp");
-      expect(mockSafeRpc).toHaveBeenCalledWith("search_customers_b2b_v2", { p_keyword: "Corp" });
+      expect(mockSafeRpc).toHaveBeenCalledWith("search_customers_b2b_v2", {
+        p_keyword: "Corp",
+      });
       expect(result).toEqual([{ id: 2, name: "Corp B2B" }]);
     });
   });
@@ -132,7 +152,10 @@ describe("financeService", () => {
 
     it("returns empty data and 0 count when data is null", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
-      const result = await financeService.getTransactions({ page: 1, pageSize: 10 });
+      const result = await financeService.getTransactions({
+        page: 1,
+        pageSize: 10,
+      });
       expect(result).toEqual({ data: [], totalCount: 0 });
     });
 
@@ -149,6 +172,45 @@ describe("financeService", () => {
         p_date_to: null,
         p_creator_id: null,
       });
+    });
+  });
+
+  // --- getSupplierDebt ---
+  // Consolidate supplier debt source về supplier_debt_view (single source of truth).
+  describe("getSupplierDebt", () => {
+    it("queries supplier_debt_view and returns current_debt", async () => {
+      mockSupabaseState.maybeSingle = {
+        data: { current_debt: 1_250_000 },
+        error: null,
+      };
+      const result = await financeService.getSupplierDebt(42);
+      expect(mockSupabaseState.lastFromTable).toBe("supplier_debt_view");
+      expect(result).toBe(1_250_000);
+    });
+
+    it("returns 0 when view returns no row (supplier mới chưa có PO)", async () => {
+      mockSupabaseState.maybeSingle = { data: null, error: null };
+      const result = await financeService.getSupplierDebt(99);
+      expect(result).toBe(0);
+    });
+
+    it("clamps negative debt to 0 (đã trả thừa NCC)", async () => {
+      mockSupabaseState.maybeSingle = {
+        data: { current_debt: -500_000 },
+        error: null,
+      };
+      const result = await financeService.getSupplierDebt(7);
+      expect(result).toBe(0);
+    });
+
+    it("throws Vietnamese error khi query view lỗi", async () => {
+      mockSupabaseState.maybeSingle = {
+        data: null,
+        error: { message: "permission denied" },
+      };
+      await expect(financeService.getSupplierDebt(1)).rejects.toThrow(
+        /Không thể tải công nợ NCC/
+      );
     });
   });
 });

@@ -5,7 +5,7 @@ import {
   EnvironmentOutlined,
 } from "@ant-design/icons";
 import { Select, Avatar, Tag, Empty, Spin, Row, Col } from "antd";
-import { useState, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import { salesService } from "@/features/sales/api/salesService";
 import { ProductB2B } from "@/features/sales/types/b2b_sales";
@@ -22,15 +22,22 @@ export const ProductSearchBar = ({ onSelect }: Props) => {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
+  const latestReqIdRef = useRef(0);
 
-  // Logic gọi API tìm sản phẩm
-  useMemo(() => {
+  // Logic gọi API tìm sản phẩm — chuyển useMemo (anti-pattern cho side-effect)
+  // sang useEffect và chống race với latestReqIdRef
+  useEffect(() => {
     if (!debouncedSearch) return;
+
+    const reqId = ++latestReqIdRef.current;
 
     const loadData = async () => {
       setLoading(true);
       try {
         const data = await salesService.searchProducts(debouncedSearch);
+
+        // Bỏ qua response stale
+        if (reqId !== latestReqIdRef.current) return;
 
         // Render kết quả Rich Text theo yêu cầu Stratos
         const newOptions = data.map((item) => ({
@@ -89,8 +96,10 @@ export const ProductSearchBar = ({ onSelect }: Props) => {
         }));
         setOptions(newOptions);
       } catch (e) {
+        if (reqId !== latestReqIdRef.current) return;
         console.error(e);
       } finally {
+        if (reqId !== latestReqIdRef.current) return;
         setLoading(false);
       }
     };
@@ -106,6 +115,8 @@ export const ProductSearchBar = ({ onSelect }: Props) => {
       onSearch={setSearch}
       onSelect={(_, option: any) => {
         if (option?.product) {
+          // Vô hiệu hoá in-flight requests sau khi chọn
+          latestReqIdRef.current += 1;
           onSelect(option.product);
           setSearch(""); // Reset sau khi chọn
         }

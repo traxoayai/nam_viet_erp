@@ -4,15 +4,14 @@
 //
 // Yêu cầu: local Supabase đang chạy (127.0.0.1:54321) với migration mới nhất.
 
-import {
-  afterAll,
-  beforeAll,
-  describe as _describe,
-  expect,
-  it,
-} from "vitest";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { adminClient, createUserClient, isProduction } from "../helpers/supabase";
+import { afterAll, beforeAll, describe as _describe, expect, it } from "vitest";
+
+import {
+  adminClient,
+  createUserClient,
+  isProduction,
+} from "../helpers/supabase";
 
 // Không seed data trên production
 const describe = isProduction ? _describe.skip : _describe;
@@ -40,7 +39,11 @@ let userClient: SupabaseClient;
 describe("bulk_update_batch_costs (integration)", () => {
   beforeAll(async () => {
     // Authenticated client — RPC yêu cầu auth.uid() IS NOT NULL
-    userClient = await createUserClient("admin@test.com", "Admin@938!");
+    const staffPassword = process.env.TEST_STAFF_PASSWORD;
+    if (!staffPassword) {
+      throw new Error("TEST_STAFF_PASSWORD env var required (do not hardcode)");
+    }
+    userClient = await createUserClient("admin@test.com", staffPassword);
 
     // Cleanup zombie data từ các lần chạy trước bị interrupt
     // (tránh để product/batch cũ làm nhiễu test khác hoặc crash seeding)
@@ -50,9 +53,18 @@ describe("bulk_update_batch_costs (integration)", () => {
       .like("sku", "COST-ADJ-%");
     if (staleProducts && staleProducts.length > 0) {
       const ids = staleProducts.map((p) => p.id);
-      await adminClient.from("batch_revaluations").delete().in("product_id", ids);
-      await adminClient.from("vat_inventory_ledger").delete().in("product_id", ids);
-      await adminClient.from("inventory_batches").delete().in("product_id", ids);
+      await adminClient
+        .from("batch_revaluations")
+        .delete()
+        .in("product_id", ids);
+      await adminClient
+        .from("vat_inventory_ledger")
+        .delete()
+        .in("product_id", ids);
+      await adminClient
+        .from("inventory_batches")
+        .delete()
+        .in("product_id", ids);
       await adminClient.from("batches").delete().in("product_id", ids);
       await adminClient.from("products").delete().in("id", ids);
     }

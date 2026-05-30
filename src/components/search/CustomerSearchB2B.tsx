@@ -1,7 +1,7 @@
 // src/components/search/CustomerSearchB2B.tsx
 import { UserOutlined } from "@ant-design/icons";
 import { Select, Spin, Typography, Empty, Tag } from "antd";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import { salesService } from "@/features/sales/api/salesService";
 import { useDebounce } from "@/shared/hooks/useDebounce";
@@ -18,12 +18,16 @@ export const CustomerSearchB2B = ({ onSelect, style }: Props) => {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 400);
+  const latestReqIdRef = useRef(0);
 
   const loadData = async (keyword: string) => {
+    const reqId = ++latestReqIdRef.current;
     setLoading(true);
     try {
       // Lưu ý: Nếu CORE chưa sửa lỗi 400 thì hàm này vẫn sẽ fail
       const data = await salesService.searchCustomers(keyword);
+      // Bỏ qua response stale
+      if (reqId !== latestReqIdRef.current) return;
       setOptions(
         data.map((c: any) => ({
           label: (
@@ -48,8 +52,10 @@ export const CustomerSearchB2B = ({ onSelect, style }: Props) => {
         }))
       );
     } catch (e) {
+      if (reqId !== latestReqIdRef.current) return;
       console.error(e);
     } finally {
+      if (reqId !== latestReqIdRef.current) return;
       setLoading(false);
     }
   };
@@ -68,7 +74,11 @@ export const CustomerSearchB2B = ({ onSelect, style }: Props) => {
       options={options}
       style={{ width: "100%", ...style }}
       onChange={(_, option: any) => {
-        if (option?.customer) onSelect(option.customer);
+        if (option?.customer) {
+          // Vô hiệu hoá in-flight requests khi user đã chọn xong
+          latestReqIdRef.current += 1;
+          onSelect(option.customer);
+        }
       }}
       notFoundContent={
         loading ? <Spin size="small" /> : <Empty description="Không tìm thấy" />

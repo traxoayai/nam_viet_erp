@@ -1,7 +1,7 @@
 // src/features/medical/components/CustomerSearchSelect.tsx
 import { PlusOutlined, PhoneOutlined } from "@ant-design/icons";
 import { Select, Tag, Spin, Empty, Button } from "antd";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import { receptionService } from "@/features/medical/api/receptionService";
 import { useDebounce } from "@/shared/hooks/useDebounce";
@@ -28,6 +28,7 @@ export const CustomerSearchSelect = ({
   const [options, setOptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const latestReqIdRef = useRef(0);
 
   // Debounce search input
   const debouncedSearch = useDebounce(search, 400);
@@ -38,10 +39,14 @@ export const CustomerSearchSelect = ({
       return;
     }
 
+    const reqId = ++latestReqIdRef.current;
+
     const loadData = async () => {
       setLoading(true);
       try {
         const data = await receptionService.searchCustomers(debouncedSearch);
+        // Bỏ qua response stale
+        if (reqId !== latestReqIdRef.current) return;
         const newOptions = data.map((c: any) => ({
           label: c.name,
           value: c.id,
@@ -49,8 +54,10 @@ export const CustomerSearchSelect = ({
         }));
         setOptions(newOptions);
       } catch (err) {
+        if (reqId !== latestReqIdRef.current) return;
         console.error(err);
       } finally {
+        if (reqId !== latestReqIdRef.current) return;
         setLoading(false);
       }
     };
@@ -92,7 +99,11 @@ export const CustomerSearchSelect = ({
       filterOption={false}
       onSearch={handleSearch}
       loading={loading}
-      onChange={(val, opt: any) => onChange?.(val, opt?.customer)}
+      onChange={(val, opt: any) => {
+        // Vô hiệu hoá in-flight requests sau khi user chọn xong
+        latestReqIdRef.current += 1;
+        onChange?.(val, opt?.customer);
+      }}
       style={{ width: "100%" }}
       size="large"
       options={options}

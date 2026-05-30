@@ -33,6 +33,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
+import { financeService } from "@/features/finance/api/financeService";
 import { useBankStore } from "@/features/finance/stores/useBankStore";
 import { supplierService } from "@/features/purchasing/api/supplierService"; // [NEW]
 import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
@@ -70,12 +71,23 @@ const SupplierDetailPage: React.FC = () => {
   const [financeModalOpen, setFinanceModalOpen] = useState(false);
   const [financeModalFlow, setFinanceModalFlow] = useState<"in" | "out">("out"); // [NEW] Control Flow
   const [quickInfo, setQuickInfo] = useState<any>(null);
+  // [NEW] Công nợ lấy thẳng từ supplier_debt_view — single source. Tách khỏi
+  // quickInfo.current_debt (RPC có thể trả số cached/lệch) để Statistic + Modal
+  // prefill cùng dùng 1 số → tránh thanh toán quá/thiếu.
+  const [currentDebt, setCurrentDebt] = useState<number>(0);
 
   const fetchQuickInfo = async () => {
     if (!id) return;
     try {
-      const data = await supplierService.getQuickInfo(Number(id));
+      const [data, debt] = await Promise.all([
+        supplierService.getQuickInfo(Number(id)),
+        financeService.getSupplierDebt(Number(id)).catch((err: unknown) => {
+          console.error("[fetchQuickInfo] getSupplierDebt failed", err);
+          return 0;
+        }),
+      ]);
       setQuickInfo(data);
+      setCurrentDebt(debt);
     } catch (err) {
       console.error(err);
     }
@@ -383,14 +395,11 @@ const SupplierDetailPage: React.FC = () => {
                   <Col span={8}>
                     <Statistic
                       title="Nợ cần trả"
-                      value={quickInfo?.current_debt || 0}
+                      value={currentDebt}
                       precision={0}
                       suffix="₫"
                       valueStyle={{
-                        color:
-                          (quickInfo?.current_debt || 0) > 0
-                            ? "#cf1322"
-                            : "#3f8600",
+                        color: currentDebt > 0 ? "#cf1322" : "#3f8600",
                       }}
                     />
                     <Space style={{ marginTop: 16 }}>
@@ -401,7 +410,7 @@ const SupplierDetailPage: React.FC = () => {
                           setFinanceModalFlow("out");
                           setFinanceModalOpen(true);
                         }}
-                        disabled={(quickInfo?.current_debt || 0) <= 0}
+                        disabled={currentDebt <= 0}
                       >
                         Thanh toán công nợ
                       </Button>
@@ -440,9 +449,9 @@ const SupplierDetailPage: React.FC = () => {
                 business_type: "trade",
                 partner_type: "supplier",
                 partner_id: Number(id),
-                // Logic dynamic initial values
-                amount:
-                  financeModalFlow === "out" ? quickInfo?.current_debt || 0 : 0,
+                // Logic dynamic initial values — dùng currentDebt từ supplier_debt_view
+                // để prefill chính xác, tránh thanh toán quá/thiếu so với UI hiển thị.
+                amount: financeModalFlow === "out" ? currentDebt : 0,
                 description:
                   financeModalFlow === "out"
                     ? `Thanh toán công nợ cho NCC ${currentSupplier?.name}`
@@ -497,7 +506,7 @@ const SupplierDetailPage: React.FC = () => {
           business_type: "trade",
           partner_type: "supplier",
           partner_id: String(id), // Ép kiểu string cho chắc
-          amount: financeModalFlow === "out" ? quickInfo?.current_debt || 0 : 0,
+          amount: financeModalFlow === "out" ? currentDebt : 0,
           description:
             financeModalFlow === "out"
               ? `Thanh toán công nợ cho NCC ${currentSupplier?.name}`

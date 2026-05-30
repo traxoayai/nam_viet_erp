@@ -88,11 +88,22 @@ export const PosActionToolbar = () => {
   const handlePrintBill = () => {
     if (items.length === 0) return message.warning("Giỏ hàng trống");
     const totals = getTotals();
+    // Tách rõ 3 con số để bill không bị lệch:
+    //   - current_total = tiền hàng đơn này (subtotal - discount), KHÔNG cộng nợ cũ
+    //     → đây cũng là số tiền cho QR thanh toán đơn này (nợ cũ là giao dịch khác)
+    //   - old_debt     = nợ cũ của khách (debtAmount, có thể âm = trả trước)
+    //   - grand_total  = current_total + old_debt = tổng phải trả KH cầm về
+    const currentTotal = totals.subTotal - totals.discountVal;
     const mockOrder = {
       code: "PREVIEW",
       sub_total: totals.subTotal,
       discount_amount: totals.discountVal,
-      final_amount: totals.grandTotal,
+      current_total: currentTotal,
+      old_debt: totals.debtAmount,
+      grand_total: totals.grandTotal,
+      // final_amount giữ ý nghĩa "tiền đơn này" → dùng cho QR (KHÔNG gộp nợ cũ)
+      final_amount: currentTotal,
+      total_payable_display: totals.grandTotal,
       customer_name: customer?.name || customer?.buyer_name || "",
       customer_phone: customer?.phone || "",
       loyalty_points: customer?.loyalty_points,

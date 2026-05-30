@@ -8,8 +8,14 @@ export async function setupBrowserContext(page: Page) {
   // Mock Notification BEFORE any page script runs (survives reload)
   await page.context().addInitScript(() => {
     window.Notification = Object.assign(
-      function () { return {}; },
-      { permission: "granted", requestPermission: () => Promise.resolve("granted" as NotificationPermission) }
+      function () {
+        return {};
+      },
+      {
+        permission: "granted",
+        requestPermission: () =>
+          Promise.resolve("granted" as NotificationPermission),
+      }
     ) as any;
   });
 
@@ -28,8 +34,13 @@ export async function setupBrowserContext(page: Page) {
 export async function login(
   page: Page,
   email = "admin@test.com",
-  password = "Admin@938!"
+  passwordArg?: string
 ) {
+  const password = passwordArg ?? process.env.E2E_ADMIN_PASSWORD;
+  if (!password) {
+    throw new Error("E2E_ADMIN_PASSWORD env required for production E2E");
+  }
+
   await setupBrowserContext(page);
 
   // Reload to apply all mocks/flags
@@ -37,27 +48,28 @@ export async function login(
   await page.waitForTimeout(2000);
 
   // Fill login form
-  const emailInput = page.locator(
-    "#email, input[id*='email'], input[type='email'], input[placeholder*='Email']"
-  ).first();
+  const emailInput = page
+    .locator(
+      "#email, input[id*='email'], input[type='email'], input[placeholder*='Email']"
+    )
+    .first();
 
   await emailInput.waitFor({ state: "visible", timeout: 15000 });
   await emailInput.fill(email);
 
-  const passwordInput = page.locator(
-    "#password, input[id*='password'], input[type='password']"
-  ).first();
+  const passwordInput = page
+    .locator("#password, input[id*='password'], input[type='password']")
+    .first();
   await passwordInput.fill(password);
 
-  const submitBtn = page.locator(
-    "button[type='submit'], button:has-text('Đăng nhập')"
-  ).first();
+  const submitBtn = page
+    .locator("button[type='submit'], button:has-text('Đăng nhập')")
+    .first();
   await submitBtn.click();
 
-  await page.waitForURL(
-    (url) => !url.toString().includes("/auth/login"),
-    { timeout: 15000 }
-  );
+  await page.waitForURL((url) => !url.toString().includes("/auth/login"), {
+    timeout: 15000,
+  });
 
   // Xử lý màn hình "Cập nhật Mật khẩu Mới" (lần đăng nhập đầu)
   if (page.url().includes("/onboarding/update-password")) {
@@ -68,14 +80,15 @@ export async function login(
     const confirmPwInput = page.locator("input[type='password']").nth(1);
     await confirmPwInput.fill(password);
 
-    const saveBtn = page.locator(
-      "button:has-text('Lưu'), button:has-text('Tiếp tục'), button[type='submit']"
-    ).first();
+    const saveBtn = page
+      .locator(
+        "button:has-text('Lưu'), button:has-text('Tiếp tục'), button[type='submit']"
+      )
+      .first();
     await saveBtn.click();
 
-    await page.waitForURL(
-      (url) => !url.toString().includes("/onboarding"),
-      { timeout: 15000 }
-    );
+    await page.waitForURL((url) => !url.toString().includes("/onboarding"), {
+      timeout: 15000,
+    });
   }
 }

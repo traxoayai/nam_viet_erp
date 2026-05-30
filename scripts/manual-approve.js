@@ -1,8 +1,26 @@
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = "https://iudkexocalqdhxuyjacu.supabase.co";
-const SERVICE_ROLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1ZGtleG9jYWxxZGh4dXlqYWN1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjE0MDk3MiwiZXhwIjoyMDc3NzE2OTcyfQ.zRb5ctyyTik5JtwDu9TTnXiNAcfd-3NsFnt4n9XNyNM";
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SERVICE_ROLE_KEY) {
+  throw new Error("SUPABASE_SERVICE_ROLE_KEY env var required");
+}
+
+const password = process.env.TEST_USER_PASSWORD;
+if (!password) {
+  throw new Error("TEST_USER_PASSWORD env var required (do not hardcode)");
+}
+// Guard against running in prod
+if (
+  process.env.SUPABASE_URL?.includes("iudkexocalqdhxuyjacu") &&
+  !process.env.ALLOW_PROD
+) {
+  throw new Error("Refuse to run on prod without ALLOW_PROD=1");
+}
+// Also guard the hardcoded URL above (same prod project ref)
+if (SUPABASE_URL.includes("iudkexocalqdhxuyjacu") && !process.env.ALLOW_PROD) {
+  throw new Error("Refuse to run on prod without ALLOW_PROD=1");
+}
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -71,7 +89,7 @@ async function checkAndApprove() {
   const { data: authResult, error: authErr } =
     await supabase.auth.admin.createUser({
       email: email,
-      password: "NamViet@123",
+      password: password,
       email_confirm: true,
       user_metadata: { full_name: request.contact_name },
     });

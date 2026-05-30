@@ -1,7 +1,7 @@
 // src/components/search/ProductSearchB2B.tsx
 import { BarcodeOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import { Select, Avatar, Tag, Typography, Spin, Empty, Tooltip } from "antd";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import { salesService } from "@/features/sales/api/salesService";
 import { ProductB2B } from "@/features/sales/types/b2b_sales";
@@ -23,16 +23,22 @@ export const ProductSearchB2B = ({
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
+  const latestReqIdRef = useRef(0);
 
   const handleSearch = async (keyword: string) => {
     if (!keyword) return;
+    const reqId = ++latestReqIdRef.current;
     setLoading(true);
     try {
       // [FIX] Truyền warehouseId vào service
       const results = await salesService.searchProducts(keyword, warehouseId);
 
+      // Bỏ qua response stale (user đã gõ tiếp hoặc chọn xong)
+      if (reqId !== latestReqIdRef.current) return;
+
       // Auto add nếu khớp barcode 100%
       if (results.length === 1 && keyword.length > 8 && !loading) {
+        latestReqIdRef.current += 1; // invalidate sau khi auto-select
         onSelect(results[0]); // Gọi prop từ cha
         setSearch("");
         setOptions([]);
@@ -47,8 +53,10 @@ export const ProductSearchB2B = ({
         }))
       );
     } catch (e) {
+      if (reqId !== latestReqIdRef.current) return;
       console.error(e);
     } finally {
+      if (reqId !== latestReqIdRef.current) return;
       setLoading(false);
     }
   };
@@ -118,6 +126,8 @@ export const ProductSearchB2B = ({
       filterOption={false}
       onSearch={setSearch}
       onSelect={(_, opt: any) => {
+        // Vô hiệu hoá in-flight requests sau khi user chọn
+        latestReqIdRef.current += 1;
         onSelect(opt.product); // Gọi prop từ cha
         setSearch("");
       }}

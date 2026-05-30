@@ -6,7 +6,7 @@ import {
   GiftOutlined,
 } from "@ant-design/icons";
 import { Select, Spin, Avatar, Typography, Empty, Tag } from "antd";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 import { searchProductsForDropdown } from "@/features/product/api/productService";
 import { useDebounce } from "@/shared/hooks/useDebounce";
@@ -36,11 +36,13 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
   const [options, setOptions] = useState<any[]>([]);
   const [fetching, setFetching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const latestReqIdRef = useRef(0);
 
   // Debounce 300ms
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   const fetchOptions = async (keyword: string) => {
+    const reqId = ++latestReqIdRef.current;
     setFetching(true);
     try {
       let items = [];
@@ -53,6 +55,9 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
         // Nếu không (Trang POS, Voucher...) -> Dùng mặc định
         items = await searchProductsForDropdown(keyword, searchTypes);
       }
+
+      // Bỏ qua response cũ (stale) nếu user đã gõ tiếp / chọn option
+      if (reqId !== latestReqIdRef.current) return;
 
       const formattedOptions = items.map((item: any) => ({
         label: (
@@ -146,7 +151,11 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
       }));
 
       setOptions(formattedOptions);
+    } catch (err) {
+      if (reqId !== latestReqIdRef.current) return;
+      console.error(err);
     } finally {
+      if (reqId !== latestReqIdRef.current) return;
       setFetching(false);
     }
   };
@@ -182,7 +191,11 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
       }
       options={options}
       value={value}
-      onChange={onChange}
+      onChange={(val, opt) => {
+        // Khi user chọn option: vô hiệu hoá các request đang chạy
+        latestReqIdRef.current += 1;
+        onChange?.(val, opt);
+      }}
       placeholder={placeholder}
       style={style}
       suffixIcon={<SearchOutlined />}

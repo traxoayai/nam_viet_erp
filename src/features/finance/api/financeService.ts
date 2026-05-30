@@ -23,6 +23,23 @@ export const financeService = {
     return data || [];
   },
 
+  // [NEW] Lấy nợ NCC trực tiếp từ supplier_debt_view (Single source of truth)
+  // Thay thế việc đọc `current_debt` từ get_supplier_quick_info / suppliers.current_debt
+  // hoặc các cột cached khác — để mọi UI hiển thị cùng một con số.
+  getSupplierDebt: async (supplierId: number): Promise<number> => {
+    const { data, error } = await supabase
+      .from("supplier_debt_view")
+      .select("current_debt")
+      .eq("supplier_id", supplierId)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`Không thể tải công nợ NCC: ${error.message}`);
+    }
+    // View đảm bảo current_debt = total_invoiced - total_paid, đã COALESCE 0.
+    // Math.max để chặn trường hợp NCC đã trả thừa (negative) bị hiểu nhầm là phải đòi NCC.
+    return Math.max(0, Number(data?.current_debt ?? 0));
+  },
+
   // [NEW] Lấy nợ trực tiếp từ View (Thay thế hoàn toàn cột cũ)
   getB2BDebt: async (customerId: number) => {
     const { data, error } = await supabase
