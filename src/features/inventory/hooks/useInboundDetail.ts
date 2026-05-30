@@ -1,8 +1,11 @@
 // src/features/inventory/hooks/useInboundDetail.ts
 import { message, Modal } from "antd";
 import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+dayjs.extend(customParseFormat);
 
 import { useInboundStore } from "../stores/useInboundStore";
 
@@ -95,7 +98,9 @@ export const useInboundDetail = (id?: string) => {
                 unit_price: i.unit_price || i.final_unit_cost || 0,
                 lot_number: i.input_lot || "DEFAULT",
                 expiry_date: i.input_expiry
-                  ? dayjs(i.input_expiry).format("YYYY-MM-DD")
+                  ? dayjs(i.input_expiry, ["DD/MM/YYYY", "YYYY-MM-DDTHH:mm:ss.SSSZ", "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ssZ"]).isValid()
+                    ? dayjs(i.input_expiry, ["DD/MM/YYYY", "YYYY-MM-DDTHH:mm:ss.SSSZ", "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ssZ"]).format("YYYY-MM-DD")
+                    : dayjs(i.input_expiry).format("YYYY-MM-DD") // fallback
                   : "2099-12-31",
               };
             }),
