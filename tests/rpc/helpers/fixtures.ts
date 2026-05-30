@@ -288,13 +288,53 @@ export async function cleanupTestData(
   for (const marker of markers) {
     const pattern = `%${marker}%`;
 
+    // 0. Lookup warehouse/customer theo marker TRƯỚC để dọn orders không có
+    //    marker trong code (vd reprocess-failed-bank-memos test dùng code
+    //    'SO-{yymmdd}-{seq8}' không chứa marker, nhưng warehouse + customer
+    //    của order có name chứa marker).
+    const { data: whRowsEarly } = await admin
+      .from("warehouses")
+      .select("id")
+      .or(`name.like.${pattern},key.like.${pattern},code.like.${pattern}`);
+    const whIdsEarly = (whRowsEarly ?? []).map((w) => w.id);
+
+    const { data: custRowsEarly } = await admin
+      .from("customers_b2b")
+      .select("id")
+      .or(`name.like.${pattern},customer_code.like.${pattern}`);
+    const custIdsEarly = (custRowsEarly ?? []).map((c) => c.id);
+
     // 1. Xóa inventory_transactions ref tới order test
-    const { data: orders } = await admin
+    //    Tìm orders qua: code marker HOẶC warehouse/customer marker.
+    const { data: ordersByCode } = await admin
       .from("orders")
       .select("id, code")
       .like("code", pattern);
-    const orderIds = (orders ?? []).map((o) => o.id);
-    const orderCodes = (orders ?? []).map((o) => o.code);
+    const { data: ordersByWh } =
+      whIdsEarly.length > 0
+        ? await admin
+            .from("orders")
+            .select("id, code")
+            .in("warehouse_id", whIdsEarly)
+        : { data: [] as Array<{ id: number; code: string }> };
+    const { data: ordersByCust } =
+      custIdsEarly.length > 0
+        ? await admin
+            .from("orders")
+            .select("id, code")
+            .in("customer_b2b_id", custIdsEarly)
+        : { data: [] as Array<{ id: number; code: string }> };
+
+    const orderMap = new Map<number, string>();
+    for (const o of [
+      ...(ordersByCode ?? []),
+      ...(ordersByWh ?? []),
+      ...(ordersByCust ?? []),
+    ]) {
+      orderMap.set(o.id, o.code);
+    }
+    const orderIds = Array.from(orderMap.keys());
+    const orderCodes = Array.from(orderMap.values());
 
     if (orderCodes.length > 0) {
       await admin
@@ -305,8 +345,15 @@ export async function cleanupTestData(
       await admin.from("orders").delete().in("id", orderIds);
     }
 
-    // 2. Xóa finance_transactions ref tới code marker
+    // 2. Xóa finance_transactions ref tới marker. Test reprocess insert tx
+    //    với code 'PT-{yymmdd}-...' không chứa marker, nhưng
+    //    bank_reference_id (vd 'BF-DRY-REF-{marker}') có chứa marker.
+    //    Dọn cả 2 đường để tránh orphan tích lũy.
     await admin.from("finance_transactions").delete().like("code", pattern);
+    await admin
+      .from("finance_transactions")
+      .delete()
+      .like("bank_reference_id", pattern);
 
     // 3. Xóa inventory_batches có batch_code / warehouse / product marker
     //    (dùng 2 bước vì không có join trong Supabase JS client)
@@ -322,11 +369,7 @@ export async function cleanupTestData(
       .or(`name.like.${pattern},sku.like.${pattern}`);
     const prodIds = (prodRows ?? []).map((p) => p.id);
 
-    const { data: whRows } = await admin
-      .from("warehouses")
-      .select("id")
-      .or(`name.like.${pattern},key.like.${pattern},code.like.${pattern}`);
-    const whIds = (whRows ?? []).map((w) => w.id);
+    const whIds = whIdsEarly;
 
     if (batchIds.length > 0) {
       await admin.from("inventory_batches").delete().in("batch_id", batchIds);
