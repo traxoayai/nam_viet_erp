@@ -6,10 +6,18 @@ BEGIN;
     ALTER TABLE public.users 
     ADD COLUMN IF NOT EXISTS work_state text DEFAULT 'working';
 
-    -- 2. Thêm ràng buộc giá trị cho work_state
-    ALTER TABLE public.users 
-    ADD CONSTRAINT users_work_state_check 
-    CHECK (work_state IN ('working', 'on_leave', 'resigned', 'test'));
+    -- 2. Thêm ràng buộc giá trị cho work_state (idempotent: skip nếu đã tồn tại)
+    DO $$ BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'users_work_state_check'
+              AND conrelid = 'public.users'::regclass
+        ) THEN
+            ALTER TABLE public.users
+            ADD CONSTRAINT users_work_state_check
+            CHECK (work_state IN ('working', 'on_leave', 'resigned', 'test'));
+        END IF;
+    END $$;
 
     -- 3. Cập nhật dữ liệu cũ (Data Migration)
     -- Mặc định tất cả đang active -> working
