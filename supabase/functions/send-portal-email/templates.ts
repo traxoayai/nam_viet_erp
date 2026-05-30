@@ -1,43 +1,7 @@
-export type EmailType = 'registration_received' | 'registration_approved' | 'registration_rejected'
-  | 'admin_new_registration' | 'admin_new_order' | 'admin_payment_received'
-  | 'portal_user_invite' | 'portal_user_reset_password'
-  | 'payment_reminder'
-  | 'payment_received_customer' | 'payment_received_internal'
-
-export interface EmailData {
-  business_name?: string
-  portal_url?: string
-  reason?: string
-  contact_name?: string
-  contact_email?: string
-  contact_phone?: string
-  order_code?: string
-  customer_name?: string
-  total_amount?: number
-  amount?: string
-  partner_name?: string
-  reference?: string
-  description?: string
-  action_link?: string
-  display_name?: string
-  // payment_reminder fields
-  remaining_amount?: number
-  hours_left?: number
-  milestone_idx?: number
-  // payment_received fields
-  final_amount?: number
-  total_paid?: number
-  status_confirmed?: boolean
-}
-
-export function buildHtmlEmail(
-  type: EmailType,
-  data: EmailData,
-): { subject: string; html: string } {
-  const brandColor = '#0d9488'
-  const brandName = 'Nam Việt'
-
-  const wrapper = (title: string, body: string) => `
+export function buildHtmlEmail(type, data) {
+  const brandColor = '#0d9488';
+  const brandName = 'Nam Việt';
+  const wrapper = (title, body)=>`
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -75,16 +39,13 @@ export function buildHtmlEmail(
     </tr>
   </table>
 </body>
-</html>`
-
-  const businessLabel = data.business_name
-    ? `<strong>${data.business_name}</strong>`
-    : 'Quý khách'
-
-  switch (type) {
-    case 'registration_received': {
-      const subject = `[${brandName}] Đã nhận đơn đăng ký của bạn`
-      const body = `
+</html>`;
+  const businessLabel = data.business_name ? `<strong>${data.business_name}</strong>` : 'Quý khách';
+  switch(type){
+    case 'registration_received':
+      {
+        const subject = `[${brandName}] Đã nhận đơn đăng ký của bạn`;
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Xác nhận đơn đăng ký</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Xin chào ${businessLabel},
@@ -100,14 +61,17 @@ export function buildHtmlEmail(
         </div>
         <p style="margin:0;color:#6b7280;font-size:14px;">
           Nếu bạn có thắc mắc, vui lòng liên hệ bộ phận hỗ trợ của chúng tôi.
-        </p>`
-      return { subject, html: wrapper(subject, body) }
-    }
-
-    case 'registration_approved': {
-      const subject = `[${brandName}] Tài khoản của bạn đã được kích hoạt`
-      const portalUrl = data.portal_url || '#'
-      const body = `
+        </p>`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
+    case 'registration_approved':
+      {
+        const subject = `[${brandName}] Tài khoản của bạn đã được kích hoạt`;
+        const portalUrl = data.portal_url || '#';
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Tài khoản đã kích hoạt</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Xin chào ${businessLabel},
@@ -127,14 +91,17 @@ export function buildHtmlEmail(
         </p>
         <p style="margin:16px 0 0;color:#6b7280;font-size:14px;">
           Nếu bạn có thắc mắc, vui lòng liên hệ bộ phận hỗ trợ của chúng tôi.
-        </p>`
-      return { subject, html: wrapper(subject, body) }
-    }
-
-    case 'registration_rejected': {
-      const subject = `[${brandName}] Thông báo về đơn đăng ký`
-      const reason = data.reason || 'Không đủ điều kiện'
-      const body = `
+        </p>`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
+    case 'registration_rejected':
+      {
+        const subject = `[${brandName}] Thông báo về đơn đăng ký`;
+        const reason = data.reason || 'Không đủ điều kiện';
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Kết quả xét duyệt</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Xin chào ${businessLabel},
@@ -151,14 +118,17 @@ export function buildHtmlEmail(
         <p style="margin:0;color:#374151;font-size:15px;line-height:1.6;">
           Bạn có thể liên hệ bộ phận hỗ trợ để được tư vấn thêm hoặc nộp đơn mới sau khi
           đã bổ sung đầy đủ thông tin cần thiết.
-        </p>`
-      return { subject, html: wrapper(subject, body) }
-    }
-
-    case 'admin_new_registration': {
-      const bName = data.business_name || 'Không rõ'
-      const subject = `[${brandName}] Đăng ký Portal mới: ${bName}`
-      const body = `
+        </p>`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
+    case 'admin_new_registration':
+      {
+        const bName = data.business_name || 'Không rõ';
+        const subject = `[${brandName}] Đăng ký Portal mới: ${bName}`;
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Đăng ký Portal mới</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Có một đơn đăng ký Portal mới cần duyệt:
@@ -188,18 +158,19 @@ export function buildHtmlEmail(
              style="display:inline-block;padding:14px 32px;background-color:${brandColor};color:#ffffff;text-decoration:none;border-radius:6px;font-size:16px;font-weight:600;">
             Xem & Duyệt đơn
           </a>
-        </div>`
-      return { subject, html: wrapper(subject, body) }
-    }
-
-    case 'admin_new_order': {
-      const orderCode = data.order_code || 'N/A'
-      const custName = data.customer_name || 'Khách hàng'
-      const totalAmt = data.total_amount != null
-        ? new Intl.NumberFormat('vi-VN').format(data.total_amount) + ' đ'
-        : '0 đ'
-      const subject = `[${brandName}] Đơn hàng Portal mới: ${orderCode}`
-      const body = `
+        </div>`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
+    case 'admin_new_order':
+      {
+        const orderCode = data.order_code || 'N/A';
+        const custName = data.customer_name || 'Khách hàng';
+        const totalAmt = data.total_amount != null ? new Intl.NumberFormat('vi-VN').format(data.total_amount) + ' đ' : '0 đ';
+        const subject = `[${brandName}] Đơn hàng Portal mới: ${orderCode}`;
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Đơn hàng Portal mới</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Có đơn hàng mới từ Portal cần xử lý:
@@ -225,17 +196,20 @@ export function buildHtmlEmail(
              style="display:inline-block;padding:14px 32px;background-color:${brandColor};color:#ffffff;text-decoration:none;border-radius:6px;font-size:16px;font-weight:600;">
             Xem đơn hàng
           </a>
-        </div>`
-      return { subject, html: wrapper(subject, body) }
-    }
-
-    case 'admin_payment_received': {
-      const amt = data.amount || '0 đ'
-      const partner = data.partner_name || 'Không rõ'
-      const ref = data.reference || 'N/A'
-      const desc = data.description || ''
-      const subject = `[${brandName}] Thanh toán mới: ${amt}`
-      const body = `
+        </div>`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
+    case 'admin_payment_received':
+      {
+        const amt = data.amount || '0 đ';
+        const partner = data.partner_name || 'Không rõ';
+        const ref = data.reference || 'N/A';
+        const desc = data.description || '';
+        const subject = `[${brandName}] Thanh toán mới: ${amt}`;
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Thanh toán mới</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Hệ thống vừa ghi nhận một khoản thanh toán:
@@ -265,15 +239,18 @@ export function buildHtmlEmail(
              style="display:inline-block;padding:14px 32px;background-color:${brandColor};color:#ffffff;text-decoration:none;border-radius:6px;font-size:16px;font-weight:600;">
             Xem tài chính
           </a>
-        </div>`
-      return { subject, html: wrapper(subject, body) }
-    }
-
-    case 'portal_user_invite': {
-      const subject = `[${brandName}] Tài khoản Portal đã được tạo`
-      const actionLink = data.action_link || '#'
-      const displayName = data.display_name || data.business_name || 'Quý khách'
-      const body = `
+        </div>`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
+    case 'portal_user_invite':
+      {
+        const subject = `[${brandName}] Tài khoản Portal đã được tạo`;
+        const actionLink = data.action_link || '#';
+        const displayName = data.display_name || data.business_name || 'Quý khách';
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Mời kích hoạt tài khoản Portal</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Xin chào <strong>${displayName}</strong>,
@@ -291,26 +268,23 @@ export function buildHtmlEmail(
         <p style="margin:0;color:#6b7280;font-size:13px;">
           Nếu nút không hoạt động, sao chép liên kết sau vào trình duyệt:<br/>
           <a href="${actionLink}" style="color:${brandColor};word-break:break-all;">${actionLink}</a>
-        </p>`
-      return { subject, html: wrapper(subject, body) }
-    }
-
-    case 'payment_reminder': {
-      const orderCode = data.order_code || 'N/A'
-      const displayName = data.display_name || data.business_name || 'Quý khách'
-      const portalUrl = data.portal_url || '#'
-      const totalAmt = data.total_amount != null
-        ? new Intl.NumberFormat('vi-VN').format(data.total_amount) + ' đ'
-        : '0 đ'
-      const remainAmt = data.remaining_amount != null
-        ? new Intl.NumberFormat('vi-VN').format(data.remaining_amount) + ' đ'
-        : totalAmt
-      const hoursLeft = typeof data.hours_left === 'number' ? Math.max(0, Math.round(data.hours_left)) : 0
-      const subject = `[${brandName}] Nhắc thanh toán đơn ${orderCode}`
-      const urgency = hoursLeft <= 4
-        ? `<strong style="color:#b91c1c;">Đơn sẽ tự hủy trong ~${hoursLeft} giờ nữa nếu chưa thanh toán.</strong>`
-        : `Đơn sẽ tự hủy sau ${hoursLeft} giờ nữa nếu chưa thanh toán.`
-      const body = `
+        </p>`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
+    case 'payment_reminder':
+      {
+        const orderCode = data.order_code || 'N/A';
+        const displayName = data.display_name || data.business_name || 'Quý khách';
+        const portalUrl = data.portal_url || '#';
+        const totalAmt = data.total_amount != null ? new Intl.NumberFormat('vi-VN').format(data.total_amount) + ' đ' : '0 đ';
+        const remainAmt = data.remaining_amount != null ? new Intl.NumberFormat('vi-VN').format(data.remaining_amount) + ' đ' : totalAmt;
+        const hoursLeft = typeof data.hours_left === 'number' ? Math.max(0, Math.round(data.hours_left)) : 0;
+        const subject = `[${brandName}] Nhắc thanh toán đơn ${orderCode}`;
+        const urgency = hoursLeft <= 4 ? `<strong style="color:#b91c1c;">Đơn sẽ tự hủy trong ~${hoursLeft} giờ nữa nếu chưa thanh toán.</strong>` : `Đơn sẽ tự hủy sau ${hoursLeft} giờ nữa nếu chưa thanh toán.`;
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Đơn hàng đang chờ thanh toán</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Xin chào <strong>${displayName}</strong>,
@@ -343,35 +317,24 @@ export function buildHtmlEmail(
         </div>
         <p style="margin:16px 0 0;color:#6b7280;font-size:13px;">
           Nếu bạn đã chuyển khoản, vui lòng bỏ qua email này — hệ thống sẽ tự động cập nhật trong vài phút.
-        </p>`
-      return { subject, html: wrapper(subject, body) }
-    }
-
-    case 'payment_received_customer': {
-      const orderCode = data.order_code || 'N/A'
-      const displayName = data.display_name || data.business_name || 'Quý khách'
-      const amount = data.amount != null
-        ? new Intl.NumberFormat('vi-VN').format(Number(data.amount)) + ' đ'
-        : '0 đ'
-      const totalPaid = data.total_paid != null
-        ? new Intl.NumberFormat('vi-VN').format(data.total_paid) + ' đ'
-        : amount
-      const finalAmt = data.final_amount != null
-        ? new Intl.NumberFormat('vi-VN').format(data.final_amount) + ' đ'
-        : totalPaid
-      const remainAmt = data.remaining_amount != null
-        ? new Intl.NumberFormat('vi-VN').format(data.remaining_amount) + ' đ'
-        : '0 đ'
-      const subject = data.status_confirmed
-        ? `[${brandName}] Đơn ${orderCode} đã thanh toán đủ`
-        : `[${brandName}] Đã nhận ${amount} cho đơn ${orderCode}`
-      const heading = data.status_confirmed
-        ? 'Đơn hàng đã thanh toán đủ'
-        : 'Xác nhận đã nhận thanh toán'
-      const statusRow = data.status_confirmed
-        ? `<tr><td colspan="2" style="padding:8px;background:#dcfce7;color:#166534;border-radius:4px;font-weight:600;">Đơn đã xác nhận, đội kho sẽ sớm chuẩn bị hàng.</td></tr>`
-        : `<tr><td style="padding:4px 8px;font-weight:600;">Còn thiếu:</td><td style="padding:4px 8px;color:#b45309;font-weight:700;">${remainAmt}</td></tr>`
-      const body = `
+        </p>`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
+    case 'payment_received_customer':
+      {
+        const orderCode = data.order_code || 'N/A';
+        const displayName = data.display_name || data.business_name || 'Quý khách';
+        const amount = data.amount != null ? new Intl.NumberFormat('vi-VN').format(Number(data.amount)) + ' đ' : '0 đ';
+        const totalPaid = data.total_paid != null ? new Intl.NumberFormat('vi-VN').format(data.total_paid) + ' đ' : amount;
+        const finalAmt = data.final_amount != null ? new Intl.NumberFormat('vi-VN').format(data.final_amount) + ' đ' : totalPaid;
+        const remainAmt = data.remaining_amount != null ? new Intl.NumberFormat('vi-VN').format(data.remaining_amount) + ' đ' : '0 đ';
+        const subject = data.status_confirmed ? `[${brandName}] Đơn ${orderCode} đã thanh toán đủ` : `[${brandName}] Đã nhận ${amount} cho đơn ${orderCode}`;
+        const heading = data.status_confirmed ? 'Đơn hàng đã thanh toán đủ' : 'Xác nhận đã nhận thanh toán';
+        const statusRow = data.status_confirmed ? `<tr><td colspan="2" style="padding:8px;background:#dcfce7;color:#166534;border-radius:4px;font-weight:600;">Đơn đã xác nhận, đội kho sẽ sớm chuẩn bị hàng.</td></tr>` : `<tr><td style="padding:4px 8px;font-weight:600;">Còn thiếu:</td><td style="padding:4px 8px;color:#b45309;font-weight:700;">${remainAmt}</td></tr>`;
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">${heading}</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Xin chào <strong>${displayName}</strong>,
@@ -398,40 +361,38 @@ export function buildHtmlEmail(
         </div>
         <p style="margin:16px 0 0;color:#6b7280;font-size:13px;">
           Cảm ơn Quý khách đã tin tưởng ${brandName}.
-        </p>`
-      return { subject, html: wrapper(subject, body) }
-    }
-
-    case 'payment_received_internal': {
-      const orderCode = data.order_code || 'N/A'
-      const customerName = data.customer_name || 'Khách lẻ'
-      const amount = data.amount != null
-        ? new Intl.NumberFormat('vi-VN').format(Number(data.amount)) + ' đ'
-        : '0 đ'
-      const finalAmt = data.final_amount != null
-        ? new Intl.NumberFormat('vi-VN').format(data.final_amount) + ' đ'
-        : '-'
-      const remainAmt = data.remaining_amount != null
-        ? new Intl.NumberFormat('vi-VN').format(data.remaining_amount) + ' đ'
-        : '0 đ'
-      const subject = `[ERP] ${customerName} đã thanh toán ${amount} — đơn ${orderCode}`
-      const statusLine = data.status_confirmed
-        ? `<p style="margin:0 0 12px;color:#166534;font-weight:600;">Đơn đã chuyển CONFIRMED, sẵn sàng đóng gói.</p>`
-        : `<p style="margin:0 0 12px;color:#b45309;">Đơn vẫn đang chờ đủ tiền. Còn thiếu: <strong>${remainAmt}</strong>.</p>`
-      const body = `
+        </p>`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
+    case 'payment_received_internal':
+      {
+        const orderCode = data.order_code || 'N/A';
+        const customerName = data.customer_name || 'Khách lẻ';
+        const amount = data.amount != null ? new Intl.NumberFormat('vi-VN').format(Number(data.amount)) + ' đ' : '0 đ';
+        const finalAmt = data.final_amount != null ? new Intl.NumberFormat('vi-VN').format(data.final_amount) + ' đ' : '-';
+        const remainAmt = data.remaining_amount != null ? new Intl.NumberFormat('vi-VN').format(data.remaining_amount) + ' đ' : '0 đ';
+        const subject = `[ERP] ${customerName} đã thanh toán ${amount} — đơn ${orderCode}`;
+        const statusLine = data.status_confirmed ? `<p style="margin:0 0 12px;color:#166534;font-weight:600;">Đơn đã chuyển CONFIRMED, sẵn sàng đóng gói.</p>` : `<p style="margin:0 0 12px;color:#b45309;">Đơn vẫn đang chờ đủ tiền. Còn thiếu: <strong>${remainAmt}</strong>.</p>`;
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Thông báo thu tiền nội bộ</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Khách <strong>${customerName}</strong> đã thanh toán <strong>${amount}</strong> cho đơn <strong>${orderCode}</strong> (tổng đơn ${finalAmt}).
         </p>
-        ${statusLine}`
-      return { subject, html: wrapper(subject, body) }
-    }
-
-    case 'portal_user_reset_password': {
-      const subject = `[${brandName}] Yêu cầu đặt lại mật khẩu Portal`
-      const actionLink = data.action_link || '#'
-      const displayName = data.display_name || data.business_name || 'Quý khách'
-      const body = `
+        ${statusLine}`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
+    case 'portal_user_reset_password':
+      {
+        const subject = `[${brandName}] Yêu cầu đặt lại mật khẩu Portal`;
+        const actionLink = data.action_link || '#';
+        const displayName = data.display_name || data.business_name || 'Quý khách';
+        const body = `
         <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">Đặt lại mật khẩu</h2>
         <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.6;">
           Xin chào <strong>${displayName}</strong>,
@@ -449,8 +410,11 @@ export function buildHtmlEmail(
         <p style="margin:0;color:#6b7280;font-size:13px;">
           Nếu bạn không thực hiện yêu cầu này, có thể bỏ qua email.<br/>
           Liên kết trực tiếp: <a href="${actionLink}" style="color:${brandColor};word-break:break-all;">${actionLink}</a>
-        </p>`
-      return { subject, html: wrapper(subject, body) }
-    }
+        </p>`;
+        return {
+          subject,
+          html: wrapper(subject, body)
+        };
+      }
   }
 }

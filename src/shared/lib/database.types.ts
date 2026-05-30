@@ -14,6 +14,135 @@ export type Database = {
   }
   public: {
     Tables: {
+      _revert_double_deduct_20260417: {
+        Row: {
+          action: string
+          id: number
+          payload: Json
+          snapshot_at: string
+        }
+        Insert: {
+          action: string
+          id?: number
+          payload: Json
+          snapshot_at?: string
+        }
+        Update: {
+          action?: string
+          id?: number
+          payload?: Json
+          snapshot_at?: string
+        }
+        Relationships: []
+      }
+      _revert_double_deduct_20260418: {
+        Row: {
+          action: string
+          id: number
+          payload: Json
+          snapshot_at: string
+        }
+        Insert: {
+          action: string
+          id?: number
+          payload: Json
+          snapshot_at?: string
+        }
+        Update: {
+          action?: string
+          id?: number
+          payload?: Json
+          snapshot_at?: string
+        }
+        Relationships: []
+      }
+      _revert_double_deduct_20260423: {
+        Row: {
+          action: string
+          id: number
+          payload: Json
+          snapshot_at: string
+        }
+        Insert: {
+          action: string
+          id?: number
+          payload: Json
+          snapshot_at?: string
+        }
+        Update: {
+          action?: string
+          id?: number
+          payload?: Json
+          snapshot_at?: string
+        }
+        Relationships: []
+      }
+      _stock_adjust_oversell_failures: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: number
+          missing_base_qty: number
+          order_code: string
+          product_id: number
+          uom: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: number
+          missing_base_qty: number
+          order_code: string
+          product_id: number
+          uom: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: number
+          missing_base_qty?: number
+          order_code?: string
+          product_id?: number
+          uom?: string
+        }
+        Relationships: []
+      }
+      _unit_normalize_skipped: {
+        Row: {
+          canonical: string | null
+          created_at: string | null
+          existing_canonical_conv: number | null
+          id: number
+          product_id: number | null
+          reason: string | null
+          unit_type: string | null
+          variant: string | null
+          variant_conv: number | null
+        }
+        Insert: {
+          canonical?: string | null
+          created_at?: string | null
+          existing_canonical_conv?: number | null
+          id?: number
+          product_id?: number | null
+          reason?: string | null
+          unit_type?: string | null
+          variant?: string | null
+          variant_conv?: number | null
+        }
+        Update: {
+          canonical?: string | null
+          created_at?: string | null
+          existing_canonical_conv?: number | null
+          id?: number
+          product_id?: number | null
+          reason?: string | null
+          unit_type?: string | null
+          variant?: string | null
+          variant_conv?: number | null
+        }
+        Relationships: []
+      }
       appointments: {
         Row: {
           appointment_time: string
@@ -277,6 +406,95 @@ export type Database = {
           },
         ]
       }
+      b2b_notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          customer_b2b_id: number | null
+          data: Json | null
+          id: string
+          is_read: boolean
+          read_at: string | null
+          title: string
+          type: Database["public"]["Enums"]["b2b_notification_type"]
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          customer_b2b_id?: number | null
+          data?: Json | null
+          id?: string
+          is_read?: boolean
+          read_at?: string | null
+          title: string
+          type?: Database["public"]["Enums"]["b2b_notification_type"]
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          customer_b2b_id?: number | null
+          data?: Json | null
+          id?: string
+          is_read?: boolean
+          read_at?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["b2b_notification_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "b2b_notifications_customer_b2b_id_fkey"
+            columns: ["customer_b2b_id"]
+            isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "b2b_notifications_customer_b2b_id_fkey"
+            columns: ["customer_b2b_id"]
+            isOneToOne: false
+            referencedRelation: "customers_b2b"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      b2b_push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          portal_user_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          portal_user_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          portal_user_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "b2b_push_subscriptions_portal_user_id_fkey"
+            columns: ["portal_user_id"]
+            isOneToOne: false
+            referencedRelation: "portal_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       banks: {
         Row: {
           bin: string
@@ -321,47 +539,49 @@ export type Database = {
       }
       batch_revaluations: {
         Row: {
-          id: number
           batch_id: number
-          product_id: number
-          warehouse_id: number | null
-          old_price: number
-          new_price: number
-          qty_at_change: number
-          delta_value: number
-          reason_code: "data_fix" | "supplier_adjust" | "nrv_writedown"
-          note: string | null
-          vat_synced: boolean
-          user_id: string | null
           created_at: string
+          delta_value: number | null
+          id: number
+          new_price: number
+          note: string | null
+          old_price: number
+          product_id: number
+          qty_at_change: number
+          reason_code: string
+          user_id: string | null
+          vat_synced: boolean
+          warehouse_id: number | null
         }
         Insert: {
-          id?: number
           batch_id: number
-          product_id: number
-          warehouse_id?: number | null
-          old_price: number
-          new_price: number
-          qty_at_change: number
-          reason_code: "data_fix" | "supplier_adjust" | "nrv_writedown"
-          note?: string | null
-          vat_synced?: boolean
-          user_id?: string | null
           created_at?: string
+          delta_value?: number | null
+          id?: number
+          new_price: number
+          note?: string | null
+          old_price: number
+          product_id: number
+          qty_at_change: number
+          reason_code: string
+          user_id?: string | null
+          vat_synced?: boolean
+          warehouse_id?: number | null
         }
         Update: {
-          id?: number
           batch_id?: number
-          product_id?: number
-          warehouse_id?: number | null
-          old_price?: number
-          new_price?: number
-          qty_at_change?: number
-          reason_code?: "data_fix" | "supplier_adjust" | "nrv_writedown"
-          note?: string | null
-          vat_synced?: boolean
-          user_id?: string | null
           created_at?: string
+          delta_value?: number | null
+          id?: number
+          new_price?: number
+          note?: string | null
+          old_price?: number
+          product_id?: number
+          qty_at_change?: number
+          reason_code?: string
+          user_id?: string | null
+          vat_synced?: boolean
+          warehouse_id?: number | null
         }
         Relationships: [
           {
@@ -376,6 +596,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "batch_revaluations_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]
@@ -414,6 +641,50 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          created_at: string
+          id: number
+          image_url: string | null
+          name: string
+          parent_id: number | null
+          slug: string
+          sort_order: number | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          image_url?: string | null
+          name: string
+          parent_id?: number | null
+          slug: string
+          sort_order?: number | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          image_url?: string | null
+          name?: string
+          parent_id?: number | null
+          slug?: string
+          sort_order?: number | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
             referencedColumns: ["id"]
           },
         ]
@@ -464,6 +735,273 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      chat_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          expires_at: string
+          hits: number
+          response: Json
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          expires_at: string
+          hits?: number
+          response: Json
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          expires_at?: string
+          hits?: number
+          response?: Json
+        }
+        Relationships: []
+      }
+      chat_compliance_audits: {
+        Row: {
+          audited_at: string
+          excerpt: string | null
+          id: string
+          matched_keywords: string[] | null
+          message_id: string
+          reviewed_at: string | null
+          reviewer_id: string | null
+          reviewer_note: string | null
+          rule_code: string
+          session_id: string
+          severity: string
+          status: string
+        }
+        Insert: {
+          audited_at?: string
+          excerpt?: string | null
+          id?: string
+          matched_keywords?: string[] | null
+          message_id: string
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          reviewer_note?: string | null
+          rule_code: string
+          session_id: string
+          severity: string
+          status?: string
+        }
+        Update: {
+          audited_at?: string
+          excerpt?: string | null
+          id?: string
+          matched_keywords?: string[] | null
+          message_id?: string
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          reviewer_note?: string | null
+          rule_code?: string
+          session_id?: string
+          severity?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_compliance_audits_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_compliance_audits_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_feedback: {
+        Row: {
+          created_at: string
+          feedback_type: string
+          id: string
+          message_id: string
+          note: string | null
+          reporter_id: string
+        }
+        Insert: {
+          created_at?: string
+          feedback_type: string
+          id?: string
+          message_id: string
+          note?: string | null
+          reporter_id: string
+        }
+        Update: {
+          created_at?: string
+          feedback_type?: string
+          id?: string
+          message_id?: string
+          note?: string | null
+          reporter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_feedback_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_feedback_weekly_clusters: {
+        Row: {
+          created_at: string
+          feedback_count: number
+          id: number
+          pattern_keyword: string
+          sample_message_ids: string[]
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          feedback_count: number
+          id?: number
+          pattern_keyword: string
+          sample_message_ids: string[]
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          feedback_count?: number
+          id?: number
+          pattern_keyword?: string
+          sample_message_ids?: string[]
+          week_start?: string
+        }
+        Relationships: []
+      }
+      chat_handoffs: {
+        Row: {
+          created_at: string
+          id: string
+          reason: string
+          resolved_at: string | null
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reason: string
+          resolved_at?: string | null
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reason?: string
+          resolved_at?: string | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_handoffs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          attachments: Json | null
+          content: string | null
+          content_type: string
+          created_at: string
+          deleted_at: string | null
+          entities: Json | null
+          id: string
+          intent: string | null
+          llm_meta: Json | null
+          role: string
+          session_id: string
+        }
+        Insert: {
+          attachments?: Json | null
+          content?: string | null
+          content_type: string
+          created_at?: string
+          deleted_at?: string | null
+          entities?: Json | null
+          id?: string
+          intent?: string | null
+          llm_meta?: Json | null
+          role: string
+          session_id: string
+        }
+        Update: {
+          attachments?: Json | null
+          content?: string | null
+          content_type?: string
+          created_at?: string
+          deleted_at?: string | null
+          entities?: Json | null
+          id?: string
+          intent?: string | null
+          llm_meta?: Json | null
+          role?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sessions: {
+        Row: {
+          assigned_sales_id: string | null
+          closed_at: string | null
+          context: Json
+          draft_cart_id: string | null
+          id: string
+          last_activity_at: string
+          platform: string
+          started_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          assigned_sales_id?: string | null
+          closed_at?: string | null
+          context?: Json
+          draft_cart_id?: string | null
+          id?: string
+          last_activity_at?: string
+          platform?: string
+          started_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          assigned_sales_id?: string | null
+          closed_at?: string | null
+          context?: Json
+          draft_cart_id?: string | null
+          id?: string
+          last_activity_at?: string
+          platform?: string
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       clinical_prescription_items: {
         Row: {
@@ -920,6 +1458,49 @@ export type Database = {
           },
         ]
       }
+      customer_favorites: {
+        Row: {
+          created_at: string | null
+          customer_b2b_id: number
+          id: string
+          product_id: number
+        }
+        Insert: {
+          created_at?: string | null
+          customer_b2b_id: number
+          id?: string
+          product_id: number
+        }
+        Update: {
+          created_at?: string | null
+          customer_b2b_id?: number
+          id?: string
+          product_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_favorites_customer_b2b_id_fkey"
+            columns: ["customer_b2b_id"]
+            isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_favorites_customer_b2b_id_fkey"
+            columns: ["customer_b2b_id"]
+            isOneToOne: false
+            referencedRelation: "customers_b2b"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_favorites_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_guardians: {
         Row: {
           customer_id: number
@@ -1343,6 +1924,7 @@ export type Database = {
           business_license_url: string | null
           created_at: string | null
           current_debt: number | null
+          current_debt_bak: number | null
           customer_code: string | null
           debt_limit: number | null
           email: string | null
@@ -1369,6 +1951,7 @@ export type Database = {
           business_license_url?: string | null
           created_at?: string | null
           current_debt?: number | null
+          current_debt_bak?: number | null
           customer_code?: string | null
           debt_limit?: number | null
           email?: string | null
@@ -1395,6 +1978,7 @@ export type Database = {
           business_license_url?: string | null
           created_at?: string | null
           current_debt?: number | null
+          current_debt_bak?: number | null
           customer_code?: string | null
           debt_limit?: number | null
           email?: string | null
@@ -1412,6 +1996,109 @@ export type Database = {
           tax_code?: string | null
           updated_at?: string | null
           vat_address?: string | null
+        }
+        Relationships: []
+      }
+      deal_items: {
+        Row: {
+          created_at: string
+          deal_id: number
+          id: number
+          override_discount_type: string | null
+          override_discount_value: number | null
+          product_id: number
+        }
+        Insert: {
+          created_at?: string
+          deal_id: number
+          id?: number
+          override_discount_type?: string | null
+          override_discount_value?: number | null
+          product_id: number
+        }
+        Update: {
+          created_at?: string
+          deal_id?: number
+          id?: number
+          override_discount_type?: string | null
+          override_discount_value?: number | null
+          product_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_items_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "product_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_items_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_deals"
+            referencedColumns: ["deal_id"]
+          },
+          {
+            foreignKeyName: "deal_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_routes: {
+        Row: {
+          created_at: string | null
+          day_of_week: number
+          district_codes: string[]
+          id: number
+          is_active: boolean | null
+          route_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          day_of_week: number
+          district_codes: string[]
+          id?: never
+          is_active?: boolean | null
+          route_name: string
+        }
+        Update: {
+          created_at?: string | null
+          day_of_week?: number
+          district_codes?: string[]
+          id?: never
+          is_active?: boolean | null
+          route_name?: string
+        }
+        Relationships: []
+      }
+      delivery_schedule_overrides: {
+        Row: {
+          created_at: string | null
+          district_codes: string[] | null
+          id: number
+          override_date: string
+          reason: string | null
+          route_name: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          district_codes?: string[] | null
+          id?: never
+          override_date: string
+          reason?: string | null
+          route_name?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          district_codes?: string[] | null
+          id?: never
+          override_date?: string
+          reason?: string | null
+          route_name?: string | null
         }
         Relationships: []
       }
@@ -1492,16 +2179,19 @@ export type Database = {
       }
       finance_invoices: {
         Row: {
+          buyer_tax_code: string | null
           created_at: string | null
           created_by: string | null
+          direction: string | null
           file_type: string | null
-          file_url: string
+          file_url: string | null
           id: number
           invoice_date: string | null
           invoice_number: string | null
           invoice_symbol: string | null
           items_json: Json | null
           parsed_data: Json | null
+          raw_items: Json | null
           status: string | null
           supplier_address_raw: string | null
           supplier_id: number | null
@@ -1513,16 +2203,19 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          buyer_tax_code?: string | null
           created_at?: string | null
           created_by?: string | null
+          direction?: string | null
           file_type?: string | null
-          file_url: string
+          file_url?: string | null
           id?: number
           invoice_date?: string | null
           invoice_number?: string | null
           invoice_symbol?: string | null
           items_json?: Json | null
           parsed_data?: Json | null
+          raw_items?: Json | null
           status?: string | null
           supplier_address_raw?: string | null
           supplier_id?: number | null
@@ -1534,16 +2227,19 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          buyer_tax_code?: string | null
           created_at?: string | null
           created_by?: string | null
+          direction?: string | null
           file_type?: string | null
-          file_url?: string
+          file_url?: string | null
           id?: number
           invoice_date?: string | null
           invoice_number?: string | null
           invoice_symbol?: string | null
           items_json?: Json | null
           parsed_data?: Json | null
+          raw_items?: Json | null
           status?: string | null
           supplier_address_raw?: string | null
           supplier_id?: number | null
@@ -2359,6 +3055,92 @@ export type Database = {
           },
         ]
       }
+      llm_request_log: {
+        Row: {
+          attempted_providers: string[] | null
+          created_at: string
+          error_message: string | null
+          id: number
+          latency_ms: number | null
+          model: string | null
+          provider: string
+          session_id: string | null
+          status: string
+          tokens_in: number | null
+          tokens_out: number | null
+          user_id: string | null
+        }
+        Insert: {
+          attempted_providers?: string[] | null
+          created_at?: string
+          error_message?: string | null
+          id?: number
+          latency_ms?: number | null
+          model?: string | null
+          provider: string
+          session_id?: string | null
+          status: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          attempted_providers?: string[] | null
+          created_at?: string
+          error_message?: string | null
+          id?: number
+          latency_ms?: number | null
+          model?: string | null
+          provider?: string
+          session_id?: string | null
+          status?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_request_log_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      manufacturers: {
+        Row: {
+          country: string | null
+          created_at: string
+          id: number
+          logo_url: string | null
+          name: string
+          slug: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          id?: number
+          logo_url?: string | null
+          name: string
+          slug: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          id?: number
+          logo_url?: string | null
+          name?: string
+          slug?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       medical_visits: {
         Row: {
           appointment_id: string | null
@@ -2515,30 +3297,36 @@ export type Database = {
       }
       notifications: {
         Row: {
+          category: string | null
           created_at: string | null
           id: string
           is_read: boolean | null
           message: string | null
+          metadata: Json | null
           reference_id: string | null
           title: string
           type: string | null
           user_id: string
         }
         Insert: {
+          category?: string | null
           created_at?: string | null
           id?: string
           is_read?: boolean | null
           message?: string | null
+          metadata?: Json | null
           reference_id?: string | null
           title: string
           type?: string | null
           user_id: string
         }
         Update: {
+          category?: string | null
           created_at?: string | null
           id?: string
           is_read?: boolean | null
           message?: string | null
+          metadata?: Json | null
           reference_id?: string | null
           title?: string
           type?: string | null
@@ -2621,11 +3409,52 @@ export type Database = {
           },
         ]
       }
+      order_status_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          id: number
+          new_status: string
+          old_status: string | null
+          order_id: string
+          reason: string | null
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          id?: number
+          new_status: string
+          old_status?: string | null
+          order_id: string
+          reason?: string | null
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          id?: number
+          new_status?: string
+          old_status?: string | null
+          order_id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_status_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           code: string
           created_at: string | null
           creator_id: string | null
+          custom_vehicle_name: string | null
+          custom_vehicle_phone: string | null
+          custom_vehicle_route: string | null
           customer_b2c_id: number | null
           customer_id: number | null
           delivery_address: string | null
@@ -2648,10 +3477,13 @@ export type Database = {
           quote_expires_at: string | null
           remittance_status: string | null
           remittance_transaction_id: number | null
+          shipping_address_id: number | null
           shipping_fee: number | null
           shipping_partner_id: number | null
-          status: string | null
+          source: string | null
+          status: string
           total_amount: number | null
+          transport_vehicle_id: number | null
           updated_at: string | null
           warehouse_id: number | null
         }
@@ -2659,6 +3491,9 @@ export type Database = {
           code: string
           created_at?: string | null
           creator_id?: string | null
+          custom_vehicle_name?: string | null
+          custom_vehicle_phone?: string | null
+          custom_vehicle_route?: string | null
           customer_b2c_id?: number | null
           customer_id?: number | null
           delivery_address?: string | null
@@ -2681,10 +3516,13 @@ export type Database = {
           quote_expires_at?: string | null
           remittance_status?: string | null
           remittance_transaction_id?: number | null
+          shipping_address_id?: number | null
           shipping_fee?: number | null
           shipping_partner_id?: number | null
-          status?: string | null
+          source?: string | null
+          status?: string
           total_amount?: number | null
+          transport_vehicle_id?: number | null
           updated_at?: string | null
           warehouse_id?: number | null
         }
@@ -2692,6 +3530,9 @@ export type Database = {
           code?: string
           created_at?: string | null
           creator_id?: string | null
+          custom_vehicle_name?: string | null
+          custom_vehicle_phone?: string | null
+          custom_vehicle_route?: string | null
           customer_b2c_id?: number | null
           customer_id?: number | null
           delivery_address?: string | null
@@ -2714,10 +3555,13 @@ export type Database = {
           quote_expires_at?: string | null
           remittance_status?: string | null
           remittance_transaction_id?: number | null
+          shipping_address_id?: number | null
           shipping_fee?: number | null
           shipping_partner_id?: number | null
-          status?: string | null
+          source?: string | null
+          status?: string
           total_amount?: number | null
+          transport_vehicle_id?: number | null
           updated_at?: string | null
           warehouse_id?: number | null
         }
@@ -2751,10 +3595,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "orders_shipping_address_id_fkey"
+            columns: ["shipping_address_id"]
+            isOneToOne: false
+            referencedRelation: "shipping_addresses"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "orders_shipping_partner_id_fkey"
             columns: ["shipping_partner_id"]
             isOneToOne: false
             referencedRelation: "shipping_partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_transport_vehicle_id_fkey"
+            columns: ["transport_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "transport_vehicles"
             referencedColumns: ["id"]
           },
           {
@@ -2833,6 +3691,114 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      portal_cart_items: {
+        Row: {
+          conversion_factor: number
+          created_at: string
+          id: string
+          portal_user_id: string
+          product_id: number
+          quantity: number
+          unit_price: number
+          uom: string
+          updated_at: string
+        }
+        Insert: {
+          conversion_factor?: number
+          created_at?: string
+          id?: string
+          portal_user_id: string
+          product_id: number
+          quantity: number
+          unit_price: number
+          uom: string
+          updated_at?: string
+        }
+        Update: {
+          conversion_factor?: number
+          created_at?: string
+          id?: string
+          portal_user_id?: string
+          product_id?: number
+          quantity?: number
+          unit_price?: number
+          uom?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_cart_items_portal_user_id_fkey"
+            columns: ["portal_user_id"]
+            isOneToOne: false
+            referencedRelation: "portal_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_cart_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_users: {
+        Row: {
+          auth_user_id: string
+          created_at: string | null
+          customer_b2b_id: number
+          display_name: string | null
+          email: string
+          id: string
+          last_login_at: string | null
+          phone: string | null
+          role: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string | null
+          customer_b2b_id: number
+          display_name?: string | null
+          email: string
+          id?: string
+          last_login_at?: string | null
+          phone?: string | null
+          role?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string | null
+          customer_b2b_id?: number
+          display_name?: string | null
+          email?: string
+          id?: string
+          last_login_at?: string | null
+          phone?: string | null
+          role?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_users_customer_b2b_id_fkey"
+            columns: ["customer_b2b_id"]
+            isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "portal_users_customer_b2b_id_fkey"
+            columns: ["customer_b2b_id"]
+            isOneToOne: false
+            referencedRelation: "customers_b2b"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       prescription_template_items: {
         Row: {
@@ -3005,6 +3971,48 @@ export type Database = {
           },
         ]
       }
+      product_deals: {
+        Row: {
+          created_at: string
+          description: string | null
+          discount_type: string
+          discount_value: number
+          end_date: string | null
+          id: number
+          name: string
+          slug: string
+          start_date: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          discount_type?: string
+          discount_value: number
+          end_date?: string | null
+          id?: number
+          name: string
+          slug: string
+          start_date?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          end_date?: string | null
+          id?: number
+          name?: string
+          slug?: string
+          start_date?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       product_inventory: {
         Row: {
           id: number
@@ -3061,6 +4069,38 @@ export type Database = {
             columns: ["warehouse_id"]
             isOneToOne: false
             referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_synonyms: {
+        Row: {
+          created_at: string
+          id: number
+          product_id: number
+          synonym: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          product_id: number
+          synonym: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          product_id?: number
+          synonym?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_synonyms_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -3128,6 +4168,7 @@ export type Database = {
           barcode: string | null
           carton_dimensions: string | null
           carton_weight: number | null
+          category_id: number | null
           category_name: string | null
           conversion_factor: number | null
           created_at: string | null
@@ -3138,6 +4179,7 @@ export type Database = {
           image_url: string | null
           invoice_price: number | null
           items_per_carton: number | null
+          manufacturer_id: number | null
           manufacturer_name: string | null
           name: string
           packing_spec: string | null
@@ -3152,6 +4194,7 @@ export type Database = {
           stock_management_type:
             | Database["public"]["Enums"]["stock_management_type"]
             | null
+          stock_status: string | null
           updated_at: string | null
           updated_by: string | null
           usage_instructions: Json | null
@@ -3166,6 +4209,7 @@ export type Database = {
           barcode?: string | null
           carton_dimensions?: string | null
           carton_weight?: number | null
+          category_id?: number | null
           category_name?: string | null
           conversion_factor?: number | null
           created_at?: string | null
@@ -3176,6 +4220,7 @@ export type Database = {
           image_url?: string | null
           invoice_price?: number | null
           items_per_carton?: number | null
+          manufacturer_id?: number | null
           manufacturer_name?: string | null
           name: string
           packing_spec?: string | null
@@ -3190,6 +4235,7 @@ export type Database = {
           stock_management_type?:
             | Database["public"]["Enums"]["stock_management_type"]
             | null
+          stock_status?: string | null
           updated_at?: string | null
           updated_by?: string | null
           usage_instructions?: Json | null
@@ -3204,6 +4250,7 @@ export type Database = {
           barcode?: string | null
           carton_dimensions?: string | null
           carton_weight?: number | null
+          category_id?: number | null
           category_name?: string | null
           conversion_factor?: number | null
           created_at?: string | null
@@ -3214,6 +4261,7 @@ export type Database = {
           image_url?: string | null
           invoice_price?: number | null
           items_per_carton?: number | null
+          manufacturer_id?: number | null
           manufacturer_name?: string | null
           name?: string
           packing_spec?: string | null
@@ -3228,6 +4276,7 @@ export type Database = {
           stock_management_type?:
             | Database["public"]["Enums"]["stock_management_type"]
             | null
+          stock_status?: string | null
           updated_at?: string | null
           updated_by?: string | null
           usage_instructions?: Json | null
@@ -3238,10 +4287,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "products_distributor_id_fkey"
             columns: ["distributor_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_manufacturer_id_fkey"
+            columns: ["manufacturer_id"]
+            isOneToOne: false
+            referencedRelation: "manufacturers"
             referencedColumns: ["id"]
           },
         ]
@@ -3344,6 +4407,7 @@ export type Database = {
         Row: {
           created_at: string | null
           customer_id: number
+          discount_amount: number
           id: string
           order_id: string | null
           promotion_id: string
@@ -3351,6 +4415,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           customer_id: number
+          discount_amount?: number
           id?: string
           order_id?: string | null
           promotion_id: string
@@ -3358,6 +4423,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           customer_id?: number
+          discount_amount?: number
           id?: string
           order_id?: string | null
           promotion_id?: string
@@ -3537,6 +4603,7 @@ export type Database = {
           carrier_name: string | null
           carrier_phone: string | null
           code: string
+          costing_confirmed_at: string | null
           created_at: string
           creator_id: string | null
           delivery_method: string | null
@@ -3548,6 +4615,7 @@ export type Database = {
           id: number
           note: string | null
           payment_status: string | null
+          receipt_draft: Json | null
           shipping_fee: number | null
           shipping_partner_id: number | null
           status: string | null
@@ -3562,6 +4630,7 @@ export type Database = {
           carrier_name?: string | null
           carrier_phone?: string | null
           code: string
+          costing_confirmed_at?: string | null
           created_at?: string
           creator_id?: string | null
           delivery_method?: string | null
@@ -3573,6 +4642,7 @@ export type Database = {
           id?: number
           note?: string | null
           payment_status?: string | null
+          receipt_draft?: Json | null
           shipping_fee?: number | null
           shipping_partner_id?: number | null
           status?: string | null
@@ -3587,6 +4657,7 @@ export type Database = {
           carrier_name?: string | null
           carrier_phone?: string | null
           code?: string
+          costing_confirmed_at?: string | null
           created_at?: string
           creator_id?: string | null
           delivery_method?: string | null
@@ -3598,6 +4669,7 @@ export type Database = {
           id?: number
           note?: string | null
           payment_status?: string | null
+          receipt_draft?: Json | null
           shipping_fee?: number | null
           shipping_partner_id?: number | null
           status?: string | null
@@ -3620,6 +4692,87 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      registration_requests: {
+        Row: {
+          address: string | null
+          approved_at: string | null
+          approved_by: string | null
+          approved_customer_b2b_id: number | null
+          approved_portal_user_id: string | null
+          auth_user_id: string | null
+          business_name: string
+          contact_email: string | null
+          contact_name: string
+          contact_phone: string | null
+          created_at: string
+          email: string
+          id: string
+          note: string | null
+          phone: string
+          rejection_reason: string | null
+          status: string
+          tax_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_customer_b2b_id?: number | null
+          approved_portal_user_id?: string | null
+          auth_user_id?: string | null
+          business_name: string
+          contact_email?: string | null
+          contact_name: string
+          contact_phone?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          note?: string | null
+          phone: string
+          rejection_reason?: string | null
+          status?: string
+          tax_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_customer_b2b_id?: number | null
+          approved_portal_user_id?: string | null
+          auth_user_id?: string | null
+          business_name?: string
+          contact_email?: string | null
+          contact_name?: string
+          contact_phone?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          note?: string | null
+          phone?: string
+          rejection_reason?: string | null
+          status?: string
+          tax_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registration_requests_approved_customer_b2b_id_fkey"
+            columns: ["approved_customer_b2b_id"]
+            isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "registration_requests_approved_customer_b2b_id_fkey"
+            columns: ["approved_customer_b2b_id"]
+            isOneToOne: false
+            referencedRelation: "customers_b2b"
             referencedColumns: ["id"]
           },
         ]
@@ -3675,6 +4828,51 @@ export type Database = {
         }
         Relationships: []
       }
+      rpc_access_rules: {
+        Row: {
+          description: string | null
+          function_name: string
+          is_write: boolean | null
+          max_calls_per_minute: number | null
+          required_permission: string | null
+        }
+        Insert: {
+          description?: string | null
+          function_name: string
+          is_write?: boolean | null
+          max_calls_per_minute?: number | null
+          required_permission?: string | null
+        }
+        Update: {
+          description?: string | null
+          function_name?: string
+          is_write?: boolean | null
+          max_calls_per_minute?: number | null
+          required_permission?: string | null
+        }
+        Relationships: []
+      }
+      rpc_rate_log: {
+        Row: {
+          called_at: string
+          function_name: string
+          id: number
+          user_id: string
+        }
+        Insert: {
+          called_at?: string
+          function_name: string
+          id?: number
+          user_id: string
+        }
+        Update: {
+          called_at?: string
+          function_name?: string
+          id?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       sales_invoices: {
         Row: {
           buyer_address: string | null
@@ -3696,6 +4894,7 @@ export type Database = {
           payment_method: string | null
           status: string
           total_amount_pre_tax: number | null
+          tracking_code: string | null
           updated_at: string | null
           vat_amount: number | null
           vat_rate: number | null
@@ -3720,6 +4919,7 @@ export type Database = {
           payment_method?: string | null
           status?: string
           total_amount_pre_tax?: number | null
+          tracking_code?: string | null
           updated_at?: string | null
           vat_amount?: number | null
           vat_rate?: number | null
@@ -3744,6 +4944,7 @@ export type Database = {
           payment_method?: string | null
           status?: string
           total_amount_pre_tax?: number | null
+          tracking_code?: string | null
           updated_at?: string | null
           vat_amount?: number | null
           vat_rate?: number | null
@@ -4039,6 +5240,96 @@ export type Database = {
             referencedColumns: ["account_code"]
           },
         ]
+      }
+      shipping_addresses: {
+        Row: {
+          created_at: string | null
+          customer_b2b_id: number
+          district_code: string
+          full_address: string
+          id: number
+          is_default: boolean | null
+          label: string | null
+          province_code: string
+          street: string | null
+          updated_at: string | null
+          ward_code: string
+        }
+        Insert: {
+          created_at?: string | null
+          customer_b2b_id: number
+          district_code: string
+          full_address: string
+          id?: never
+          is_default?: boolean | null
+          label?: string | null
+          province_code: string
+          street?: string | null
+          updated_at?: string | null
+          ward_code: string
+        }
+        Update: {
+          created_at?: string | null
+          customer_b2b_id?: number
+          district_code?: string
+          full_address?: string
+          id?: never
+          is_default?: boolean | null
+          label?: string | null
+          province_code?: string
+          street?: string | null
+          updated_at?: string | null
+          ward_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipping_addresses_customer_b2b_id_fkey"
+            columns: ["customer_b2b_id"]
+            isOneToOne: false
+            referencedRelation: "b2b_customer_debt_view"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "shipping_addresses_customer_b2b_id_fkey"
+            columns: ["customer_b2b_id"]
+            isOneToOne: false
+            referencedRelation: "customers_b2b"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shipping_fee_config: {
+        Row: {
+          delivery_method: string
+          estimated_days_max: number
+          estimated_days_min: number
+          estimated_text: string | null
+          flat_fee: number
+          id: number
+          is_active: boolean
+          updated_at: string
+        }
+        Insert: {
+          delivery_method: string
+          estimated_days_max?: number
+          estimated_days_min?: number
+          estimated_text?: string | null
+          flat_fee?: number
+          id?: number
+          is_active?: boolean
+          updated_at?: string
+        }
+        Update: {
+          delivery_method?: string
+          estimated_days_max?: number
+          estimated_days_min?: number
+          estimated_text?: string | null
+          flat_fee?: number
+          id?: number
+          is_active?: boolean
+          updated_at?: string
+        }
+        Relationships: []
       }
       shipping_partners: {
         Row: {
@@ -4415,16 +5706,19 @@ export type Database = {
       }
       system_settings: {
         Row: {
+          description: string | null
           key: string
           updated_at: string | null
           value: Json | null
         }
         Insert: {
+          description?: string | null
           key: string
           updated_at?: string | null
           value?: Json | null
         }
         Update: {
+          description?: string | null
           key?: string
           updated_at?: string | null
           value?: Json | null
@@ -4528,6 +5822,36 @@ export type Database = {
             referencedColumns: ["account_code"]
           },
         ]
+      }
+      transport_vehicles: {
+        Row: {
+          created_at: string | null
+          id: number
+          name: string
+          phone: string | null
+          route: string | null
+          status: Database["public"]["Enums"]["account_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: never
+          name: string
+          phone?: string | null
+          route?: string | null
+          status?: Database["public"]["Enums"]["account_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: never
+          name?: string
+          phone?: string | null
+          route?: string | null
+          status?: Database["public"]["Enums"]["account_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
@@ -4880,6 +6204,27 @@ export type Database = {
         }
         Relationships: []
       }
+      v_active_deals: {
+        Row: {
+          deal_id: number | null
+          deal_name: string | null
+          deal_slug: string | null
+          discount_type: string | null
+          discount_value: number | null
+          end_date: string | null
+          product_id: number | null
+          start_date: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vw_task_board: {
         Row: {
           ai_metadata: Json | null
@@ -4906,17 +6251,127 @@ export type Database = {
       }
     }
     Functions: {
+      _cancel_restock: { Args: { p_order_id: string }; Returns: undefined }
+      _check_b2b_credit_exposure: {
+        Args: {
+          p_customer_id: number
+          p_final_amount: number
+          p_order_type: string
+        }
+        Returns: undefined
+      }
+      _confirm_deduct_stock: {
+        Args: { p_order_id: string }
+        Returns: undefined
+      }
+      _deduct_stock_fefo: {
+        Args: {
+          p_base_quantity: number
+          p_order_code: string
+          p_partner_id?: string
+          p_product_id: number
+          p_unit_price: number
+          p_warehouse_id: number
+        }
+        Returns: undefined
+      }
+      _gen_finance_tx_code: { Args: { p_prefix?: string }; Returns: string }
+      _insert_order_payment_tx: {
+        Args: {
+          p_amount: number
+          p_bank_ref?: string
+          p_description: string
+          p_order_id: string
+          p_status?: string
+        }
+        Returns: string
+      }
+      _log_rpc_call: {
+        Args: { p_action: string; p_data?: Json; p_module: string }
+        Returns: undefined
+      }
+      _resolve_conversion_factor: {
+        Args: {
+          p_explicit_factor?: number
+          p_product_id: number
+          p_uom: string
+        }
+        Returns: number
+      }
+      _resolve_conversion_factor_strict: {
+        Args: {
+          p_explicit_factor?: number
+          p_product_id: number
+          p_uom: string
+        }
+        Returns: number
+      }
+      _resolve_order_partner: {
+        Args: { p_order_id: string }
+        Returns: {
+          partner_id: string
+          partner_name: string
+          partner_type: string
+        }[]
+      }
+      _test_find_auth_user_by_email: {
+        Args: { p_email: string }
+        Returns: string
+      }
+      _validate_stock_availability: {
+        Args: { p_items: Json; p_warehouse_id: number }
+        Returns: undefined
+      }
       add_item_to_check_session: {
         Args: { p_check_id: number; p_product_id: number }
         Returns: Json
+      }
+      add_product_synonym: {
+        Args: { p_product_id: number; p_synonym: string; p_weight?: number }
+        Returns: number
       }
       add_surplus_stocktake_line: {
         Args: { p_check_id: number; p_product_id: number }
         Returns: Json
       }
       allocate_inbound_costs: { Args: { p_receipt_id: number }; Returns: Json }
+      analyze_chat_feedback_weekly: {
+        Args: { p_week_start?: string }
+        Returns: Json
+      }
+      approve_portal_registration:
+        | { Args: { p_request_id: string }; Returns: Json }
+        | {
+            Args: {
+              p_auth_user_id?: string
+              p_debt_limit?: number
+              p_existing_customer_id?: number
+              p_payment_term?: number
+              p_request_id: string
+            }
+            Returns: Json
+          }
       approve_user: { Args: { p_user_id: string }; Returns: undefined }
+      assign_chat_session_to_self: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
+      audit_chat_messages_daily: {
+        Args: { p_for_day?: string; p_sample_size?: number }
+        Returns: Json
+      }
+      audit_is_base_ambiguous: {
+        Args: never
+        Returns: {
+          ambiguous_count: number
+          product_id: number
+          unit_ids: number[]
+          unit_names: string[]
+        }[]
+      }
       auto_create_purchase_orders_min_max: { Args: never; Returns: number }
+      batch_deduct_vat_for_pos: { Args: { p_items: Json }; Returns: undefined }
+      bulk_import_synonyms: { Args: { p_rows: Json }; Returns: Json }
       bulk_pay_orders: {
         Args: {
           p_fund_account_id: number
@@ -4926,10 +6381,13 @@ export type Database = {
         Returns: Json
       }
       bulk_update_batch_costs: {
-        Args: { p_changes: Json; p_reason: string; p_note?: string }
+        Args: { p_changes: Json; p_note?: string; p_reason: string }
         Returns: Json
       }
-      bulk_update_product_barcodes: { Args: { p_data: Json }; Returns: Json }
+      bulk_update_product_barcodes: {
+        Args: { p_data: Json }
+        Returns: undefined
+      }
       bulk_update_product_prices: { Args: { p_data: Json }; Returns: undefined }
       bulk_update_product_strategy: {
         Args: { p_product_ids: number[]; p_strategy_type: string }
@@ -4968,7 +6426,42 @@ export type Database = {
         Args: { p_order_id: string; p_reason: string; p_user_id: string }
         Returns: Json
       }
+      cancel_purchase_order: { Args: { p_po_id: number }; Returns: undefined }
       cancel_return_request: { Args: { p_return_id: string }; Returns: Json }
+      cancel_unpaid_orders_after_24h: { Args: never; Returns: undefined }
+      chat_sessions_per_day: {
+        Args: { p_from: string; p_platform?: string; p_to: string }
+        Returns: {
+          day: string
+          orders: number
+          sessions: number
+        }[]
+      }
+      chat_stats_overview: {
+        Args: { p_from: string; p_platform?: string; p_to: string }
+        Returns: Json
+      }
+      chat_top_intents: {
+        Args: { p_from: string; p_limit?: number; p_to: string }
+        Returns: {
+          count: number
+          intent: string
+        }[]
+      }
+      chat_unmatched_questions: {
+        Args: { p_from: string; p_limit?: number; p_to: string }
+        Returns: {
+          occurred_at: string
+          question: string
+          session_id: string
+        }[]
+      }
+      check_debt_due_soon: { Args: never; Returns: undefined }
+      check_debt_overdue: { Args: never; Returns: undefined }
+      check_idle_transactions: {
+        Args: { p_threshold_minutes?: number }
+        Returns: undefined
+      }
       check_in_patient: {
         Args: {
           p_customer_id: number
@@ -4985,9 +6478,18 @@ export type Database = {
         Args: { p_number: string; p_symbol: string; p_tax_code: string }
         Returns: boolean
       }
+      check_pending_cart: { Args: { p_user_id: string }; Returns: Json }
+      check_pending_payment_reminders: {
+        Args: { p_force?: number }
+        Returns: undefined
+      }
       check_product_dependencies: {
         Args: { p_product_ids: number[] }
         Returns: Json
+      }
+      check_rpc_access: {
+        Args: { p_function_name: string }
+        Returns: undefined
       }
       check_vat_availability: {
         Args: {
@@ -5015,23 +6517,26 @@ export type Database = {
             }
             Returns: Json
           }
+      cleanup_old_chat_messages: { Args: never; Returns: Json }
+      cleanup_rpc_rate_log: { Args: never; Returns: undefined }
       clone_sales_order: { Args: { p_old_order_id: string }; Returns: Json }
+      close_chat_session: { Args: { p_session_id: string }; Returns: undefined }
       complete_inventory_check: {
         Args: { p_check_id: number; p_user_id: string }
         Returns: Json
       }
-      confirm_finance_transaction:
-        | { Args: { p_id: number }; Returns: undefined }
-        | { Args: { p_id: number; p_target_status: string }; Returns: boolean }
-      confirm_order_payment:
-        | {
-            Args: { p_fund_account_id: number; p_order_ids: number[] }
-            Returns: Json
-          }
-        | {
-            Args: { p_fund_account_id: number; p_order_ids: string[] }
-            Returns: Json
-          }
+      confirm_check_item_matching: {
+        Args: { p_item_id: number }
+        Returns: Json
+      }
+      confirm_finance_transaction: {
+        Args: { p_id: number; p_target_status: string }
+        Returns: boolean
+      }
+      confirm_order_payment: {
+        Args: { p_fund_account_id: number; p_order_ids: number[] }
+        Returns: Json
+      }
       confirm_outbound_packing: { Args: { p_order_id: string }; Returns: Json }
       confirm_post_read: { Args: { p_post_id: number }; Returns: undefined }
       confirm_purchase_costing: {
@@ -5208,6 +6713,17 @@ export type Database = {
         Args: { p_email: string; p_full_name: string; p_password: string }
         Returns: string
       }
+      create_portal_user_from_erp: {
+        Args: {
+          p_auth_user_id: string
+          p_customer_b2b_id: number
+          p_display_name?: string
+          p_email: string
+          p_phone?: string
+          p_role?: string
+        }
+        Returns: string
+      }
       create_prescription_template: {
         Args: { p_data: Json; p_items: Json }
         Returns: number
@@ -5320,16 +6836,18 @@ export type Database = {
           p_delivery_method?: string
           p_delivery_time?: string
           p_discount_amount?: number
-          p_items?: Json
+          p_items: Json
           p_note?: string
           p_order_type?: string
           p_payment_method?: string
           p_shipping_fee?: number
           p_shipping_partner_id?: number
+          p_source?: string
           p_status?: string
+          p_voucher_code?: string
           p_warehouse_id?: number
         }
-        Returns: string
+        Returns: Json
       }
       create_service_package: {
         Args: { p_data: Json; p_items: Json }
@@ -5362,17 +6880,27 @@ export type Database = {
         Args: { p_data: Json; p_items: Json }
         Returns: number
       }
+      deduct_vat_for_pos_export: {
+        Args: { p_base_qty: number; p_product_id: number; p_vat_rate: number }
+        Returns: undefined
+      }
       delete_asset: { Args: { p_id: number }; Returns: undefined }
       delete_auth_user: { Args: { p_user_id: string }; Returns: undefined }
       delete_customer_b2b: { Args: { p_id: number }; Returns: undefined }
       delete_customer_b2c: { Args: { p_id: number }; Returns: undefined }
+      delete_invoice_atomic: {
+        Args: { p_invoice_id: number }
+        Returns: undefined
+      }
       delete_prescription_template: { Args: { p_id: number }; Returns: boolean }
+      delete_product_synonym: { Args: { p_id: number }; Returns: undefined }
       delete_products: { Args: { p_ids: number[] }; Returns: undefined }
-      delete_purchase_order: { Args: { p_id: number }; Returns: boolean }
+      delete_purchase_order: { Args: { p_po_id: number }; Returns: undefined }
       delete_service_packages: { Args: { p_ids: number[] }; Returns: undefined }
       delete_shipping_partner: { Args: { p_id: number }; Returns: undefined }
       delete_supplier: { Args: { p_id: number }; Returns: undefined }
       delete_vaccination_template: { Args: { p_id: number }; Returns: boolean }
+      detect_medical_advice: { Args: { p_content: string }; Returns: Json }
       distribute_voucher_to_segment: {
         Args: { p_promotion_id: string; p_segment_id: number }
         Returns: number
@@ -5397,14 +6925,13 @@ export type Database = {
       }
       export_customers_b2b_list: {
         Args: {
-          sales_staff_filter?: string
-          search_query?: string
-          status_filter?: string
+          sales_staff_filter: string
+          search_query: string
+          status_filter: string
         }
         Returns: {
           contact_person_name: string
           contact_person_phone: string
-          current_debt: number
           customer_code: string
           debt_limit: number
           email: string
@@ -5488,6 +7015,10 @@ export type Database = {
           status: string
           total_count: number
         }[]
+      }
+      extract_order_codes_from_memo: {
+        Args: { p_memo: string }
+        Returns: string[]
       }
       generate_vaccine_timeline: {
         Args: {
@@ -5578,6 +7109,63 @@ export type Database = {
           valid_to: string
         }[]
       }
+      get_b2b_orders_view: {
+        Args: {
+          p_date_from?: string
+          p_date_to?: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      get_b2b_warehouse_id: { Args: never; Returns: number }
+      get_batch_valuation_grid: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_only_missing_price?: boolean
+          p_search?: string
+          p_warehouse_id?: number
+        }
+        Returns: {
+          batch_id: number
+          expiry_date: string
+          inbound_price: number
+          inventory_batch_id: number
+          last_revalued_at: string
+          lot_number: string
+          product_id: number
+          product_name: string
+          quantity: number
+          sku: string
+          total_count: number
+          total_value: number
+          warehouse_id: number
+          warehouse_name: string
+        }[]
+      }
+      get_chat_customer_summary: { Args: { p_user_id: string }; Returns: Json }
+      get_chat_session_old_summary: {
+        Args: { p_keep_recent?: number; p_session_id: string }
+        Returns: Json
+      }
+      get_columns: {
+        Args: { table_name: string }
+        Returns: {
+          column_name: string
+          data_type: string
+        }[]
+      }
+      get_compliance_audit_detail: {
+        Args: { p_audit_id: string }
+        Returns: Json
+      }
+      get_compliance_audit_stats: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
       get_connect_posts: {
         Args: {
           p_category: string
@@ -5622,6 +7210,74 @@ export type Database = {
           debt_limit: number
           is_bad_debt: boolean
         }[]
+      }
+      get_customer_debt_summary: {
+        Args: { p_customer_b2b_id: number }
+        Returns: Json
+      }
+      get_customer_exposure_summary: {
+        Args: { p_customer_id: number }
+        Returns: {
+          actual_current_debt: number
+          available_credit: number
+          debt_limit: number
+          pending_orders_total: number
+          total_exposure: number
+        }[]
+      }
+      get_customer_notifications: {
+        Args: {
+          p_customer_b2b_id: number
+          p_page?: number
+          p_page_size?: number
+          p_type?: string
+          p_unread_only?: boolean
+        }
+        Returns: Json
+      }
+      get_customer_order_detail: {
+        Args: { p_customer_b2b_id: number; p_order_id: string }
+        Returns: Json
+      }
+      get_customer_orders: {
+        Args: {
+          p_customer_b2b_id: number
+          p_page?: number
+          p_page_size?: number
+          p_status?: string
+        }
+        Returns: Json
+      }
+      get_customer_product_prices: {
+        Args: { p_customer_b2b_id: number; p_product_ids: number[] }
+        Returns: Json
+      }
+      get_customer_product_prices_by_uom: {
+        Args: { p_customer_b2b_id: number; p_items: Json }
+        Returns: {
+          customer_price: number
+          list_price: number
+          product_id: number
+          uom: string
+        }[]
+      }
+      get_customer_purchase_stats: {
+        Args: { p_customer_id: number; p_limit?: number }
+        Returns: Json
+      }
+      get_customer_sales_invoices: {
+        Args: {
+          p_customer_b2b_id: number
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      get_customer_unread_notification_count: {
+        Args: { p_customer_b2b_id: number }
+        Returns: number
       }
       get_customers_b2b_list: {
         Args: {
@@ -5758,6 +7414,10 @@ export type Database = {
           unit_name: string
         }[]
       }
+      get_inventory_total_value: {
+        Args: { p_warehouse_id?: number }
+        Returns: Json
+      }
       get_mapped_product: {
         Args: {
           p_product_name: string
@@ -5769,7 +7429,26 @@ export type Database = {
           internal_unit: string
         }[]
       }
+      get_my_notifications: {
+        Args: { p_category?: string; p_page?: number; p_page_size?: number }
+        Returns: Json
+      }
       get_my_permissions: { Args: never; Returns: string[] }
+      get_my_permissions_for_user: {
+        Args: { p_user_id: string }
+        Returns: string[]
+      }
+      get_notification_history: {
+        Args: {
+          p_customer_b2b_id?: number
+          p_date_from?: string
+          p_date_to?: string
+          p_page?: number
+          p_page_size?: number
+          p_type?: string
+        }
+        Returns: Json
+      }
       get_nurse_execution_queue: { Args: { p_date?: string }; Returns: Json }
       get_outbound_order_detail: { Args: { p_order_id: string }; Returns: Json }
       get_outbound_stats: { Args: { p_warehouse_id: number }; Returns: Json }
@@ -5777,6 +7456,7 @@ export type Database = {
         Args: { p_partner_id: number; p_partner_type: string }
         Returns: number
       }
+      get_payment_tolerance: { Args: never; Returns: number }
       get_pending_reconciliation_orders: {
         Args: never
         Returns: {
@@ -5804,6 +7484,29 @@ export type Database = {
           method: string
           order_count: number
           total_cartons: number
+        }[]
+      }
+      get_portal_dashboard_stats: { Args: never; Returns: Json }
+      get_portal_user_profile: {
+        Args: { p_auth_user_id: string }
+        Returns: Json
+      }
+      get_portal_users_list: {
+        Args: { p_search?: string; p_status?: string }
+        Returns: {
+          auth_user_id: string
+          created_at: string
+          customer_b2b_id: number
+          customer_code: string
+          customer_name: string
+          display_name: string
+          email: string
+          id: string
+          is_banned: boolean
+          last_login_at: string
+          phone: string
+          role: string
+          status: string
         }[]
       }
       get_pos_usable_promotions: {
@@ -5842,6 +7545,7 @@ export type Database = {
           real_stock: number
         }[]
       }
+      get_product_batch_info: { Args: { p_product_id: number }; Returns: Json }
       get_product_cardex: {
         Args: {
           p_from_date?: string
@@ -5924,15 +7628,20 @@ export type Database = {
           total_count: number
         }[]
       }
+      get_products_stock_status: {
+        Args: { p_product_ids: number[]; p_warehouse_id?: number }
+        Returns: Json
+      }
       get_purchase_order_detail: { Args: { p_po_id: number }; Returns: Json }
       get_purchase_order_details: { Args: { p_id: number }; Returns: Json }
       get_purchase_orders_master: {
         Args: {
-          p_date_from: string
-          p_date_to: string
+          p_date_from?: string
+          p_date_to?: string
           p_page: number
           p_page_size: number
           p_search: string
+          p_status?: string
           p_status_delivery: string
           p_status_payment: string
         }
@@ -5999,6 +7708,7 @@ export type Database = {
           p_payment_status?: string
           p_remittance_status?: string
           p_search?: string
+          p_source?: string
           p_status?: string
           p_warehouse_id?: number
         }
@@ -6121,37 +7831,67 @@ export type Database = {
         }
         Returns: Json
       }
-      get_transaction_history: {
-        Args: {
-          p_created_by?: string
-          p_date_from?: string
-          p_date_to?: string
-          p_flow?: Database["public"]["Enums"]["transaction_flow"]
-          p_fund_id?: number
-          p_limit?: number
-          p_offset?: number
-          p_search?: string
-          p_status?: Database["public"]["Enums"]["transaction_status"]
-        }
-        Returns: {
-          amount: number
-          business_type: Database["public"]["Enums"]["business_type"]
-          category_name: string
-          code: string
-          created_by_name: string
-          description: string
-          flow: Database["public"]["Enums"]["transaction_flow"]
-          fund_name: string
-          id: number
-          partner_name: string
-          ref_advance_code: string
-          ref_advance_id: number
-          status: Database["public"]["Enums"]["transaction_status"]
-          target_bank_info: Json
-          total_count: number
-          transaction_date: string
-        }[]
-      }
+      get_transaction_history:
+        | {
+            Args: {
+              p_created_by?: string
+              p_date_from?: string
+              p_date_to?: string
+              p_flow?: Database["public"]["Enums"]["transaction_flow"]
+              p_fund_id?: number
+              p_limit?: number
+              p_offset?: number
+              p_search?: string
+              p_status?: Database["public"]["Enums"]["transaction_status"]
+            }
+            Returns: {
+              amount: number
+              business_type: Database["public"]["Enums"]["business_type"]
+              category_name: string
+              code: string
+              created_by_name: string
+              description: string
+              flow: Database["public"]["Enums"]["transaction_flow"]
+              fund_name: string
+              id: number
+              partner_name: string
+              ref_advance_code: string
+              ref_advance_id: number
+              status: Database["public"]["Enums"]["transaction_status"]
+              target_bank_info: Json
+              total_count: number
+              transaction_date: string
+            }[]
+          }
+        | {
+            Args: {
+              p_date_from?: string
+              p_date_to?: string
+              p_flow?: Database["public"]["Enums"]["transaction_flow"]
+              p_fund_id?: number
+              p_limit?: number
+              p_offset?: number
+              p_search?: string
+              p_status?: string
+            }
+            Returns: {
+              amount: number
+              business_type: Database["public"]["Enums"]["business_type"]
+              category_name: string
+              code: string
+              created_by_name: string
+              description: string
+              evidence_url: string
+              flow: Database["public"]["Enums"]["transaction_flow"]
+              fund_name: string
+              id: number
+              partner_name: string
+              ref_advance_id: number
+              status: Database["public"]["Enums"]["transaction_status"]
+              total_count: number
+              transaction_date: string
+            }[]
+          }
       get_transactions: {
         Args: {
           p_creator_id?: string
@@ -6311,6 +8051,23 @@ export type Database = {
           total_count: number
         }[]
       }
+      get_wholesale_catalog: {
+        Args: {
+          p_categories?: string
+          p_category?: string
+          p_countries?: string
+          p_dosage_forms?: string
+          p_manufacturer?: string
+          p_manufacturers?: string
+          p_page?: number
+          p_page_size?: number
+          p_price_max?: number
+          p_price_min?: number
+          p_search?: string
+          p_sort?: string
+        }
+        Returns: Json
+      }
       handle_order_cancellation: {
         Args: { p_order_id: string }
         Returns: undefined
@@ -6335,25 +8092,94 @@ export type Database = {
         Args: { p_email: string; p_full_name: string }
         Returns: string
       }
-      mark_notification_read: {
-        Args: { p_noti_id: string }
-        Returns: undefined
+      is_admin: { Args: never; Returns: boolean }
+      is_authenticated: { Args: never; Returns: boolean }
+      is_chat_staff: { Args: never; Returns: boolean }
+      list_chat_compliance_audits: {
+        Args: {
+          p_from: string
+          p_limit?: number
+          p_offset?: number
+          p_severity?: string
+          p_to: string
+        }
+        Returns: {
+          audit_created_at: string
+          audit_id: string
+          customer_email: string
+          customer_name: string
+          excerpt: string
+          matched_keywords: string[]
+          message_id: string
+          rule_code: string
+          session_id: string
+          severity: string
+          status: string
+        }[]
       }
+      list_inbox_sessions: {
+        Args: { p_limit?: number; p_tab: string }
+        Returns: {
+          assigned_sales_id: string
+          closed_at: string
+          context: Json
+          customer_name: string
+          customer_phone: string
+          draft_cart_id: string
+          id: string
+          last_activity_at: string
+          last_message_at: string
+          last_message_preview: string
+          platform: string
+          started_at: string
+          status: string
+          unresolved_handoff_reason: string
+          user_id: string
+        }[]
+      }
+      list_product_synonyms: {
+        Args: { p_product_id: number }
+        Returns: {
+          created_at: string
+          id: number
+          synonym: string
+          weight: number
+        }[]
+      }
+      llm_log_daily_usage: {
+        Args: { p_day?: string }
+        Returns: {
+          error: number
+          provider: string
+          rate_limit: number
+          success: number
+          total: number
+          total_tokens_in: number
+          total_tokens_out: number
+        }[]
+      }
+      mark_all_my_notifications_read: { Args: never; Returns: number }
+      mark_all_notifications_read: {
+        Args: { p_customer_b2b_id: number }
+        Returns: number
+      }
+      mark_notification_read:
+        | { Args: { p_noti_id: string }; Returns: undefined }
+        | {
+            Args: { p_customer_b2b_id: number; p_notification_id: string }
+            Returns: boolean
+          }
       match_products_from_excel: {
         Args: { p_data: Json }
         Returns: {
           base_unit: string
           excel_name: string
           excel_sku: string
-          match_type: string
           product_id: number
           product_name: string
           product_sku: string
-          retail_conversion_rate: number
-          retail_unit: string
+          product_status: string
           similarity_score: number
-          wholesale_conversion_rate: number
-          wholesale_unit: string
         }[]
       }
       notify_group: {
@@ -6367,7 +8193,9 @@ export type Database = {
       }
       notify_users_by_permission: {
         Args: {
+          p_category?: string
           p_message: string
+          p_metadata?: Json
           p_permission_key: string
           p_title: string
           p_type?: string
@@ -6400,10 +8228,15 @@ export type Database = {
         Args: { p_invoice_id: number }
         Returns: undefined
       }
+      process_vat_export_entry: {
+        Args: { p_invoice_id: number }
+        Returns: undefined
+      }
       process_vat_invoice_entry: {
         Args: { p_invoice_id: number }
         Returns: undefined
       }
+      product_dosage_label: { Args: { spec: string }; Returns: string }
       quick_assign_barcode: {
         Args: { p_barcode: string; p_product_id: number; p_unit_id: number }
         Returns: Json
@@ -6414,17 +8247,42 @@ export type Database = {
         Args: { p_id: number }
         Returns: undefined
       }
+      record_b2b_debt_payment: {
+        Args: {
+          p_amount: number
+          p_bank_ref_id: string
+          p_customer_b2b_id: number
+          p_description?: string
+        }
+        Returns: Json
+      }
+      record_manual_payment_received: {
+        Args: { p_amount?: number; p_note?: string; p_order_id: string }
+        Returns: Json
+      }
       refresh_segment_members: {
         Args: { p_segment_id: number }
         Returns: undefined
+      }
+      reprocess_failed_bank_memos: {
+        Args: { p_dry_run?: boolean; p_limit?: number }
+        Returns: Json
       }
       reschedule_vaccine_timeline: {
         Args: { p_new_expected_date: string; p_record_id: number }
         Returns: Json
       }
+      return_chat_session_to_bot: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       reverse_vat_invoice_entry: {
         Args: { p_invoice_id: number }
         Returns: undefined
+      }
+      save_inbound_draft: {
+        Args: { p_draft_data: Json; p_po_id: number }
+        Returns: Json
       }
       save_outbound_progress: {
         Args: { p_items: Json; p_order_id: string }
@@ -6501,35 +8359,6 @@ export type Database = {
           quantity: number
         }[]
       }
-      get_batch_valuation_grid: {
-        Args: {
-          p_warehouse_id?: number | null
-          p_search?: string
-          p_only_missing_price?: boolean
-          p_limit?: number
-          p_offset?: number
-        }
-        Returns: {
-          inventory_batch_id: number
-          batch_id: number
-          product_id: number
-          sku: string | null
-          product_name: string
-          warehouse_id: number | null
-          warehouse_name: string | null
-          lot_number: string
-          expiry_date: string
-          quantity: number
-          inbound_price: number
-          total_value: number
-          last_revalued_at: string | null
-          total_count: number
-        }[]
-      }
-      get_inventory_total_value: {
-        Args: { p_warehouse_id?: number | null }
-        Returns: Json
-      }
       search_product_batches_for_stocktake: {
         Args: { p_product_id: number; p_warehouse_id: number }
         Returns: {
@@ -6547,6 +8376,8 @@ export type Database = {
         Args: { p_keyword?: string }
         Returns: {
           actual_cost: number
+          available_units: Json
+          avg_monthly_sold: number
           barcode: string
           id: number
           image_url: string
@@ -6555,6 +8386,7 @@ export type Database = {
           name: string
           retail_unit: string
           sku: string
+          total_stock: number
           wholesale_unit: string
         }[]
       }
@@ -6573,6 +8405,16 @@ export type Database = {
           wholesale_unit: string
         }[]
       }
+      search_products_for_synonym_admin: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          active_ingredient: string
+          id: number
+          name: string
+          sku: string
+          synonym_count: number
+        }[]
+      }
       search_products_for_transfer: {
         Args: { p_keyword?: string; p_limit?: number; p_warehouse_id: number }
         Returns: {
@@ -6588,6 +8430,16 @@ export type Database = {
           sku: string
           stock_display: string
           unit: string
+        }[]
+      }
+      search_products_fts: {
+        Args: { lim?: number; q: string }
+        Returns: {
+          id: number
+          name: string
+          score: number
+          sku: string
+          stock_status: string
         }[]
       }
       search_products_pos: {
@@ -6647,8 +8499,32 @@ export type Database = {
         }
         Returns: Json
       }
+      send_sales_reply: {
+        Args: { p_content: string; p_session_id: string }
+        Returns: {
+          attachments: Json | null
+          content: string | null
+          content_type: string
+          created_at: string
+          deleted_at: string | null
+          entities: Json | null
+          id: string
+          intent: string | null
+          llm_meta: Json | null
+          role: string
+          session_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chat_messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      split_csv_nonempty: { Args: { p: string }; Returns: string[] }
+      split_words_vn: { Args: { p_text: string }; Returns: string[] }
       submit_cash_remittance: {
         Args: { p_order_ids: string[]; p_user_id: string }
         Returns: Json
@@ -6665,6 +8541,10 @@ export type Database = {
       submit_transfer_shipping: {
         Args: { p_batch_items: Json; p_transfer_id: number }
         Returns: Json
+      }
+      toggle_portal_user_status: {
+        Args: { p_new_status: string; p_portal_user_id: string }
+        Returns: undefined
       }
       unaccent: { Args: { "": string }; Returns: string }
       update_asset: {
@@ -6778,6 +8658,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      update_purchase_order_logistics: {
+        Args: {
+          p_delivery_method?: string
+          p_expected_delivery_date?: string
+          p_note?: string
+          p_po_id: number
+          p_shipping_fee?: number
+          p_shipping_partner_id?: number
+          p_total_packages?: number
+        }
+        Returns: boolean
+      }
       update_sales_order: {
         Args: {
           p_customer_id: number
@@ -6845,6 +8737,11 @@ export type Database = {
         }
         Returns: Json
       }
+      user_has_permission: { Args: { p_permission: string }; Returns: boolean }
+      validate_stock_for_order: {
+        Args: { p_items: Json; p_warehouse_id: number }
+        Returns: Json
+      }
       verify_promotion_code: {
         Args: { p_code: string; p_customer_id: number; p_order_value: number }
         Returns: Json
@@ -6872,6 +8769,13 @@ export type Database = {
         | "waiting_procedure"
         | "observing"
       asset_status: "active" | "storage" | "repair" | "disposed"
+      b2b_notification_type:
+        | "order_status"
+        | "invoice"
+        | "promotion"
+        | "debt_reminder"
+        | "system"
+        | "broadcast"
       business_type:
         | "trade"
         | "advance"
@@ -7075,6 +8979,14 @@ export const Constants = {
         "observing",
       ],
       asset_status: ["active", "storage", "repair", "disposed"],
+      b2b_notification_type: [
+        "order_status",
+        "invoice",
+        "promotion",
+        "debt_reminder",
+        "system",
+        "broadcast",
+      ],
       business_type: [
         "trade",
         "advance",

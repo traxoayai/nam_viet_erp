@@ -99,7 +99,7 @@ export default function NotificationsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const { data: result, error } = await safeRpc("get_my_notifications", {
-      p_category: category || null,
+      p_category: category || undefined,
       p_page: page,
       p_page_size: PAGE_SIZE,
     });

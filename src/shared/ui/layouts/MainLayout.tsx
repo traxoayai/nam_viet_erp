@@ -263,6 +263,11 @@ const finalMenuItems: MenuItem[] = [
         "/inventory/purchase",
         <ShoppingCartOutlined />
       ),
+      // getItem(
+      //   <Link to="/inventory/purchase-v2">Mua Hàng V2</Link>,
+      //   "/inventory/purchase-v2",
+      //   <ShoppingCartOutlined />
+      // ),
       // --- MỚI: NHẬP KHO (INBOUND) ---
       getItem(
         <Link to="/inventory/inbound">Nhập Kho</Link>,
@@ -656,6 +661,7 @@ const MENU_PERMISSIONS: Record<string, string> = {
   // --- KHO ---
   "/inventory/products": "inv-product-view",
   "/inventory/purchase": "inv-po-create",
+  // "/inventory/purchase-v2": "inv-po-create",
   "/inventory/stocktake": "inv-count-create",
 
   // --- TÀI CHÍNH (ĐÃ SỬA ĐỔI) ---

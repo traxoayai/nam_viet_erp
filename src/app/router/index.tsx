@@ -84,6 +84,11 @@ const NotificationsPage = lazy(() => import("@/pages/notifications/Notifications
 import PortalDashboardPage from "@/pages/portal/PortalDashboardPage";
 import PortalUsersPage from "@/pages/portal/PortalUsersPage";
 
+import PurchaseOrderV2ListPage from "@/pages/Purchase-v2/PurchaseOrderV2ListPage";
+import PurchaseV2CreateEstimatePage from "@/pages/Purchase-v2/PurchaseV2CreateEstimatePage";
+import PurchaseV2CreateSinglePage from "@/pages/Purchase-v2/PurchaseV2CreateSinglePage";
+import PurchaseV2CreateFromVatPage from "@/pages/Purchase-v2/PurchaseV2CreateFromVatPage";
+
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -286,6 +291,45 @@ const routes: RouteObject[] = [
           // =========================================================
           // --- MODULE MUA HÀNG (PURCHASING) ---
           // =========================================================
+          // --- MUA HÀNG V2 ---
+          {
+            path: "inventory/purchase-v2",
+            children: [
+              {
+                index: true,
+                element: (
+                  <PermissionGuard permission={PERMISSIONS.PURCHASING.VIEW}>
+                    <PurchaseOrderV2ListPage />
+                  </PermissionGuard>
+                ),
+              },
+              {
+                path: "create-minmax",
+                element: (
+                  <PermissionGuard permission={PERMISSIONS.PURCHASING.CREATE}>
+                    <PurchaseV2CreateEstimatePage />
+                  </PermissionGuard>
+                ),
+              },
+              {
+                path: "create-single",
+                element: (
+                  <PermissionGuard permission={PERMISSIONS.PURCHASING.CREATE}>
+                    <PurchaseV2CreateSinglePage />
+                  </PermissionGuard>
+                ),
+              },
+              {
+                path: "create-vat",
+                element: (
+                  <PermissionGuard permission={PERMISSIONS.PURCHASING.CREATE}>
+                    <PurchaseV2CreateFromVatPage />
+                  </PermissionGuard>
+                ),
+              },
+            ],
+          },
+          // --- KẾT THÚC MUA HÀNG V2 ---
           {
             path: "purchase-orders",
             children: [

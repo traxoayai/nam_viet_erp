@@ -1,6 +1,6 @@
 // src/pages/purchasing/PurchaseOrderDetail.tsx
-import { SaveOutlined } from "@ant-design/icons";
-import { Layout, Form, ConfigProvider, App, Card, Typography, Button } from "antd";
+import { SaveOutlined, UploadOutlined } from "@ant-design/icons";
+import { Layout, Form, ConfigProvider, App, Card, Typography, Button, Upload } from "antd";
 import viVN from "antd/locale/vi_VN";
 import { useState, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
@@ -116,14 +116,36 @@ const PurchaseOrderDetailContent = () => {
           >
             Sản phẩm
           </div>
-          <div style={{ padding: "8px 16px", borderBottom: "1px solid #f0f0f0" }}>
+          <div style={{ padding: "8px 16px", borderBottom: "1px solid #f0f0f0", display: "flex", gap: "8px" }}>
             <DebounceProductSelect
               key={logic.searchKey}
               placeholder="Tìm thuốc theo tên, hoạt chất, mã vạch..."
-              style={{ width: "100%" }}
+              style={{ flex: 1 }}
               fetcher={searchProductsForPurchase}
               onChange={logic.handleSelectProduct}
             />
+            <Upload
+              accept="image/*,.pdf,.xml,.html"
+              showUploadList={false}
+              beforeUpload={(file) => {
+                logic.handleUploadInvoice(file);
+                return false;
+              }}
+            >
+              <Button 
+                type="primary"
+                icon={<UploadOutlined />} 
+                loading={logic.isUploadingInvoice}
+                style={{ 
+                  background: 'linear-gradient(90deg, #1890ff, #722ed1)', 
+                  borderColor: 'transparent',
+                  boxShadow: '0 2px 8px rgba(114, 46, 209, 0.4)',
+                  fontWeight: 500
+                }}
+              >
+                Upload Hóa Đơn / Phiếu Xuất
+              </Button>
+            </Upload>
           </div>
           <div style={{ padding: "8px 16px" }}>
             <POProductTable

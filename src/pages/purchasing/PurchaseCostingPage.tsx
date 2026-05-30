@@ -175,6 +175,7 @@ const PurchaseCostingPage: React.FC = () => {
         i.rebate_rate,
         i.bonus_quantity,
         i.allocated_shipping,
+        i.unit_price,
       ])
     ),
   ]);
@@ -381,15 +382,14 @@ const PurchaseCostingPage: React.FC = () => {
     }
   };
 
-  // --- SUBMIT ---
+  
+  // hàm handleSubmit và sửa lại payload gửi lên server để cập nhật Giá Bán như sau:
   const handleSubmit = async () => {
     if (!id) return;
     setLoading(true);
     try {
-      // [FIX] Snapshot giá cũ TRƯỚC KHI update
       const productIds = [...new Set(costingItems.map((i) => i.product_id))];
-      const oldData =
-        await purchaseOrderService.getProductCostsSnapshot(productIds);
+      const oldData = await purchaseOrderService.getProductCostsSnapshot(productIds);
       setPreUpdateCosts(oldData || []);
 
       const payload = {
@@ -398,8 +398,8 @@ const PurchaseCostingPage: React.FC = () => {
         p_items_data: costingItems.map((item) => ({
           id: item.id,
           product_id: item.product_id,
-          // [FIX] Convert to Base Cost before sending to backend (assuming backend expects base cost)
-          final_unit_cost: item.final_unit_cost / (item.conversion_factor || 1),
+          // [CORE FIX]: Gửi đúng giá của giao diện (Giá Thùng/Hộp). Không tự chia nữa. Backend sẽ lo!
+          final_unit_cost: item.final_unit_cost, 
           rebate_rate: item.rebate_rate,
           vat_rate: item.vat_rate,
           quantity_received: item.quantity_ordered + item.bonus_quantity,
@@ -417,11 +417,8 @@ const PurchaseCostingPage: React.FC = () => {
 
       await purchaseOrderService.confirmCosting(payload);
       message.success("Xác nhận giá vốn thành công!");
-
-      // [NEW] Open Price Modal instead of navigate immediately
       setShowPriceModal(true);
     } catch (err: any) {
-      console.error(err);
       message.error("Lỗi: " + err.message);
     } finally {
       setLoading(false);
@@ -453,10 +450,22 @@ const PurchaseCostingPage: React.FC = () => {
     },
     {
       title: "Đơn giá",
-      dataIndex: "unit_price",
-      width: 120,
+      width: 130,
       align: "right" as const,
-      render: (val: number) => formatCurrency(val),
+      render: (_: any, r: CostingItem) => (
+        <InputNumber
+          style={{ width: "100%" }}
+          min={0}
+          formatter={(value) =>
+            `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+          }
+          parser={(value) =>
+            value!.replace(/\$\s?|(,*)/g, "") as unknown as number
+          }
+          value={r.unit_price}
+          onChange={(v) => handleItemChange(r.id, "unit_price", Number(v))}
+        />
+      ),
     },
     {
       title: "Rebate %",
@@ -736,16 +745,21 @@ const PurchaseCostingPage: React.FC = () => {
                   )}
                 </Text>
               </div>
-              <Button
-                type="primary"
-                size="large"
-                icon={<SaveOutlined />}
-                onClick={handleSubmit}
-                loading={loading}
-                style={{ minWidth: 200, height: 50, fontSize: 16 }}
-              >
-                Chốt Giá Vốn & Công Nợ
-              </Button>
+              <div style={{ textAlign: "right" }}>
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<SaveOutlined />}
+                  onClick={handleSubmit}
+                  loading={loading}
+                  style={{ minWidth: 200, height: 50, fontSize: 16 }}
+                >
+                  Chốt Giá Vốn & Công Nợ
+                </Button>
+                <div style={{ fontSize: 12, color: "#fa8c16", marginTop: 4 }}>
+                  * Lưu ý: Sau khi chốt, đơn hàng sẽ chuyển sang trạng thái Hoàn Thành và khóa sổ.
+                </div>
+              </div>
             </Space>
           </div>
         </Affix>

@@ -21,6 +21,8 @@ export interface POItem {
   discount: number;
   is_bonus?: boolean; // [NEW] V20 Bonus Item support
   bonus_quantity?: number; // Số lượng hàng tặng kèm
+  input_lot?: string; // [NEW] Số Lô trích xuất từ AI
+  input_expiry?: string; // [NEW] Hạn sử dụng trích xuất từ AI
 
   // [NEW] Mảng đơn vị động trả về từ API
   available_units?: ProductUnitOption[];

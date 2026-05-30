@@ -54,10 +54,10 @@ export const useAutoLogout = () => {
   useEffect(() => {
     if (!user) return;
 
-    // ĐÃ FIX: Thay 'keypress' bằng 'keydown' để bắt được phím Numpad và Tab
+    // Thay 'keypress' bằng 'keydown' để bắt được phím Numpad và Tab
     const events = ["click", "mousemove", "keydown", "scroll", "touchstart"];
 
-    // ĐÃ FIX: Kỹ thuật Throttling (Chặn gọi liên tục). Chỉ reset Timer tối đa 1 lần mỗi 2 giây. Tránh treo RAM.
+    // Kỹ thuật Throttling (Chặn gọi liên tục). Chỉ reset Timer tối đa 1 lần mỗi 2 giây. Tránh treo RAM.
     let throttleTimer: boolean = false;
     const handleActivity = () => {
       if (throttleTimer) return;

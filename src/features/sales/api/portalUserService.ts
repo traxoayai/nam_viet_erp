@@ -22,8 +22,8 @@ export const fetchPortalUsers = async (
   status?: string,
 ): Promise<PortalUserRow[]> => {
   const { data, error } = await safeRpc("get_portal_users_list", {
-    p_search: search || null,
-    p_status: status || null,
+    p_search: search || undefined,
+    p_status: status || undefined,
   });
   if (error) throw error;
   return (data ?? []) as PortalUserRow[];
@@ -67,13 +67,13 @@ export const createPortalUserFromERP = async (
     p_auth_user_id: edgeData.auth_user_id,
     p_customer_b2b_id: customerB2bId,
     p_email: email,
-    p_display_name: displayName || null,
-    p_phone: phone || null,
+    p_display_name: displayName || undefined,
+    p_phone: phone || undefined,
     p_role: role || "staff",
   });
   if (error) throw error;
 
-  const result = data as Record<string, unknown>;
+  const result = data as unknown as Record<string, unknown>;
   return { portalUserId: result.portal_user_id as string };
 };
 

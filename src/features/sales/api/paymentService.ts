@@ -30,10 +30,10 @@ export const paymentService = {
   ): Promise<ManualPaymentResult> {
     const { data, error } = await safeRpc("record_manual_payment_received", {
       p_order_id: orderId,
-      p_amount: amount ?? null,
-      p_note: note ?? null,
+      p_amount: amount ?? undefined,
+      p_note: note ?? undefined,
     });
     if (error) throw error;
-    return data as ManualPaymentResult;
+    return data as unknown as ManualPaymentResult;
   },
 };

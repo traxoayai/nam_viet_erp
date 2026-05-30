@@ -10,7 +10,10 @@ import {
   Grid,
   Avatar,
   Form,
+  Input,
+  DatePicker,
 } from "antd";
+import dayjs from "dayjs";
 import React from "react";
 
 // FIX: Import POItem để định nghĩa kiểu dữ liệu chính xác
@@ -157,12 +160,47 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
                 {renderUnitSelect(item, idx)}
               </Form.Item>
 
-              <Form.Item label="SL" style={{ width: 250, marginBottom: 0 }}>
+              <Form.Item label="SL" style={{ width: 100, marginBottom: 0 }}>
                 <InputNumber
                   value={item.quantity}
                   min={1}
                   style={{ width: "100%" }}
                   onChange={(val) => onItemChange(idx, "quantity", val)}
+                />
+              </Form.Item>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              <Form.Item label="Lô" style={{ width: 100, marginBottom: 0 }}>
+                <Input
+                  placeholder="Số Lô"
+                  value={item.input_lot}
+                  onChange={(e) =>
+                    onItemChange(idx, "input_lot", e.target.value)
+                  }
+                />
+              </Form.Item>
+              <Form.Item label="HSD" style={{ width: 130, marginBottom: 0 }}>
+                <DatePicker
+                  placeholder="Hạn SD"
+                  format="DD/MM/YYYY"
+                  value={
+                    item.input_expiry &&
+                    dayjs(item.input_expiry, "DD/MM/YYYY").isValid()
+                      ? dayjs(item.input_expiry, "DD/MM/YYYY")
+                      : null
+                  }
+                  onChange={(_, dateString) =>
+                    onItemChange(idx, "input_expiry", dateString)
+                  }
+                  style={{ width: "100%" }}
                 />
               </Form.Item>
             </div>
@@ -262,6 +300,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
         />
       ),
     },
+
     {
       title: "Đơn giá",
       width: 150,
@@ -311,6 +350,39 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
           onClick={() => onRemove(idx)}
         />
       ),
+    },
+    {
+      title: "Số Lô",
+      width: 100,
+      render: (_: any, r: POItem, idx: number) => (
+        <Input
+          placeholder="Số Lô"
+          value={r.input_lot}
+          onChange={(e) => onItemChange(idx, "input_lot", e.target.value)}
+        />
+      ),
+    },
+    {
+      title: "Hạn sử dụng",
+      width: 130,
+      render: (_: any, r: POItem, idx: number) => {
+        const format = "DD/MM/YYYY";
+        const parsedDate =
+          r.input_expiry && dayjs(r.input_expiry, format).isValid()
+            ? dayjs(r.input_expiry, format)
+            : null;
+        return (
+          <DatePicker
+            placeholder="Hạn SD"
+            format={format}
+            value={parsedDate}
+            onChange={(_, dateString) =>
+              onItemChange(idx, "input_expiry", dateString)
+            }
+            style={{ width: "100%" }}
+          />
+        );
+      },
     },
   ];
 

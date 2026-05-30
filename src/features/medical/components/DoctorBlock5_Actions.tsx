@@ -104,7 +104,7 @@ export const DoctorBlock5_Actions: React.FC<Props> = ({
             className="bg-green-600 hover:bg-green-700 border-green-600"
             loading={loading}
           >
-            Hoàn tất & Chuyển Dược
+            Hoàn tất
           </Button>
         </Popconfirm>
       </div>

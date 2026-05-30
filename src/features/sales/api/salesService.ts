@@ -90,7 +90,7 @@ export const salesService = {
   // 5. Tạo đơn hàng (QUAN TRỌNG: Mapping Payload Mới)
   async createOrder(payload: CreateSalesOrderPayload) {
     // Payload lúc này đã bao gồm: p_delivery_method, p_shipping_partner_id
-    const { data } = await safeRpc("create_sales_order", payload as unknown as Record<string, unknown>);
+    const { data } = await safeRpc("create_sales_order", payload as any);
 
     return data; // Trả về UUID đơn hàng
   },
@@ -204,7 +204,7 @@ export const salesService = {
   // 9. [NEW] Xác nhận thu tiền đơn hàng (Bulk Action)
   async confirmPayment(orderIds: (string | number)[], fundAccountId: number) {
     await safeRpc("confirm_order_payment", {
-      p_order_ids: orderIds.map(String),
+      p_order_ids: orderIds.map(Number),
       p_fund_account_id: fundAccountId,
     });
     return true;

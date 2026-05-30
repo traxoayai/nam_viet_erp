@@ -129,7 +129,7 @@ export const purchaseOrderService = {
 
   // 6. Xóa PO
   async deletePO(id: number) {
-    await safeRpc("delete_purchase_order", { p_id: id });
+    await safeRpc("delete_purchase_order", { p_po_id: id });
     return true;
   },
 
@@ -152,11 +152,11 @@ export const purchaseOrderService = {
   }) {
     await safeRpc("update_purchase_order_logistics", {
       p_po_id: id,
-      p_delivery_method: payload.delivery_method || null,
-      p_shipping_partner_id: payload.shipping_partner_id || null,
-      p_shipping_fee: payload.shipping_fee ?? null,
-      p_total_packages: payload.total_packages ?? null,
-      p_expected_delivery_date: payload.expected_delivery_date || null,
+      p_delivery_method: payload.delivery_method || undefined,
+      p_shipping_partner_id: payload.shipping_partner_id || undefined,
+      p_shipping_fee: payload.shipping_fee ?? undefined,
+      p_total_packages: payload.total_packages ?? undefined,
+      p_expected_delivery_date: payload.expected_delivery_date || undefined,
       p_note: payload.note ?? "",
     });
     return true;

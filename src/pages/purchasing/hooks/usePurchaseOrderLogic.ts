@@ -33,6 +33,7 @@ export const usePurchaseOrderLogic = () => {
 
   // --- STATE ---
   const [loading, setLoading] = useState(false);
+  const [isUploadingInvoice, setIsUploadingInvoice] = useState(false);
   const [itemsList, setItemsList] = useState<POItem[]>([]);
   const [poCode, setPoCode] = useState<string>("");
   const [poStatus, setPoStatus] = useState<string>("");
@@ -101,6 +102,34 @@ export const usePurchaseOrderLogic = () => {
         setSupplierInfo({ ...supplier, ...richObj });
       }
 
+      // [FIX] Lấy thông tin Lô/Hạn sử dụng từ receipt_draft để hiển thị lại
+      let receiptDraft: any[] = [];
+      try {
+        const { data: poExtra, error: fetchErr } = await supabase
+          .from("purchase_orders")
+          .select("receipt_draft")
+          .eq("id", poId)
+          .single();
+          
+        if (fetchErr) {
+          console.warn("Could not fetch receipt_draft:", fetchErr);
+        } else if (poExtra?.receipt_draft) {
+          let parsed = poExtra.receipt_draft;
+          if (typeof parsed === 'string') {
+            try { parsed = JSON.parse(parsed); } catch(e) {}
+          }
+          if (Array.isArray(parsed)) {
+            receiptDraft = parsed;
+          } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).items)) {
+            receiptDraft = (parsed as any).items;
+          } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).draft_data)) {
+            receiptDraft = (parsed as any).draft_data;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch receipt_draft:", err);
+      }
+
       const mappedItems: POItem[] = ((po.items as unknown[]) || []).map((item: unknown) => {
         const i = item as Record<string, unknown>;
         // [FIX] Normalize Data Keys (Phòng trường hợp RPC trả về biến thể khác)
@@ -109,6 +138,9 @@ export const usePurchaseOrderLogic = () => {
         const retailUnit = (i.retail_unit as string) || (i.retailUnit as string) || "Vỉ";
         const itemsPerCarton =
           (i.items_per_carton as number) || (i.itemsPerCarton as number) || 1;
+
+        // [FIX] Lấy lại draft lot & expiry (An toàn hơn bằng Array.isArray)
+        const draftItem = Array.isArray(receiptDraft) ? receiptDraft.find((d) => d.product_id === i.product_id) : undefined;
 
         return {
           id: i.id as number,
@@ -134,6 +166,9 @@ export const usePurchaseOrderLogic = () => {
           allocated_shipping_fee: (i.allocated_shipping_fee as number) || 0,
           bonus_quantity: (i.bonus_quantity as number) || 0,
           is_bonus: (i.is_bonus as boolean) || false,
+          
+          input_lot: draftItem?.input_lot || undefined,
+          input_expiry: draftItem?.input_expiry || undefined,
         };
       });
 
@@ -159,6 +194,7 @@ export const usePurchaseOrderLogic = () => {
 
       calculateTotals(mappedItems);
     } catch (error: any) {
+      console.error("DEBUG PO DETAIL ERROR:", error);
       message.error(error.message || "Lỗi tải đơn hàng");
       navigate("/purchase-orders");
     } finally {
@@ -344,6 +380,62 @@ export const usePurchaseOrderLogic = () => {
     calculateTotals(newItems);
   };
 
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = (error) => reject(error);
+    });
+
+  const handleUploadInvoice = async (file: File) => {
+    setIsUploadingInvoice(true);
+    try {
+      const base64_data = await fileToBase64(file);
+      const mime_type = file.type;
+      
+      const expected_items = itemsList.map(i => ({ product_id: i.product_id, name: i.name }));
+
+      const { data, error } = await supabase.functions.invoke("scan-po-invoice-gemini", {
+        body: { base64_data, mime_type, expected_items },
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Lỗi khi trích xuất hóa đơn");
+
+      const extractedItems = data.data?.items || [];
+      if (extractedItems.length === 0) {
+        message.warning("Không tìm thấy thông tin sản phẩm, lô và hạn sử dụng trong file.");
+        return;
+      }
+
+      setItemsList((prev) => {
+        const newItems = [...prev];
+        let matchCount = 0;
+        newItems.forEach((item) => {
+          const match = extractedItems.find((e: any) => e.product_id === item.product_id);
+          if (match) {
+            if (match.lot_number) item.input_lot = match.lot_number;
+            if (match.expiry_date) item.input_expiry = match.expiry_date;
+            matchCount++;
+          }
+        });
+        form.setFieldsValue({ items: newItems });
+        if (matchCount > 0) {
+          message.success(`Đã tự động điền Lô/Hạn sử dụng cho ${matchCount} sản phẩm!`);
+        } else {
+          message.warning("Đã trích xuất dữ liệu nhưng không khớp với sản phẩm nào trong đơn.");
+        }
+        return newItems;
+      });
+    } catch (err: any) {
+      console.error(err);
+      message.error("Lỗi xử lý file: " + err.message);
+    } finally {
+      setIsUploadingInvoice(false);
+    }
+  };
+
   // --- 3. CORE LOGIC: SAVE & CONFIRM ---
 
   // [NEW] Hàm dùng chung để lưu dữ liệu (Gọi RPC Update)
@@ -378,6 +470,7 @@ export const usePurchaseOrderLogic = () => {
       total_packages: values.total_packages,
     };
 
+    let savedId: number;
     if (isEditMode) {
       // Update
       await purchaseOrderService.updatePO(
@@ -385,7 +478,7 @@ export const usePurchaseOrderLogic = () => {
         payloadData,
         payloadItems
       );
-      return Number(id);
+      savedId = Number(id);
     } else {
       // Create
       const result = await purchaseOrderService.createPO({
@@ -396,8 +489,37 @@ export const usePurchaseOrderLogic = () => {
         status: "DRAFT",
       });
       const created = result as unknown as { id: number };
-      return created.id;
+      savedId = created.id;
     }
+
+    // [NEW] Lưu draft Lô/Date vào receipt_draft cho Kho
+    try {
+      const constructedDraftData = itemsList.map(item => ({
+        sku: item.sku,
+        unit: item.uom,
+        image_url: item.image_url,
+        input_lot: item.input_lot || "",
+        product_id: item.product_id,
+        input_expiry: item.input_expiry || "",
+        product_name: item.name,
+        input_quantity: item.quantity,
+        available_units: item.available_units || [],
+        quantity_ordered: item.quantity,
+        received_batches: [],
+        quantity_remaining: item.quantity,
+        stock_management_type: "lot_date",
+        quantity_received_prev: 0
+      }));
+
+      await safeRpc("save_inbound_draft", {
+        p_po_id: savedId,
+        p_draft_data: constructedDraftData as any,
+      });
+    } catch (e) {
+      console.error("Lỗi khi lưu receipt_draft:", e);
+    }
+
+    return savedId;
   };
 
   // Nút Lưu Nháp (UI Trigger)
@@ -545,6 +667,7 @@ export const usePurchaseOrderLogic = () => {
     form,
     isEditMode,
     loading,
+    isUploadingInvoice,
     poCode,
     poStatus,
     costingConfirmedAt,
@@ -557,6 +680,7 @@ export const usePurchaseOrderLogic = () => {
     handleSelectProduct,
     handleItemChange,
     handleRemoveItem,
+    handleUploadInvoice,
     onFinish,
     confirmOrder,
     requestPayment,

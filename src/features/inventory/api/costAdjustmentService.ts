@@ -78,7 +78,7 @@ export const costAdjustmentService = {
     const { data } = await safeRpc(
       "get_batch_valuation_grid",
       {
-        p_warehouse_id: params.warehouseId ?? null,
+        p_warehouse_id: params.warehouseId ?? undefined,
         p_search: params.search ?? "",
         p_only_missing_price: params.onlyMissingPrice ?? false,
         p_limit: params.limit ?? 50,
@@ -95,7 +95,7 @@ export const costAdjustmentService = {
   async getTotalValue(warehouseId?: number | null) {
     const { data } = await safeRpc(
       "get_inventory_total_value",
-      { p_warehouse_id: warehouseId ?? null },
+      { p_warehouse_id: warehouseId ?? undefined },
       { silent: true }
     );
     const raw = (data ?? {}) as Partial<InventoryTotalValue>;

@@ -112,7 +112,7 @@ export const VatInvoiceModal: React.FC<Props> = ({
       if (deductItems.length === 0) return;
 
       await safeRpc("batch_deduct_vat_for_pos", {
-        p_items: deductItems as unknown as Record<string, unknown>[],
+        p_items: deductItems as any,
       });
     } catch {
       message.warning("Lỗi trừ kho VAT - vui lòng kiểm tra thủ công");

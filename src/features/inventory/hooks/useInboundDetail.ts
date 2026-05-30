@@ -124,11 +124,9 @@ export const useInboundDetail = (id?: string) => {
     try {
       await safeRpc("save_inbound_draft", {
         p_po_id: Number(id),
-        p_draft_data: workingItems,
+        p_draft_data: workingItems as any,
       });
-      message.success(
-        "Đã lưu nháp! Bạn có thể tắt máy và quét tiếp vào ngày mai."
-      );
+      message.success("Đã lưu nháp.");
     } catch (error: unknown) {
       console.error(error);
       const msg = error instanceof Error ? error.message : String(error);

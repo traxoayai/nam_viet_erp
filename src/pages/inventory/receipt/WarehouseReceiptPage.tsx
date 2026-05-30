@@ -56,6 +56,13 @@ type ReceivedBatchRecord = InboundDetailItem & {
   received_batches?: ReceivedBatch[];
 };
 
+// [FIX] Utility function to safely parse dates that might be in DD/MM/YYYY format
+const parseDateString = (dateStr?: string) => {
+  if (!dateStr) return null;
+  const parsed = dayjs(dateStr, ["DD/MM/YYYY", "YYYY-MM-DDTHH:mm:ss.SSSZ", "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ssZ"]);
+  return parsed.isValid() ? parsed : dayjs(dateStr);
+};
+
 const WarehouseReceiptPage = () => {
   const params = useParams();
   const navigate = useNavigate();
@@ -393,7 +400,7 @@ const WarehouseReceiptPage = () => {
                   <span style={{ fontSize: 11 }}>
                     <b>HSD:</b>{" "}
                     {batch.expiry_date
-                      ? dayjs(batch.expiry_date).format("DD/MM/YY")
+                      ? parseDateString(batch.expiry_date)?.format("DD/MM/YY") || "N/A"
                       : "N/A"}{" "}
                     - ({batch.quantity} {record.unit})
                   </span>
@@ -442,7 +449,7 @@ const WarehouseReceiptPage = () => {
             placeholder="VD: 140228"
             style={{ width: "100%" }}
             format={["DD/MM/YYYY", "DDMMYY", "DDMMYYYY", "D/M/YY", "D/M/YYYY"]}
-            value={displayExpiry ? dayjs(displayExpiry) : null}
+            value={parseDateString(displayExpiry)}
             onChange={(date) =>
               updateWorkingItem(record.product_id, {
                 input_expiry: date ? date.toISOString() : undefined,

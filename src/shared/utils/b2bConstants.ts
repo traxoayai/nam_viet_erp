@@ -1,4 +1,5 @@
 // Map trạng thái đơn hàng sang màu (Ant Design presets)
+// src: shared/utils/b2bConstants.ts
 export const B2B_STATUS_COLOR = {
   DRAFT: "default", // Xám
   QUOTE: "purple", // Tím
