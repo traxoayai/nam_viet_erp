@@ -20,34 +20,75 @@ import {
 } from "antd";
 import React from "react";
 
+import type { FormInstance } from "antd";
+
 const { Option } = Select;
 const { TextArea } = Input;
 const { Text } = Typography;
 
+interface SupplierOption {
+  id: number;
+  name: string;
+  phone?: string | null;
+}
+
+interface ShippingPartnerOption {
+  id: number;
+  name: string;
+  type?: string | null;
+}
+
+interface SupplierInfoLite {
+  contact_person?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  current_debt?: number | string | null;
+  [key: string]: unknown;
+}
+
 interface Props {
-  suppliers: any[];
-  supplierInfo: any;
+  suppliers: SupplierOption[];
+  supplierInfo: SupplierInfoLite | null;
+  /**
+   * Công nợ NCC lấy từ `supplier_debt_view` qua `financeService.getSupplierDebt`
+   * (single source of truth — đồng nhất với SupplierDetailPage / supplier list).
+   * Caller PHẢI truyền giá trị này; fallback `supplierInfo.current_debt` chỉ giữ
+   * cho hành vi cũ khi prop undefined (RPC quick_info có thể lệch view → tránh
+   * lặp lại bug PM debt).
+   */
+  currentDebt?: number | null;
   onSupplierChange: (id: number) => void;
   onShippingFeeChange: (val: number | null) => void;
-  shippingPartners?: any[];
+  shippingPartners?: ShippingPartnerOption[];
   onPartnerChange?: (partnerId: number) => void;
-  form?: any;
+  form?: FormInstance;
 }
 
 const POGeneralInfo: React.FC<Props> = ({
   suppliers,
   supplierInfo,
+  currentDebt,
   onSupplierChange,
   onShippingFeeChange,
   shippingPartners = [],
   onPartnerChange,
   form,
 }) => {
+  // Ưu tiên prop currentDebt (đã đi qua supplier_debt_view); chỉ fallback về
+  // supplierInfo.current_debt khi caller chưa migrate truyền prop.
+  const debtToShow =
+    currentDebt !== undefined && currentDebt !== null
+      ? Number(currentDebt)
+      : Number(supplierInfo?.current_debt ?? 0);
   return (
     <div style={{ marginBottom: 16 }}>
       {/* --- Thông tin NCC (fullwidth) --- */}
       <Card
-        title={<span><UserOutlined /> Thông tin NCC</span>}
+        title={
+          <span>
+            <UserOutlined /> Thông tin NCC
+          </span>
+        }
         size="small"
         styles={{ body: { padding: 12 } }}
         style={{ marginBottom: 12 }}
@@ -77,32 +118,63 @@ const POGeneralInfo: React.FC<Props> = ({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            {supplierInfo && (
-              <div style={{ padding: 8, background: "#f9f9f9", borderRadius: 6, border: "1px solid #f0f0f0", fontSize: 13, height: "100%" }}>
+            {supplierInfo ? (
+              <div
+                style={{
+                  padding: 8,
+                  background: "#f9f9f9",
+                  borderRadius: 6,
+                  border: "1px solid #f0f0f0",
+                  fontSize: 13,
+                  height: "100%",
+                }}
+              >
                 <Space direction="vertical" size={4} style={{ width: "100%" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <Text strong><UserOutlined /> {supplierInfo.contact_person || "Chưa có tên LH"}</Text>
-                    <Text><PhoneOutlined /> {supplierInfo.phone}</Text>
+                  <div
+                    style={{ display: "flex", justifyContent: "space-between" }}
+                  >
+                    <Text strong>
+                      <UserOutlined />{" "}
+                      {supplierInfo.contact_person || "Chưa có tên LH"}
+                    </Text>
+                    <Text>
+                      <PhoneOutlined /> {supplierInfo.phone}
+                    </Text>
                   </div>
                   <div>
-                    <EnvironmentOutlined /> <Text type="secondary">{supplierInfo.address || "Chưa cập nhật"}</Text>
+                    <EnvironmentOutlined />{" "}
+                    <Text type="secondary">
+                      {supplierInfo.address || "Chưa cập nhật"}
+                    </Text>
                   </div>
-                  <div style={{ marginTop: 4, borderTop: "1px dashed #ddd", paddingTop: 4 }}>
+                  <div
+                    style={{
+                      marginTop: 4,
+                      borderTop: "1px dashed #ddd",
+                      paddingTop: 4,
+                    }}
+                  >
                     <Space>
                       <Tag color="blue">Công nợ:</Tag>
-                      <Text type="danger" strong>{supplierInfo.current_debt ? Number(supplierInfo.current_debt).toLocaleString() : 0} ₫</Text>
+                      <Text type="danger" strong>
+                        {debtToShow ? debtToShow.toLocaleString() : 0} ₫
+                      </Text>
                     </Space>
                   </div>
                 </Space>
               </div>
-            )}
+            ) : null}
           </Col>
         </Row>
       </Card>
 
       {/* --- Vận chuyển + Ghi chú (fullwidth, 70/30 split) --- */}
       <Card
-        title={<span><CarOutlined /> Vận chuyển</span>}
+        title={
+          <span>
+            <CarOutlined /> Vận chuyển
+          </span>
+        }
         size="small"
         styles={{ body: { padding: 12 } }}
         id="section-shipping"
@@ -112,12 +184,20 @@ const POGeneralInfo: React.FC<Props> = ({
           <Col xs={24} md={17}>
             <Row gutter={12}>
               <Col xs={24} md={8}>
-                <Form.Item name="delivery_method" label="Hình thức giao" style={{ marginBottom: 8 }}>
+                <Form.Item
+                  name="delivery_method"
+                  label="Hình thức giao"
+                  style={{ marginBottom: 8 }}
+                >
                   <Select
                     placeholder="Chọn hình thức"
-                    onChange={() => form?.setFieldsValue({ shipping_partner_id: undefined })}
+                    onChange={() =>
+                      form?.setFieldsValue({ shipping_partner_id: undefined })
+                    }
                   >
-                    <Select.Option value="self_shipping">Tự giao / Xe cá nhân</Select.Option>
+                    <Select.Option value="self_shipping">
+                      Tự giao / Xe cá nhân
+                    </Select.Option>
                     <Select.Option value="internal">Xe nội bộ</Select.Option>
                     <Select.Option value="app">App Công nghệ</Select.Option>
                     <Select.Option value="coach">Nhà xe / Chành</Select.Option>
@@ -126,16 +206,35 @@ const POGeneralInfo: React.FC<Props> = ({
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.delivery_method !== curr.delivery_method}>
+                <Form.Item
+                  noStyle
+                  shouldUpdate={(prev, curr) =>
+                    prev.delivery_method !== curr.delivery_method
+                  }
+                >
                   {({ getFieldValue }) => {
                     const method = getFieldValue("delivery_method");
-                    const filtered = shippingPartners.filter((p) => p.type === method);
-                    const isDisabled = method === "internal" || method === "supplier";
+                    const filtered = shippingPartners.filter(
+                      (p) => p.type === method
+                    );
+                    const isDisabled =
+                      method === "internal" || method === "supplier";
                     return (
-                      <Form.Item name="shipping_partner_id" label="Đối tác VC" style={{ marginBottom: 8 }}>
-                        <Select placeholder="Chọn đối tác..." allowClear disabled={isDisabled} onChange={onPartnerChange}>
+                      <Form.Item
+                        name="shipping_partner_id"
+                        label="Đối tác VC"
+                        style={{ marginBottom: 8 }}
+                      >
+                        <Select
+                          placeholder="Chọn đối tác..."
+                          allowClear
+                          disabled={isDisabled}
+                          onChange={onPartnerChange}
+                        >
                           {filtered.map((p) => (
-                            <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
+                            <Select.Option key={p.id} value={p.id}>
+                              {p.name}
+                            </Select.Option>
                           ))}
                         </Select>
                       </Form.Item>
@@ -144,23 +243,48 @@ const POGeneralInfo: React.FC<Props> = ({
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item name="expected_delivery_date" label="Ngày giao dự kiến" style={{ marginBottom: 8 }}>
-                  <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" placeholder="Chọn ngày..." />
+                <Form.Item
+                  name="expected_delivery_date"
+                  label="Ngày giao dự kiến"
+                  style={{ marginBottom: 8 }}
+                >
+                  <DatePicker
+                    style={{ width: "100%" }}
+                    format="DD/MM/YYYY"
+                    placeholder="Chọn ngày..."
+                  />
                 </Form.Item>
               </Col>
             </Row>
             <Row gutter={12}>
               <Col xs={12} md={8}>
-                <Form.Item name="total_packages" label="Số kiện" style={{ marginBottom: 0 }}>
-                  <InputNumber placeholder="SL" style={{ width: "100%" }} min={0} />
+                <Form.Item
+                  name="total_packages"
+                  label="Số kiện"
+                  style={{ marginBottom: 0 }}
+                >
+                  <InputNumber
+                    placeholder="SL"
+                    style={{ width: "100%" }}
+                    min={0}
+                  />
                 </Form.Item>
               </Col>
               <Col xs={12} md={8}>
-                <Form.Item name="shipping_fee" label="Phí VC dự kiến" initialValue={0} style={{ marginBottom: 0 }}>
+                <Form.Item
+                  name="shipping_fee"
+                  label="Phí VC dự kiến"
+                  initialValue={0}
+                  style={{ marginBottom: 0 }}
+                >
                   <InputNumber<number>
                     style={{ width: "100%" }}
-                    formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                    parser={(v) => v!.replace(/\$\s?|(,*)/g, "") as unknown as number}
+                    formatter={(v) =>
+                      `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(v) =>
+                      v!.replace(/\$\s?|(,*)/g, "") as unknown as number
+                    }
                     addonAfter="₫"
                     min={0}
                     onChange={onShippingFeeChange}
@@ -172,8 +296,15 @@ const POGeneralInfo: React.FC<Props> = ({
 
           {/* Bên phải 30%: Ghi chú */}
           <Col xs={24} md={7}>
-            <Form.Item name="note" label="Ghi chú" style={{ marginBottom: 0, height: "100%" }}>
-              <TextArea style={{ height: "100%", minHeight: 100 }} placeholder="Nhập ghi chú cho đơn hàng..." />
+            <Form.Item
+              name="note"
+              label="Ghi chú"
+              style={{ marginBottom: 0, height: "100%" }}
+            >
+              <TextArea
+                style={{ height: "100%", minHeight: 100 }}
+                placeholder="Nhập ghi chú cho đơn hàng..."
+              />
             </Form.Item>
           </Col>
         </Row>

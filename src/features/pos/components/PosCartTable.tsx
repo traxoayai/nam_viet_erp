@@ -16,7 +16,7 @@ import {
 import { usePosCartStore } from "../stores/usePosCartStore";
 import { CartItem } from "../types/pos.types";
 
-import { moneyLineTotal } from "@/shared/utils/money";
+import { fmtMoney, moneyLineTotal } from "@/shared/utils/money";
 import { printInstruction } from "@/shared/utils/printTemplates";
 
 const { Text } = Typography;
@@ -158,10 +158,10 @@ export const PosCartTable = () => {
           }}
         >
           <Text strong style={{ fontSize: 16, color: "#fa541c" }}>
-            {moneyLineTotal(r.price, r.qty).toLocaleString("vi-VN")}
+            {fmtMoney(moneyLineTotal(r.price ?? 0, r.qty ?? 0))}
           </Text>
           <Text type="secondary" style={{ fontSize: 11 }}>
-            {r.price.toLocaleString()} / {r.unit}
+            {fmtMoney(r.price)} / {r.unit}
           </Text>
         </div>
       ),

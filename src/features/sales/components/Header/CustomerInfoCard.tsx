@@ -47,8 +47,7 @@ export const CustomerInfoCard = ({
 }: Props) => {
   // Lấy người liên hệ chính (hoặc người đầu tiên)
   const contacts = customer.contacts || [];
-  const primaryContact =
-    contacts.find((c) => c.is_primary) || contacts[0];
+  const primaryContact = contacts.find((c) => c.is_primary) || contacts[0];
 
   return (
     <Card
@@ -159,7 +158,9 @@ export const CustomerInfoCard = ({
               }}
             >
               <Text type="secondary">Hạn mức:</Text>
-              <Text strong>{customer.debt_limit.toLocaleString()} ₫</Text>
+              <Text strong>
+                {Number(customer.debt_limit || 0).toLocaleString()} ₫
+              </Text>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -178,7 +179,10 @@ export const CustomerInfoCard = ({
                 strong
                 style={{ fontSize: 15 }}
               >
-                {(Number(currentDebt || 0) + Number(newDebt || 0)).toLocaleString()} ₫
+                {(
+                  Number(currentDebt || 0) + Number(newDebt || 0)
+                ).toLocaleString()}{" "}
+                ₫
               </Text>
             </div>
 
@@ -222,7 +226,7 @@ export const CustomerInfoCard = ({
           placeholder="Nhập ghi chú (VD: giao giờ hành chính)..."
           rows={2}
           value={note}
-          onChange={(e: any) => setNote(e.target.value)}
+          onChange={(e) => setNote(e.target.value)}
         />
       </div>
     </Card>

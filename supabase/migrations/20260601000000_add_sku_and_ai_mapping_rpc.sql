@@ -44,12 +44,19 @@ DECLARE
     v_price numeric;
     v_lot text;
     v_expiry text;
-    
+
     v_internal_id bigint;
     v_internal_name text;
     v_score numeric;
     v_method text;
+
+    v_vendor_tax_code text;
 BEGIN
+    -- Lấy tax_code của supplier (vendor_product_mappings join theo vendor_tax_code, không có vendor_id)
+    SELECT tax_code INTO v_vendor_tax_code
+    FROM suppliers
+    WHERE id = p_vendor_id;
+
     FOR item IN SELECT * FROM jsonb_array_elements(p_items)
     LOOP
         v_sku := trim(item->>'sku');
@@ -59,41 +66,44 @@ BEGIN
         v_price := (item->>'unit_price')::numeric;
         v_lot := trim(item->>'lot');
         v_expiry := trim(item->>'expiry');
-        
+
         v_internal_id := NULL;
         v_internal_name := NULL;
         v_score := 0;
         v_method := NULL;
 
-        -- Cách 1: Tìm chính xác theo supplier_sku
-        IF v_sku IS NOT NULL AND v_sku != '' THEN
-            SELECT m.internal_product_id, p.name
-            INTO v_internal_id, v_internal_name
-            FROM vendor_product_mappings m
-            JOIN products p ON p.id = m.internal_product_id
-            WHERE m.vendor_id = p_vendor_id 
-              AND m.supplier_sku = v_sku 
-            LIMIT 1;
-            
-            IF FOUND THEN
-                v_method := 'Exact SKU';
-                v_score := 1.0;
-            END IF;
-        END IF;
+        -- Chỉ tìm mapping khi vendor có tax_code
+        IF v_vendor_tax_code IS NOT NULL AND v_vendor_tax_code != '' THEN
+            -- Cách 1: Tìm chính xác theo supplier_sku
+            IF v_sku IS NOT NULL AND v_sku != '' THEN
+                SELECT m.internal_product_id, p.name
+                INTO v_internal_id, v_internal_name
+                FROM vendor_product_mappings m
+                JOIN products p ON p.id = m.internal_product_id
+                WHERE m.vendor_tax_code = v_vendor_tax_code
+                  AND m.supplier_sku = v_sku
+                LIMIT 1;
 
-        -- Cách 2: Tìm chính xác theo vendor_product_name
-        IF v_internal_id IS NULL AND v_name IS NOT NULL AND v_name != '' THEN
-            SELECT m.internal_product_id, p.name
-            INTO v_internal_id, v_internal_name
-            FROM vendor_product_mappings m
-            JOIN products p ON p.id = m.internal_product_id
-            WHERE m.vendor_id = p_vendor_id 
-              AND lower(m.vendor_product_name) = lower(v_name)
-            LIMIT 1;
-            
-            IF FOUND THEN
-                v_method := 'Exact Name';
-                v_score := 1.0;
+                IF FOUND THEN
+                    v_method := 'Exact SKU';
+                    v_score := 1.0;
+                END IF;
+            END IF;
+
+            -- Cách 2: Tìm chính xác theo vendor_product_name
+            IF v_internal_id IS NULL AND v_name IS NOT NULL AND v_name != '' THEN
+                SELECT m.internal_product_id, p.name
+                INTO v_internal_id, v_internal_name
+                FROM vendor_product_mappings m
+                JOIN products p ON p.id = m.internal_product_id
+                WHERE m.vendor_tax_code = v_vendor_tax_code
+                  AND lower(m.vendor_product_name) = lower(v_name)
+                LIMIT 1;
+
+                IF FOUND THEN
+                    v_method := 'Exact Name';
+                    v_score := 1.0;
+                END IF;
             END IF;
         END IF;
 

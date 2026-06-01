@@ -1,11 +1,19 @@
 // src/features/pos/cart/store.ts
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { CartItem, CartTotals, PosVoucher, PosProductSearchResult } from "@/features/pos/types/pos.types";
+
+import {
+  CartItem,
+  CartTotals,
+  PosVoucher,
+  PosProductSearchResult,
+} from "@/features/pos/types/pos.types";
 
 interface PosCartState {
   items: CartItem[];
-  customer: any | null; // Sẽ chứa { id, name, debt_amount, ... }
+  // Legacy: customer shape chưa chuẩn hoá (id, name, debt_amount, ...) → refactor riêng PR.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  customer: any | null;
   isInvoiceRequested: boolean; // Khách có yêu cầu xuất VAT không?
   selectedVoucher: PosVoucher | null;
 
@@ -13,8 +21,10 @@ interface PosCartState {
   addToCart: (product: PosProductSearchResult) => void;
   removeFromCart: (id: number) => void;
   updateQuantity: (id: number, qty: number) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- value type phụ thuộc field name, cần discriminated union
   updateItemField: (id: number, field: keyof CartItem, value: any) => void;
-  
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- xem note customer
   setCustomer: (cust: any) => void;
   toggleInvoiceRequest: () => void; // Đổi tên hàm VAT
   applyVoucher: (voucher: PosVoucher | null) => void;
@@ -42,7 +52,12 @@ export const usePosCartStore = create<PosCartState>()(
             ),
           });
         } else {
-          set({ items: [...items, { ...product, qty: 1, price: product.retail_price, dosage: "" }] });
+          set({
+            items: [
+              ...items,
+              { ...product, qty: 1, price: product.retail_price, dosage: "" },
+            ],
+          });
         }
       },
 
@@ -62,42 +77,52 @@ export const usePosCartStore = create<PosCartState>()(
         })),
 
       setCustomer: (cust) => set({ customer: cust, selectedVoucher: null }),
-      
-      toggleInvoiceRequest: () => set((state) => ({ isInvoiceRequested: !state.isInvoiceRequested })),
-      
+
+      toggleInvoiceRequest: () =>
+        set((state) => ({ isInvoiceRequested: !state.isInvoiceRequested })),
+
       applyVoucher: (voucher) => set({ selectedVoucher: voucher }),
-      
-      clearCart: () => set({ items: [], customer: null, selectedVoucher: null, isInvoiceRequested: false }),
+
+      clearCart: () =>
+        set({
+          items: [],
+          customer: null,
+          selectedVoucher: null,
+          isInvoiceRequested: false,
+        }),
 
       getTotals: () => {
         const { items, selectedVoucher, customer } = get();
-        
+
         // 1. Tổng tiền hàng
         const subTotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
-        
+
         // 2. Giảm giá (Voucher)
         let discountVal = 0;
         if (selectedVoucher) {
-            if (selectedVoucher.discount_type === 'fixed') {
-                discountVal = selectedVoucher.discount_value;
-            } else {
-                discountVal = (subTotal * selectedVoucher.discount_value) / 100;
-            }
+          if (selectedVoucher.discount_type === "fixed") {
+            discountVal = selectedVoucher.discount_value;
+          } else {
+            discountVal = (subTotal * selectedVoucher.discount_value) / 100;
+          }
         }
         if (discountVal > subTotal) discountVal = subTotal; // Không giảm âm tiền
 
-        // 3. Nợ cũ (Lấy từ thông tin khách hàng)
+        // 3. Tổng phải thu ĐƠN HÀNG NÀY (KHÔNG gộp nợ cũ — nợ cũ gạch riêng).
+        const orderTotal = subTotal - discountVal;
+
+        // 4. Nợ cũ (tham khảo, KHÔNG cộng vào orderTotal).
         const debtAmount = customer?.debt_amount || 0;
 
-        // 4. Tổng thanh toán
-        // Công thức: (Hàng - Voucher) + Nợ
-        const grandTotal = (subTotal - discountVal) + debtAmount;
+        // 5. grandTotal giữ field cho consumers cũ; = orderTotal (không gộp nợ cũ).
+        const grandTotal = orderTotal;
 
         return {
-            subTotal,
-            discountVal,
-            debtAmount,
-            grandTotal
+          subTotal,
+          discountVal,
+          orderTotal,
+          debtAmount,
+          grandTotal,
         };
       },
     }),

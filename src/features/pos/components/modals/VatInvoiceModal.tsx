@@ -112,7 +112,8 @@ export const VatInvoiceModal: React.FC<Props> = ({
       if (deductItems.length === 0) return;
 
       await safeRpc("batch_deduct_vat_for_pos", {
-        p_items: deductItems as any,
+        p_items:
+          deductItems as unknown as import("@/shared/lib/database.types").Json,
       });
     } catch {
       message.warning("Lỗi trừ kho VAT - vui lòng kiểm tra thủ công");
@@ -245,12 +246,25 @@ export const VatInvoiceModal: React.FC<Props> = ({
       const excelRows = validItems.map((item, index) => {
         const isBaseRow = index === 0;
 
-        let vatStr = String(item.vat_rate);
+        // Guard NULL/invalid vat_rate & price — tránh NaN ghi vào file HĐ VAT
+        const vatRate = Number(item.vat_rate ?? 0);
+        const grossPrice = Number(item.price ?? 0);
+        if (!Number.isFinite(vatRate) || vatRate < 0) {
+          throw new Error(
+            `Thuế suất không hợp lệ cho mặt hàng "${item.name}" (vat_rate=${String(item.vat_rate)})`
+          );
+        }
+        if (!Number.isFinite(grossPrice) || grossPrice <= 0) {
+          throw new Error(
+            `Đơn giá không hợp lệ cho mặt hàng "${item.name}" (price=${String(item.price)})`
+          );
+        }
+
+        let vatStr = String(vatRate);
         if (vatStr === "0") vatStr = "0";
 
         // Tính toán Net/Gross
-        const vatPercent = item.vat_rate / 100;
-        const grossPrice = item.price;
+        const vatPercent = vatRate / 100;
         const netPrice = grossPrice / (1 + vatPercent);
         const netAmount = netPrice * item.vat_qty;
 

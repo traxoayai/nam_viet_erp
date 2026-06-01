@@ -39,7 +39,7 @@ interface PosCartState {
   removeOrder: (id: string) => void; // Đóng tab
 
   // Actions cho Giỏ hàng (Tác động vào activeOrderId)
-  addToCart: (product: PosProductSearchResult) => void;
+  addToCart: (product: PosProductSearchResult) => Promise<void>;
   removeFromCart: (itemId: number) => void;
   updateQuantity: (itemId: number, qty: number) => void;
   updateItemField: (
@@ -127,8 +127,8 @@ export const usePosCartStore = create<PosCartState>()(
         set({ orders: newOrders, activeOrderId: newActiveId });
       },
 
-      addToCart: (product) => {
-        const { orders, activeOrderId } = get();
+      addToCart: async (product) => {
+        const { activeOrderId, warehouseId } = get();
 
         // [FIX] Map lại vị trí kho từ API (phẳng) sang Object (để UI dùng không bị lỗi)
         const flat = product as unknown as Record<string, string>;
@@ -141,14 +141,56 @@ export const usePosCartStore = create<PosCartState>()(
           },
         };
 
-        const newOrders = orders.map((order) => {
-          if (order.id !== activeOrderId) return order;
-
-          // Validate tồn kho...
-          if ((normalizedProduct.stock_quantity || 0) <= 0) {
-            message.warning(`"${normalizedProduct.name}" hết hàng!`);
-            return order;
+        // [FIX stale-stock] Re-fetch available_stock realtime trước khi validate
+        // (snapshot stock_quantity từ search_pos có thể bị stale khi:
+        //  - cashier khác đang bán cùng SP
+        //  - vừa có đơn CONFIRMED ở warehouse khác trừ committed_stock)
+        let availableStock = normalizedProduct.stock_quantity || 0;
+        if (warehouseId != null) {
+          try {
+            const { data } = await safeRpc(
+              "get_product_available_stock",
+              {
+                p_warehouse_id: warehouseId,
+                p_product_ids: [normalizedProduct.id],
+              },
+              { silent: true }
+            );
+            const rows = (data ?? []) as unknown as Array<{
+              product_id: number;
+              available_stock: number;
+            }>;
+            const row = rows.find((r) => r.product_id === normalizedProduct.id);
+            if (row) availableStock = row.available_stock || 0;
+          } catch (err) {
+            console.error("get_product_available_stock failed", err);
+            // Fail-safe: dùng snapshot stock_quantity nếu RPC lỗi
           }
+        }
+
+        // [FIX] Discard nếu user đã switch tab trong khi await RPC
+        const stateAfter = get();
+        if (stateAfter.activeOrderId !== activeOrderId) return;
+
+        const currentOrder = stateAfter.orders.find(
+          (o) => o.id === activeOrderId
+        );
+        const existingQty =
+          currentOrder?.items.find((i) => i.id === normalizedProduct.id)?.qty ??
+          0;
+        const requestedQty = existingQty + 1;
+
+        if (availableStock <= 0) {
+          message.warning(`"${normalizedProduct.name}" hết hàng!`);
+          return;
+        }
+        if (requestedQty > availableStock) {
+          message.warning(`Kho chỉ còn ${availableStock}`);
+          return;
+        }
+
+        const newOrders = stateAfter.orders.map((order) => {
+          if (order.id !== activeOrderId) return order;
 
           const existingItem = order.items.find(
             (i) => i.id === normalizedProduct.id
@@ -156,15 +198,6 @@ export const usePosCartStore = create<PosCartState>()(
           let newItems = [];
 
           if (existingItem) {
-            if (
-              existingItem.qty + 1 >
-              (normalizedProduct.stock_quantity || 0)
-            ) {
-              message.warning(
-                `Kho chỉ còn ${normalizedProduct.stock_quantity}`
-              );
-              return order;
-            }
             newItems = order.items.map((i) =>
               i.id === normalizedProduct.id ? { ...i, qty: i.qty + 1 } : i
             );
@@ -173,6 +206,9 @@ export const usePosCartStore = create<PosCartState>()(
               ...order.items,
               {
                 ...normalizedProduct,
+                // Sync stock_quantity về available_stock realtime để
+                // updateQuantity validate sau này không lệch
+                stock_quantity: availableStock,
                 qty: 1,
                 price: normalizedProduct.retail_price,
                 dosage: "",
@@ -337,7 +373,13 @@ export const usePosCartStore = create<PosCartState>()(
       getTotals: () => {
         const currentOrder = get().getCurrentOrder();
         if (!currentOrder)
-          return { subTotal: 0, discountVal: 0, debtAmount: 0, grandTotal: 0 };
+          return {
+            subTotal: 0,
+            discountVal: 0,
+            orderTotal: 0,
+            debtAmount: 0,
+            grandTotal: 0,
+          };
 
         const { items, selectedVoucher, customer } = currentOrder;
 
@@ -371,15 +413,23 @@ export const usePosCartStore = create<PosCartState>()(
 
         if (discountVal > subTotal) discountVal = subTotal;
 
-        // 3. Nợ cũ
+        // 3. Tổng phải thu cho ĐƠN HÀNG NÀY (KHÔNG gộp nợ cũ).
+        //    Dùng cho QR pay, "KHÁCH TRẢ", tính tiền thừa, allocate finance_transaction
+        //    ref_type='order'. Nợ cũ là giao dịch riêng (ref_type='customer_debt').
+        const orderTotal = subTotal - discountVal;
+
+        // 4. Nợ cũ (tham khảo). KHÔNG cộng vào orderTotal — gạch nợ NV phải bấm
+        //    riêng để BE tạo finance_transaction ref_type='customer_debt'.
         const debtAmount = customer?.debt_amount || 0;
 
-        // 4. Tổng thanh toán
-        const grandTotal = subTotal - discountVal + debtAmount;
+        // 5. grandTotal giữ lại để consumers cũ không vỡ build, nhưng KHÔNG
+        //    còn gộp nợ cũ. Hiển thị "tổng khách ôm" phải tự cộng orderTotal + debtAmount.
+        const grandTotal = orderTotal;
 
         return {
           subTotal,
           discountVal,
+          orderTotal,
           debtAmount,
           grandTotal,
         };

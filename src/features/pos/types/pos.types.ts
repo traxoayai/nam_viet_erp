@@ -30,7 +30,15 @@ export interface CartItem extends PosProductSearchResult {
 export interface CartTotals {
   subTotal: number;
   discountVal: number;
+  /** Tổng phải thu cho ĐƠN HÀNG NÀY (subTotal - discountVal). Dùng cho QR/khách trả/tiền thừa. */
+  orderTotal: number;
+  /** Nợ cũ của khách (tham khảo). KHÔNG cộng vào orderTotal — gạch nợ là giao dịch riêng. */
   debtAmount: number;
+  /**
+   * @deprecated Trước đây = orderTotal + debtAmount, gây double-count khi gộp tiền đơn này + nợ cũ.
+   * Hiện = orderTotal để consumers cũ KHÔNG ép khách trả 1 cục lẫn nợ cũ.
+   * Hiển thị "tổng khách ôm" (đơn này + nợ cũ) phải tự cộng `orderTotal + debtAmount`.
+   */
   grandTotal: number;
 }
 

@@ -1,4 +1,8 @@
 // src/pages/purchasing/hooks/usePurchaseOrderLogic.ts
+/* eslint-disable @typescript-eslint/no-explicit-any --
+ * Legacy: ~30 any tồn tại từ PM commit (ba0dbcb). Refactor type-safe riêng PR
+ * sau khi gen lại Database types + đụng toàn module purchasing → để task này
+ * không bị scope creep. KHÔNG ADD any mới trong file này. */
 import { Form, App } from "antd";
 import dayjs from "dayjs";
 import { useState, useEffect, useCallback } from "react";
@@ -53,6 +57,10 @@ export const usePurchaseOrderLogic = () => {
     []
   );
   const [supplierInfo, setSupplierInfo] = useState<any>(null);
+  // Công nợ NCC lấy thẳng từ supplier_debt_view — single source. Tách khỏi
+  // supplierInfo để mọi UI consume cùng 1 con số (đồng nhất với SupplierDetailPage
+  // + supplier list), tránh lệch khi RPC get_supplier_quick_info trả số cached.
+  const [currentDebt, setCurrentDebt] = useState<number | null>(null);
 
   // Modal State
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -72,6 +80,7 @@ export const usePurchaseOrderLogic = () => {
       }
     };
     initData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy lại khi id thay đổi; các function ref ổn định
   }, [id]);
 
   const fetchShippingPartners = async () => {
@@ -97,7 +106,7 @@ export const usePurchaseOrderLogic = () => {
       const supplier = po.supplier as Record<string, unknown> | undefined;
       if (supplier?.id) {
         // Song song: thông tin tổng quát NCC + công nợ thực từ view (single source).
-        const [{ data: richInfo }, currentDebt] = await Promise.all([
+        const [{ data: richInfo }, debtFromView] = await Promise.all([
           safeRpc("get_supplier_quick_info", {
             p_supplier_id: supplier.id as number,
           }),
@@ -115,8 +124,9 @@ export const usePurchaseOrderLogic = () => {
         setSupplierInfo({
           ...supplier,
           ...richObj,
-          ...(currentDebt !== null ? { current_debt: currentDebt } : {}),
+          ...(debtFromView !== null ? { current_debt: debtFromView } : {}),
         });
+        setCurrentDebt(debtFromView);
       }
 
       // [FIX] Lấy thông tin Lô/Hạn sử dụng từ receipt_draft để hiển thị lại
@@ -135,7 +145,9 @@ export const usePurchaseOrderLogic = () => {
           if (typeof parsed === "string") {
             try {
               parsed = JSON.parse(parsed);
-            } catch (e) {}
+            } catch {
+              /* ignore parse error */
+            }
           }
           if (Array.isArray(parsed)) {
             receiptDraft = parsed;
@@ -244,7 +256,7 @@ export const usePurchaseOrderLogic = () => {
     const found = suppliers.find((s) => s.id === supplierId);
     if (found) {
       // Song song: quick info (lead_time, contact...) + công nợ từ view (single source).
-      const [{ data }, currentDebt] = await Promise.all([
+      const [{ data }, debtFromView] = await Promise.all([
         safeRpc("get_supplier_quick_info", { p_supplier_id: supplierId }),
         financeService.getSupplierDebt(supplierId).catch((err: unknown) => {
           console.error("[handleSupplierChange] getSupplierDebt failed", err);
@@ -255,8 +267,9 @@ export const usePurchaseOrderLogic = () => {
       setSupplierInfo({
         ...found,
         ...info,
-        ...(currentDebt !== null ? { current_debt: currentDebt } : {}),
+        ...(debtFromView !== null ? { current_debt: debtFromView } : {}),
       });
+      setCurrentDebt(debtFromView);
       if (info?.lead_time) {
         form.setFieldsValue({
           expected_delivery_date: dayjs().add(info.lead_time as number, "day"),
@@ -326,24 +339,38 @@ export const usePurchaseOrderLogic = () => {
     }
 
     // [NEW] Fetch đơn vị tính chuẩn từ bảng product_units
-    const { data: unitsDataRaw } = await supabase.from('product_units').select('*').eq('product_id', p.id);
+    const { data: unitsDataRaw } = await supabase
+      .from("product_units")
+      .select("*")
+      .eq("product_id", p.id);
     const unitsData = (unitsDataRaw || []).map((u: any) => ({
       ...u,
       conversion_rate: u.conversion_rate || 1,
-      is_base: u.is_base || false
+      is_base: u.is_base || false,
     }));
 
-    const wholesaleUnitObj = unitsData.find((u: any) => u.unit_type === 'wholesale');
-    const retailUnitObj = unitsData.find((u: any) => u.unit_type === 'retail' || u.is_base);
+    const wholesaleUnitObj = unitsData.find(
+      (u: any) => u.unit_type === "wholesale"
+    );
+    const retailUnitObj = unitsData.find(
+      (u: any) => u.unit_type === "retail" || u.is_base
+    );
 
     let wholesaleUnit: string = wholesaleUnitObj?.unit_name || "";
     if (!wholesaleUnit) {
-      message.warning(`Sản phẩm [${p.name}] chưa được thiết lập đơn vị Wholesale trong hệ thống! Vui lòng cập nhật.`);
+      message.warning(
+        `Sản phẩm [${p.name}] chưa được thiết lập đơn vị Wholesale trong hệ thống! Vui lòng cập nhật.`
+      );
       wholesaleUnit = p.wholesale_unit || p.wholesaleUnit || "Hộp"; // Fallback
     }
-    
-    const retailUnit = retailUnitObj?.unit_name || p.retail_unit || p.retailUnit || "Vỉ";
-    const itemsPerCarton = wholesaleUnitObj?.conversion_rate || p.items_per_carton || p.itemsPerCarton || 1;
+
+    const retailUnit =
+      retailUnitObj?.unit_name || p.retail_unit || p.retailUnit || "Vỉ";
+    const itemsPerCarton =
+      wholesaleUnitObj?.conversion_rate ||
+      p.items_per_carton ||
+      p.itemsPerCarton ||
+      1;
 
     // Giá cost: Ưu tiên giá nhập gần nhất -> giá vốn thực tế -> 0
     const basePrice =
@@ -360,7 +387,16 @@ export const usePurchaseOrderLogic = () => {
       name: p.name,
       image_url: p.image_url,
       quantity: 1,
-      available_units: unitsData.length > 0 ? unitsData : [{ unit_name: wholesaleUnit, conversion_rate: itemsPerCarton, is_base: false }],
+      available_units:
+        unitsData.length > 0
+          ? unitsData
+          : [
+              {
+                unit_name: wholesaleUnit,
+                conversion_rate: itemsPerCarton,
+                is_base: false,
+              },
+            ],
 
       // 3. [FIX] Luôn set mặc định là Đơn vị nhập (Wholesale Unit)
       uom: wholesaleUnit,
@@ -504,10 +540,12 @@ export const usePurchaseOrderLogic = () => {
     try {
       const base64_data = await fileToBase64(file);
       const mime_type = file.type;
-      
+
       const supplier_id = form.getFieldValue("supplier_id");
       if (!supplier_id) {
-        message.warning("Vui lòng chọn Nhà cung cấp trước khi sử dụng tính năng này!");
+        message.warning(
+          "Vui lòng chọn Nhà cung cấp trước khi sử dụng tính năng này!"
+        );
         return;
       }
 
@@ -520,7 +558,8 @@ export const usePurchaseOrderLogic = () => {
       );
 
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Lỗi khi trích xuất hóa đơn");
+      if (!data?.success)
+        throw new Error(data?.error || "Lỗi khi trích xuất hóa đơn");
 
       const extractedItems = data.data?.items || [];
       if (extractedItems.length === 0) {
@@ -529,46 +568,73 @@ export const usePurchaseOrderLogic = () => {
       }
 
       // 2. Gọi RPC map_scanned_invoice_products
-      const { data: mappedItems, error: rpcError } = await safeRpc("map_scanned_invoice_products", {
-        p_vendor_id: supplier_id,
-        p_items: extractedItems
-      });
+      const { data: mappedItems, error: rpcError } = await safeRpc(
+        "map_scanned_invoice_products",
+        {
+          p_vendor_id: supplier_id,
+          p_items: extractedItems,
+        }
+      );
 
       if (rpcError) throw rpcError;
       if (!mappedItems || mappedItems.length === 0) {
-        message.warning("Đã quét thành công nhưng không map được với sản phẩm nào trong hệ thống.");
+        message.warning(
+          "Đã quét thành công nhưng không map được với sản phẩm nào trong hệ thống."
+        );
         return;
       }
 
       // 3. Đưa vào State
       const newPOItems: POItem[] = [];
-      
+
       for (const item of mappedItems as any[]) {
         if (!item.internal_product_id) continue;
 
         // Fetch detail product to get unit rules & base price
-        const { data: pData } = await supabase.from('products').select('*, product_units(*)').eq('id', item.internal_product_id).single();
+        const { data: pData } = await supabase
+          .from("products")
+          .select("*, product_units(*)")
+          .eq("id", item.internal_product_id)
+          .single();
         if (!pData) continue;
 
         const p = pData as any;
         const unitsData = (p.product_units || []).map((u: any) => ({
           ...u,
           conversion_rate: u.conversion_rate || 1,
-          is_base: u.is_base || false
+          is_base: u.is_base || false,
         }));
-        
-        const wholesaleUnitObj = unitsData.find((u: any) => u.unit_type === 'wholesale');
-        const retailUnitObj = unitsData.find((u: any) => u.unit_type === 'retail' || u.is_base);
+
+        const wholesaleUnitObj = unitsData.find(
+          (u: any) => u.unit_type === "wholesale"
+        );
+        const retailUnitObj = unitsData.find(
+          (u: any) => u.unit_type === "retail" || u.is_base
+        );
 
         let wholesaleUnit: string = wholesaleUnitObj?.unit_name || "";
         if (!wholesaleUnit) {
-          message.warning(`Sản phẩm [${p.name}] chưa được thiết lập đơn vị Wholesale! AI đã dùng đơn vị trên hóa đơn.`);
-          wholesaleUnit = item.unit || p.wholesale_unit || p.wholesaleUnit || "Hộp"; // Fallback AI unit
+          message.warning(
+            `Sản phẩm [${p.name}] chưa được thiết lập đơn vị Wholesale! AI đã dùng đơn vị trên hóa đơn.`
+          );
+          wholesaleUnit =
+            item.unit || p.wholesale_unit || p.wholesaleUnit || "Hộp"; // Fallback AI unit
         }
 
-        const retailUnit = retailUnitObj?.unit_name || p.retail_unit || p.retailUnit || "Vỉ";
-        const itemsPerCarton = wholesaleUnitObj?.conversion_rate || p.items_per_carton || p.itemsPerCarton || 1;
-        const basePrice = p.latest_purchase_price || p.latestPurchasePrice || p.last_price || p.actual_cost || p.price || 0;
+        const retailUnit =
+          retailUnitObj?.unit_name || p.retail_unit || p.retailUnit || "Vỉ";
+        const itemsPerCarton =
+          wholesaleUnitObj?.conversion_rate ||
+          p.items_per_carton ||
+          p.itemsPerCarton ||
+          1;
+        const basePrice =
+          p.latest_purchase_price ||
+          p.latestPurchasePrice ||
+          p.last_price ||
+          p.actual_cost ||
+          p.price ||
+          0;
 
         const qty = item.quantity || 1;
         const mappedPrice = item.unit_price > 0 ? item.unit_price : basePrice;
@@ -579,7 +645,16 @@ export const usePurchaseOrderLogic = () => {
           name: p.name,
           image_url: p.image_url,
           quantity: qty,
-          available_units: unitsData.length > 0 ? unitsData : [{ unit_name: wholesaleUnit, conversion_rate: itemsPerCarton, is_base: false }],
+          available_units:
+            unitsData.length > 0
+              ? unitsData
+              : [
+                  {
+                    unit_name: wholesaleUnit,
+                    conversion_rate: itemsPerCarton,
+                    is_base: false,
+                  },
+                ],
           uom: item.unit || wholesaleUnit,
           unit_price: mappedPrice,
           discount: 0,
@@ -593,24 +668,27 @@ export const usePurchaseOrderLogic = () => {
           is_bonus: false,
           input_lot: item.lot || undefined,
           input_expiry: item.expiry || undefined,
-          is_ai_suggested: item.match_method === 'Fuzzy Match',
+          is_ai_suggested: item.match_method === "Fuzzy Match",
           expected_pre_vat_price: item.expected_pre_vat_price,
-          expected_vat: item.expected_vat
+          expected_vat: item.expected_vat,
         } as POItem & { is_ai_suggested?: boolean };
 
         newPOItems.push(newItem);
       }
 
       if (newPOItems.length === 0) {
-         message.warning("AI đã đọc được sản phẩm nhưng không có sản phẩm nào khớp trong hệ thống.");
-         return;
+        message.warning(
+          "AI đã đọc được sản phẩm nhưng không có sản phẩm nào khớp trong hệ thống."
+        );
+        return;
       }
 
       setItemsList(newPOItems);
       form.setFieldsValue({ items: newPOItems });
       calculateTotals(newPOItems);
-      message.success(`Đã tự động tạo ${newPOItems.length} sản phẩm từ hóa đơn!`);
-
+      message.success(
+        `Đã tự động tạo ${newPOItems.length} sản phẩm từ hóa đơn!`
+      );
     } catch (err: any) {
       console.error(err);
       message.error("Lỗi xử lý tự động tạo SP: " + err.message);
@@ -860,6 +938,7 @@ export const usePurchaseOrderLogic = () => {
     shippingPartners,
     suppliers,
     supplierInfo,
+    currentDebt,
     handleSelectProduct,
     handleItemChange,
     handleRemoveItem,

@@ -84,7 +84,7 @@ export const ProductSearchBar = ({ onSelect }: Props) => {
                       color: item.stock_quantity > 0 ? "green" : "red",
                     }}
                   >
-                    Tồn: {item.stock_quantity.toLocaleString()}{" "}
+                    Tồn: {item.stock_quantity?.toLocaleString() ?? "0"}{" "}
                     {item.wholesale_unit}
                   </div>
                 </Col>
@@ -113,11 +113,12 @@ export const ProductSearchBar = ({ onSelect }: Props) => {
       placeholder="🔍 Gõ tên, SKU hoặc quét mã vạch để thêm hàng..."
       filterOption={false}
       onSearch={setSearch}
-      onSelect={(_, option: any) => {
-        if (option?.product) {
+      onSelect={(_, option) => {
+        const opt = option as unknown as { product?: ProductB2B };
+        if (opt?.product) {
           // Vô hiệu hoá in-flight requests sau khi chọn
           latestReqIdRef.current += 1;
-          onSelect(option.product);
+          onSelect(opt.product);
           setSearch(""); // Reset sau khi chọn
         }
       }}

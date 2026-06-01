@@ -1,6 +1,15 @@
 // src/pages/purchasing/PurchaseOrderDetail.tsx
 import { SaveOutlined, UploadOutlined } from "@ant-design/icons";
-import { Layout, Form, ConfigProvider, App, Card, Typography, Button, Upload } from "antd";
+import {
+  Layout,
+  Form,
+  ConfigProvider,
+  App,
+  Card,
+  Typography,
+  Button,
+  Upload,
+} from "antd";
 import viVN from "antd/locale/vi_VN";
 import { useState, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
@@ -8,7 +17,9 @@ import { useParams } from "react-router-dom";
 import POGeneralInfo from "./components/POGeneralInfo";
 import POHeaderAction from "./components/POHeaderAction";
 import POProductTable from "./components/POProductTable";
-import PurchaseCostingSection, { CostingData } from "./components/PurchaseCostingSection";
+import PurchaseCostingSection, {
+  CostingData,
+} from "./components/PurchaseCostingSection";
 import { usePurchaseOrderLogic } from "./hooks/usePurchaseOrderLogic";
 
 import CreateInvoiceFromPO from "@/features/finance/components/invoices/CreateInvoiceFromPO";
@@ -22,7 +33,9 @@ import { printPurchaseOrder } from "@/shared/utils/printTemplates";
 const { Content } = Layout;
 
 const scrollToSection = (sectionId: string) => {
-  document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document
+    .getElementById(sectionId)
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
 const PurchaseOrderDetailContent = () => {
@@ -36,6 +49,7 @@ const PurchaseOrderDetailContent = () => {
 
   const handleCostingComplete = useCallback(() => {
     logic.loadOrderDetail(Number(id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- logic ref ổn định (custom hook); chỉ cần id
   }, [id, logic.loadOrderDetail]);
 
   const handleInvoiceComplete = useCallback(() => {
@@ -60,7 +74,8 @@ const PurchaseOrderDetailContent = () => {
   };
 
   // Hiện full thông tin cho mọi status (trừ DRAFT chưa có gì)
-  const showSections = logic.isEditMode && logic.poStatus !== "DRAFT";
+  const showSections: boolean =
+    logic.isEditMode === true && logic.poStatus !== "DRAFT";
   const isCostingLocked = !!logic.costingConfirmedAt;
 
   return (
@@ -86,17 +101,18 @@ const PurchaseOrderDetailContent = () => {
       <Content style={{ padding: "0 24px", maxWidth: "100%" }}>
         {/* Thông tin chung + Sản phẩm */}
         <div id="section-general">
-        <Form form={logic.form} layout="vertical" onFinish={logic.onFinish}>
-          <POGeneralInfo
-            suppliers={logic.suppliers}
-            supplierInfo={logic.supplierInfo}
-            onSupplierChange={logic.handleSupplierChange}
-            onShippingFeeChange={logic.handleShippingFeeChange}
-            shippingPartners={logic.shippingPartners}
-            onPartnerChange={logic.handlePartnerChange}
-            form={logic.form}
-          />
-        </Form>
+          <Form form={logic.form} layout="vertical" onFinish={logic.onFinish}>
+            <POGeneralInfo
+              suppliers={logic.suppliers}
+              supplierInfo={logic.supplierInfo}
+              currentDebt={logic.currentDebt}
+              onSupplierChange={logic.handleSupplierChange}
+              onShippingFeeChange={logic.handleShippingFeeChange}
+              shippingPartners={logic.shippingPartners}
+              onPartnerChange={logic.handlePartnerChange}
+              form={logic.form}
+            />
+          </Form>
         </div>
 
         <div
@@ -117,7 +133,14 @@ const PurchaseOrderDetailContent = () => {
           >
             Sản phẩm
           </div>
-          <div style={{ padding: "8px 16px", borderBottom: "1px solid #f0f0f0", display: "flex", gap: "8px" }}>
+          <div
+            style={{
+              padding: "8px 16px",
+              borderBottom: "1px solid #f0f0f0",
+              display: "flex",
+              gap: "8px",
+            }}
+          >
             <DebounceProductSelect
               key={logic.searchKey}
               placeholder="Tìm thuốc theo tên, hoạt chất, mã vạch..."
@@ -126,9 +149,9 @@ const PurchaseOrderDetailContent = () => {
               onChange={logic.handleSelectProduct}
             />
             {logic.itemsList.length === 0 ? (
-              <UploadFullInvoiceButton 
-                loading={logic.isUploadingInvoice} 
-                onUpload={logic.handleUploadFullInvoice} 
+              <UploadFullInvoiceButton
+                loading={logic.isUploadingInvoice}
+                onUpload={logic.handleUploadFullInvoice}
               />
             ) : (
               <Upload
@@ -139,15 +162,15 @@ const PurchaseOrderDetailContent = () => {
                   return false;
                 }}
               >
-                <Button 
+                <Button
                   type="primary"
-                  icon={<UploadOutlined />} 
+                  icon={<UploadOutlined />}
                   loading={logic.isUploadingInvoice}
-                  style={{ 
-                    background: 'linear-gradient(90deg, #1890ff, #722ed1)', 
-                    borderColor: 'transparent',
-                    boxShadow: '0 2px 8px rgba(114, 46, 209, 0.4)',
-                    fontWeight: 500
+                  style={{
+                    background: "linear-gradient(90deg, #1890ff, #722ed1)",
+                    borderColor: "transparent",
+                    boxShadow: "0 2px 8px rgba(114, 46, 209, 0.4)",
+                    fontWeight: 500,
                   }}
                 >
                   Upload Hóa Đơn / Phiếu Xuất
@@ -165,6 +188,7 @@ const PurchaseOrderDetailContent = () => {
         </div>
 
         {/* Section: Đối Chiếu Hóa Đơn VAT */}
+        {/* eslint-disable-next-line react/jsx-no-leaked-render -- showSections explicit boolean */}
         {showSections && (
           <div id="section-invoice" style={{ marginTop: 16 }}>
             <Card
@@ -181,12 +205,28 @@ const PurchaseOrderDetailContent = () => {
                 onRequestPayment={logic.requestPayment}
                 onOpenCreateInvoice={() => {
                   setShowCreateInvoice(true);
-                  setTimeout(() => createInvoiceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+                  setTimeout(
+                    () =>
+                      createInvoiceRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      }),
+                    100
+                  );
                 }}
               />
 
+              {/* eslint-disable-next-line react/jsx-no-leaked-render -- useState boolean */}
               {showCreateInvoice && (
-                <div ref={createInvoiceRef} style={{ marginTop: 16, border: "2px solid #52c41a", borderRadius: 8, padding: 16 }}>
+                <div
+                  ref={createInvoiceRef}
+                  style={{
+                    marginTop: 16,
+                    border: "2px solid #52c41a",
+                    borderRadius: 8,
+                    padding: 16,
+                  }}
+                >
                   <CreateInvoiceFromPO
                     poId={Number(id)}
                     poItems={logic.itemsList}
@@ -200,6 +240,7 @@ const PurchaseOrderDetailContent = () => {
         )}
 
         {/* Section: Tính Giá Vốn */}
+        {/* eslint-disable-next-line react/jsx-no-leaked-render -- showSections explicit boolean */}
         {showSections && (
           <div id="section-costing" style={{ marginTop: 24, marginBottom: 24 }}>
             <Card
@@ -224,41 +265,71 @@ const PurchaseOrderDetailContent = () => {
       </Content>
 
       {/* Bottom Sticky: Tổng hợp thanh toán */}
-      <div style={{
-        position: "sticky",
-        bottom: 0,
-        zIndex: 50,
-        background: "#fff",
-        borderTop: "2px solid #e8e8e8",
-        padding: "10px 24px",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        boxShadow: "0 -2px 8px rgba(0,0,0,0.08)",
-      }}>
+      <div
+        style={{
+          position: "sticky",
+          bottom: 0,
+          zIndex: 50,
+          background: "#fff",
+          borderTop: "2px solid #e8e8e8",
+          padding: "10px 24px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          boxShadow: "0 -2px 8px rgba(0,0,0,0.08)",
+        }}
+      >
         <div style={{ fontSize: 13, color: "#8c8c8c" }}>
-          {logic.itemsList.length} sản phẩm · {logic.financials.totalCartons || 0} thùng
+          {logic.itemsList.length} sản phẩm ·{" "}
+          {logic.financials.totalCartons || 0} thùng
         </div>
         <div style={{ display: "flex", gap: 28, alignItems: "center" }}>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 11, color: "#8c8c8c" }}>Tiền hàng</div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{(logic.financials.subtotal || 0).toLocaleString()} ₫</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>
+              {(logic.financials.subtotal || 0).toLocaleString()} ₫
+            </div>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 11, color: "#8c8c8c" }}>Phí vận chuyển</div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{(logic.financials.shippingFee || 0).toLocaleString()} ₫</div>
-          </div>
-          <div style={{ textAlign: "right", borderLeft: "2px solid #d9363e", paddingLeft: 16 }}>
-            <div style={{ fontSize: 11, color: "#8c8c8c" }}>Tổng thanh toán dự kiến</div>
-            <div style={{ fontWeight: 700, fontSize: 18, color: "#d9363e" }}>
-              {((logic.financials.subtotal || 0) + (logic.financials.shippingFee || 0)).toLocaleString()} ₫
+            <div style={{ fontWeight: 600, fontSize: 14 }}>
+              {(logic.financials.shippingFee || 0).toLocaleString()} ₫
             </div>
           </div>
+          <div
+            style={{
+              textAlign: "right",
+              borderLeft: "2px solid #d9363e",
+              paddingLeft: 16,
+            }}
+          >
+            <div style={{ fontSize: 11, color: "#8c8c8c" }}>
+              Tổng thanh toán dự kiến
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: "#d9363e" }}>
+              {(
+                (logic.financials.subtotal || 0) +
+                (logic.financials.shippingFee || 0)
+              ).toLocaleString()}{" "}
+              ₫
+            </div>
+          </div>
+          {/* eslint-disable-next-line react/jsx-no-leaked-render -- both checked explicit */}
           {showSections && costingData && (
             <>
-              <div style={{ textAlign: "right", borderLeft: "2px solid #52c41a", paddingLeft: 16 }}>
-                <div style={{ fontSize: 11, color: "#8c8c8c" }}>Tổng giá trị nhập kho (Dự kiến)</div>
-                <div style={{ fontWeight: 700, fontSize: 18, color: "#52c41a" }}>
+              <div
+                style={{
+                  textAlign: "right",
+                  borderLeft: "2px solid #52c41a",
+                  paddingLeft: 16,
+                }}
+              >
+                <div style={{ fontSize: 11, color: "#8c8c8c" }}>
+                  Tổng giá trị nhập kho (Dự kiến)
+                </div>
+                <div
+                  style={{ fontWeight: 700, fontSize: 18, color: "#52c41a" }}
+                >
                   {(costingData.costingTotal || 0).toLocaleString()} ₫
                 </div>
               </div>
@@ -277,7 +348,9 @@ const PurchaseOrderDetailContent = () => {
                   borderColor: isCostingLocked ? "#d9d9d9" : "#52c41a",
                 }}
               >
-                {isCostingLocked ? "Đã Chốt Giá Vốn ✓" : "Chốt Giá Vốn & Công Nợ"}
+                {isCostingLocked
+                  ? "Đã Chốt Giá Vốn ✓"
+                  : "Chốt Giá Vốn & Công Nợ"}
               </Button>
             </>
           )}

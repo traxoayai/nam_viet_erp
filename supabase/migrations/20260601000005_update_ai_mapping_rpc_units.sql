@@ -7,11 +7,14 @@ BEGIN;
 DROP FUNCTION IF EXISTS public.map_scanned_invoice_products(bigint, jsonb);
 
 -- 2. Alter the type to add internal_product_unit_id
-DO $$ 
+-- NOTE: No CASCADE — function depending on this type was already dropped above (step 1).
+-- Catch duplicate_object (sqlstate 42710) which is the correct error for type attributes,
+-- so re-running the migration is idempotent.
+DO $$
 BEGIN
-    ALTER TYPE public.mapped_invoice_product ADD ATTRIBUTE internal_product_unit_id bigint CASCADE;
+    ALTER TYPE public.mapped_invoice_product ADD ATTRIBUTE internal_product_unit_id bigint;
 EXCEPTION
-    WHEN duplicate_column THEN NULL;
+    WHEN duplicate_object THEN NULL;
 END $$;
 
 -- 3. Recreate the function with updated logic
