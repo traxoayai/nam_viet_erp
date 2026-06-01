@@ -316,7 +316,7 @@ export const usePurchaseOrderLogic = () => {
   };
 
   // [FIX CRITICAL] Xử lý chọn sản phẩm
-  const handleSelectProduct = (_: any, option: any) => {
+  const handleSelectProduct = async (_: any, option: any) => {
     setSearchKey((prev) => prev + 1);
     const p = option.product;
 
@@ -325,10 +325,26 @@ export const usePurchaseOrderLogic = () => {
       return;
     }
 
-    // 1. [FIX] Normalize Key Names (Chấp nhận cả snake_case và camelCase)
-    const wholesaleUnit = p.wholesale_unit || p.wholesaleUnit || "Hộp";
-    const retailUnit = p.retail_unit || p.retailUnit || "Vỉ";
-    const itemsPerCarton = p.items_per_carton || p.itemsPerCarton || 1;
+    // [NEW] Fetch đơn vị tính chuẩn từ bảng product_units
+    const { data: unitsDataRaw } = await supabase.from('product_units').select('*').eq('product_id', p.id);
+    const unitsData = (unitsDataRaw || []).map((u: any) => ({
+      ...u,
+      conversion_rate: u.conversion_rate || 1,
+      is_base: u.is_base || false
+    }));
+
+    const wholesaleUnitObj = unitsData.find((u: any) => u.unit_type === 'wholesale');
+    const retailUnitObj = unitsData.find((u: any) => u.unit_type === 'retail' || u.is_base);
+
+    let wholesaleUnit: string = wholesaleUnitObj?.unit_name || "";
+    if (!wholesaleUnit) {
+      message.warning(`Sản phẩm [${p.name}] chưa được thiết lập đơn vị Wholesale trong hệ thống! Vui lòng cập nhật.`);
+      wholesaleUnit = p.wholesale_unit || p.wholesaleUnit || "Hộp"; // Fallback
+    }
+    
+    const retailUnit = retailUnitObj?.unit_name || p.retail_unit || p.retailUnit || "Vỉ";
+    const itemsPerCarton = wholesaleUnitObj?.conversion_rate || p.items_per_carton || p.itemsPerCarton || 1;
+
     // Giá cost: Ưu tiên giá nhập gần nhất -> giá vốn thực tế -> 0
     const basePrice =
       p.latest_purchase_price ||
@@ -338,31 +354,13 @@ export const usePurchaseOrderLogic = () => {
       p.price ||
       0;
 
-    // 2. Logic tạo dropdown Units
-    const unitsData = p.available_units || p.units || [];
-    if (unitsData.length === 0) {
-      // Chỉ push nếu unit tồn tại và không trùng
-      if (wholesaleUnit)
-        unitsData.push({
-          unit_name: wholesaleUnit,
-          conversion_rate: itemsPerCarton,
-          is_base: false,
-        });
-      if (retailUnit && retailUnit !== wholesaleUnit)
-        unitsData.push({
-          unit_name: retailUnit,
-          conversion_rate: 1,
-          is_base: true,
-        });
-    }
-
     const newItem: POItem = {
       product_id: p.id,
       sku: p.sku,
       name: p.name,
       image_url: p.image_url,
       quantity: 1,
-      available_units: unitsData,
+      available_units: unitsData.length > 0 ? unitsData : [{ unit_name: wholesaleUnit, conversion_rate: itemsPerCarton, is_base: false }],
 
       // 3. [FIX] Luôn set mặc định là Đơn vị nhập (Wholesale Unit)
       uom: wholesaleUnit,
@@ -373,6 +371,7 @@ export const usePurchaseOrderLogic = () => {
       discount: 0,
       total_stock: p.total_stock ?? 0,
       avg_monthly_sold: p.avg_monthly_sold ?? 0,
+      formatted_monthly_sales_qty: p.formatted_monthly_sales_qty,
       _items_per_carton: itemsPerCarton,
       _wholesale_unit: wholesaleUnit,
       _retail_unit: retailUnit,
@@ -495,6 +494,126 @@ export const usePurchaseOrderLogic = () => {
     } catch (err: any) {
       console.error(err);
       message.error("Lỗi xử lý file: " + err.message);
+    } finally {
+      setIsUploadingInvoice(false);
+    }
+  };
+
+  const handleUploadFullInvoice = async (file: File) => {
+    setIsUploadingInvoice(true);
+    try {
+      const base64_data = await fileToBase64(file);
+      const mime_type = file.type;
+      
+      const supplier_id = form.getFieldValue("supplier_id");
+      if (!supplier_id) {
+        message.warning("Vui lòng chọn Nhà cung cấp trước khi sử dụng tính năng này!");
+        return;
+      }
+
+      // 1. Gọi Gemini bóc tách toàn bộ file
+      const { data, error } = await supabase.functions.invoke(
+        "scan-full-invoice-gemini",
+        {
+          body: { base64_data, mime_type },
+        }
+      );
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Lỗi khi trích xuất hóa đơn");
+
+      const extractedItems = data.data?.items || [];
+      if (extractedItems.length === 0) {
+        message.warning("Không tìm thấy thông tin sản phẩm nào trong file.");
+        return;
+      }
+
+      // 2. Gọi RPC map_scanned_invoice_products
+      const { data: mappedItems, error: rpcError } = await safeRpc("map_scanned_invoice_products", {
+        p_vendor_id: supplier_id,
+        p_items: extractedItems
+      });
+
+      if (rpcError) throw rpcError;
+      if (!mappedItems || mappedItems.length === 0) {
+        message.warning("Đã quét thành công nhưng không map được với sản phẩm nào trong hệ thống.");
+        return;
+      }
+
+      // 3. Đưa vào State
+      const newPOItems: POItem[] = [];
+      
+      for (const item of mappedItems as any[]) {
+        if (!item.internal_product_id) continue;
+
+        // Fetch detail product to get unit rules & base price
+        const { data: pData } = await supabase.from('products').select('*, product_units(*)').eq('id', item.internal_product_id).single();
+        if (!pData) continue;
+
+        const p = pData as any;
+        const unitsData = (p.product_units || []).map((u: any) => ({
+          ...u,
+          conversion_rate: u.conversion_rate || 1,
+          is_base: u.is_base || false
+        }));
+        
+        const wholesaleUnitObj = unitsData.find((u: any) => u.unit_type === 'wholesale');
+        const retailUnitObj = unitsData.find((u: any) => u.unit_type === 'retail' || u.is_base);
+
+        let wholesaleUnit: string = wholesaleUnitObj?.unit_name || "";
+        if (!wholesaleUnit) {
+          message.warning(`Sản phẩm [${p.name}] chưa được thiết lập đơn vị Wholesale! AI đã dùng đơn vị trên hóa đơn.`);
+          wholesaleUnit = item.unit || p.wholesale_unit || p.wholesaleUnit || "Hộp"; // Fallback AI unit
+        }
+
+        const retailUnit = retailUnitObj?.unit_name || p.retail_unit || p.retailUnit || "Vỉ";
+        const itemsPerCarton = wholesaleUnitObj?.conversion_rate || p.items_per_carton || p.itemsPerCarton || 1;
+        const basePrice = p.latest_purchase_price || p.latestPurchasePrice || p.last_price || p.actual_cost || p.price || 0;
+
+        const qty = item.quantity || 1;
+        const mappedPrice = item.unit_price > 0 ? item.unit_price : basePrice;
+
+        const newItem: POItem = {
+          product_id: p.id,
+          sku: p.sku,
+          name: p.name,
+          image_url: p.image_url,
+          quantity: qty,
+          available_units: unitsData.length > 0 ? unitsData : [{ unit_name: wholesaleUnit, conversion_rate: itemsPerCarton, is_base: false }],
+          uom: item.unit || wholesaleUnit,
+          unit_price: mappedPrice,
+          discount: 0,
+          total_stock: p.total_stock ?? 0,
+          avg_monthly_sold: p.avg_monthly_sold ?? 0,
+          formatted_monthly_sales_qty: p.formatted_monthly_sales_qty,
+          _items_per_carton: itemsPerCarton,
+          _wholesale_unit: wholesaleUnit,
+          _retail_unit: retailUnit,
+          _base_price: basePrice,
+          is_bonus: false,
+          input_lot: item.lot || undefined,
+          input_expiry: item.expiry || undefined,
+          is_ai_suggested: item.match_method === 'Fuzzy Match',
+          expected_pre_vat_price: item.expected_pre_vat_price,
+          expected_vat: item.expected_vat
+        } as POItem & { is_ai_suggested?: boolean };
+
+        newPOItems.push(newItem);
+      }
+
+      if (newPOItems.length === 0) {
+         message.warning("AI đã đọc được sản phẩm nhưng không có sản phẩm nào khớp trong hệ thống.");
+         return;
+      }
+
+      setItemsList(newPOItems);
+      form.setFieldsValue({ items: newPOItems });
+      calculateTotals(newPOItems);
+      message.success(`Đã tự động tạo ${newPOItems.length} sản phẩm từ hóa đơn!`);
+
+    } catch (err: any) {
+      console.error(err);
+      message.error("Lỗi xử lý tự động tạo SP: " + err.message);
     } finally {
       setIsUploadingInvoice(false);
     }
@@ -745,6 +864,7 @@ export const usePurchaseOrderLogic = () => {
     handleItemChange,
     handleRemoveItem,
     handleUploadInvoice,
+    handleUploadFullInvoice,
     onFinish,
     confirmOrder,
     requestPayment,

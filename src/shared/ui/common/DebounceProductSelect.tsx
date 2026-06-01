@@ -23,6 +23,7 @@ interface DebounceProductSelectProps {
   // --- TÍNH NĂNG MỚI: HÀM TÌM KIẾM TÙY CHỈNH ---
   // Cho phép truyền hàm tìm kiếm riêng (ví dụ: tìm hàng buôn) vào đây
   fetcher?: (keyword: string) => Promise<any[]>;
+  initialOptions?: any[];
 }
 
 const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
@@ -32,8 +33,9 @@ const DebounceProductSelect: React.FC<DebounceProductSelectProps> = ({
   style,
   searchTypes = ["service", "bundle"], // Mặc định tìm tất cả
   fetcher, // Prop mới nhận hàm tìm kiếm
+  initialOptions = [],
 }) => {
-  const [options, setOptions] = useState<any[]>([]);
+  const [options, setOptions] = useState<any[]>(initialOptions);
   const [fetching, setFetching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const latestReqIdRef = useRef(0);

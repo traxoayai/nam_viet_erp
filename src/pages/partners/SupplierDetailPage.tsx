@@ -40,6 +40,7 @@ import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
 import { Access } from "@/shared/components/auth/Access"; // [NEW]
 import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
+import SupplierProductMappingTab from "./components/SupplierProductMappingTab"; // [NEW]
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -377,9 +378,14 @@ const SupplierDetailPage: React.FC = () => {
                 </Space>
               }
               key="mapping"
-              disabled
             >
-              <Text type="secondary">Tính năng đang được phát triển.</Text>
+              <Card bordered={false}>
+                <SupplierProductMappingTab 
+                  vendorTaxCode={currentSupplier?.tax_code || ""} 
+                  vendorId={Number(id) || undefined}
+                  vendorName={currentSupplier?.name || ""}
+                />
+              </Card>
             </Tabs.TabPane>
             {/* TAB FINANCE - [NEW] */}
             <Tabs.TabPane

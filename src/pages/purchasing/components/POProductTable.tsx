@@ -1,4 +1,4 @@
-import { DeleteOutlined, PictureOutlined } from "@ant-design/icons"; // [UPDATE] Import icon ảnh
+import { DeleteOutlined, PictureOutlined, WarningOutlined } from "@ant-design/icons";
 import {
   Table,
   Card,
@@ -12,6 +12,7 @@ import {
   Form,
   Input,
   DatePicker,
+  Tooltip,
 } from "antd";
 import dayjs from "dayjs";
 import React from "react";
@@ -104,7 +105,15 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
           <Card
             key={item.product_id}
             size="small"
-            styles={{ body: { padding: 8 } }}
+            styles={{
+              body: {
+                padding: 8,
+                background: item.is_ai_suggested ? "#fffbe6" : undefined,
+              },
+            }}
+            style={
+              item.is_ai_suggested ? { borderColor: "#ffe58f" } : undefined
+            }
           >
             <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
               <Avatar
@@ -133,12 +142,9 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
                   >
                     Tồn: {(item.total_stock ?? 0).toLocaleString()}
                   </Text>
-                  <Text
-                    style={{ fontSize: 11, marginLeft: 8 }}
-                    type="secondary"
-                  >
-                    TB: {(item.avg_monthly_sold ?? 0).toLocaleString()}/th
-                  </Text>
+                  <span style={{ color: "#8c8c8c", fontSize: "12px", marginLeft: 8 }}>
+                    TB: {item.formatted_monthly_sales_qty ? `${item.formatted_monthly_sales_qty}/th` : `${(item.avg_monthly_sold ?? 0).toLocaleString()}/th`}
+                  </span>
                 </div>
               </div>
               <Button
@@ -213,16 +219,24 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
                 alignItems: "center",
               }}
             >
-              <InputNumber
-                value={item.unit_price}
-                style={{ width: 120 }}
-                formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                parser={(v) =>
-                  v!.replace(/\$\s?|(,*)/g, "") as unknown as number
-                }
-                onChange={(val) => onItemChange(idx, "unit_price", val)}
-                addonAfter="₫"
-              />
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                <InputNumber
+                  value={item.unit_price}
+                  style={{ width: 120 }}
+                  formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                  parser={(v) =>
+                    v!.replace(/\$\s?|(,*)/g, "") as unknown as number
+                  }
+                  onChange={(val) => onItemChange(idx, "unit_price", val)}
+                  addonAfter="₫"
+                  status={item.expected_pre_vat_price !== undefined && item.unit_price !== item.expected_pre_vat_price && item.expected_pre_vat_price > 0 ? "warning" : undefined}
+                />
+                {item.expected_pre_vat_price !== undefined && item.unit_price !== item.expected_pre_vat_price && item.expected_pre_vat_price > 0 && (
+                  <div style={{ fontSize: 11, color: "#faad14", marginTop: 4 }}>
+                    <WarningOutlined /> Lệch: {new Intl.NumberFormat("vi-VN").format(item.expected_pre_vat_price)}đ
+                  </div>
+                )}
+              </div>
               <Text strong style={{ fontSize: 16, color: "#1677ff" }}>
                 {(item.quantity * item.unit_price).toLocaleString()} ₫
               </Text>
@@ -278,14 +292,14 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
       width: 100,
       align: "center" as const,
       render: (_: any, r: POItem) => (
-        <Text type="secondary">
-          {(r.avg_monthly_sold ?? 0).toLocaleString()}
-        </Text>
+        <div style={{ fontSize: "12px", color: "#8c8c8c" }}>
+          {r.formatted_monthly_sales_qty ? r.formatted_monthly_sales_qty : (r.avg_monthly_sold ?? 0).toLocaleString()}
+        </div>
       ),
     },
     {
       title: "ĐVT",
-      width: 100,
+      width: 130,
       render: (_: any, r: POItem, idx: number) => renderUnitSelect(r, idx),
     },
     {
@@ -304,17 +318,31 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
     {
       title: "Đơn giá",
       width: 150,
-      render: (_: any, r: POItem, idx: number) => (
-        <InputNumber
-          value={r.unit_price}
-          style={{ width: "100%" }}
-          formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-          parser={(v) => v!.replace(/\$\s?|(,*)/g, "") as unknown as number}
-          onChange={(val) => onItemChange(idx, "unit_price", val)}
-          addonAfter="₫"
-          disabled={r.is_bonus} // [NEW] Disable price if bonus
-        />
-      ),
+      render: (_: any, r: POItem, idx: number) => {
+        const isPriceVariance = r.expected_pre_vat_price !== undefined && r.unit_price !== r.expected_pre_vat_price && r.expected_pre_vat_price > 0;
+        return (
+          <Space direction="vertical" size={2} style={{ width: "100%" }}>
+            <InputNumber
+              value={r.unit_price}
+              style={{ width: "100%" }}
+              formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+              parser={(v) => v!.replace(/\$\s?|(,*)/g, "") as unknown as number}
+              onChange={(val) => onItemChange(idx, "unit_price", val)}
+              addonAfter="₫"
+              disabled={r.is_bonus}
+              status={isPriceVariance ? "warning" : undefined}
+            />
+            {isPriceVariance && (
+              <div style={{ fontSize: 11, color: "#faad14", display: "flex", alignItems: "center", gap: 4 }}>
+                <WarningOutlined />
+                <Tooltip title={`Giá trên Master Data: ${new Intl.NumberFormat("vi-VN").format(r.expected_pre_vat_price!)}đ`}>
+                  <span style={{ cursor: "help" }}>Giá lệch Ánh xạ</span>
+                </Tooltip>
+              </div>
+            )}
+          </Space>
+        );
+      },
     },
     // {
     //   title: "Hàng tặng", // [NEW] Bonus Column
@@ -387,13 +415,23 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
   ];
 
   return (
-    <Table
-      dataSource={items}
-      columns={columns}
-      rowKey="product_id"
-      pagination={false}
-      scroll={{ y: 500 }}
-    />
+    <>
+      <Table
+        dataSource={items}
+        columns={columns}
+        rowKey="product_id"
+        pagination={false}
+        scroll={{ y: 500 }}
+        rowClassName={(record) =>
+          record.is_ai_suggested ? "ai-suggested-row" : ""
+        }
+      />
+      <style>{`
+      .ai-suggested-row > td {
+        background-color: #fffbe6 !important;
+      }
+    `}</style>
+    </>
   );
 };
 

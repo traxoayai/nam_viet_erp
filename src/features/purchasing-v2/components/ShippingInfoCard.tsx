@@ -4,7 +4,6 @@ import { PhoneOutlined, ClockCircleOutlined, EnvironmentOutlined, UserOutlined }
 import dayjs from "dayjs";
 
 const { Text } = Typography;
-
 const { Option } = Select;
 
 interface ShippingInfoProps {
@@ -117,7 +116,6 @@ export const ShippingInfoCard: React.FC<ShippingInfoProps> = ({
           </Descriptions.Item>
         </Descriptions>
       )}
-
     </Card>
   );
 };

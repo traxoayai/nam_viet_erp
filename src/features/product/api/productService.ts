@@ -75,7 +75,7 @@ export const getProductDetails = async (id: number) => {
   // [FIX] Lấy dữ liệu Marketing (Tìm bản ghi channel='website')
   const marketingData =
     data.product_contents && data.product_contents.length > 0
-      ? (data.product_contents.find((c) => c.channel === "website") as Record<string, unknown> | undefined) ?? {}
+      ? (data.product_contents.find((c: any) => c.channel === "website") as Record<string, unknown> | undefined) ?? {}
       : {} as Record<string, unknown>;
 
   // D. MAP DỮ LIỆU DB (Snake_case) -> FORM (CamelCase)
@@ -486,6 +486,7 @@ export const searchProductsForPurchase = async (keyword: string) => {
     last_price: p.latest_purchase_price,
     total_stock: p.total_stock,
     avg_monthly_sold: p.avg_monthly_sold,
+    formatted_monthly_sales_qty: p.formatted_monthly_sales_qty,
   }));
 };
 

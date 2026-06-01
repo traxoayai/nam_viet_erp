@@ -14,6 +14,7 @@ import { usePurchaseOrderLogic } from "./hooks/usePurchaseOrderLogic";
 import CreateInvoiceFromPO from "@/features/finance/components/invoices/CreateInvoiceFromPO";
 import InvoiceVerifySection from "@/features/finance/components/invoices/InvoiceVerifySection";
 import { searchProductsForPurchase } from "@/features/product/api/productService";
+import UploadFullInvoiceButton from "@/features/purchasing/components/UploadFullInvoiceButton";
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal";
 import DebounceProductSelect from "@/shared/ui/common/DebounceProductSelect";
 import { printPurchaseOrder } from "@/shared/utils/printTemplates";
@@ -124,28 +125,35 @@ const PurchaseOrderDetailContent = () => {
               fetcher={searchProductsForPurchase}
               onChange={logic.handleSelectProduct}
             />
-            <Upload
-              accept="image/*,.pdf,.xml,.html"
-              showUploadList={false}
-              beforeUpload={(file) => {
-                logic.handleUploadInvoice(file);
-                return false;
-              }}
-            >
-              <Button 
-                type="primary"
-                icon={<UploadOutlined />} 
-                loading={logic.isUploadingInvoice}
-                style={{ 
-                  background: 'linear-gradient(90deg, #1890ff, #722ed1)', 
-                  borderColor: 'transparent',
-                  boxShadow: '0 2px 8px rgba(114, 46, 209, 0.4)',
-                  fontWeight: 500
+            {logic.itemsList.length === 0 ? (
+              <UploadFullInvoiceButton 
+                loading={logic.isUploadingInvoice} 
+                onUpload={logic.handleUploadFullInvoice} 
+              />
+            ) : (
+              <Upload
+                accept="image/*,.pdf,.xml,.html"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  logic.handleUploadInvoice(file);
+                  return false;
                 }}
               >
-                Upload Hóa Đơn / Phiếu Xuất
-              </Button>
-            </Upload>
+                <Button 
+                  type="primary"
+                  icon={<UploadOutlined />} 
+                  loading={logic.isUploadingInvoice}
+                  style={{ 
+                    background: 'linear-gradient(90deg, #1890ff, #722ed1)', 
+                    borderColor: 'transparent',
+                    boxShadow: '0 2px 8px rgba(114, 46, 209, 0.4)',
+                    fontWeight: 500
+                  }}
+                >
+                  Upload Hóa Đơn / Phiếu Xuất
+                </Button>
+              </Upload>
+            )}
           </div>
           <div style={{ padding: "8px 16px" }}>
             <POProductTable

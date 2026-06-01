@@ -188,7 +188,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
             / {record.max_stock}
           </div>
           <div style={{ fontSize: "12px", color: "#666" }}>
-            Bán TB: {record.monthly_sales_qty}/tháng
+            Bán TB: {record.formatted_monthly_sales_qty ? record.formatted_monthly_sales_qty : record.monthly_sales_qty}/tháng
           </div>
         </div>
       ),

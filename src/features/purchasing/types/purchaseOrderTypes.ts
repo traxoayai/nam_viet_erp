@@ -23,6 +23,12 @@ export interface POItem {
   bonus_quantity?: number; // Số lượng hàng tặng kèm
   input_lot?: string; // [NEW] Số Lô trích xuất từ AI
   input_expiry?: string; // [NEW] Hạn sử dụng trích xuất từ AI
+  is_ai_suggested?: boolean; // [NEW] Đánh dấu sản phẩm được AI suggest
+
+  // [NEW] Phase 3: AI Warning fields
+  invoice_vat?: number;
+  expected_pre_vat_price?: number;
+  expected_vat?: number;
 
   // [NEW] Mảng đơn vị động trả về từ API
   available_units?: ProductUnitOption[];
@@ -30,6 +36,7 @@ export interface POItem {
   // Thông tin tồn kho (hỗ trợ quyết định mua hàng)
   total_stock?: number;
   avg_monthly_sold?: number;
+  formatted_monthly_sales_qty?: string;
 
   // Các trường meta để tính toán
   _items_per_carton: number;

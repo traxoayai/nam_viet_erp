@@ -60,6 +60,7 @@ serve(async (req) => {
           COALESCE(pi.stock_quantity, 0) AS stock_quantity,
           COALESCE(pi.max_stock, 0) AS max_stock,
           COALESCE(ms.monthly_sales_qty, 0) AS monthly_sales_qty,
+          ms.formatted_monthly_sales_qty,
           (
             SELECT jsonb_build_object(
               'unit_name', pu.unit_name,
@@ -86,6 +87,7 @@ serve(async (req) => {
           COALESCE(pi.stock_quantity, 0) AS stock_quantity,
           COALESCE(pi.max_stock, 0) AS max_stock,
           COALESCE(ms.monthly_sales_qty, 0) AS monthly_sales_qty,
+          ms.formatted_monthly_sales_qty,
           (
             SELECT jsonb_build_object(
               'unit_name', pu.unit_name,

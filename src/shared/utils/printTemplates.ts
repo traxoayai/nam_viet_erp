@@ -369,7 +369,7 @@ export const generateB2BOrderHTML = (order: PrintOrder) => {
         <div style="font-size: 10px; color: #444;">
              ${item.batch_no ? `Lô: ${item.batch_no}` : ""}
              ${item.expiry_date ? `| HSD: ${dayjs(item.expiry_date).format("DD/MM/YY")}` : ""}
-             ${item.shelf_location ? `| <span style="color: #096dd9; font-weight: 600;">📍 ${item.shelf_location}</span>` : ""}
+             ${item.shelf_location ? `| <span style="color: #096dd9; font-weight: 600;"> ${item.shelf_location}</span>` : ""}
         </div>
         ${item.note ? `<div style="font-style: italic; font-size: 10px;">(${item.note})</div>` : ""}
       </td>
