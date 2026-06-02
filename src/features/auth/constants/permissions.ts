@@ -11,6 +11,12 @@ export const PERMISSIONS = {
     VIEW_MARGIN_RETAIL: "inventory.product.view_margin_retail",
     VIEW_MARGIN_WHOLESALE: "inventory.product.view_margin_wholesale",
   },
+  CATALOG: {
+    // Cấu hình phân loại thuốc / ma trận quyền bán theo loại cơ sở (selling_rules)
+    CLASSIFICATION: {
+      MANAGE: "catalog.classification.manage",
+    },
+  },
   PURCHASING: {
     VIEW: "inv-po-create", // Legacy key — ai có quyền tạo PO cũng xem được
     CREATE: "inv-po-create",
