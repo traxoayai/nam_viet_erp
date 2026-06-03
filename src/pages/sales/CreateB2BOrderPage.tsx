@@ -230,8 +230,9 @@ const CreateB2BOrderPage = () => {
             for (const s of (stockData || []) as Array<{
               product_id: number;
               total_quantity: number;
+              wholesale_quantity?: number;
             }>) {
-              stockMap.set(s.product_id, s.total_quantity);
+              stockMap.set(s.product_id, s.wholesale_quantity ?? s.total_quantity);
             }
           } catch (stockErr: unknown) {
             const msg =
@@ -404,8 +405,8 @@ const CreateB2BOrderPage = () => {
           reset();
           navigate("/b2b/orders");
         }
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Lỗi tạo đơn";
+      } catch (e: any) {
+        const msg = e?.message || "Lỗi tạo đơn";
         message.error(msg);
       }
     });
