@@ -7,11 +7,6 @@ export type Json =
   | Json[];
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.5";
-  };
   public: {
     Tables: {
       _revert_double_deduct_20260417: {
@@ -140,6 +135,42 @@ export type Database = {
           unit_type?: string | null;
           variant?: string | null;
           variant_conv?: number | null;
+        };
+        Relationships: [];
+      };
+      active_ingredients: {
+        Row: {
+          atc_code: string | null;
+          created_at: string;
+          description: string | null;
+          id: number;
+          name: string;
+          name_intl: string | null;
+          slug: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          atc_code?: string | null;
+          created_at?: string;
+          description?: string | null;
+          id?: never;
+          name: string;
+          name_intl?: string | null;
+          slug: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          atc_code?: string | null;
+          created_at?: string;
+          description?: string | null;
+          id?: never;
+          name?: string;
+          name_intl?: string | null;
+          slug?: string;
+          status?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -2248,6 +2279,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      dosage_forms: {
+        Row: {
+          created_at: string;
+          id: number;
+          is_complex: boolean;
+          name: string;
+          slug: string;
+          sort_order: number;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: never;
+          is_complex?: boolean;
+          name: string;
+          slug: string;
+          sort_order?: number;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: never;
+          is_complex?: boolean;
+          name?: string;
+          slug?: string;
+          sort_order?: number;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       finance_invoice_allocations: {
         Row: {
           allocated_amount: number | null;
@@ -4058,6 +4122,64 @@ export type Database = {
         };
         Relationships: [];
       };
+      product_active_ingredients: {
+        Row: {
+          active_ingredient_id: number;
+          created_at: string;
+          id: number;
+          is_primary: boolean;
+          product_id: number;
+          sort_order: number;
+          strength_unit: string | null;
+          strength_value: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          active_ingredient_id: number;
+          created_at?: string;
+          id?: never;
+          is_primary?: boolean;
+          product_id: number;
+          sort_order?: number;
+          strength_unit?: string | null;
+          strength_value?: number | null;
+          updated_at?: string;
+        };
+        Update: {
+          active_ingredient_id?: number;
+          created_at?: string;
+          id?: never;
+          is_primary?: boolean;
+          product_id?: number;
+          sort_order?: number;
+          strength_unit?: string | null;
+          strength_value?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "product_active_ingredients_active_ingredient_id_fkey";
+            columns: ["active_ingredient_id"];
+            isOneToOne: false;
+            referencedRelation: "active_ingredients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "product_active_ingredients_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "product_active_ingredients_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       product_activity_logs: {
         Row: {
           action_type: string | null;
@@ -4259,6 +4381,83 @@ export type Database = {
             columns: ["warehouse_id"];
             isOneToOne: false;
             referencedRelation: "warehouses";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      product_regulatory: {
+        Row: {
+          classified_at: string | null;
+          classified_by: string | null;
+          created_at: string;
+          dosage_form_id: number | null;
+          is_essential: boolean;
+          is_restricted_retail: boolean;
+          is_vaccine: boolean;
+          item_type: string;
+          prescription_class: string | null;
+          product_id: number;
+          route_id: number | null;
+          special_control_type: string;
+          updated_at: string;
+        };
+        Insert: {
+          classified_at?: string | null;
+          classified_by?: string | null;
+          created_at?: string;
+          dosage_form_id?: number | null;
+          is_essential?: boolean;
+          is_restricted_retail?: boolean;
+          is_vaccine?: boolean;
+          item_type?: string;
+          prescription_class?: string | null;
+          product_id: number;
+          route_id?: number | null;
+          special_control_type?: string;
+          updated_at?: string;
+        };
+        Update: {
+          classified_at?: string | null;
+          classified_by?: string | null;
+          created_at?: string;
+          dosage_form_id?: number | null;
+          is_essential?: boolean;
+          is_restricted_retail?: boolean;
+          is_vaccine?: boolean;
+          item_type?: string;
+          prescription_class?: string | null;
+          product_id?: number;
+          route_id?: number | null;
+          special_control_type?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "product_regulatory_dosage_form_id_fkey";
+            columns: ["dosage_form_id"];
+            isOneToOne: false;
+            referencedRelation: "dosage_forms";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "product_regulatory_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: true;
+            referencedRelation: "product_monthly_sales_view";
+            referencedColumns: ["product_id"];
+          },
+          {
+            foreignKeyName: "product_regulatory_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: true;
+            referencedRelation: "products";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "product_regulatory_route_id_fkey";
+            columns: ["route_id"];
+            isOneToOne: false;
+            referencedRelation: "routes_of_administration";
             referencedColumns: ["id"];
           },
         ];
@@ -5063,6 +5262,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      routes_of_administration: {
+        Row: {
+          created_at: string;
+          id: number;
+          is_complex: boolean;
+          name: string;
+          slug: string;
+          sort_order: number;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: never;
+          is_complex?: boolean;
+          name: string;
+          slug: string;
+          sort_order?: number;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: never;
+          is_complex?: boolean;
+          name?: string;
+          slug?: string;
+          sort_order?: number;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       rpc_access_rules: {
         Row: {
           description: string | null;
@@ -5333,6 +5565,45 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      selling_rules: {
+        Row: {
+          allowed_if_essential: boolean;
+          created_at: string;
+          id: number;
+          is_allowed: boolean;
+          note: string | null;
+          outlet_type: string;
+          requires_prescription: boolean;
+          requires_special_license: boolean;
+          rule_key: string;
+          updated_at: string;
+        };
+        Insert: {
+          allowed_if_essential?: boolean;
+          created_at?: string;
+          id?: never;
+          is_allowed: boolean;
+          note?: string | null;
+          outlet_type: string;
+          requires_prescription?: boolean;
+          requires_special_license?: boolean;
+          rule_key: string;
+          updated_at?: string;
+        };
+        Update: {
+          allowed_if_essential?: boolean;
+          created_at?: string;
+          id?: never;
+          is_allowed?: boolean;
+          note?: string | null;
+          outlet_type?: string;
+          requires_prescription?: boolean;
+          requires_special_license?: boolean;
+          rule_key?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       service_consumables: {
         Row: {
@@ -6432,9 +6703,13 @@ export type Database = {
           created_at: string | null;
           id: number;
           internal_product_id: number;
+          internal_product_unit_id: number | null;
           internal_unit: string | null;
           last_used_at: string | null;
+          pre_vat_price: number | null;
+          supplier_sku: string | null;
           updated_by: string | null;
+          vat_of_supplier: number | null;
           vendor_product_name: string;
           vendor_tax_code: string;
           vendor_unit: string | null;
@@ -6443,9 +6718,13 @@ export type Database = {
           created_at?: string | null;
           id?: number;
           internal_product_id: number;
+          internal_product_unit_id?: number | null;
           internal_unit?: string | null;
           last_used_at?: string | null;
+          pre_vat_price?: number | null;
+          supplier_sku?: string | null;
           updated_by?: string | null;
+          vat_of_supplier?: number | null;
           vendor_product_name: string;
           vendor_tax_code: string;
           vendor_unit?: string | null;
@@ -6454,9 +6733,13 @@ export type Database = {
           created_at?: string | null;
           id?: number;
           internal_product_id?: number;
+          internal_product_unit_id?: number | null;
           internal_unit?: string | null;
           last_used_at?: string | null;
+          pre_vat_price?: number | null;
+          supplier_sku?: string | null;
           updated_by?: string | null;
+          vat_of_supplier?: number | null;
           vendor_product_name?: string;
           vendor_tax_code?: string;
           vendor_unit?: string | null;
@@ -6476,6 +6759,13 @@ export type Database = {
             referencedRelation: "products";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "vendor_product_mappings_internal_product_unit_id_fkey";
+            columns: ["internal_product_unit_id"];
+            isOneToOne: false;
+            referencedRelation: "product_units";
+            referencedColumns: ["id"];
+          },
         ];
       };
       warehouses: {
@@ -6490,6 +6780,7 @@ export type Database = {
           longitude: number | null;
           manager: string | null;
           name: string;
+          outlet_type: string | null;
           phone: string | null;
           status: string;
           type: string;
@@ -6506,6 +6797,7 @@ export type Database = {
           longitude?: number | null;
           manager?: string | null;
           name: string;
+          outlet_type?: string | null;
           phone?: string | null;
           status?: string;
           type?: string;
@@ -6522,6 +6814,7 @@ export type Database = {
           longitude?: number | null;
           manager?: string | null;
           name?: string;
+          outlet_type?: string | null;
           phone?: string | null;
           status?: string;
           type?: string;
@@ -6545,6 +6838,7 @@ export type Database = {
       };
       product_monthly_sales_view: {
         Row: {
+          formatted_monthly_sales_qty: string | null;
           monthly_sales_qty: number | null;
           product_id: number | null;
         };
@@ -6779,6 +7073,16 @@ export type Database = {
         Returns: Json;
       };
       calculate_package_cost: { Args: { p_items: Json }; Returns: number };
+      can_outlet_sell: {
+        Args: { p_outlet_type: string; p_product_id: number };
+        Returns: {
+          allowed: boolean;
+          reason: string;
+          requires_prescription: boolean;
+          requires_special_license: boolean;
+          rule_key: string;
+        }[];
+      };
       cancel_inventory_check: {
         Args: { p_check_id: number; p_user_id: string };
         Returns: undefined;
@@ -7396,6 +7700,10 @@ export type Database = {
       extract_order_codes_from_memo: {
         Args: { p_memo: string };
         Returns: string[];
+      };
+      format_product_quantity: {
+        Args: { p_product_id: number; p_qty: number };
+        Returns: string;
       };
       generate_vaccine_timeline: {
         Args: {
@@ -8544,6 +8852,16 @@ export type Database = {
           total_tokens_out: number;
         }[];
       };
+      map_scanned_invoice_products: {
+        Args: { p_items: Json; p_vendor_id: number };
+        Returns: Database["public"]["CompositeTypes"]["mapped_invoice_product"][];
+        SetofOptions: {
+          from: "*";
+          to: "mapped_invoice_product";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
       mark_all_my_notifications_read: { Args: never; Returns: number };
       mark_all_notifications_read: {
         Args: { p_customer_b2b_id: number };
@@ -8658,6 +8976,10 @@ export type Database = {
         Args: { p_new_expected_date: string; p_record_id: number };
         Returns: Json;
       };
+      resolve_selling_rule_key: {
+        Args: { p_product_id: number };
+        Returns: string;
+      };
       return_chat_session_to_bot: {
         Args: { p_session_id: string };
         Returns: undefined;
@@ -8765,6 +9087,7 @@ export type Database = {
           available_units: Json;
           avg_monthly_sold: number;
           barcode: string;
+          formatted_monthly_sales_qty: string;
           id: number;
           image_url: string;
           items_per_carton: number;
@@ -9217,7 +9540,22 @@ export type Database = {
       transaction_type: "thu" | "chi";
     };
     CompositeTypes: {
-      [_ in never]: never;
+      mapped_invoice_product: {
+        supplier_sku: string | null;
+        vendor_product_name: string | null;
+        unit: string | null;
+        quantity: number | null;
+        unit_price: number | null;
+        lot: string | null;
+        expiry: string | null;
+        internal_product_id: number | null;
+        internal_product_name: string | null;
+        match_score: number | null;
+        match_method: string | null;
+        internal_product_unit_id: number | null;
+        expected_pre_vat_price: number | null;
+        expected_vat: number | null;
+      };
     };
   };
 };
