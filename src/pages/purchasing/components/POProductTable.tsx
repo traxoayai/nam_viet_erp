@@ -98,6 +98,19 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
     );
   };
 
+  // Helper: Render Stock in Wholesale Unit
+  const renderStock = (item: POItem) => {
+    if (item.total_stock == null) return "Tồn: 0";
+    
+    const wholesaleUnit = item.available_units?.find(u => u.unit_name === item._wholesale_unit);
+    if (wholesaleUnit && wholesaleUnit.conversion_rate > 0) {
+      const stockInWholesale = item.total_stock / wholesaleUnit.conversion_rate;
+      return `Tồn: ${stockInWholesale.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${wholesaleUnit.unit_name}`;
+    }
+    
+    return `Tồn: ${item.total_stock.toLocaleString()}`;
+  };
+
   // --- RENDER MOBILE VIEW (CARD LIST) ---
   if (!screens.md) {
     return (
@@ -141,7 +154,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
                         : "danger"
                     }
                   >
-                    Tồn: {(item.total_stock ?? 0).toLocaleString()}
+                    {renderStock(item)}
                   </Text>
                   <span style={{ color: "#8c8c8c", fontSize: "12px", marginLeft: 8 }}>
                     TB: {item.formatted_monthly_sales_qty ? `${item.formatted_monthly_sales_qty}/th` : `${(item.avg_monthly_sold ?? 0).toLocaleString()}/th`}
@@ -284,7 +297,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
       align: "center" as const,
       render: (_: any, r: POItem) => (
         <Text type={r.total_stock && r.total_stock > 0 ? undefined : "danger"}>
-          {(r.total_stock ?? 0).toLocaleString()}
+          {renderStock(r).replace("Tồn: ", "")}
         </Text>
       ),
     },
