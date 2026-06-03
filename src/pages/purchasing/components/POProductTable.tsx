@@ -33,6 +33,7 @@ interface Props {
 
 const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
   const screens = useBreakpoint();
+  const DATE_FORMATS = ["DD/MM/YYYY", "DDMMYY", "DDMMYYYY"];
 
   // Helper: Render Unit Select (Shared between Mobile & Desktop)
   const renderUnitSelect = (item: POItem, idx: number) => {
@@ -196,11 +197,11 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
               <Form.Item label="HSD" style={{ width: 130, marginBottom: 0 }}>
                 <DatePicker
                   placeholder="Hạn SD"
-                  format="DD/MM/YYYY"
+                  format={DATE_FORMATS}
                   value={
                     item.input_expiry &&
-                    dayjs(item.input_expiry, "DD/MM/YYYY").isValid()
-                      ? dayjs(item.input_expiry, "DD/MM/YYYY")
+                    dayjs(item.input_expiry, DATE_FORMATS[0]).isValid()
+                      ? dayjs(item.input_expiry, DATE_FORMATS[0])
                       : null
                   }
                   onChange={(_, dateString) =>
@@ -394,15 +395,14 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
       title: "Hạn sử dụng",
       width: 130,
       render: (_: any, r: POItem, idx: number) => {
-        const format = "DD/MM/YYYY";
         const parsedDate =
-          r.input_expiry && dayjs(r.input_expiry, format).isValid()
-            ? dayjs(r.input_expiry, format)
+          r.input_expiry && dayjs(r.input_expiry, DATE_FORMATS[0]).isValid()
+            ? dayjs(r.input_expiry, DATE_FORMATS[0])
             : null;
         return (
           <DatePicker
             placeholder="Hạn SD"
-            format={format}
+            format={DATE_FORMATS}
             value={parsedDate}
             onChange={(_, dateString) =>
               onItemChange(idx, "input_expiry", dateString)

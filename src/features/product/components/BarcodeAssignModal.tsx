@@ -1,10 +1,19 @@
 // src/features/product/components/BarcodeAssignModal.tsx
-import { BarcodeOutlined } from "@ant-design/icons";
-import { Modal, Form, Select, message, Typography, Tag } from "antd";
+import { BarcodeOutlined, MedicineBoxOutlined } from "@ant-design/icons";
+import {
+  Modal,
+  Form,
+  Select,
+  message,
+  Typography,
+  Tag,
+  Avatar,
+  Space,
+} from "antd";
 import React, { useState, useEffect } from "react";
 
 import { safeRpc } from "@/shared/lib/safeRpc";
-import { supabase } from "@/shared/lib/supabaseClient";
+//import { supabase } from "@/shared/lib/supabaseClient";
 
 interface Props {
   visible: boolean;
@@ -24,8 +33,10 @@ export const BarcodeAssignModal: React.FC<Props> = ({
   // State lưu danh sách sản phẩm tìm được
   const [products, setProducts] = useState<any[]>([]);
 
-  // [QUAN TRỌNG] State lưu Units phải là Array Object có ID và Name
-  const [units, setUnits] = useState<{ id: number; name: string }[]>([]);
+  // [QUAN TRỌNG] State lưu Units phải là Array Object có ID và Name, loại đơn vị
+  const [units, setUnits] = useState<
+    { id: number; name: string; unit_type: string; is_base: boolean }[]
+  >([]);
 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -44,13 +55,11 @@ export const BarcodeAssignModal: React.FC<Props> = ({
     if (!val) return;
     setLoading(true);
     try {
-      // Select thêm ID của units
-      const { data } = await supabase
-        .from("products")
-        .select("id, name, sku, image_url, product_units(id, unit_name)")
-        .ilike("name", `%${val}%`)
-        .limit(10);
-      setProducts(data || []);
+      // Gọi RPC tìm kiếm có tách từ khóa (hỗ trợ gõ tắt/sai chính tả)
+      const { data } = await safeRpc("search_products_for_barcode_assign", {
+        p_keyword: val,
+      });
+      setProducts((data as any[]) || []);
     } finally {
       setLoading(false);
     }
@@ -65,6 +74,8 @@ export const BarcodeAssignModal: React.FC<Props> = ({
         prod.product_units?.map((u: any) => ({
           id: u.id,
           name: u.unit_name,
+          unit_type: u.unit_type,
+          is_base: u.is_base,
         })) || [];
 
       setUnits(unitOptions);
@@ -90,7 +101,11 @@ export const BarcodeAssignModal: React.FC<Props> = ({
         p_unit_id: values.unit_id, // Gửi ID thay vì Name
         p_barcode: scannedBarcode,
       });
-      const result = data as unknown as { success: boolean; message: string; data: unknown } | null;
+      const result = data as unknown as {
+        success: boolean;
+        message: string;
+        data: unknown;
+      } | null;
       if (result && !result.success) throw new Error(result.message);
 
       message.success(result?.message);
@@ -134,8 +149,9 @@ export const BarcodeAssignModal: React.FC<Props> = ({
         >
           <Select
             showSearch
-            placeholder="Gõ tên tìm kiếm..."
+            placeholder="Gõ tên hoặc mã SKU tìm kiếm..."
             filterOption={false}
+            optionLabelProp="label"
             onSearch={handleSearch}
             onSelect={handleProductSelect}
             loading={loading}
@@ -146,9 +162,60 @@ export const BarcodeAssignModal: React.FC<Props> = ({
             }
           >
             {products.map((p) => (
-              <Select.Option key={p.id} value={p.id}>
-                {p.name}{" "}
-                <span className="text-gray-400 text-xs">({p.sku})</span>
+              <Select.Option key={p.id} value={p.id} label={p.name}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    padding: "8px 0",
+                    alignItems: "center",
+                  }}
+                >
+                  <Avatar
+                    shape="square"
+                    size={48}
+                    src={p.image_url}
+                    icon={<MedicineBoxOutlined />}
+                    style={{
+                      backgroundColor: "#f5f7fa",
+                      border: "1px solid #f0f0f0",
+                      flexShrink: 0,
+                      borderRadius: 8,
+                    }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ marginBottom: 4 }}>
+                      <Typography.Text
+                        strong
+                        style={{
+                          fontSize: 14,
+                          color: "#1a1a1a",
+                          display: "block",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {p.name}
+                      </Typography.Text>
+                    </div>
+                    <div>
+                      <Space size="small">
+                        <Typography.Text code style={{ fontSize: 11 }}>
+                          {p.sku}
+                        </Typography.Text>
+                        <Typography.Text
+                          type="secondary"
+                          style={{ fontSize: 12 }}
+                        >
+                          {p.product_units
+                            ?.map((u: any) => u.unit_name)
+                            .join(", ")}
+                        </Typography.Text>
+                      </Space>
+                    </div>
+                  </div>
+                </div>
               </Select.Option>
             ))}
           </Select>
@@ -161,12 +228,43 @@ export const BarcodeAssignModal: React.FC<Props> = ({
         >
           <Select placeholder="Chọn đơn vị (Hộp/Viên/Vỉ...)">
             {/* [FIX] Dùng ID làm Key và Value -> Hết lỗi Duplicate Key */}
-            {units.map((u) => (
-              <Select.Option key={u.id} value={u.id}>
-                {u.name}{" "}
-                <span className="text-gray-400 text-xs ms-1">#{u.id}</span>
-              </Select.Option>
-            ))}
+            {units.map((u) => {
+              let tagColor = "default";
+              let tagLabel = "Đơn vị";
+              if (u.is_base) {
+                tagColor = "blue";
+                tagLabel = "Đơn vị Cơ Sở";
+              } else if (u.unit_type === "retail") {
+                tagColor = "green";
+                tagLabel = "Đơn vị Bán Lẻ";
+              } else if (u.unit_type === "wholesale") {
+                tagColor = "orange";
+                tagLabel = "Đơn vị Bán Sỉ";
+              }
+
+              return (
+                <Select.Option key={u.id} value={u.id}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      width: "100%",
+                    }}
+                  >
+                    <span>
+                      {u.name}{" "}
+                      <span className="text-gray-400 text-xs ms-1">
+                        #{u.id}
+                      </span>
+                    </span>
+                    <Tag color={tagColor} style={{ margin: 0 }}>
+                      {tagLabel}
+                    </Tag>
+                  </div>
+                </Select.Option>
+              );
+            })}
           </Select>
         </Form.Item>
       </Form>
