@@ -8843,13 +8843,13 @@ export type Database = {
       llm_log_daily_usage: {
         Args: { p_day?: string };
         Returns: {
+          circuit_open: number;
           error: number;
           provider: string;
           rate_limit: number;
           success: number;
-          total: number;
-          total_tokens_in: number;
-          total_tokens_out: number;
+          tool_use_failed: number;
+          total_latency_ms: number;
         }[];
       };
       map_scanned_invoice_products: {
