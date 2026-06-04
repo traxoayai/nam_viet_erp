@@ -28,11 +28,13 @@ import {
   Tag,
   Alert,
 } from "antd";
-import { VerifyProductModal } from "@/features/finance/components/invoices/VerifyProductModal";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useState } from "react";
+
 import { useInvoiceVerifyLogic } from "../../../features/finance/hooks/useInvoiceVerifyLogic";
+
+import { VerifyProductModal } from "@/features/finance/components/invoices/VerifyProductModal";
 
 dayjs.extend(customParseFormat);
 
@@ -366,26 +368,14 @@ const InvoiceVerifyPage = () => {
                     placeholder="Chọn ĐVT"
                     disabled={isReadOnly}
                     style={{ width: "100%" }}
-                    onChange={(_value, option: any) => {
-                      const newRate = option?.data_rate || 1;
-                      const fields = form.getFieldsValue();
-                      const newItems = [...fields.items];
-
-                      if (newItems[index]) {
-                        // [FIX] Giữ nguyên SL gốc từ XML, chỉ quy đổi đơn giá
-                        // SL gốc (baseXmlQty) luôn cố định theo hóa đơn VAT
-                        // Đơn giá = xml_unit_price * rate (quy đổi theo ĐVT nhập)
-                        const basePrice = newItems[index].xml_unit_price || 0;
-                        if (basePrice > 0) {
-                          newItems[index].unit_price = basePrice * newRate;
-                        }
-
-                        // SL hiển thị giữ nguyên giá trị gốc XML
-                        // Thông tin quy đổi hiển thị riêng bên dưới Select ĐVT
-
-                        form.setFieldsValue({ items: newItems });
-                        setTimeout(() => handleRecalculate(), 0);
-                      }
+                    onChange={() => {
+                      // ĐVT nhập chỉ là NHÃN để backend (RPC) quy đổi ra đơn vị
+                      // cơ bản khi nhập kho. TUYỆT ĐỐI không sửa unit_price hay
+                      // quantity: Số lượng & Đơn giá trên hóa đơn VAT là BẤT BIẾN
+                      // pháp lý (Thành tiền = Số lượng × Đơn giá). Code cũ nhân
+                      // unit_price * rate (giữ nguyên SL) khiến tổng tiền phình
+                      // gấp 'rate' lần — sai công nợ, thuế và tồn kho VAT.
+                      setTimeout(() => handleRecalculate(), 0);
                     }}
                   >
                     {units.map((u: any) => (
@@ -399,7 +389,7 @@ const InvoiceVerifyPage = () => {
                     ))}
                   </Select>
                 </Form.Item>
-                {currentUnitId && (
+                {currentUnitId ? (
                   <div
                     style={{
                       position: "absolute",
@@ -412,17 +402,14 @@ const InvoiceVerifyPage = () => {
                   >
                     {rate > 1 ? (
                       <>
-                        Quy đổi:{" "}
-                        <b>
-                          {(baseXmlQty / rate).toFixed(2)}
-                        </b>{" "}
-                        {selectedUnitObj?.unit_name}
+                        Nhập kho: <b>{(baseXmlQty * rate).toFixed(0)}</b> đơn vị
+                        cơ bản (1 {selectedUnitObj?.unit_name} = {rate})
                       </>
                     ) : (
                       <span>(Đơn vị cơ bản)</span>
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
             );
           }}

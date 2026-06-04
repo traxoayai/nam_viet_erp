@@ -5,10 +5,10 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 
 import { invoiceService } from "../api/invoiceService";
-import { calcInvoiceTotals } from "@/shared/utils/money";
 
 import { useProductStore } from "@/features/product/stores/productStore";
 import { supabase } from "@/shared/lib/supabaseClient";
+import { calcInvoiceTotals } from "@/shared/utils/money";
 
 export const useInvoiceVerifyLogic = () => {
   const { message } = App.useApp();
@@ -54,14 +54,16 @@ export const useInvoiceVerifyLogic = () => {
           invoice_date: record.invoice_date ? dayjs(record.invoice_date) : null,
           supplier_id: record.supplier_id,
           total_amount_post_tax: record.total_amount_post_tax,
-          items: ((record.items_json as any[]) || []).map((item: any, idx: number) => ({
-            ...item,
-            key: idx,
-            expiry_date: item.expiry_date ? dayjs(item.expiry_date) : null,
-            // [FIX] Restore base price & qty for unit conversion logic
-            xml_unit_price: item.xml_unit_price || item.unit_price,
-            xml_quantity: item.xml_quantity || item.quantity,
-          })),
+          items: ((record.items_json as any[]) || []).map(
+            (item: any, idx: number) => ({
+              ...item,
+              key: idx,
+              expiry_date: item.expiry_date ? dayjs(item.expiry_date) : null,
+              // [FIX] Restore base price & qty for unit conversion logic
+              xml_unit_price: item.xml_unit_price || item.unit_price,
+              xml_quantity: item.xml_quantity || item.quantity,
+            })
+          ),
         });
       }
     } catch (err) {
@@ -96,29 +98,51 @@ export const useInvoiceVerifyLogic = () => {
           suppliers.find((s) => s.id === safeSupplierId) as any
         )?.tax_code;
         if (supplierTax) {
-          const mappingPromises = values.items.map(
-            async (item: any, index: number) => {
-              const originalName = xmlRawItems[index]?.name;
-              const originalUnit = xmlRawItems[index]?.unit;
+          // Gom UNIQUE theo (tên NCC + ĐVT NCC) TRƯỚC khi gọi. Một hóa đơn XML
+          // có thể có nhiều dòng cùng tên + cùng đơn vị (vd tách dòng do khác
+          // lô/HSD). Nếu bắn UPSERT song song cùng key vào vendor_product_mappings
+          // sẽ gây race-condition (trùng key, có thể lỗi). Dedup → mỗi key 1 lần,
+          // last-wins nếu cùng key nhưng map khác sản phẩm.
+          interface PendingMapping {
+            originalName: string;
+            originalUnit: string | null;
+            selectedId: number;
+            selectedUnit: string;
+          }
+          const uniqueMappings = new Map<string, PendingMapping>();
 
-              // Ép kiểu ID sản phẩm, nếu lỗi -> 0
-              let selectedId = item.product_id ? Number(item.product_id) : 0;
-              if (isNaN(selectedId)) selectedId = 0;
+          values.items.forEach((item: any, index: number) => {
+            const originalName = xmlRawItems[index]?.name;
+            const originalUnit = xmlRawItems[index]?.unit;
 
-              const selectedUnit = item.internal_unit;
+            // Ép kiểu ID sản phẩm, nếu lỗi -> 0
+            let selectedId = item.product_id ? Number(item.product_id) : 0;
+            if (isNaN(selectedId)) selectedId = 0;
 
-              if (originalName && selectedId > 0 && selectedUnit) {
-                await invoiceService.saveProductMapping(
-                  supplierTax,
-                  originalName,
-                  originalUnit || null,
-                  selectedId,
-                  selectedUnit
-                );
-              }
+            const selectedUnit = item.internal_unit;
+
+            if (originalName && selectedId > 0 && selectedUnit) {
+              const key = `${originalName}|||${originalUnit || ""}`;
+              uniqueMappings.set(key, {
+                originalName,
+                originalUnit: originalUnit || null,
+                selectedId,
+                selectedUnit,
+              });
             }
+          });
+
+          await Promise.all(
+            Array.from(uniqueMappings.values()).map((m) =>
+              invoiceService.saveProductMapping(
+                supplierTax,
+                m.originalName,
+                m.originalUnit || "",
+                m.selectedId,
+                m.selectedUnit
+              )
+            )
           );
-          await Promise.all(mappingPromises);
         }
       }
 
