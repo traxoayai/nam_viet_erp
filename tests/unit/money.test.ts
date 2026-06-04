@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import {
   moneyAdd,
   moneySub,
@@ -223,6 +224,91 @@ describe("calcInvoiceTotals", () => {
       { quantity: 3, unit_price: 30000, vat_rate: 8 },
     ]);
     expect(result.final).toBe(result.totalPreTax + result.totalTax);
+  });
+
+  // --- Chuẩn VAS: chiết khấu dòng + phí ---
+  it("trừ chiết khấu dòng (discount_amount) TRƯỚC khi tính thuế", () => {
+    // goods=15*120000=1,800,000; CK=270,000; trước thuế=1,530,000; thuế 5%=76,500
+    const r = calcInvoiceTotals([
+      {
+        quantity: 15,
+        unit_price: 120000,
+        vat_rate: 5,
+        discount_amount: 270000,
+      },
+    ]);
+    expect(r.totalGoods).toBe(1800000);
+    expect(r.totalDiscount).toBe(270000);
+    expect(r.totalPreTax).toBe(1530000);
+    expect(r.totalTax).toBe(76500); // thuế trên 1.53tr (sau CK), KHÔNG phải trên 1.8tr
+    expect(r.final).toBe(1606500);
+  });
+
+  it("tính chiết khấu theo discount_rate% khi không có discount_amount", () => {
+    // goods=1,000,000; CK 10%=100,000; trước thuế=900,000; thuế 8%=72,000
+    const r = calcInvoiceTotals([
+      { quantity: 10, unit_price: 100000, vat_rate: 8, discount_rate: 10 },
+    ]);
+    expect(r.totalDiscount).toBe(100000);
+    expect(r.totalPreTax).toBe(900000);
+    expect(r.totalTax).toBe(72000);
+  });
+
+  it("ưu tiên amount_before_tax (ThTien) từ XML nếu có", () => {
+    const r = calcInvoiceTotals([
+      {
+        quantity: 15,
+        unit_price: 120000,
+        vat_rate: 5,
+        discount_amount: 270000,
+        amount_before_tax: 1530000,
+      },
+    ]);
+    expect(r.totalPreTax).toBe(1530000);
+    expect(r.totalTax).toBe(76500);
+  });
+
+  it("khớp hóa đơn mẫu thật (2 dòng, CK thương mại, VAT 5%)", () => {
+    const r = calcInvoiceTotals([
+      {
+        quantity: 15,
+        unit_price: 120000,
+        vat_rate: 5,
+        discount_amount: 270000,
+        amount_before_tax: 1530000,
+      },
+      {
+        quantity: 10,
+        unit_price: 150000,
+        vat_rate: 5,
+        discount_amount: 225000,
+        amount_before_tax: 1275000,
+      },
+    ]);
+    expect(r.totalGoods).toBe(3300000);
+    expect(r.totalDiscount).toBe(495000); // = TTCKTMai
+    expect(r.totalPreTax).toBe(2805000); // = TgTCThue
+    expect(r.totalTax).toBe(140250); // = TgTThue
+    expect(r.final).toBe(2945250); // = TgTTTBSo
+  });
+
+  it("tiền phí (opts.totalFee) trả riêng, KHÔNG cộng vào final", () => {
+    const r = calcInvoiceTotals(
+      [{ quantity: 1, unit_price: 100000, vat_rate: 10 }],
+      { totalFee: 50000 }
+    );
+    expect(r.totalFee).toBe(50000);
+    expect(r.final).toBe(110000); // chỉ chưa thuế + thuế, không + phí
+  });
+
+  it("tương thích ngược: item không CK → totalPreTax = goods", () => {
+    const r = calcInvoiceTotals([
+      { quantity: 2, unit_price: 50000, vat_rate: 10 },
+    ]);
+    expect(r.totalPreTax).toBe(100000);
+    expect(r.totalDiscount).toBe(0);
+    expect(r.totalGoods).toBe(100000);
+    expect(r.final).toBe(110000);
   });
 });
 

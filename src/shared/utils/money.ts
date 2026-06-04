@@ -64,10 +64,32 @@ export const moneyLineTotal = (qty: number, price: number): number =>
 export const moneyVat = (lineTotal: number, vatRate: number): number =>
   toFloat(Math.round((toInt(lineTotal) * vatRate) / 100));
 
-/** Tính invoice totals từ danh sách items */
+/**
+ * Tính invoice totals theo chuẩn kế toán VN (VAS).
+ * - Tiền hàng nguyên giá (goods) = SL*ĐG.
+ * - Chiết khấu dòng: ưu tiên discount_amount; nếu không có thì = goods * discount_rate%.
+ * - Thành tiền trước thuế (amount_before_tax) = ưu tiên field có sẵn (XML ThTien),
+ *   nếu không thì = goods - discount.
+ * - Thuế tính trên amount_before_tax (SAU chiết khấu), KHÔNG phải qty*price.
+ * - Tiền phí (opts.totalFee, nhập tay) tách riêng — KHÔNG cộng vào `final` (tổng thanh
+ *   toán hóa đơn = chưa thuế + thuế), vì phí thường không nằm trên TgTTTBSo của hóa đơn;
+ *   phí được phân bổ vào GIÁ VỐN tồn kho ở backend (process_vat_invoice_entry).
+ * Tương thích ngược: caller cũ chỉ truyền {quantity, unit_price, vat_rate} → discount=0,
+ * amount_before_tax=goods → kết quả totalPreTax/totalTax/final y như trước.
+ */
 export const calcInvoiceTotals = (
-  items: Array<{ quantity?: number; unit_price?: number; vat_rate?: number }>
+  items: Array<{
+    quantity?: number;
+    unit_price?: number;
+    vat_rate?: number;
+    discount_amount?: number;
+    discount_rate?: number;
+    amount_before_tax?: number;
+  }>,
+  opts?: { totalFee?: number }
 ) => {
+  let totalGoodsInt = 0;
+  let totalDiscountInt = 0;
   let totalPreTaxInt = 0;
   let totalTaxInt = 0;
 
@@ -76,19 +98,41 @@ export const calcInvoiceTotals = (
     const price = Number(item?.unit_price) || 0;
     const vat = Number(item?.vat_rate) || 0;
 
-    // lineTotal = qty * price (cả 2 qua integer domain, chia SCALE)
-    const lineTotalInt = Math.round((toInt(qty) * toInt(price)) / SCALE);
-    totalPreTaxInt += lineTotalInt;
+    // goods = SL*ĐG (qua integer domain)
+    const goodsInt = Math.round((toInt(qty) * toInt(price)) / SCALE);
 
-    // tax = lineTotal * vat / 100
-    totalTaxInt += Math.round((lineTotalInt * vat) / 100);
+    // chiết khấu dòng: ưu tiên discount_amount, else theo discount_rate%
+    let discountInt = 0;
+    if (item?.discount_amount != null) {
+      discountInt = toInt(Number(item.discount_amount) || 0);
+    } else if (item?.discount_rate) {
+      discountInt = Math.round(
+        (goodsInt * (Number(item.discount_rate) || 0)) / 100
+      );
+    }
+
+    // thành tiền trước thuế: ưu tiên field XML (ThTien), else goods - discount
+    const amountBeforeTaxInt =
+      item?.amount_before_tax != null
+        ? toInt(Number(item.amount_before_tax) || 0)
+        : goodsInt - discountInt;
+
+    totalGoodsInt += goodsInt;
+    totalDiscountInt += discountInt;
+    totalPreTaxInt += amountBeforeTaxInt;
+    // thuế tính trên thành tiền SAU chiết khấu
+    totalTaxInt += Math.round((amountBeforeTaxInt * vat) / 100);
   });
 
-  const totalPreTax = toFloat(totalPreTaxInt);
-  const totalTax = toFloat(totalTaxInt);
+  const totalFeeInt = toInt(Number(opts?.totalFee) || 0);
+
   return {
-    totalPreTax,
-    totalTax,
+    totalGoods: toFloat(totalGoodsInt),
+    totalDiscount: toFloat(totalDiscountInt),
+    totalPreTax: toFloat(totalPreTaxInt),
+    totalTax: toFloat(totalTaxInt),
+    totalFee: toFloat(totalFeeInt),
+    // tổng thanh toán hóa đơn = chưa thuế + thuế (khớp TgTTTBSo); phí KHÔNG cộng vào đây
     final: toFloat(totalPreTaxInt + totalTaxInt),
   };
 };
