@@ -2009,3 +2009,301 @@ describe("acc_close_period — edge: kỳ lỗ (2026-09, actual)", () => {
     await cleanupLossPeriods();
   }, 60000);
 });
+
+// ─── get_income_statement + get_trial_balance (kỳ INTERNAL 2027-01) ───────────
+
+describe("get_income_statement + get_trial_balance — kỳ INTERNAL 2027-01", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+
+  /** Dọn sạch toàn bộ dữ liệu kỳ INTERNAL 2027-01 */
+  async function cleanupPeriod2027_01(): Promise<void> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      await pg.query(
+        `DELETE FROM public.journal_entry_lines
+         WHERE entry_id IN (
+           SELECT id FROM public.journal_entries
+           WHERE book = 'INTERNAL'
+             AND period_id IN (
+               SELECT id FROM public.accounting_periods
+               WHERE book = 'INTERNAL' AND year = 2027 AND month = 1
+             )
+         )`
+      );
+      await pg.query(
+        `DELETE FROM public.journal_entries
+         WHERE book = 'INTERNAL'
+           AND period_id IN (
+             SELECT id FROM public.accounting_periods
+             WHERE book = 'INTERNAL' AND year = 2027 AND month = 1
+           )`
+      );
+      await pg.query(
+        `DELETE FROM public.account_balances
+         WHERE book = 'INTERNAL'
+           AND period_id IN (
+             SELECT id FROM public.accounting_periods
+             WHERE book = 'INTERNAL' AND year = 2027 AND month = 1
+           )`
+      );
+      await pg.query(
+        `DELETE FROM public.accounting_periods
+         WHERE book = 'INTERNAL' AND year = 2027 AND month = 1`
+      );
+    } finally {
+      await pg.end();
+    }
+  }
+
+  it("KQKD: doanh_thu_thuan=1.000.000, gia_von=600.000, loi_nhuan_gop=400.000, loi_nhuan_sau_thue=400.000", async () => {
+    await cleanupPeriod2027_01();
+
+    const authedClient = await createTestAuthedClient();
+
+    // (1) Bút toán bán: Nợ131 1.000.000 / Có5111 1.000.000
+    const { data: saleId, error: saleErr } = await authedClient.rpc(
+      "acc_create_journal_entry",
+      {
+        p_book: "INTERNAL",
+        p_entry_date: "2027-01-10",
+        p_doc_type: "sale",
+        p_source_ref_type: "orders",
+        p_source_ref_id: "BCTC-TEST-2027-SALE",
+        p_description: "Bán hàng test BCTC 2027-01",
+        p_lines: [
+          {
+            account_code: "131",
+            debit: 1000000,
+            credit: 0,
+            description: "Phải thu KH",
+          },
+          {
+            account_code: "5111",
+            debit: 0,
+            credit: 1000000,
+            description: "Doanh thu",
+          },
+        ],
+      }
+    );
+    expect(saleErr).toBeNull();
+    expect(saleId).toBeGreaterThan(0);
+
+    const { error: postSaleErr } = await authedClient.rpc(
+      "post_journal_entry",
+      {
+        p_entry_id: saleId,
+      }
+    );
+    expect(postSaleErr).toBeNull();
+
+    // (2) Bút toán giá vốn: Nợ632 600.000 / Có156 600.000
+    const { data: cogsId, error: cogsErr } = await authedClient.rpc(
+      "acc_create_journal_entry",
+      {
+        p_book: "INTERNAL",
+        p_entry_date: "2027-01-10",
+        p_doc_type: "cogs",
+        p_source_ref_type: "orders",
+        p_source_ref_id: "BCTC-TEST-2027-COGS",
+        p_description: "Giá vốn test BCTC 2027-01",
+        p_lines: [
+          {
+            account_code: "632",
+            debit: 600000,
+            credit: 0,
+            description: "Giá vốn",
+          },
+          {
+            account_code: "156",
+            debit: 0,
+            credit: 600000,
+            description: "Xuất kho",
+          },
+        ],
+      }
+    );
+    expect(cogsErr).toBeNull();
+    expect(cogsId).toBeGreaterThan(0);
+
+    const { error: postCogsErr } = await authedClient.rpc(
+      "post_journal_entry",
+      {
+        p_entry_id: cogsId,
+      }
+    );
+    expect(postCogsErr).toBeNull();
+
+    // (3) get_income_statement → kiểm tra chỉ tiêu
+    const { data: is_data, error: isErr } = await authedClient.rpc(
+      "get_income_statement",
+      { p_book: "INTERNAL", p_year: 2027, p_month: 1 }
+    );
+    expect(isErr).toBeNull();
+    expect(is_data).not.toBeNull();
+
+    const is = is_data as Record<string, number>;
+    expect(Number(is["doanh_thu_thuan"])).toBe(1000000);
+    expect(Number(is["gia_von"])).toBe(600000);
+    expect(Number(is["loi_nhuan_gop"])).toBe(400000);
+    // Không có chi phí tài chính/QLKD/thuế → lợi nhuận sau thuế = 400.000
+    expect(Number(is["loi_nhuan_sau_thue"])).toBe(400000);
+    expect(Number(is["tong_loi_nhuan_truoc_thue"])).toBe(400000);
+    expect(Number(is["chi_phi_thue_tndn"])).toBe(0);
+
+    await cleanupPeriod2027_01();
+  }, 60000);
+
+  it("trial_balance: có dòng TK 5111 (period_credit=1.000.000), 632 (period_debit=600.000), 131, 156", async () => {
+    await cleanupPeriod2027_01();
+
+    const authedClient = await createTestAuthedClient();
+
+    // Seed 2 bút toán tương tự
+    const { data: saleId, error: saleErr } = await authedClient.rpc(
+      "acc_create_journal_entry",
+      {
+        p_book: "INTERNAL",
+        p_entry_date: "2027-01-15",
+        p_doc_type: "sale",
+        p_source_ref_type: "orders",
+        p_source_ref_id: "BCTC-TB-2027-SALE",
+        p_description: "Bán hàng test trial balance 2027-01",
+        p_lines: [
+          {
+            account_code: "131",
+            debit: 1000000,
+            credit: 0,
+            description: "Phải thu KH",
+          },
+          {
+            account_code: "5111",
+            debit: 0,
+            credit: 1000000,
+            description: "Doanh thu",
+          },
+        ],
+      }
+    );
+    expect(saleErr).toBeNull();
+    await authedClient.rpc("post_journal_entry", { p_entry_id: saleId });
+
+    const { data: cogsId, error: cogsErr } = await authedClient.rpc(
+      "acc_create_journal_entry",
+      {
+        p_book: "INTERNAL",
+        p_entry_date: "2027-01-15",
+        p_doc_type: "cogs",
+        p_source_ref_type: "orders",
+        p_source_ref_id: "BCTC-TB-2027-COGS",
+        p_description: "Giá vốn test trial balance 2027-01",
+        p_lines: [
+          {
+            account_code: "632",
+            debit: 600000,
+            credit: 0,
+            description: "Giá vốn",
+          },
+          {
+            account_code: "156",
+            debit: 0,
+            credit: 600000,
+            description: "Xuất kho",
+          },
+        ],
+      }
+    );
+    expect(cogsErr).toBeNull();
+    await authedClient.rpc("post_journal_entry", { p_entry_id: cogsId });
+
+    // get_trial_balance
+    const { data: tb, error: tbErr } = await authedClient.rpc(
+      "get_trial_balance",
+      { p_book: "INTERNAL", p_year: 2027, p_month: 1 }
+    );
+    expect(tbErr).toBeNull();
+    expect(Array.isArray(tb)).toBe(true);
+    expect(tb!.length).toBeGreaterThanOrEqual(4);
+
+    type TBRow = {
+      account_code: string;
+      account_name: string;
+      period_debit: number;
+      period_credit: number;
+      opening_debit: number;
+      opening_credit: number;
+      closing_debit: number;
+      closing_credit: number;
+    };
+
+    const rows = tb as TBRow[];
+
+    // TK 5111 — period_credit=1.000.000
+    const row5111 = rows.find((r) => r.account_code === "5111");
+    expect(row5111).toBeDefined();
+    expect(Number(row5111!.period_credit)).toBe(1000000);
+    expect(row5111!.account_name).toBeTruthy();
+
+    // TK 632 — period_debit=600.000
+    const row632 = rows.find((r) => r.account_code === "632");
+    expect(row632).toBeDefined();
+    expect(Number(row632!.period_debit)).toBe(600000);
+    expect(row632!.account_name).toBeTruthy();
+
+    // TK 131 — tồn tại (Nợ 1.000.000)
+    const row131 = rows.find((r) => r.account_code === "131");
+    expect(row131).toBeDefined();
+    expect(Number(row131!.period_debit)).toBe(1000000);
+
+    // TK 156 — tồn tại (Có 600.000)
+    const row156 = rows.find((r) => r.account_code === "156");
+    expect(row156).toBeDefined();
+    expect(Number(row156!.period_credit)).toBe(600000);
+
+    // Kiểm tra thứ tự account_code tăng dần
+    const codes = rows.map((r) => r.account_code);
+    const sorted = [...codes].sort();
+    expect(codes).toEqual(sorted);
+
+    await cleanupPeriod2027_01();
+  }, 60000);
+
+  it("get_income_statement kỳ chưa tồn tại → trả 0 cho tất cả chỉ tiêu", async () => {
+    const authedClient = await createTestAuthedClient();
+
+    const { data, error } = await authedClient.rpc("get_income_statement", {
+      p_book: "INTERNAL",
+      p_year: 2099,
+      p_month: 6,
+    });
+
+    expect(error).toBeNull();
+    expect(data).not.toBeNull();
+
+    const is = data as Record<string, number>;
+    expect(Number(is["doanh_thu_thuan"])).toBe(0);
+    expect(Number(is["loi_nhuan_sau_thue"])).toBe(0);
+  }, 30000);
+
+  it("get_trial_balance kỳ chưa tồn tại → trả mảng rỗng", async () => {
+    const authedClient = await createTestAuthedClient();
+
+    const { data, error } = await authedClient.rpc("get_trial_balance", {
+      p_book: "INTERNAL",
+      p_year: 2099,
+      p_month: 7,
+    });
+
+    expect(error).toBeNull();
+    expect(Array.isArray(data)).toBe(true);
+    expect((data as unknown[]).length).toBe(0);
+  }, 30000);
+});
