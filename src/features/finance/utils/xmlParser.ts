@@ -13,6 +13,7 @@ export interface ParsedInvoiceItem {
   discount_rate: number; // TLCKhau (% chiết khấu dòng)
   discount_amount: number; // STCKhau (tiền chiết khấu dòng)
   amount_before_tax: number; // ThTien (thành tiền sau CK, trước thuế = SL*ĐG - STCKhau)
+  is_promo: boolean; // TChat=2 → hàng khuyến mại (DGia=0, không tính vào giá vốn)
 }
 
 export interface ParsedInvoiceHeader {
@@ -84,6 +85,8 @@ export const parseInvoiceXML = (
     const amountBeforeTax = Number(getText(node, "ThTien") || 0); // ThTien = SL*ĐG - STCKhau
     const discountAmount = Number(getText(node, "STCKhau") || 0);
     const discountRate = Number(getText(node, "TLCKhau").replace("%", "") || 0);
+    // TChat (tính chất dòng) theo chuẩn HĐĐT TT78: 1=hàng/dịch vụ, 2=khuyến mại, 3=CKTM, 4=ghi chú
+    const isPromo = getText(node, "TChat") === "2";
 
     items.push({
       line_number: Number(getText(node, "STT")),
@@ -97,6 +100,7 @@ export const parseInvoiceXML = (
       discount_amount: discountAmount,
       amount_before_tax: amountBeforeTax,
       vat_rate: vatRate,
+      is_promo: isPromo,
     });
   });
 
