@@ -5,12 +5,14 @@ import { useState, useEffect, useCallback } from "react";
 import type { UploadFile } from "antd/es/upload/interface";
 
 import { useUserStore } from "@/features/auth/stores/useUserStore";
+import { accountingService } from "@/features/finance/api/accountingService";
 import { financeService } from "@/features/finance/api/financeService";
 import { useFinanceStore } from "@/features/finance/stores/useFinanceStore";
 import { useTransactionCategoryStore } from "@/features/finance/stores/useTransactionCategoryStore";
 import { CreateTransactionParams } from "@/features/finance/types/finance";
 import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
 import { uploadFile } from "@/shared/api/storageService";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 type PartnerOption = {
   label: string;
@@ -428,6 +430,87 @@ export const useFinanceFormLogic = (
       }
 
       const success = await createTransaction(payload);
+
+      // [Kế toán] Sinh bút toán thu/chi (nháp, 2 sổ) — non-blocking
+      if (success) {
+        try {
+          const categoryId = values.category_id;
+          const fundAccountId = values.fund_account_id;
+
+          // Resolve account_code cho category và fund song song
+          // Note: fund_accounts.account_id được thêm qua migration 20260607000001
+          // nhưng database.types.ts chưa regenerate → cast qua unknown để bypass
+          const [catResult, fundResult] = await Promise.all([
+            categoryId != null
+              ? supabase
+                  .from("transaction_categories")
+                  .select("account_id")
+                  .eq("id", categoryId)
+                  .single()
+              : Promise.resolve({ data: null, error: null }),
+            fundAccountId != null
+              ? (supabase
+                  .from("fund_accounts")
+                  .select("account_id")
+                  .eq("id", fundAccountId)
+                  .single() as unknown as Promise<{
+                  data: { account_id: string | null } | null;
+                  error: unknown;
+                }>)
+              : Promise.resolve({ data: null, error: null }),
+          ]);
+
+          const categoryAccount = catResult.data?.account_id as
+            | string
+            | null
+            | undefined;
+          const fundAccount = (
+            fundResult.data as { account_id?: string | null } | null
+          )?.account_id;
+
+          if (!categoryAccount || !fundAccount) {
+            console.warn(
+              "[accounting] Bỏ qua sinh bút toán: category hoặc fund chưa gán account_code",
+              { categoryId, fundAccountId, categoryAccount, fundAccount }
+            );
+          } else {
+            const entryDate = payload.p_transaction_date;
+            const amount = payload.p_amount;
+            const partner = payload.p_partner_name ?? "";
+            const desc = payload.p_description ?? "";
+            // sourceId: lấy p_ref_id nếu có, không thì để rỗng
+            const sourceId = payload.p_ref_id ?? "";
+
+            if (values.flow === "in") {
+              await accountingService.postReceipt({
+                sourceId,
+                entryDate,
+                amount,
+                categoryAccount,
+                fundAccount,
+                partner,
+                desc,
+              });
+            } else {
+              await accountingService.postPayment({
+                sourceId,
+                entryDate,
+                amount,
+                categoryAccount,
+                fundAccount,
+                partner,
+                desc,
+              });
+            }
+          }
+        } catch (e) {
+          console.error(
+            "[accounting] postReceipt/postPayment failed (transaction created OK):",
+            e
+          );
+        }
+      }
+
       if (success) onCancel();
       return success;
     } catch (error) {

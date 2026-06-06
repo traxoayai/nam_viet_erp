@@ -1,6 +1,7 @@
 // src/services/invoiceService.ts
 import { v4 as uuidv4 } from "uuid";
 
+import { accountingService } from "@/features/finance/api/accountingService";
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
@@ -273,6 +274,16 @@ export const invoiceService = {
     //    Nếu nhập kho lỗi -> status tự rollback về draft (không để HĐ "verified"
     //    nhưng kho chưa nhập như flow cũ).
     await safeRpc("verify_and_process_vat_invoice", { p_invoice_id: id });
+
+    // [Kế toán] Sinh bút toán mua (nháp, 2 sổ) — non-blocking
+    try {
+      await accountingService.postPurchase(id);
+    } catch (e) {
+      console.error(
+        "[accounting] postPurchase failed (invoice verified OK):",
+        e
+      );
+    }
 
     return true;
   },
