@@ -1,4 +1,4 @@
-export type Book = "vat" | "actual";
+export type Book = "INTERNAL" | "TAX";
 export type JournalStatus = "draft" | "posted" | "void";
 
 export interface JournalLine {

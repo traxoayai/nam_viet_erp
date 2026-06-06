@@ -1,11 +1,11 @@
--- Hệ hạch toán: bảng sổ cái kép (journal) + kỳ + số dư. TT133, 2 sổ (vat/actual).
+-- Hệ hạch toán: bảng sổ cái kép (journal) + kỳ + số dư. TT133, 2 sổ (INTERNAL/TAX).
 -- Ngày 2026-06-07. Idempotent. RLS bật. KHÔNG đụng dữ liệu giao dịch hiện có.
 BEGIN;
 
 -- 1. Kỳ kế toán (tháng), theo sổ
 CREATE TABLE IF NOT EXISTS public.accounting_periods (
   id          bigserial PRIMARY KEY,
-  book        text NOT NULL CHECK (book IN ('vat','actual')),
+  book        text NOT NULL CHECK (book IN ('INTERNAL','TAX')),
   year        int  NOT NULL,
   month       int  NOT NULL CHECK (month BETWEEN 1 AND 12),
   status      text NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS public.accounting_periods (
 -- 2. Đầu bút toán
 CREATE TABLE IF NOT EXISTS public.journal_entries (
   id              bigserial PRIMARY KEY,
-  book            text NOT NULL CHECK (book IN ('vat','actual')),
+  book            text NOT NULL CHECK (book IN ('INTERNAL','TAX')),
   entry_date      date NOT NULL,
   period_id       bigint NOT NULL REFERENCES public.accounting_periods(id),
   doc_type        text NOT NULL CHECK (doc_type IN ('purchase','sale','cogs','receipt','payment','closing')),
@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_jel_account ON public.journal_entry_lines(account
 -- 4. Số dư tài khoản theo kỳ
 CREATE TABLE IF NOT EXISTS public.account_balances (
   id              bigserial PRIMARY KEY,
-  book            text NOT NULL CHECK (book IN ('vat','actual')),
+  book            text NOT NULL CHECK (book IN ('INTERNAL','TAX')),
   account_id      uuid NOT NULL REFERENCES public.chart_of_accounts(id),
   period_id       bigint NOT NULL REFERENCES public.accounting_periods(id),
   opening_debit   numeric NOT NULL DEFAULT 0,

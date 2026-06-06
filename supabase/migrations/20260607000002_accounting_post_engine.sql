@@ -22,7 +22,7 @@ DECLARE
   v_td numeric := 0; v_tc numeric := 0; v_no int := 0;
 BEGIN
   PERFORM public.check_rpc_access('acc_create_journal_entry');
-  IF p_book NOT IN ('vat','actual') THEN RAISE EXCEPTION 'book không hợp lệ: %', p_book; END IF;
+  IF p_book NOT IN ('INTERNAL','TAX') THEN RAISE EXCEPTION 'book không hợp lệ: %', p_book; END IF;
   IF jsonb_array_length(COALESCE(p_lines,'[]'::jsonb)) < 2 THEN
     RAISE EXCEPTION 'Bút toán phải có tối thiểu 2 dòng';
   END IF;

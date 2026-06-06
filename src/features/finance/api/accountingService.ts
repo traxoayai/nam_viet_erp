@@ -2,7 +2,7 @@ import type { Book } from "../types/accounting";
 
 import { safeRpc } from "@/shared/lib/safeRpc";
 
-const BOOKS: Book[] = ["vat", "actual"];
+const BOOKS: Book[] = ["INTERNAL", "TAX"];
 
 export const accountingService = {
   /** Sinh bút toán mua hàng (nháp) cho cả 2 sổ từ 1 finance_invoices */
@@ -18,7 +18,7 @@ export const accountingService = {
     return ids;
   },
 
-  /** Bán hàng: revenue + vat (sổ vat). Sổ actual chỉ doanh thu thật (vat=0). */
+  /** Bán hàng: revenue + vat (sổ TAX). Sổ INTERNAL chỉ doanh thu thật (vat=0). */
   async postSale(args: {
     sourceId: string;
     entryDate: string;
@@ -34,7 +34,7 @@ export const accountingService = {
         p_entry_date: args.entryDate,
         p_partner: args.partner,
         p_revenue: args.revenue,
-        p_vat: book === "vat" ? args.vat : 0,
+        p_vat: book === "TAX" ? args.vat : 0,
       });
       ids.push(data as number);
     }

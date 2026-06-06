@@ -112,7 +112,7 @@ describe("acc_create_journal_entry", () => {
     ];
 
     const { data, error } = await authedClient.rpc("acc_create_journal_entry", {
-      p_book: "actual",
+      p_book: "INTERNAL",
       p_entry_date: "2026-06-07",
       p_doc_type: "purchase",
       p_source_ref_type: "purchase_order",
@@ -160,7 +160,7 @@ describe("acc_create_journal_entry", () => {
     ];
 
     const { data, error } = await authedClient.rpc("acc_create_journal_entry", {
-      p_book: "actual",
+      p_book: "INTERNAL",
       p_entry_date: "2026-06-07",
       p_doc_type: "purchase",
       p_source_ref_type: null,
@@ -225,7 +225,7 @@ describe("post_journal_entry / void_journal_entry", () => {
     const { data: entryId, error: createErr } = await authedClient.rpc(
       "acc_create_journal_entry",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_entry_date: "2026-06-07",
         p_doc_type: "sale",
         p_source_ref_type: "order",
@@ -277,7 +277,7 @@ describe("post_journal_entry / void_journal_entry", () => {
     const { data: bal, error: balErr } = await adminClient
       .from("account_balances")
       .select("period_debit, period_credit")
-      .eq("book", "actual")
+      .eq("book", "INTERNAL")
       .eq("account_id", account632Id)
       .eq("period_id", periodId)
       .single();
@@ -290,7 +290,7 @@ describe("post_journal_entry / void_journal_entry", () => {
     await pg2.connect();
     try {
       await pg2.query(
-        `DELETE FROM public.account_balances WHERE book='actual' AND account_id=$1 AND period_id=$2`,
+        `DELETE FROM public.account_balances WHERE book='INTERNAL' AND account_id=$1 AND period_id=$2`,
         [account632Id, periodId]
       );
       await pg2.query(`DELETE FROM public.journal_entries WHERE id=$1`, [
@@ -322,7 +322,7 @@ describe("post_journal_entry / void_journal_entry", () => {
     const { data: entryId, error: createErr } = await authedClient.rpc(
       "acc_create_journal_entry",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_entry_date: "2026-06-07",
         p_doc_type: "sale",
         p_source_ref_type: "order",
@@ -360,7 +360,7 @@ describe("post_journal_entry / void_journal_entry", () => {
       );
       if (rows[0]) {
         await pg.query(
-          `DELETE FROM public.account_balances WHERE book='actual' AND account_id=$1 AND period_id=$2`,
+          `DELETE FROM public.account_balances WHERE book='INTERNAL' AND account_id=$1 AND period_id=$2`,
           [account632Id, rows[0].period_id]
         );
       }
@@ -447,7 +447,7 @@ describe("gen_journal_purchase / sale / cogs / payment", () => {
     try {
       const { data: entryId, error } = await authedClient.rpc(
         "gen_journal_purchase",
-        { p_book: "vat", p_invoice_id: invoiceId }
+        { p_book: "TAX", p_invoice_id: invoiceId }
       );
 
       expect(error).toBeNull();
@@ -492,7 +492,7 @@ describe("gen_journal_purchase / sale / cogs / payment", () => {
     const { data: entryId, error } = await authedClient.rpc(
       "gen_journal_sale",
       {
-        p_book: "vat",
+        p_book: "TAX",
         p_source_id: "SO-T1",
         p_entry_date: "2026-06-13",
         p_partner: "KH-1",
@@ -521,7 +521,7 @@ describe("gen_journal_purchase / sale / cogs / payment", () => {
     const { data: entryId, error } = await authedClient.rpc(
       "gen_journal_cogs",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_source_id: "SO-T1",
         p_entry_date: "2026-06-13",
         p_cogs: 600000,
@@ -549,7 +549,7 @@ describe("gen_journal_purchase / sale / cogs / payment", () => {
     const { data: entryId, error } = await authedClient.rpc(
       "gen_journal_payment",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_source_id: "PC-T1",
         p_entry_date: "2026-06-14",
         p_amount: 2000000,
@@ -614,17 +614,17 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
         `DELETE FROM public.journal_entry_lines
          WHERE entry_id IN (
            SELECT id FROM public.journal_entries
-           WHERE book = 'actual'
+           WHERE book = 'INTERNAL'
              AND period_id IN (
-               SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=7
+               SELECT id FROM public.accounting_periods WHERE book='INTERNAL' AND year=2026 AND month=7
              )
          )`
       );
       await pg.query(
         `DELETE FROM public.journal_entries
-         WHERE book = 'actual'
+         WHERE book = 'INTERNAL'
            AND period_id IN (
-             SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=7
+             SELECT id FROM public.accounting_periods WHERE book='INTERNAL' AND year=2026 AND month=7
            )`
       );
       // Cũng dọn kỳ tháng 8 (được tạo tự động bởi carry-forward)
@@ -632,28 +632,28 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
         `DELETE FROM public.journal_entry_lines
          WHERE entry_id IN (
            SELECT id FROM public.journal_entries
-           WHERE book = 'actual'
+           WHERE book = 'INTERNAL'
              AND period_id IN (
-               SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=8
+               SELECT id FROM public.accounting_periods WHERE book='INTERNAL' AND year=2026 AND month=8
              )
          )`
       );
       await pg.query(
         `DELETE FROM public.journal_entries
-         WHERE book = 'actual'
+         WHERE book = 'INTERNAL'
            AND period_id IN (
-             SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=8
+             SELECT id FROM public.accounting_periods WHERE book='INTERNAL' AND year=2026 AND month=8
            )`
       );
       await pg.query(
         `DELETE FROM public.account_balances
-         WHERE book = 'actual'
+         WHERE book = 'INTERNAL'
            AND period_id IN (
-             SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month IN (7,8)
+             SELECT id FROM public.accounting_periods WHERE book='INTERNAL' AND year=2026 AND month IN (7,8)
            )`
       );
       await pg.query(
-        `DELETE FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month IN (7,8)`
+        `DELETE FROM public.accounting_periods WHERE book='INTERNAL' AND year=2026 AND month IN (7,8)`
       );
     } finally {
       await pg.end();
@@ -670,7 +670,7 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
     const { data: saleId, error: saleErr } = await authedClient.rpc(
       "gen_journal_sale",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_source_id: "SO-CLOSE",
         p_entry_date: "2026-07-05",
         p_partner: "KH",
@@ -692,7 +692,7 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
     const { data: cogsId, error: cogsErr } = await authedClient.rpc(
       "gen_journal_cogs",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_source_id: "SO-CLOSE",
         p_entry_date: "2026-07-05",
         p_cogs: 600000,
@@ -710,7 +710,7 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
 
     // (3) Khóa kỳ
     const { error: closeErr } = await authedClient.rpc("acc_close_period", {
-      p_book: "actual",
+      p_book: "INTERNAL",
       p_year: 2026,
       p_month: 7,
     });
@@ -720,7 +720,7 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
     const { data: period, error: periodErr } = await adminClient
       .from("accounting_periods")
       .select("status, closed_at")
-      .eq("book", "actual")
+      .eq("book", "INTERNAL")
       .eq("year", 2026)
       .eq("month", 7)
       .single();
@@ -729,11 +729,11 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
     expect(period?.status).toBe("closed");
     expect(period?.closed_at).not.toBeNull();
 
-    // (4b) Verify: có >=1 journal_entries doc_type='closing' book='actual' status='posted'
+    // (4b) Verify: có >=1 journal_entries doc_type='closing' book='INTERNAL' status='posted'
     const { data: closingEntries, error: ceErr } = await adminClient
       .from("journal_entries")
       .select("id, doc_type, status")
-      .eq("book", "actual")
+      .eq("book", "INTERNAL")
       .eq("doc_type", "closing")
       .eq("status", "posted");
 
@@ -755,7 +755,7 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
       account4212Id = accRows[0].id as string;
 
       const { rows: perRows } = await pg.query(
-        `SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=7 LIMIT 1`
+        `SELECT id FROM public.accounting_periods WHERE book='INTERNAL' AND year=2026 AND month=7 LIMIT 1`
       );
       expect(perRows[0]).toBeDefined();
       periodId = perRows[0].id as string;
@@ -766,7 +766,7 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
     const { data: bal4212, error: balErr } = await adminClient
       .from("account_balances")
       .select("closing_credit, closing_debit, period_credit, period_debit")
-      .eq("book", "actual")
+      .eq("book", "INTERNAL")
       .eq("account_id", account4212Id!)
       .eq("period_id", periodId!)
       .single();
@@ -782,7 +782,7 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
     const { data: bal5111, error: bal5111Err } = await adminClient
       .from("account_balances")
       .select("period_debit, period_credit")
-      .eq("book", "actual")
+      .eq("book", "INTERNAL")
       .eq("account_id", account5111Id)
       .eq("period_id", periodId!)
       .single();
@@ -797,7 +797,7 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
     const { data: bal632, error: bal632Err } = await adminClient
       .from("account_balances")
       .select("period_debit, period_credit")
-      .eq("book", "actual")
+      .eq("book", "INTERNAL")
       .eq("account_id", account632Id)
       .eq("period_id", periodId!)
       .single();
@@ -816,7 +816,7 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
 
     // Tạo minimal data và đóng kỳ
     const { data: saleId } = await authedClient.rpc("gen_journal_sale", {
-      p_book: "actual",
+      p_book: "INTERNAL",
       p_source_id: "SO-CLOSE-2",
       p_entry_date: "2026-07-10",
       p_partner: "KH2",
@@ -825,14 +825,14 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
     });
     await authedClient.rpc("post_journal_entry", { p_entry_id: saleId });
     await authedClient.rpc("acc_close_period", {
-      p_book: "actual",
+      p_book: "INTERNAL",
       p_year: 2026,
       p_month: 7,
     });
 
     // Gọi lần 2 → phải lỗi
     const { error: closeErr2 } = await authedClient.rpc("acc_close_period", {
-      p_book: "actual",
+      p_book: "INTERNAL",
       p_year: 2026,
       p_month: 7,
     });
@@ -878,7 +878,7 @@ describe("gen_journal_purchase — edge: hóa đơn không VAT (tax=0)", () => {
     try {
       const { data: entryId, error } = await authedClient.rpc(
         "gen_journal_purchase",
-        { p_book: "vat", p_invoice_id: invoiceId }
+        { p_book: "TAX", p_invoice_id: invoiceId }
       );
 
       expect(error).toBeNull();
@@ -971,35 +971,35 @@ describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () =>
           `DELETE FROM public.journal_entry_lines
            WHERE entry_id IN (
              SELECT id FROM public.journal_entries
-             WHERE book = 'actual'
+             WHERE book = 'INTERNAL'
                AND period_id IN (
                  SELECT id FROM public.accounting_periods
-                 WHERE book='actual' AND year=2026 AND month=$1
+                 WHERE book='INTERNAL' AND year=2026 AND month=$1
                )
            )`,
           [m]
         );
         await pg.query(
           `DELETE FROM public.journal_entries
-           WHERE book = 'actual'
+           WHERE book = 'INTERNAL'
              AND period_id IN (
                SELECT id FROM public.accounting_periods
-               WHERE book='actual' AND year=2026 AND month=$1
+               WHERE book='INTERNAL' AND year=2026 AND month=$1
              )`,
           [m]
         );
         await pg.query(
           `DELETE FROM public.account_balances
-           WHERE book = 'actual'
+           WHERE book = 'INTERNAL'
              AND period_id IN (
                SELECT id FROM public.accounting_periods
-               WHERE book='actual' AND year=2026 AND month=$1
+               WHERE book='INTERNAL' AND year=2026 AND month=$1
              )`,
           [m]
         );
         await pg.query(
           `DELETE FROM public.accounting_periods
-           WHERE book='actual' AND year=2026 AND month=$1`,
+           WHERE book='INTERNAL' AND year=2026 AND month=$1`,
           [m]
         );
       }
@@ -1034,7 +1034,7 @@ describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () =>
 
     const { data: purId, error: purErr } = await authedClient.rpc(
       "gen_journal_purchase",
-      { p_book: "actual", p_invoice_id: invoiceId }
+      { p_book: "INTERNAL", p_invoice_id: invoiceId }
     );
     expect(purErr).toBeNull();
     expect(purId).toBeGreaterThan(0);
@@ -1048,7 +1048,7 @@ describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () =>
     const { data: saleId, error: saleErr } = await authedClient.rpc(
       "gen_journal_sale",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_source_id: "E2E-SO",
         p_entry_date: "2026-08-10",
         p_partner: "KH-E2E",
@@ -1071,7 +1071,7 @@ describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () =>
     const { data: cogsId, error: cogsErr } = await authedClient.rpc(
       "gen_journal_cogs",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_source_id: "E2E-SO",
         p_entry_date: "2026-08-10",
         p_cogs: 600000,
@@ -1092,7 +1092,7 @@ describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () =>
     const { data: payId, error: payErr } = await authedClient.rpc(
       "gen_journal_payment",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_source_id: "E2E-PC",
         p_entry_date: "2026-08-12",
         p_amount: 200000,
@@ -1112,7 +1112,7 @@ describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () =>
 
     // (5) Khóa kỳ 2026-08
     const { error: closeErr } = await authedClient.rpc("acc_close_period", {
-      p_book: "actual",
+      p_book: "INTERNAL",
       p_year: 2026,
       p_month: 8,
     });
@@ -1122,7 +1122,7 @@ describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () =>
     const { data: period, error: periodErr } = await adminClient
       .from("accounting_periods")
       .select("status")
-      .eq("book", "actual")
+      .eq("book", "INTERNAL")
       .eq("year", 2026)
       .eq("month", 8)
       .single();
@@ -1143,7 +1143,7 @@ describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () =>
       account4212Id = accRows[0].id as string;
 
       const { rows: perRows } = await pg2.query(
-        `SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=8 LIMIT 1`
+        `SELECT id FROM public.accounting_periods WHERE book='INTERNAL' AND year=2026 AND month=8 LIMIT 1`
       );
       expect(perRows[0]).toBeDefined();
       periodId8 = perRows[0].id as string;
@@ -1154,7 +1154,7 @@ describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () =>
     const { data: bal4212, error: balErr } = await adminClient
       .from("account_balances")
       .select("closing_credit, closing_debit")
-      .eq("book", "actual")
+      .eq("book", "INTERNAL")
       .eq("account_id", account4212Id!)
       .eq("period_id", periodId8!)
       .single();
@@ -1201,35 +1201,35 @@ describe("Regression #2 — carry-forward giữ phát sinh kỳ N+1 (2026-10/11)
           `DELETE FROM public.journal_entry_lines
            WHERE entry_id IN (
              SELECT id FROM public.journal_entries
-             WHERE book='actual'
+             WHERE book='INTERNAL'
                AND period_id IN (
                  SELECT id FROM public.accounting_periods
-                 WHERE book='actual' AND year=2026 AND month=$1
+                 WHERE book='INTERNAL' AND year=2026 AND month=$1
                )
            )`,
           [m]
         );
         await pg.query(
           `DELETE FROM public.journal_entries
-           WHERE book='actual'
+           WHERE book='INTERNAL'
              AND period_id IN (
                SELECT id FROM public.accounting_periods
-               WHERE book='actual' AND year=2026 AND month=$1
+               WHERE book='INTERNAL' AND year=2026 AND month=$1
              )`,
           [m]
         );
         await pg.query(
           `DELETE FROM public.account_balances
-           WHERE book='actual'
+           WHERE book='INTERNAL'
              AND period_id IN (
                SELECT id FROM public.accounting_periods
-               WHERE book='actual' AND year=2026 AND month=$1
+               WHERE book='INTERNAL' AND year=2026 AND month=$1
              )`,
           [m]
         );
         await pg.query(
           `DELETE FROM public.accounting_periods
-           WHERE book='actual' AND year=2026 AND month=$1`,
+           WHERE book='INTERNAL' AND year=2026 AND month=$1`,
           [m]
         );
       }
@@ -1276,7 +1276,7 @@ describe("Regression #2 — carry-forward giữ phát sinh kỳ N+1 (2026-10/11)
       // Bút toán kỳ N: Nợ156 700000 / Có331 700000
       const { data: entryN, error: errN } = await authedClient.rpc(
         "gen_journal_purchase",
-        { p_book: "actual", p_invoice_id: invoiceN }
+        { p_book: "INTERNAL", p_invoice_id: invoiceN }
       );
       expect(errN).toBeNull();
       expect(entryN).toBeGreaterThan(0);
@@ -1289,7 +1289,7 @@ describe("Regression #2 — carry-forward giữ phát sinh kỳ N+1 (2026-10/11)
       // Bút toán kỳ N+1 (TRƯỚC khi đóng N): Nợ156 300000 / Có331 300000
       const { data: entryN1, error: errN1 } = await authedClient.rpc(
         "gen_journal_purchase",
-        { p_book: "actual", p_invoice_id: invoiceN1 }
+        { p_book: "INTERNAL", p_invoice_id: invoiceN1 }
       );
       expect(errN1).toBeNull();
       expect(entryN1).toBeGreaterThan(0);
@@ -1315,7 +1315,7 @@ describe("Regression #2 — carry-forward giữ phát sinh kỳ N+1 (2026-10/11)
         account156Id = accRows[0].id as string;
 
         const { rows: perRows } = await pg2.query(
-          `SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=11 LIMIT 1`
+          `SELECT id FROM public.accounting_periods WHERE book='INTERNAL' AND year=2026 AND month=11 LIMIT 1`
         );
         expect(perRows[0]).toBeDefined();
         periodN1Id = perRows[0].id as string;
@@ -1326,7 +1326,7 @@ describe("Regression #2 — carry-forward giữ phát sinh kỳ N+1 (2026-10/11)
       const { data: balBefore, error: balBeforeErr } = await adminClient
         .from("account_balances")
         .select("period_debit, period_credit")
-        .eq("book", "actual")
+        .eq("book", "INTERNAL")
         .eq("account_id", account156Id!)
         .eq("period_id", periodN1Id!)
         .single();
@@ -1335,7 +1335,7 @@ describe("Regression #2 — carry-forward giữ phát sinh kỳ N+1 (2026-10/11)
 
       // Đóng kỳ N (2026-10)
       const { error: closeErr } = await authedClient.rpc("acc_close_period", {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_year: 2026,
         p_month: 10,
       });
@@ -1348,7 +1348,7 @@ describe("Regression #2 — carry-forward giữ phát sinh kỳ N+1 (2026-10/11)
         .select(
           "opening_debit, opening_credit, period_debit, period_credit, closing_debit, closing_credit"
         )
-        .eq("book", "actual")
+        .eq("book", "INTERNAL")
         .eq("account_id", account156Id!)
         .eq("period_id", periodN1Id!)
         .single();
@@ -1381,7 +1381,7 @@ describe("Regression #2 — carry-forward giữ phát sinh kỳ N+1 (2026-10/11)
         .select(
           "opening_debit, opening_credit, period_debit, period_credit, closing_debit, closing_credit"
         )
-        .eq("book", "actual")
+        .eq("book", "INTERNAL")
         .eq("account_id", account331Id!)
         .eq("period_id", periodN1Id!)
         .single();
@@ -1428,35 +1428,35 @@ describe("acc_close_period — edge: kỳ lỗ (2026-09, actual)", () => {
           `DELETE FROM public.journal_entry_lines
            WHERE entry_id IN (
              SELECT id FROM public.journal_entries
-             WHERE book = 'actual'
+             WHERE book = 'INTERNAL'
                AND period_id IN (
                  SELECT id FROM public.accounting_periods
-                 WHERE book='actual' AND year=2026 AND month=$1
+                 WHERE book='INTERNAL' AND year=2026 AND month=$1
                )
            )`,
           [m]
         );
         await pg.query(
           `DELETE FROM public.journal_entries
-           WHERE book = 'actual'
+           WHERE book = 'INTERNAL'
              AND period_id IN (
                SELECT id FROM public.accounting_periods
-               WHERE book='actual' AND year=2026 AND month=$1
+               WHERE book='INTERNAL' AND year=2026 AND month=$1
              )`,
           [m]
         );
         await pg.query(
           `DELETE FROM public.account_balances
-           WHERE book = 'actual'
+           WHERE book = 'INTERNAL'
              AND period_id IN (
                SELECT id FROM public.accounting_periods
-               WHERE book='actual' AND year=2026 AND month=$1
+               WHERE book='INTERNAL' AND year=2026 AND month=$1
              )`,
           [m]
         );
         await pg.query(
           `DELETE FROM public.accounting_periods
-           WHERE book='actual' AND year=2026 AND month=$1`,
+           WHERE book='INTERNAL' AND year=2026 AND month=$1`,
           [m]
         );
       }
@@ -1475,7 +1475,7 @@ describe("acc_close_period — edge: kỳ lỗ (2026-09, actual)", () => {
     const { data: saleId, error: saleErr } = await authedClient.rpc(
       "gen_journal_sale",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_source_id: "LOSS-SO",
         p_entry_date: "2026-09-10",
         p_partner: "KH",
@@ -1498,7 +1498,7 @@ describe("acc_close_period — edge: kỳ lỗ (2026-09, actual)", () => {
     const { data: cogsId, error: cogsErr } = await authedClient.rpc(
       "gen_journal_cogs",
       {
-        p_book: "actual",
+        p_book: "INTERNAL",
         p_source_id: "LOSS-SO",
         p_entry_date: "2026-09-10",
         p_cogs: 600000,
@@ -1517,7 +1517,7 @@ describe("acc_close_period — edge: kỳ lỗ (2026-09, actual)", () => {
 
     // (3) Khóa kỳ 2026-09
     const { error: closeErr } = await authedClient.rpc("acc_close_period", {
-      p_book: "actual",
+      p_book: "INTERNAL",
       p_year: 2026,
       p_month: 9,
     });
@@ -1538,7 +1538,7 @@ describe("acc_close_period — edge: kỳ lỗ (2026-09, actual)", () => {
          WHERE coa.account_code = '4212'
            AND jel.debit > 0
            AND je.doc_type = 'closing'
-           AND je.book = 'actual'
+           AND je.book = 'INTERNAL'
            AND ap.year = 2026
            AND ap.month = 9`
       );

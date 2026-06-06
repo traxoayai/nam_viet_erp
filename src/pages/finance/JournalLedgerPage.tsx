@@ -37,12 +37,12 @@ const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
 const BOOK_LABEL: Record<string, string> = {
-  vat: "Sổ VAT",
-  actual: "Sổ Thực",
+  TAX: "Sổ Thuế",
+  INTERNAL: "Sổ Nội bộ",
 };
 const BOOK_COLOR: Record<string, string> = {
-  vat: "blue",
-  actual: "green",
+  TAX: "blue",
+  INTERNAL: "green",
 };
 
 const DOC_TYPE_LABEL: Record<string, string> = {
@@ -216,8 +216,8 @@ const JournalLedgerPage: React.FC = () => {
                   handleFilterChange({ book: val })
                 }
               >
-                <Select.Option value="vat">Sổ VAT</Select.Option>
-                <Select.Option value="actual">Sổ Thực</Select.Option>
+                <Select.Option value="TAX">Sổ Thuế</Select.Option>
+                <Select.Option value="INTERNAL">Sổ Nội bộ</Select.Option>
               </Select>
             </Col>
             <Col xs={24} sm={12} md={5}>
