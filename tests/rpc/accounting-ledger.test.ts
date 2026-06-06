@@ -2307,3 +2307,306 @@ describe("get_income_statement + get_trial_balance — kỳ INTERNAL 2027-01", (
     expect((data as unknown[]).length).toBe(0);
   }, 30000);
 });
+
+// ─── BCTC B01a/VAT/Cash flow (Thông tư 133) — Task 1.1-1.4 ────────────────────
+
+describe("BCTC TT133 — mapping + balance_sheet + vat_declaration + cash_flow", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+
+  /** Resolve account_id (uuid) từ account_code */
+  async function resolveAccountId(code: string): Promise<string> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      const { rows } = await pg.query(
+        `SELECT id FROM public.chart_of_accounts WHERE account_code = $1 LIMIT 1`,
+        [code]
+      );
+      if (!rows[0])
+        throw new Error(`Không tìm thấy TK ${code} trong chart_of_accounts`);
+      return rows[0].id as string;
+    } finally {
+      await pg.end();
+    }
+  }
+
+  /** Dọn sạch dữ liệu kỳ test (book, year, months) sổ kép */
+  async function cleanupPeriods(
+    book: string,
+    year: number,
+    months: number[]
+  ): Promise<void> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      for (const m of months) {
+        await pg.query(
+          `DELETE FROM public.journal_entry_lines
+           WHERE entry_id IN (
+             SELECT id FROM public.journal_entries
+             WHERE book=$1 AND period_id IN (
+               SELECT id FROM public.accounting_periods WHERE book=$1 AND year=$2 AND month=$3
+             )
+           )`,
+          [book, year, m]
+        );
+        await pg.query(
+          `DELETE FROM public.journal_entries
+           WHERE book=$1 AND period_id IN (
+             SELECT id FROM public.accounting_periods WHERE book=$1 AND year=$2 AND month=$3
+           )`,
+          [book, year, m]
+        );
+        await pg.query(
+          `DELETE FROM public.account_balances
+           WHERE book=$1 AND period_id IN (
+             SELECT id FROM public.accounting_periods WHERE book=$1 AND year=$2 AND month=$3
+           )`,
+          [book, year, m]
+        );
+        await pg.query(
+          `DELETE FROM public.accounting_periods WHERE book=$1 AND year=$2 AND month=$3`,
+          [book, year, m]
+        );
+      }
+    } finally {
+      await pg.end();
+    }
+  }
+
+  // ─── Task 1.1: bctc_line_mapping ──────────────────────────────────────────
+  it("Task 1.1 — bctc_line_mapping có dữ liệu seed + dòng ma_so='110'", async () => {
+    const { data, error } = await adminClient
+      .from("bctc_line_mapping")
+      .select("*");
+
+    expect(error).toBeNull();
+    expect(Array.isArray(data)).toBe(true);
+    expect(data!.length).toBeGreaterThan(0);
+    expect(data!.some((r: { ma_so: string }) => r.ma_so === "110")).toBe(true);
+  }, 30000);
+
+  // ─── Task 1.2: get_balance_sheet ──────────────────────────────────────────
+  it("Task 1.2 — get_balance_sheet B01a: tài sản = nguồn vốn, 140=1tr, 300=1tr", async () => {
+    await cleanupPeriods("TAX", 2028, [1]);
+    const authedClient = await createTestAuthedClient();
+
+    // Bút toán: Nợ156 1.000.000 / Có331 1.000.000 (book TAX, kỳ 2028-01)
+    const { data: entryId, error: createErr } = await authedClient.rpc(
+      "acc_create_journal_entry",
+      {
+        p_book: "TAX",
+        p_entry_date: "2028-01-15",
+        p_doc_type: "purchase",
+        p_source_ref_type: "purchase_order",
+        p_source_ref_id: "BS-2028-01",
+        p_description: "Nhập hàng test balance sheet",
+        p_lines: [
+          {
+            account_code: "156",
+            debit: 1000000,
+            credit: 0,
+            description: "Nhập kho",
+          },
+          {
+            account_code: "331",
+            debit: 0,
+            credit: 1000000,
+            description: "Phải trả NCC",
+          },
+        ],
+      }
+    );
+    expect(createErr).toBeNull();
+    expect(entryId).toBeGreaterThan(0);
+
+    const { error: postErr } = await authedClient.rpc("post_journal_entry", {
+      p_entry_id: entryId,
+    });
+    expect(postErr).toBeNull();
+
+    const { data, error } = await authedClient.rpc("get_balance_sheet", {
+      p_book: "TAX",
+      p_year: 2028,
+      p_month: 1,
+    });
+    expect(error).toBeNull();
+    expect(Array.isArray(data)).toBe(true);
+
+    type BSRow = { ma_so: string; ten_chi_tieu: string; so_tien: number };
+    const rows = data as BSRow[];
+    const get = (ma: string) =>
+      Number(rows.find((r) => r.ma_so === ma)?.so_tien ?? 0);
+
+    const assetCodes = ["110", "120", "130", "140", "150", "160"];
+    const sourceCodes = ["300", "400"];
+    const totalAsset = assetCodes.reduce((s, c) => s + get(c), 0);
+    const totalSource = sourceCodes.reduce((s, c) => s + get(c), 0);
+
+    expect(get("140")).toBe(1000000);
+    expect(get("300")).toBe(1000000);
+    expect(totalAsset).toBe(totalSource);
+
+    await cleanupPeriods("TAX", 2028, [1]);
+  }, 60000);
+
+  // ─── Task 1.3: get_vat_declaration ────────────────────────────────────────
+  it("Task 1.3 — get_vat_declaration: rate 8 (pre=1tr,vat=80k), rate 10 (pre=1tr,vat=100k)", async () => {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    let invoiceId: number;
+    try {
+      const { rows } = await pg.query(
+        `INSERT INTO public.finance_invoices(
+           direction, status, invoice_number, invoice_date, items_json,
+           total_amount_pre_tax, tax_amount, total_amount_post_tax
+         ) VALUES ('inbound','verified','VAT-DECL-T1','2028-03-15',
+           $1::jsonb, 2000000, 180000, 2180000)
+         RETURNING id`,
+        [
+          JSON.stringify([
+            { quantity: 10, unit_price: 100000, vat_rate: 8 },
+            { quantity: 5, unit_price: 200000, vat_rate: 10 },
+          ]),
+        ]
+      );
+      invoiceId = rows[0].id as number;
+    } finally {
+      await pg.end();
+    }
+
+    try {
+      const authedClient = await createTestAuthedClient();
+      const { data, error } = await authedClient.rpc("get_vat_declaration", {
+        p_direction: "inbound",
+        p_year: 2028,
+        p_month: 3,
+      });
+      expect(error).toBeNull();
+      expect(Array.isArray(data)).toBe(true);
+
+      type VatRow = {
+        tax_rate: number;
+        sum_pre_tax: number;
+        sum_vat: number;
+      };
+      const rows = data as VatRow[];
+      const r8 = rows.find((r) => Number(r.tax_rate) === 8);
+      const r10 = rows.find((r) => Number(r.tax_rate) === 10);
+
+      expect(r8).toBeDefined();
+      expect(Number(r8!.sum_pre_tax)).toBe(1000000);
+      expect(Number(r8!.sum_vat)).toBe(80000);
+
+      expect(r10).toBeDefined();
+      expect(Number(r10!.sum_pre_tax)).toBe(1000000);
+      expect(Number(r10!.sum_vat)).toBe(100000);
+    } finally {
+      const pg2 = new Client(PG_CFG);
+      await pg2.connect();
+      try {
+        await pg2.query(`DELETE FROM public.finance_invoices WHERE id = $1`, [
+          invoiceId!,
+        ]);
+      } finally {
+        await pg2.end();
+      }
+    }
+  }, 60000);
+
+  // ─── Task 1.4: get_cash_flow ──────────────────────────────────────────────
+  it("Task 1.4 — get_cash_flow: vào=500k, ra=200k, thuần=300k", async () => {
+    await cleanupPeriods("INTERNAL", 2028, [4]);
+    const authedClient = await createTestAuthedClient();
+
+    // Tiền vào: Nợ111 500.000 / Có131 500.000
+    const { data: e1, error: e1Err } = await authedClient.rpc(
+      "acc_create_journal_entry",
+      {
+        p_book: "INTERNAL",
+        p_entry_date: "2028-04-05",
+        p_doc_type: "receipt",
+        p_source_ref_type: "receipt",
+        p_source_ref_id: "CF-IN-2028-04",
+        p_description: "Thu tiền KH",
+        p_lines: [
+          {
+            account_code: "111",
+            debit: 500000,
+            credit: 0,
+            description: "Thu quỹ",
+          },
+          {
+            account_code: "131",
+            debit: 0,
+            credit: 500000,
+            description: "Giảm phải thu",
+          },
+        ],
+      }
+    );
+    expect(e1Err).toBeNull();
+    await authedClient.rpc("post_journal_entry", { p_entry_id: e1 });
+
+    // Tiền ra: Nợ331 200.000 / Có111 200.000
+    const { data: e2, error: e2Err } = await authedClient.rpc(
+      "acc_create_journal_entry",
+      {
+        p_book: "INTERNAL",
+        p_entry_date: "2028-04-06",
+        p_doc_type: "payment",
+        p_source_ref_type: "payment",
+        p_source_ref_id: "CF-OUT-2028-04",
+        p_description: "Trả NCC",
+        p_lines: [
+          {
+            account_code: "331",
+            debit: 200000,
+            credit: 0,
+            description: "Giảm phải trả",
+          },
+          {
+            account_code: "111",
+            debit: 0,
+            credit: 200000,
+            description: "Chi quỹ",
+          },
+        ],
+      }
+    );
+    expect(e2Err).toBeNull();
+    await authedClient.rpc("post_journal_entry", { p_entry_id: e2 });
+
+    const { data, error } = await authedClient.rpc("get_cash_flow", {
+      p_book: "INTERNAL",
+      p_year: 2028,
+      p_month: 4,
+    });
+    expect(error).toBeNull();
+
+    const rows = data as {
+      dong_tien_vao: number;
+      dong_tien_ra: number;
+      luu_chuyen_thuan: number;
+    }[];
+    expect(Array.isArray(rows)).toBe(true);
+    expect(rows.length).toBe(1);
+    expect(Number(rows[0].dong_tien_vao)).toBe(500000);
+    expect(Number(rows[0].dong_tien_ra)).toBe(200000);
+    expect(Number(rows[0].luu_chuyen_thuan)).toBe(300000);
+
+    await cleanupPeriods("INTERNAL", 2028, [4]);
+  }, 60000);
+
+  // resolveAccountId giữ lại để dùng nếu cần debug — tránh unused
+  void resolveAccountId;
+});
