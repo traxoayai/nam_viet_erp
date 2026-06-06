@@ -372,3 +372,204 @@ describe("post_journal_entry / void_journal_entry", () => {
     }
   }, 60000);
 });
+
+// ─── gen_journal_* tests ─────────────────────────────────────────────────────
+
+describe("gen_journal_purchase / sale / cogs / payment", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+
+  /** Lấy tất cả dòng bút toán của một entry_id */
+  async function fetchLines(
+    entryId: number
+  ): Promise<{ debit: number; credit: number; account_code: string }[]> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      const { rows } = await pg.query(
+        `SELECT jel.debit, jel.credit, coa.account_code
+         FROM public.journal_entry_lines jel
+         JOIN public.chart_of_accounts coa ON coa.id = jel.account_id
+         WHERE jel.entry_id = $1`,
+        [entryId]
+      );
+      return rows.map((r) => ({
+        debit: Number(r.debit),
+        credit: Number(r.credit),
+        account_code: r.account_code as string,
+      }));
+    } finally {
+      await pg.end();
+    }
+  }
+
+  /** Xóa journal entry và finance_invoice test */
+  async function cleanupEntry(entryId: number): Promise<void> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      await pg.query(`DELETE FROM public.journal_entries WHERE id = $1`, [
+        entryId,
+      ]);
+    } finally {
+      await pg.end();
+    }
+  }
+
+  it("purchase: SUM(debit)=SUM(credit)=1080000 (Nợ156+Nợ1331 / Có331)", async () => {
+    const authedClient = await createTestAuthedClient();
+
+    // Seed finance_invoice qua pg superuser (bypass RLS)
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    let invoiceId: number;
+    try {
+      const { rows } = await pg.query(
+        `INSERT INTO public.finance_invoices(
+           direction, status, invoice_number, invoice_date,
+           total_amount_pre_tax, tax_amount, total_amount_post_tax
+         ) VALUES ('inbound','verified','PUR-T1','2026-06-13',1000000,80000,1080000)
+         RETURNING id`
+      );
+      invoiceId = rows[0].id as number;
+    } finally {
+      await pg.end();
+    }
+
+    try {
+      const { data: entryId, error } = await authedClient.rpc(
+        "gen_journal_purchase",
+        { p_book: "vat", p_invoice_id: invoiceId }
+      );
+
+      expect(error).toBeNull();
+      expect(typeof entryId).toBe("number");
+      expect(entryId).toBeGreaterThan(0);
+
+      const lines = await fetchLines(entryId as number);
+      const sumDebit = lines.reduce((s, l) => s + l.debit, 0);
+      const sumCredit = lines.reduce((s, l) => s + l.credit, 0);
+
+      expect(sumDebit).toBe(1080000);
+      expect(sumCredit).toBe(1080000);
+      // Kiểm tra đúng tài khoản
+      expect(
+        lines.some((l) => l.account_code === "156" && l.debit === 1000000)
+      ).toBe(true);
+      expect(
+        lines.some((l) => l.account_code === "1331" && l.debit === 80000)
+      ).toBe(true);
+      expect(
+        lines.some((l) => l.account_code === "331" && l.credit === 1080000)
+      ).toBe(true);
+
+      await cleanupEntry(entryId as number);
+    } finally {
+      // Cleanup invoice
+      const pg2 = new Client(PG_CFG);
+      await pg2.connect();
+      try {
+        await pg2.query(`DELETE FROM public.finance_invoices WHERE id = $1`, [
+          invoiceId,
+        ]);
+      } finally {
+        await pg2.end();
+      }
+    }
+  }, 30000);
+
+  it("sale: SUM(debit)=SUM(credit)=1080000 (Nợ131 / Có5111+Có33311)", async () => {
+    const authedClient = await createTestAuthedClient();
+
+    const { data: entryId, error } = await authedClient.rpc(
+      "gen_journal_sale",
+      {
+        p_book: "vat",
+        p_source_id: "SO-T1",
+        p_entry_date: "2026-06-13",
+        p_partner: "KH-1",
+        p_revenue: 1000000,
+        p_vat: 80000,
+      }
+    );
+
+    expect(error).toBeNull();
+    expect(typeof entryId).toBe("number");
+    expect(entryId).toBeGreaterThan(0);
+
+    const lines = await fetchLines(entryId as number);
+    const sumDebit = lines.reduce((s, l) => s + l.debit, 0);
+    const sumCredit = lines.reduce((s, l) => s + l.credit, 0);
+
+    expect(sumDebit).toBe(1080000);
+    expect(sumCredit).toBe(1080000);
+
+    await cleanupEntry(entryId as number);
+  }, 30000);
+
+  it("cogs: SUM(debit)=600000, TK 632 debit=600000", async () => {
+    const authedClient = await createTestAuthedClient();
+
+    const { data: entryId, error } = await authedClient.rpc(
+      "gen_journal_cogs",
+      {
+        p_book: "actual",
+        p_source_id: "SO-T1",
+        p_entry_date: "2026-06-13",
+        p_cogs: 600000,
+      }
+    );
+
+    expect(error).toBeNull();
+    expect(typeof entryId).toBe("number");
+    expect(entryId).toBeGreaterThan(0);
+
+    const lines = await fetchLines(entryId as number);
+    const sumDebit = lines.reduce((s, l) => s + l.debit, 0);
+
+    expect(sumDebit).toBe(600000);
+    expect(
+      lines.some((l) => l.account_code === "632" && l.debit === 600000)
+    ).toBe(true);
+
+    await cleanupEntry(entryId as number);
+  }, 30000);
+
+  it("payment: TK 635 debit=2000000 (Trả lãi vay)", async () => {
+    const authedClient = await createTestAuthedClient();
+
+    const { data: entryId, error } = await authedClient.rpc(
+      "gen_journal_payment",
+      {
+        p_book: "actual",
+        p_source_id: "PC-T1",
+        p_entry_date: "2026-06-14",
+        p_amount: 2000000,
+        p_category_account: "635",
+        p_fund_account: "112",
+        p_partner: "VCB",
+        p_desc: "Trả lãi vay",
+      }
+    );
+
+    expect(error).toBeNull();
+    expect(typeof entryId).toBe("number");
+    expect(entryId).toBeGreaterThan(0);
+
+    const lines = await fetchLines(entryId as number);
+    const line635 = lines.find((l) => l.account_code === "635");
+
+    expect(line635).toBeDefined();
+    expect(line635!.debit).toBe(2000000);
+
+    await cleanupEntry(entryId as number);
+  }, 30000);
+});
