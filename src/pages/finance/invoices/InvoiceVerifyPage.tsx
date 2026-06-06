@@ -35,13 +35,31 @@ import { useState } from "react";
 import { useInvoiceVerifyLogic } from "../../../features/finance/hooks/useInvoiceVerifyLogic";
 
 import { VerifyProductModal } from "@/features/finance/components/invoices/VerifyProductModal";
+import { getProductDetails } from "@/features/product/api/productService"; // [NEW] Fetch details if needed
 
 dayjs.extend(customParseFormat);
 
-import { getProductDetails } from "@/features/product/api/productService"; // [NEW] Fetch details if needed
-
 const { Content } = Layout;
 const { Title, Text } = Typography;
+
+/** Đơn vị tính của sản phẩm (đọc từ product_units / units). */
+interface ProductUnitOption {
+  id: number | string;
+  unit_name?: string;
+  conversion_rate?: number;
+  [extra: string]: unknown;
+}
+
+/** Sản phẩm chọn từ modal đối chiếu (gồm cả units để quy đổi ĐVT nhập). */
+interface VerifyProduct {
+  id: number;
+  sku?: string;
+  name?: string;
+  barcode?: string;
+  product_units?: ProductUnitOption[];
+  units?: ProductUnitOption[];
+  [extra: string]: unknown;
+}
 
 const InvoiceVerifyPage = () => {
   // [NEW] Modal State
@@ -57,17 +75,17 @@ const InvoiceVerifyPage = () => {
 
   // [NEW] Cache selected products locally to ensure we have full details (units)
   const [selectedProductsMap, setSelectedProductsMap] = useState<
-    Record<number, any>
+    Record<number, VerifyProduct>
   >({});
 
-  const handleSelectProduct = async (product: any) => {
+  const handleSelectProduct = async (product: VerifyProduct) => {
     if (selectingRowIndex === null) return;
 
     // Ensure we have units.
     let fullProduct = product;
     if (!product.product_units || product.product_units.length === 0) {
       try {
-        fullProduct = await getProductDetails(product.id);
+        fullProduct = (await getProductDetails(product.id)) as VerifyProduct;
       } catch (e) {
         console.error("Failed to fetch details", e);
       }
@@ -126,14 +144,16 @@ const InvoiceVerifyPage = () => {
     routerState, // Để lấy info header hiển thị raw
   } = useInvoiceVerifyLogic();
 
-  const supplierOptions = suppliers.map((s: any) => ({
-    label: `${s.name} - ${s.tax_code}`,
-    value: s.id,
-    tax_code: s.tax_code,
-  }));
+  const supplierOptions = suppliers.map(
+    (s: { id: number; name: string; tax_code?: string }) => ({
+      label: `${s.name} - ${s.tax_code}`,
+      value: s.id,
+      tax_code: s.tax_code,
+    })
+  );
 
   // 3. LOGIC FILTER AN TOÀN (Không đụng vào children)
-  const filterOptionSafe = (input: string, option: any) => {
+  const filterOptionSafe = (input: string, option?: { label?: string }) => {
     if (!option?.label) return false;
     const tokens = input
       .toLowerCase()
@@ -151,7 +171,7 @@ const InvoiceVerifyPage = () => {
       title: "Tên hàng (XML)",
       dataIndex: "name",
       width: 250,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <div style={{ display: "flex", flexDirection: "column" }}>
           <Form.Item name={[index, "name"]} style={{ marginBottom: 0 }}>
             <Input
@@ -181,7 +201,7 @@ const InvoiceVerifyPage = () => {
       title: "SL",
       dataIndex: "quantity",
       width: 80,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <Form.Item name={[index, "quantity"]} style={{ marginBottom: 0 }}>
           <InputNumber disabled style={{ width: "100%" }} controls={false} />
         </Form.Item>
@@ -193,7 +213,7 @@ const InvoiceVerifyPage = () => {
             title: "ĐVT (XML)",
             dataIndex: "xml_unit",
             width: 90,
-            render: (_: any, __: any, index: number) => (
+            render: (_: unknown, __: unknown, index: number) => (
               <Form.Item name={[index, "xml_unit"]} style={{ marginBottom: 0 }}>
                 <Input
                   disabled
@@ -213,7 +233,7 @@ const InvoiceVerifyPage = () => {
       title: "Mã Nội Bộ (Chọn)",
       dataIndex: "product_id",
       width: 250,
-      render: (_: any, _record: any, index: number) => (
+      render: (_: unknown, _record: unknown, index: number) => (
         <Form.Item
           shouldUpdate={(prev, curr) =>
             prev.items?.[index]?.product_id !== curr.items?.[index]?.product_id
@@ -224,9 +244,10 @@ const InvoiceVerifyPage = () => {
             const productId = getFieldValue(["items", index, "product_id"]);
 
             // [FIX] Look up in Local Cache FIRST, then Store
-            const selectedProduct =
-              selectedProductsMap[productId] ||
-              products.find((p) => p.id === productId);
+            const selectedProduct = (selectedProductsMap[productId] ||
+              products.find((p) => p.id === productId)) as
+              | VerifyProduct
+              | undefined;
 
             return (
               <div style={{ width: "100%" }}>
@@ -251,6 +272,8 @@ const InvoiceVerifyPage = () => {
                   </Button>
                 ) : (
                   <div
+                    role="button"
+                    tabIndex={0}
                     style={{
                       border: "1px solid #91caff",
                       padding: "6px 8px",
@@ -260,9 +283,18 @@ const InvoiceVerifyPage = () => {
                       cursor: "pointer",
                     }}
                     onClick={() => handleOpenVerifyModal(index)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleOpenVerifyModal(index);
+                      }
+                    }}
                   >
                     {/* Close Button */}
                     <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Bỏ chọn sản phẩm"
                       style={{
                         position: "absolute",
                         top: -8,
@@ -274,6 +306,13 @@ const InvoiceVerifyPage = () => {
                       onClick={(e) => {
                         e.stopPropagation();
                         handleClearProduct(index);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleClearProduct(index);
+                        }
                       }}
                     >
                       <CloseCircleOutlined
@@ -319,7 +358,7 @@ const InvoiceVerifyPage = () => {
       dataIndex: "internal_unit",
       width: 220,
       align: "left" as const,
-      render: (_: any, _record: any, index: number) => (
+      render: (_: unknown, _record: unknown, index: number) => (
         <Form.Item
           shouldUpdate={(prev, curr) =>
             prev.items?.[index]?.product_id !==
@@ -331,9 +370,10 @@ const InvoiceVerifyPage = () => {
         >
           {({ getFieldValue }) => {
             const productId = getFieldValue(["items", index, "product_id"]);
-            const selectedProduct =
-              selectedProductsMap[productId] ||
-              products.find((p) => p.id === productId);
+            const selectedProduct = (selectedProductsMap[productId] ||
+              products.find((p) => p.id === productId)) as
+              | VerifyProduct
+              | undefined;
 
             if (!selectedProduct)
               return (
@@ -353,7 +393,7 @@ const InvoiceVerifyPage = () => {
             const units =
               selectedProduct.product_units || selectedProduct.units || [];
             const selectedUnitObj = units.find(
-              (u: any) => u.id === currentUnitId
+              (u: ProductUnitOption) => u.id === currentUnitId
             );
             const rate = selectedUnitObj?.conversion_rate || 1;
 
@@ -378,7 +418,7 @@ const InvoiceVerifyPage = () => {
                       setTimeout(() => handleRecalculate(), 0);
                     }}
                   >
-                    {units.map((u: any) => (
+                    {units.map((u: ProductUnitOption) => (
                       <Select.Option
                         key={u.id}
                         value={u.id}
@@ -421,8 +461,60 @@ const InvoiceVerifyPage = () => {
       title: "Đơn giá",
       dataIndex: "unit_price",
       width: 130,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <Form.Item name={[index, "unit_price"]} style={{ marginBottom: 0 }}>
+          <InputNumber
+            style={{ width: "100%" }}
+            formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+            disabled={isReadOnly}
+            controls={false}
+          />
+        </Form.Item>
+      ),
+    },
+    {
+      title: "% CK",
+      dataIndex: "discount_rate",
+      width: 80,
+      render: (_: unknown, __: unknown, index: number) => (
+        <Form.Item name={[index, "discount_rate"]} style={{ marginBottom: 0 }}>
+          <InputNumber
+            min={0}
+            max={100}
+            style={{ width: "100%" }}
+            disabled={isReadOnly}
+            controls={false}
+          />
+        </Form.Item>
+      ),
+    },
+    {
+      title: "Tiền CK",
+      dataIndex: "discount_amount",
+      width: 120,
+      render: (_: unknown, __: unknown, index: number) => (
+        <Form.Item
+          name={[index, "discount_amount"]}
+          style={{ marginBottom: 0 }}
+        >
+          <InputNumber
+            style={{ width: "100%" }}
+            formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+            disabled={isReadOnly}
+            controls={false}
+          />
+        </Form.Item>
+      ),
+    },
+    {
+      title: "Thành Tiền (trước thuế)",
+      dataIndex: "amount_before_tax",
+      width: 150,
+      render: (_: unknown, __: unknown, index: number) => (
+        <Form.Item
+          name={[index, "amount_before_tax"]}
+          style={{ marginBottom: 0 }}
+        >
           <InputNumber
             style={{ width: "100%" }}
             formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -436,7 +528,7 @@ const InvoiceVerifyPage = () => {
       title: "VAT %",
       dataIndex: "vat_rate",
       width: 70,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <Form.Item name={[index, "vat_rate"]} style={{ marginBottom: 0 }}>
           <InputNumber
             min={0}
@@ -452,7 +544,7 @@ const InvoiceVerifyPage = () => {
       title: "Hạn Dùng",
       dataIndex: "expiry_date",
       width: 130,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <Form.Item name={[index, "expiry_date"]} style={{ marginBottom: 0 }}>
           <DatePicker
             format="DD/MM/YYYY"
@@ -637,7 +729,79 @@ const InvoiceVerifyPage = () => {
               }}
             >
               <Row justify="end">
-                <Col span={6}>
+                <Col span={8}>
+                  <Form.Item
+                    label="Tổng tiền hàng (nguyên giá)"
+                    name="total_goods_amount"
+                    style={{ marginBottom: 8 }}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      formatter={(value) =>
+                        `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                      }
+                      controls={false}
+                      readOnly
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="Tổng chiết khấu"
+                    name="total_discount_amount"
+                    style={{ marginBottom: 8 }}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      formatter={(value) =>
+                        `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                      }
+                      controls={false}
+                      readOnly
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="Tổng tiền phí (nhập tay — phân bổ vào giá vốn)"
+                    name="total_fee_amount"
+                    style={{ marginBottom: 8 }}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      formatter={(value) =>
+                        `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                      }
+                      controls={false}
+                      min={0}
+                      disabled={isReadOnly}
+                      onChange={() => setTimeout(handleRecalculate, 0)}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="Tổng tiền chưa thuế"
+                    name="total_amount_pre_tax"
+                    style={{ marginBottom: 8 }}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      formatter={(value) =>
+                        `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                      }
+                      controls={false}
+                      readOnly
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="Tổng thuế VAT"
+                    name="tax_amount"
+                    style={{ marginBottom: 8 }}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      formatter={(value) =>
+                        `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                      }
+                      controls={false}
+                      readOnly
+                    />
+                  </Form.Item>
                   <Form.Item
                     label="Tổng thanh toán (Sau thuế)"
                     name="total_amount_post_tax"

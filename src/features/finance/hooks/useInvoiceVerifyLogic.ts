@@ -6,9 +6,83 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 
 import { invoiceService } from "../api/invoiceService";
 
+import type {
+  ParsedInvoiceHeader,
+  ParsedInvoiceItem,
+} from "../utils/xmlParser";
+import type { Json } from "@/shared/types/database.types";
+
 import { useProductStore } from "@/features/product/stores/productStore";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { calcInvoiceTotals } from "@/shared/utils/money";
+
+/**
+ * Dòng hàng thô đọc từ XML (ParsedInvoiceItem) + các trường gợi ý mapping
+ * (match_type, internal_product_id, internal_unit) gắn thêm khi đối chiếu.
+ */
+type XmlRawItem = Partial<ParsedInvoiceItem> & {
+  match_type?: "exact" | "prediction" | string;
+  internal_product_id?: number;
+  internal_unit?: string;
+};
+
+/** Dòng hàng trong form đối chiếu hóa đơn VAT (có thêm trường chiết khấu chuẩn VAS). */
+interface InvoiceFormItem {
+  key?: number;
+  name?: string;
+  product_name?: string;
+  quantity?: number;
+  unit_price?: number;
+  vat_rate?: number;
+  internal_unit?: string | null;
+  unit?: string;
+  product_id?: number | string | null;
+  expiry_date?: dayjs.Dayjs | string | null;
+  xml_unit?: string;
+  xml_quantity?: number;
+  xml_unit_price?: number;
+  discount_rate?: number;
+  discount_amount?: number;
+  amount_before_tax?: number;
+  [extra: string]: unknown;
+}
+
+/** Dòng XML đã parse + gợi ý mapping nội bộ (đính khi tạo router state). */
+type RouterXmlItem = ParsedInvoiceItem & {
+  internal_product_id?: number;
+  internal_unit?: string;
+  match_type?: "exact" | "prediction" | string;
+};
+
+/** Dữ liệu XML đã parse, kèm fileUrl (đính khi điều hướng tới trang đối chiếu). */
+interface RouterXmlData {
+  header: ParsedInvoiceHeader;
+  items: RouterXmlItem[];
+  fileUrl?: string;
+  [extra: string]: unknown;
+}
+
+/** location.state truyền vào trang đối chiếu hóa đơn (react-router). */
+interface RouterState {
+  source?: string;
+  direction?: string;
+  returnTo?: string;
+  xmlData?: RouterXmlData;
+  data?: unknown;
+  [extra: string]: unknown;
+}
+
+/** Toàn bộ giá trị của Form đối chiếu hóa đơn (AntD getFieldsValue). */
+interface InvoiceFormValues {
+  supplier_id?: number | string | null;
+  invoice_number?: string;
+  invoice_symbol?: string;
+  invoice_date?: dayjs.Dayjs | string | null;
+  buyer_tax_code?: string;
+  items?: InvoiceFormItem[];
+  total_fee_amount?: number;
+  [extra: string]: unknown;
+}
 
 export const useInvoiceVerifyLogic = () => {
   const { message } = App.useApp();
@@ -17,7 +91,7 @@ export const useInvoiceVerifyLogic = () => {
   const location = useLocation();
   const [form] = Form.useForm();
 
-  const routerState = location.state;
+  const routerState = (location.state ?? null) as RouterState | null;
 
   // Get returnTo and poId from URL search params as fallback
   const searchParams = new URLSearchParams(location.search);
@@ -30,15 +104,28 @@ export const useInvoiceVerifyLogic = () => {
   const [loading, setLoading] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [isXmlSource, setIsXmlSource] = useState(false);
-  const [xmlRawItems, setXmlRawItems] = useState<any[]>([]);
+  const [xmlRawItems, setXmlRawItems] = useState<XmlRawItem[]>([]);
 
-  const calculateTotal = (items: any[] = []) => calcInvoiceTotals(items);
+  // Tính totals chuẩn VAS: items có discount_amount/discount_rate/amount_before_tax,
+  // cộng phí (total_fee_amount nhập tay) — phí tách riêng, không vào total thanh toán.
+  const computeTotals = (items: unknown[] = []) => {
+    const totalFee = Number(form.getFieldValue("total_fee_amount")) || 0;
+    return calcInvoiceTotals(items as Parameters<typeof calcInvoiceTotals>[0], {
+      totalFee,
+    });
+  };
 
   // --- ACTIONS ---
   const handleRecalculate = () => {
-    const items = form.getFieldValue("items");
-    const totals = calculateTotal(items);
-    form.setFieldsValue({ total_amount_post_tax: totals.final });
+    const items = form.getFieldValue("items") || [];
+    const totals = computeTotals(items);
+    form.setFieldsValue({
+      total_goods_amount: totals.totalGoods,
+      total_discount_amount: totals.totalDiscount,
+      total_amount_pre_tax: totals.totalPreTax,
+      tax_amount: totals.totalTax,
+      total_amount_post_tax: totals.final,
+    });
   };
 
   const loadInvoiceFromDB = async (invoiceId: number) => {
@@ -53,9 +140,12 @@ export const useInvoiceVerifyLogic = () => {
           invoice_symbol: record.invoice_symbol,
           invoice_date: record.invoice_date ? dayjs(record.invoice_date) : null,
           supplier_id: record.supplier_id,
+          total_fee_amount:
+            (record as { total_fee_amount?: number | null }).total_fee_amount ||
+            0,
           total_amount_post_tax: record.total_amount_post_tax,
-          items: ((record.items_json as any[]) || []).map(
-            (item: any, idx: number) => ({
+          items: ((record.items_json as InvoiceFormItem[] | null) || []).map(
+            (item: InvoiceFormItem, idx: number) => ({
               ...item,
               key: idx,
               expiry_date: item.expiry_date ? dayjs(item.expiry_date) : null,
@@ -65,6 +155,7 @@ export const useInvoiceVerifyLogic = () => {
             })
           ),
         });
+        handleRecalculate();
       }
     } catch (err) {
       console.error(err);
@@ -73,7 +164,7 @@ export const useInvoiceVerifyLogic = () => {
     }
   };
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: InvoiceFormValues) => {
     if (isReadOnly) return;
     setLoading(true);
 
@@ -95,7 +186,9 @@ export const useInvoiceVerifyLogic = () => {
       // 2. AUTO LEARN MAPPING
       if (isXmlSource) {
         const supplierTax = (
-          suppliers.find((s) => s.id === safeSupplierId) as any
+          suppliers.find((s) => s.id === safeSupplierId) as
+            | { tax_code?: string }
+            | undefined
         )?.tax_code;
         if (supplierTax) {
           // Gom UNIQUE theo (tên NCC + ĐVT NCC) TRƯỚC khi gọi. Một hóa đơn XML
@@ -111,7 +204,7 @@ export const useInvoiceVerifyLogic = () => {
           }
           const uniqueMappings = new Map<string, PendingMapping>();
 
-          values.items.forEach((item: any, index: number) => {
+          values.items!.forEach((item: InvoiceFormItem, index: number) => {
             const originalName = xmlRawItems[index]?.name;
             const originalUnit = xmlRawItems[index]?.unit;
 
@@ -147,11 +240,13 @@ export const useInvoiceVerifyLogic = () => {
       }
 
       // 3. CHUẨN BỊ PAYLOAD (CẬP NHẬT MỚI)
-      const totals = calculateTotal(values.items);
+      const totals = computeTotals(values.items ?? []);
       const xmlFileUrl = isXmlSource ? routerState?.xmlData?.fileUrl : null;
 
       // [FIX] Lấy thông tin Raw từ XML Header
-      const xmlHeader = isXmlSource ? routerState?.xmlData?.header : {};
+      const xmlHeader = (
+        isXmlSource ? routerState?.xmlData?.header : {}
+      ) as Partial<ParsedInvoiceHeader>;
 
       const payload = {
         invoice_number: values.invoice_number || "Unknown",
@@ -166,16 +261,26 @@ export const useInvoiceVerifyLogic = () => {
           : undefined,
 
         // [NEW] Bổ sung các trường Raw để hiển thị ngoài danh sách
-        supplier_name_raw: xmlHeader.supplier_name || null,
-        supplier_tax_code: xmlHeader.supplier_tax_code || null,
+        supplier_name_raw: (xmlHeader.supplier_name || null) as
+          | string
+          | undefined,
+        supplier_tax_code: (xmlHeader.supplier_tax_code || null) as
+          | string
+          | undefined,
         supplier_address_raw: xmlHeader.supplier_address || null,
-        parsed_data: isXmlSource ? routerState?.xmlData : null, // Lưu lại toàn bộ cục JSON XML để sau này debug
+        parsed_data: (isXmlSource ? routerState?.xmlData : null) as
+          | Json
+          | undefined, // Lưu lại toàn bộ cục JSON XML để sau này debug
 
+        // [VAS] tổng theo chuẩn kế toán VN
+        total_goods_amount: totals.totalGoods,
+        total_discount_amount: totals.totalDiscount,
+        total_fee_amount: totals.totalFee,
         total_amount_pre_tax: totals.totalPreTax,
         tax_amount: totals.totalTax,
         total_amount_post_tax: totals.final,
 
-        items_json: values.items.map((item: any) => {
+        items_json: values.items!.map((item: InvoiceFormItem) => {
           let pId = item.product_id ? Number(item.product_id) : null;
           if (typeof pId === "number" && isNaN(pId)) pId = null;
 
@@ -204,7 +309,7 @@ export const useInvoiceVerifyLogic = () => {
           total_amount_pre_tax: totals.totalPreTax,
           total_tax: totals.totalTax,
           total_amount_post_tax: totals.final,
-          items: (values.items || []).map((item: any) => ({
+          items: (values.items || []).map((item: InvoiceFormItem) => ({
             product_id: item.product_id ? Number(item.product_id) : null,
             product_name: item.product_name || item.name,
             unit: item.internal_unit || item.unit,
@@ -220,7 +325,7 @@ export const useInvoiceVerifyLogic = () => {
         if (!id || id === "new-xml") {
           // Tạo mới (từ XML hoặc manual) → create draft rồi verify luôn
           const result = await invoiceService.createInvoice(payload);
-          const newInvoiceId = (result as any)?.id;
+          const newInvoiceId = (result as { id?: number } | null)?.id;
 
           // Auto-link to PO if poId provided
           if (linkedPoId && newInvoiceId) {
@@ -245,22 +350,22 @@ export const useInvoiceVerifyLogic = () => {
       }
 
       navigate(returnTo || "/finance/invoices");
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
-      message.error("Lỗi: " + error.message);
+      message.error("Lỗi: " + (error as { message?: string })?.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const onSaveDraft = async (values: any) => {
+  const onSaveDraft = async (values: InvoiceFormValues) => {
     if (isReadOnly) {
       message.warning("Hóa đơn đã được xác nhận, không thể lưu nháp.");
       return;
     }
     setLoading(true);
     try {
-      const totals = calculateTotal(values.items);
+      const totals = computeTotals(values.items ?? []);
       let safeSupplierId = values.supplier_id
         ? Number(values.supplier_id)
         : null;
@@ -268,7 +373,9 @@ export const useInvoiceVerifyLogic = () => {
         safeSupplierId = null;
 
       const xmlFileUrl = isXmlSource ? routerState?.xmlData?.fileUrl : null;
-      const xmlHeader = isXmlSource ? routerState?.xmlData?.header : {};
+      const xmlHeader = (
+        isXmlSource ? routerState?.xmlData?.header : {}
+      ) as Partial<ParsedInvoiceHeader>;
 
       const payload = {
         invoice_number: values.invoice_number || "Draft",
@@ -279,16 +386,26 @@ export const useInvoiceVerifyLogic = () => {
         supplier_id: safeSupplierId,
         file_url: isXmlSource ? xmlFileUrl || "" : undefined,
 
-        supplier_name_raw: xmlHeader.supplier_name || null,
-        supplier_tax_code: xmlHeader.supplier_tax_code || null,
+        supplier_name_raw: (xmlHeader.supplier_name || null) as
+          | string
+          | undefined,
+        supplier_tax_code: (xmlHeader.supplier_tax_code || null) as
+          | string
+          | undefined,
         supplier_address_raw: xmlHeader.supplier_address || null,
-        parsed_data: isXmlSource ? routerState?.xmlData : null,
+        parsed_data: (isXmlSource ? routerState?.xmlData : null) as
+          | Json
+          | undefined,
 
+        // [VAS] tổng theo chuẩn kế toán VN
+        total_goods_amount: totals.totalGoods,
+        total_discount_amount: totals.totalDiscount,
+        total_fee_amount: totals.totalFee,
         total_amount_pre_tax: totals.totalPreTax,
         tax_amount: totals.totalTax,
         total_amount_post_tax: totals.final,
 
-        items_json: values.items.map((item: any) => ({
+        items_json: values.items!.map((item: InvoiceFormItem) => ({
           ...item,
           product_id: item.product_id ? Number(item.product_id) : null,
           expiry_date: item.expiry_date
@@ -325,9 +442,11 @@ export const useInvoiceVerifyLogic = () => {
 
       message.success("Đã lưu nháp hóa đơn!");
       navigate(returnTo || "/finance/invoices");
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
-      message.error("Lỗi lưu nháp: " + error.message);
+      message.error(
+        "Lỗi lưu nháp: " + (error as { message?: string })?.message
+      );
     } finally {
       setLoading(false);
     }
@@ -346,8 +465,8 @@ export const useInvoiceVerifyLogic = () => {
         setXmlRawItems(items);
 
         const matchedSupplier = suppliers.find(
-          (s: any) =>
-            s.tax_code?.replace(/\D/g, "") ===
+          (s) =>
+            (s as { tax_code?: string }).tax_code?.replace(/\D/g, "") ===
             header.supplier_tax_code?.replace(/\D/g, "")
         );
 
@@ -358,22 +477,35 @@ export const useInvoiceVerifyLogic = () => {
             ? dayjs(header.invoice_date, ["YYYY-MM-DD", "DD/MM/YYYY"])
             : dayjs(),
           supplier_id: matchedSupplier ? matchedSupplier.id : undefined,
-          items: items.map((item: any, idx: number) => ({
-            key: idx,
-            name: item.name,
-            xml_unit: item.unit,
-            quantity: item.quantity,
-            xml_quantity: item.quantity, // [NEW] Base quantity for conversion calc
-            unit_price: item.unit_price,
-            xml_unit_price: item.unit_price, // [NEW] Base price for scaling
-            vat_rate: item.vat_rate,
-            // [FIX MAPPING] Ép kiểu Number để Select box nhận diện ID
-            product_id: item.internal_product_id
-              ? Number(item.internal_product_id)
-              : undefined,
-            internal_unit: item.internal_unit || undefined,
-            expiry_date: null,
-          })),
+          total_fee_amount: header.total_fee_amount || 0,
+          items: items.map(
+            (
+              item: ParsedInvoiceItem & {
+                internal_product_id?: number;
+                internal_unit?: string;
+              },
+              idx: number
+            ) => ({
+              key: idx,
+              name: item.name,
+              xml_unit: item.unit,
+              quantity: item.quantity,
+              xml_quantity: item.quantity, // [NEW] Base quantity for conversion calc
+              unit_price: item.unit_price,
+              xml_unit_price: item.unit_price, // [NEW] Base price for scaling
+              vat_rate: item.vat_rate,
+              // [VAS] chiết khấu thương mại từ XML
+              discount_rate: item.discount_rate || 0,
+              discount_amount: item.discount_amount || 0,
+              amount_before_tax: item.amount_before_tax ?? null,
+              // [FIX MAPPING] Ép kiểu Number để Select box nhận diện ID
+              product_id: item.internal_product_id
+                ? Number(item.internal_product_id)
+                : undefined,
+              internal_unit: item.internal_unit || undefined,
+              expiry_date: null,
+            })
+          ),
         });
 
         handleRecalculate();
@@ -385,6 +517,10 @@ export const useInvoiceVerifyLogic = () => {
       }
     };
     init();
+    // Deps cố ý chỉ phụ thuộc id/routerState + độ dài data: thêm form/
+    // handleRecalculate/loadInvoiceFromDB/suppliers sẽ tạo lại effect mỗi render
+    // → reset form & gọi setFieldsValue lặp (mất dữ liệu user đang nhập).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, routerState, suppliers.length, products.length]);
 
   return {
