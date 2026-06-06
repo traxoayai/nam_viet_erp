@@ -175,3 +175,200 @@ describe("acc_create_journal_entry", () => {
     expect(data).toBeNull();
   }, 30000);
 });
+
+describe("post_journal_entry / void_journal_entry", () => {
+  const DB_CONFIG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+
+  /** Resolve account_id (uuid) từ account_code qua pg direct */
+  async function resolveAccountId(code: string): Promise<string> {
+    const { Client } = await import("pg");
+    const pg = new Client(DB_CONFIG);
+    await pg.connect();
+    try {
+      const { rows } = await pg.query(
+        `SELECT id FROM public.chart_of_accounts WHERE account_code = $1 LIMIT 1`,
+        [code]
+      );
+      if (!rows[0])
+        throw new Error(`Không tìm thấy TK ${code} trong chart_of_accounts`);
+      return rows[0].id as string;
+    } finally {
+      await pg.end();
+    }
+  }
+
+  it("post cập nhật số dư: TK 632 period_debit tăng, status=posted", async () => {
+    const authedClient = await createTestAuthedClient();
+
+    // Tạo bút toán: Nợ 632 500.000 / Có 156 500.000
+    const lines = [
+      {
+        account_code: "632",
+        debit: 500000,
+        credit: 0,
+        description: "Giá vốn hàng bán test",
+      },
+      {
+        account_code: "156",
+        debit: 0,
+        credit: 500000,
+        description: "Xuất kho test",
+      },
+    ];
+
+    const { data: entryId, error: createErr } = await authedClient.rpc(
+      "acc_create_journal_entry",
+      {
+        p_book: "actual",
+        p_entry_date: "2026-06-07",
+        p_doc_type: "sale",
+        p_source_ref_type: "order",
+        p_source_ref_id: "TEST-POST-001",
+        p_description: "Test post bút toán giá vốn",
+        p_lines: lines,
+      }
+    );
+
+    expect(createErr).toBeNull();
+    expect(typeof entryId).toBe("number");
+    expect(entryId).toBeGreaterThan(0);
+
+    // Lấy period_id của bút toán vừa tạo
+    const { Client } = await import("pg");
+    const pg = new Client(DB_CONFIG);
+    await pg.connect();
+    let periodId: string;
+    try {
+      const { rows } = await pg.query(
+        `SELECT period_id FROM public.journal_entries WHERE id = $1`,
+        [entryId]
+      );
+      periodId = rows[0].period_id as string;
+    } finally {
+      await pg.end();
+    }
+
+    // Post bút toán
+    const { error: postErr } = await authedClient.rpc("post_journal_entry", {
+      p_entry_id: entryId,
+    });
+    expect(postErr).toBeNull();
+
+    // Kiểm tra status = 'posted'
+    const { data: entry, error: entryErr } = await adminClient
+      .from("journal_entries")
+      .select("status, posted_at")
+      .eq("id", entryId)
+      .single();
+
+    expect(entryErr).toBeNull();
+    expect(entry?.status).toBe("posted");
+    expect(entry?.posted_at).not.toBeNull();
+
+    // Kiểm tra account_balances của TK 632
+    const account632Id = await resolveAccountId("632");
+
+    const { data: bal, error: balErr } = await adminClient
+      .from("account_balances")
+      .select("period_debit, period_credit")
+      .eq("book", "actual")
+      .eq("account_id", account632Id)
+      .eq("period_id", periodId)
+      .single();
+
+    expect(balErr).toBeNull();
+    expect(Number(bal?.period_debit)).toBeGreaterThanOrEqual(500000);
+
+    // Cleanup
+    const pg2 = new Client(DB_CONFIG);
+    await pg2.connect();
+    try {
+      await pg2.query(
+        `DELETE FROM public.account_balances WHERE book='actual' AND account_id=$1 AND period_id=$2`,
+        [account632Id, periodId]
+      );
+      await pg2.query(`DELETE FROM public.journal_entries WHERE id=$1`, [
+        entryId,
+      ]);
+    } finally {
+      await pg2.end();
+    }
+  }, 60000);
+
+  it("chặn post lại: post bút toán đã posted → lỗi", async () => {
+    const authedClient = await createTestAuthedClient();
+
+    const lines = [
+      {
+        account_code: "632",
+        debit: 100000,
+        credit: 0,
+        description: "Giá vốn test lần 2",
+      },
+      {
+        account_code: "156",
+        debit: 0,
+        credit: 100000,
+        description: "Xuất kho test lần 2",
+      },
+    ];
+
+    const { data: entryId, error: createErr } = await authedClient.rpc(
+      "acc_create_journal_entry",
+      {
+        p_book: "actual",
+        p_entry_date: "2026-06-07",
+        p_doc_type: "sale",
+        p_source_ref_type: "order",
+        p_source_ref_id: "TEST-POST-002",
+        p_description: "Test chặn post lại",
+        p_lines: lines,
+      }
+    );
+
+    expect(createErr).toBeNull();
+    expect(entryId).toBeGreaterThan(0);
+
+    // Post lần 1 — phải OK
+    const { error: post1Err } = await authedClient.rpc("post_journal_entry", {
+      p_entry_id: entryId,
+    });
+    expect(post1Err).toBeNull();
+
+    // Post lần 2 — phải lỗi
+    const { error: post2Err } = await authedClient.rpc("post_journal_entry", {
+      p_entry_id: entryId,
+    });
+    expect(post2Err).not.toBeNull();
+    expect(post2Err!.message).toMatch(/nháp|draft|posted/i);
+
+    // Cleanup
+    const { Client } = await import("pg");
+    const pg = new Client(DB_CONFIG);
+    await pg.connect();
+    try {
+      const account632Id = await resolveAccountId("632");
+      const { rows } = await pg.query(
+        `SELECT period_id FROM public.journal_entries WHERE id=$1`,
+        [entryId]
+      );
+      if (rows[0]) {
+        await pg.query(
+          `DELETE FROM public.account_balances WHERE book='actual' AND account_id=$1 AND period_id=$2`,
+          [account632Id, rows[0].period_id]
+        );
+      }
+      await pg.query(`DELETE FROM public.journal_entries WHERE id=$1`, [
+        entryId,
+      ]);
+    } finally {
+      await pg.end();
+    }
+  }, 60000);
+});
