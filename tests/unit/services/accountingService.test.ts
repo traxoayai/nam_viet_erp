@@ -71,4 +71,110 @@ describe("accountingService", () => {
       p_month: 6,
     });
   });
+
+  // ── postReceipt – tham số books (TASK A) ──────────────────────────────────
+  describe("postReceipt — books param", () => {
+    const receiptArgs = {
+      sourceId: "src-1",
+      entryDate: "2026-06-06T00:00:00.000Z",
+      amount: 1_000_000,
+      categoryAccount: "511",
+      fundAccount: "111",
+      partner: "Khách A",
+      desc: "Thu tiền bán hàng",
+    };
+
+    it("gọi gen_journal_receipt cho cả INTERNAL và TAX khi không truyền books (default)", async () => {
+      await accountingService.postReceipt(receiptArgs);
+
+      expect(safeRpc).toHaveBeenCalledTimes(2);
+      expect(safeRpc).toHaveBeenCalledWith(
+        "gen_journal_receipt",
+        expect.objectContaining({ p_book: "INTERNAL" })
+      );
+      expect(safeRpc).toHaveBeenCalledWith(
+        "gen_journal_receipt",
+        expect.objectContaining({ p_book: "TAX" })
+      );
+    });
+
+    it("gọi gen_journal_receipt cho cả INTERNAL và TAX khi books=[] (fallback default)", async () => {
+      await accountingService.postReceipt(receiptArgs, []);
+
+      expect(safeRpc).toHaveBeenCalledTimes(2);
+    });
+
+    it("chỉ gọi sổ INTERNAL khi books=['INTERNAL']", async () => {
+      await accountingService.postReceipt(receiptArgs, ["INTERNAL"]);
+
+      expect(safeRpc).toHaveBeenCalledTimes(1);
+      expect(safeRpc).toHaveBeenCalledWith(
+        "gen_journal_receipt",
+        expect.objectContaining({ p_book: "INTERNAL" })
+      );
+    });
+
+    it("chỉ gọi sổ TAX khi books=['TAX']", async () => {
+      await accountingService.postReceipt(receiptArgs, ["TAX"]);
+
+      expect(safeRpc).toHaveBeenCalledTimes(1);
+      expect(safeRpc).toHaveBeenCalledWith(
+        "gen_journal_receipt",
+        expect.objectContaining({ p_book: "TAX" })
+      );
+    });
+  });
+
+  // ── postPayment – tham số books (TASK A) ─────────────────────────────────
+  describe("postPayment — books param", () => {
+    const paymentArgs = {
+      sourceId: "src-2",
+      entryDate: "2026-06-06T00:00:00.000Z",
+      amount: 500_000,
+      categoryAccount: "641",
+      fundAccount: "111",
+      partner: "NCC B",
+      desc: "Chi phí vận chuyển",
+    };
+
+    it("gọi gen_journal_payment cho cả INTERNAL và TAX khi không truyền books (default)", async () => {
+      await accountingService.postPayment(paymentArgs);
+
+      expect(safeRpc).toHaveBeenCalledTimes(2);
+      expect(safeRpc).toHaveBeenCalledWith(
+        "gen_journal_payment",
+        expect.objectContaining({ p_book: "INTERNAL" })
+      );
+      expect(safeRpc).toHaveBeenCalledWith(
+        "gen_journal_payment",
+        expect.objectContaining({ p_book: "TAX" })
+      );
+    });
+
+    it("chỉ gọi sổ INTERNAL khi books=['INTERNAL']", async () => {
+      await accountingService.postPayment(paymentArgs, ["INTERNAL"]);
+
+      expect(safeRpc).toHaveBeenCalledTimes(1);
+      expect(safeRpc).toHaveBeenCalledWith(
+        "gen_journal_payment",
+        expect.objectContaining({ p_book: "INTERNAL" })
+      );
+    });
+
+    it("chỉ gọi sổ TAX khi books=['TAX']", async () => {
+      await accountingService.postPayment(paymentArgs, ["TAX"]);
+
+      expect(safeRpc).toHaveBeenCalledTimes(1);
+      expect(safeRpc).toHaveBeenCalledWith(
+        "gen_journal_payment",
+        expect.objectContaining({ p_book: "TAX" })
+      );
+    });
+
+    it("gọi đủ 2 sổ khi books=['INTERNAL','TAX']", async () => {
+      await accountingService.postPayment(paymentArgs, ["INTERNAL", "TAX"]);
+
+      expect(safeRpc).toHaveBeenCalledTimes(2);
+    });
+  });
 });

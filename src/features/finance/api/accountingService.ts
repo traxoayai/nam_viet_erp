@@ -4,6 +4,11 @@ import { safeRpc } from "@/shared/lib/safeRpc";
 
 const BOOKS: Book[] = ["INTERNAL", "TAX"];
 
+/** Danh sách sổ cần ghi — default cả 2. Truyền [book] khi user chỉ chọn 1 sổ. */
+function resolveBooks(books?: Book[]): Book[] {
+  return books && books.length > 0 ? books : BOOKS;
+}
+
 export const accountingService = {
   /** Sinh bút toán mua hàng (nháp) cho cả 2 sổ từ 1 finance_invoices */
   async postPurchase(invoiceId: number): Promise<number[]> {
@@ -60,17 +65,20 @@ export const accountingService = {
     return ids;
   },
 
-  async postPayment(args: {
-    sourceId: string;
-    entryDate: string;
-    amount: number;
-    categoryAccount: string;
-    fundAccount: string;
-    partner: string;
-    desc: string;
-  }): Promise<number[]> {
+  async postPayment(
+    args: {
+      sourceId: string;
+      entryDate: string;
+      amount: number;
+      categoryAccount: string;
+      fundAccount: string;
+      partner: string;
+      desc: string;
+    },
+    books?: Book[]
+  ): Promise<number[]> {
     const ids: number[] = [];
-    for (const book of BOOKS) {
+    for (const book of resolveBooks(books)) {
       const { data } = await safeRpc("gen_journal_payment", {
         p_book: book,
         p_source_id: args.sourceId,
@@ -86,17 +94,20 @@ export const accountingService = {
     return ids;
   },
 
-  async postReceipt(args: {
-    sourceId: string;
-    entryDate: string;
-    amount: number;
-    categoryAccount: string;
-    fundAccount: string;
-    partner: string;
-    desc: string;
-  }): Promise<number[]> {
+  async postReceipt(
+    args: {
+      sourceId: string;
+      entryDate: string;
+      amount: number;
+      categoryAccount: string;
+      fundAccount: string;
+      partner: string;
+      desc: string;
+    },
+    books?: Book[]
+  ): Promise<number[]> {
     const ids: number[] = [];
-    for (const book of BOOKS) {
+    for (const book of resolveBooks(books)) {
       const { data } = await safeRpc("gen_journal_receipt", {
         p_book: book,
         p_source_id: args.sourceId,

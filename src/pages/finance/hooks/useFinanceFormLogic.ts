@@ -2,6 +2,7 @@
 import { Form, App } from "antd";
 import { useState, useEffect, useCallback } from "react";
 
+import type { Book } from "@/features/finance/types/accounting";
 import type { UploadFile } from "antd/es/upload/interface";
 
 import { useUserStore } from "@/features/auth/stores/useUserStore";
@@ -20,9 +21,12 @@ type PartnerOption = {
   original: Record<string, unknown> & { name?: string };
 };
 
+export type BookType = "BOTH" | "INTERNAL" | "TAX";
+
 interface FinanceFormValues {
   flow?: "in" | "out";
   business_type?: "trade" | "advance" | "reimbursement" | "other";
+  book_type?: BookType;
   partner_type?: string;
   partner_id?: number;
   partner_name?: string;
@@ -481,26 +485,39 @@ export const useFinanceFormLogic = (
             // sourceId: lấy p_ref_id nếu có, không thì để rỗng
             const sourceId = payload.p_ref_id ?? "";
 
+            // Resolve sổ ghi nhận: BOTH → cả 2 (undefined = default); INTERNAL/TAX → chỉ sổ đó
+            const selectedBookType: BookType = values.book_type ?? "BOTH";
+            const booksToWrite: Book[] | undefined =
+              selectedBookType === "BOTH"
+                ? undefined
+                : [selectedBookType as Book];
+
             if (values.flow === "in") {
-              await accountingService.postReceipt({
-                sourceId,
-                entryDate,
-                amount,
-                categoryAccount,
-                fundAccount,
-                partner,
-                desc,
-              });
+              await accountingService.postReceipt(
+                {
+                  sourceId,
+                  entryDate,
+                  amount,
+                  categoryAccount,
+                  fundAccount,
+                  partner,
+                  desc,
+                },
+                booksToWrite
+              );
             } else {
-              await accountingService.postPayment({
-                sourceId,
-                entryDate,
-                amount,
-                categoryAccount,
-                fundAccount,
-                partner,
-                desc,
-              });
+              await accountingService.postPayment(
+                {
+                  sourceId,
+                  entryDate,
+                  amount,
+                  categoryAccount,
+                  fundAccount,
+                  partner,
+                  desc,
+                },
+                booksToWrite
+              );
             }
           }
         } catch (e) {

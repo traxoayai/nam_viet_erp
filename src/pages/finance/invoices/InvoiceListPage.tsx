@@ -32,7 +32,7 @@ import {
   Popconfirm,
 } from "antd";
 import dayjs from "dayjs";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx"; // Nhớ cài: npm install xlsx
 
@@ -48,7 +48,10 @@ const { Content } = Layout;
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
-const statusMap: any = {
+const statusMap: Record<
+  string,
+  { color: string; text: string; icon: React.ReactNode }
+> = {
   draft: {
     color: "orange",
     text: "Chờ đối chiếu",
@@ -67,26 +70,55 @@ const statusMap: any = {
   rejected: { color: "red", text: "Từ chối", icon: <DeleteOutlined /> },
 };
 
+const paymentStatusMap: Record<string, { color: string; text: string }> = {
+  UNPAID: { color: "red", text: "Chưa TT" },
+  PARTIAL: { color: "orange", text: "TT một phần" },
+  PAID: { color: "green", text: "Đã TT" },
+};
+
+interface InvoiceRow {
+  id: number;
+  status: string;
+  invoice_number: string | null;
+  invoice_symbol: string | null;
+  invoice_date: string | null;
+  supplier_name_raw: string | null;
+  suppliers?: { name: string } | null;
+  total_amount_post_tax: number | null;
+  payment_status?: string | null;
+  created_at: string;
+}
+
+interface InvoiceFilter {
+  search?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 const InvoiceListPage = () => {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<InvoiceRow[]>([]);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
     total: 0,
   });
-  const [filters, setFilters] = useState<any>({});
+  const [filters, setFilters] = useState<InvoiceFilter>({});
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isXmlUploadOpen, setIsXmlUploadOpen] = useState(false);
   const [isVatExportOpen, setIsVatExportOpen] = useState(false);
   const [isXmlOutboundOpen, setIsXmlOutboundOpen] = useState(false);
   const [stats, setStats] = useState({ total: 0, pending: 0, amount: 0 });
 
+  const filtersKey = JSON.stringify(filters);
+
   useEffect(() => {
     fetchData();
-  }, [pagination.current, JSON.stringify(filters)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagination.current, filtersKey]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -96,7 +128,7 @@ const InvoiceListPage = () => {
         pagination.pageSize,
         filters
       );
-      setData(data);
+      setData(data as InvoiceRow[]);
       setPagination((prev) => ({ ...prev, total }));
 
       const pendingCount = data.filter((i) => i.status === "draft").length;
@@ -158,7 +190,7 @@ const InvoiceListPage = () => {
     {
       title: "Số Hóa Đơn",
       dataIndex: "invoice_number",
-      render: (text: string, record: any) => (
+      render: (text: string, record: InvoiceRow) => (
         <div>
           <Text strong>{text || "(Chưa có số)"}</Text>
           <div style={{ fontSize: 12, color: "#888" }}>
@@ -176,7 +208,7 @@ const InvoiceListPage = () => {
       title: "Nhà Cung Cấp",
       dataIndex: "supplier_name_raw",
       ellipsis: true,
-      render: (text: string, record: any) =>
+      render: (text: string, record: InvoiceRow) =>
         text || record.suppliers?.name || "--",
     },
     {
@@ -186,9 +218,18 @@ const InvoiceListPage = () => {
       render: (v: number) => <Text strong>{fmtMoney(v)} ₫</Text>,
     },
     {
+      title: "Thanh toán",
+      dataIndex: "payment_status",
+      width: 130,
+      render: (status: string | null | undefined) => {
+        const ps = paymentStatusMap[status ?? ""] ?? paymentStatusMap["UNPAID"];
+        return <Tag color={ps.color}>{ps.text}</Tag>;
+      },
+    },
+    {
       title: "Hành động",
       align: "center" as const,
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: InvoiceRow) => (
         <Space>
           {/* Nút Xem/Đối chiếu */}
           <Tooltip
@@ -262,14 +303,26 @@ const InvoiceListPage = () => {
             </Button>
             <Button
               icon={<MinusCircleOutlined />}
-              style={{ width: "100%", marginTop: 8, fontSize: 14, borderColor: "#ff4d4f", color: "#ff4d4f" }}
+              style={{
+                width: "100%",
+                marginTop: 8,
+                fontSize: 14,
+                borderColor: "#ff4d4f",
+                color: "#ff4d4f",
+              }}
               onClick={() => setIsXmlOutboundOpen(true)}
             >
               Trừ kho VAT (XML)
             </Button>
             <Button
               icon={<MinusCircleOutlined />}
-              style={{ width: "100%", marginTop: 4, fontSize: 14, borderColor: "#ff4d4f", color: "#ff4d4f" }}
+              style={{
+                width: "100%",
+                marginTop: 4,
+                fontSize: 14,
+                borderColor: "#ff4d4f",
+                color: "#ff4d4f",
+              }}
               onClick={() => setIsVatExportOpen(true)}
             >
               Trừ kho VAT (Nhập tay)
@@ -310,7 +363,9 @@ const InvoiceListPage = () => {
                 >
                   <Select.Option value="draft">Chờ đối chiếu</Select.Option>
                   <Select.Option value="verified">Đã nhập kho</Select.Option>
-                  <Select.Option value="verified_outbound">Đã xuất kho (VAT)</Select.Option>
+                  <Select.Option value="verified_outbound">
+                    Đã xuất kho (VAT)
+                  </Select.Option>
                 </Select>
               </Col>
               <Col span={6}>
@@ -358,7 +413,10 @@ const InvoiceListPage = () => {
         />
         <InvoiceXmlUpload
           open={isXmlOutboundOpen}
-          onCancel={() => { setIsXmlOutboundOpen(false); fetchData(); }}
+          onCancel={() => {
+            setIsXmlOutboundOpen(false);
+            fetchData();
+          }}
           direction="outbound"
         />
         <VatExportEntryModal
