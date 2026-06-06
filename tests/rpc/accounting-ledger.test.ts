@@ -1,7 +1,11 @@
 import { Client } from "pg";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
-import { adminClient, createTestAuthedClient } from "../helpers/supabase";
+import {
+  adminClient,
+  createTestAuthedClient,
+  createUserClient,
+} from "../helpers/supabase";
 
 // Local Supabase DB config (well-known demo)
 const DB_CONFIG = {
@@ -2609,4 +2613,137 @@ describe("BCTC TT133 — mapping + balance_sheet + vat_declaration + cash_flow",
 
   // resolveAccountId giữ lại để dùng nếu cần debug — tránh unused
   void resolveAccountId;
+});
+
+// ─── Phase 3.1: tách quyền GHI bút toán khỏi quyền XEM ────────────────────────
+describe("Phân quyền write kế toán (finance.post/void/close_journal)", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+  // Role Phó Giám Đốc: CÓ finance.view_balance, KHÔNG admin-all, KHÔNG journal key
+  const PHO_GD_ROLE_ID = "23bb1177-22f3-4791-9529-a8043665490d";
+  const LIMITED_EMAIL = "kt.limited@nv-test.local";
+  const LIMITED_PASSWORD = "Test@123!";
+  let limitedUserId: string | null = null;
+
+  beforeAll(async () => {
+    // Tạo (hoặc tìm) auth user quyền hạn chế
+    const { data: created, error: createErr } =
+      await adminClient.auth.admin.createUser({
+        email: LIMITED_EMAIL,
+        password: LIMITED_PASSWORD,
+        email_confirm: true,
+      });
+    if (created?.user) {
+      limitedUserId = created.user.id;
+    } else if (createErr) {
+      // Đã tồn tại từ lần chạy trước — tìm lại id
+      const { data: list } = await adminClient.auth.admin.listUsers({
+        page: 1,
+        perPage: 200,
+      });
+      limitedUserId =
+        list?.users?.find((u) => u.email === LIMITED_EMAIL)?.id ?? null;
+    }
+    if (!limitedUserId) throw new Error("Không tạo được limited test user");
+
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      await pg.query(
+        `INSERT INTO users(id, email, full_name, status)
+         VALUES($1,$2,'Test Phó GĐ (limited)','active')
+         ON CONFLICT (id) DO NOTHING`,
+        [limitedUserId, LIMITED_EMAIL]
+      );
+      await pg.query(
+        `INSERT INTO user_roles(user_id, role_id, branch_id)
+         VALUES($1,$2,$3) ON CONFLICT DO NOTHING`,
+        [limitedUserId, PHO_GD_ROLE_ID, BRANCH_ID]
+      );
+      await pg.query("NOTIFY pgrst, 'reload schema'");
+    } finally {
+      await pg.end();
+    }
+  }, 60000);
+
+  afterAll(async () => {
+    if (!limitedUserId) return;
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      await pg.query(`DELETE FROM user_roles WHERE user_id=$1`, [
+        limitedUserId,
+      ]);
+      await pg.query(`DELETE FROM users WHERE id=$1`, [limitedUserId]);
+    } finally {
+      await pg.end();
+    }
+    await adminClient.auth.admin.deleteUser(limitedUserId);
+  }, 60000);
+
+  it("user chỉ có view_balance ĐỌC được get_balance_sheet (không bị chặn)", async () => {
+    const client = await createUserClient(LIMITED_EMAIL, LIMITED_PASSWORD);
+    const { error } = await client.rpc("get_balance_sheet", {
+      p_book: "TAX",
+      p_year: 2099,
+      p_month: 12,
+    });
+    expect(error).toBeNull();
+  }, 60000);
+
+  it("user chỉ có view_balance bị TỪ CHỐI post_journal_entry", async () => {
+    const client = await createUserClient(LIMITED_EMAIL, LIMITED_PASSWORD);
+    const { error } = await client.rpc("post_journal_entry", {
+      p_entry_id: 999999999,
+    });
+    expect(error).not.toBeNull();
+    expect(error!.message).toMatch(/Forbidden|quyền/i);
+  }, 60000);
+
+  it("user chỉ có view_balance bị TỪ CHỐI void_journal_entry", async () => {
+    const client = await createUserClient(LIMITED_EMAIL, LIMITED_PASSWORD);
+    const { error } = await client.rpc("void_journal_entry", {
+      p_entry_id: 999999999,
+    });
+    expect(error).not.toBeNull();
+    expect(error!.message).toMatch(/Forbidden|quyền/i);
+  }, 60000);
+
+  it("user chỉ có view_balance bị TỪ CHỐI acc_close_period", async () => {
+    const client = await createUserClient(LIMITED_EMAIL, LIMITED_PASSWORD);
+    const { error } = await client.rpc("acc_close_period", {
+      p_book: "TAX",
+      p_year: 2099,
+      p_month: 12,
+    });
+    expect(error).not.toBeNull();
+    expect(error!.message).toMatch(/Forbidden|quyền/i);
+  }, 60000);
+
+  it("rpc_access_rules: 4 RPC ghi dùng quyền write riêng (không còn view_balance)", async () => {
+    const { data, error } = await adminClient
+      .from("rpc_access_rules")
+      .select("function_name, required_permission")
+      .in("function_name", [
+        "post_journal_entry",
+        "void_journal_entry",
+        "acc_close_period",
+        "create_invoice_payment",
+      ]);
+    expect(error).toBeNull();
+    const map = Object.fromEntries(
+      (data as { function_name: string; required_permission: string }[]).map(
+        (r) => [r.function_name, r.required_permission]
+      )
+    );
+    expect(map["post_journal_entry"]).toBe("finance.post_journal");
+    expect(map["create_invoice_payment"]).toBe("finance.post_journal");
+    expect(map["void_journal_entry"]).toBe("finance.void_journal");
+    expect(map["acc_close_period"]).toBe("finance.close_period");
+  }, 30000);
 });
