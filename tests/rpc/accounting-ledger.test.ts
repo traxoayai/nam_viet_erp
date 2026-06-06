@@ -1,0 +1,177 @@
+import { Client } from "pg";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+
+import { adminClient, createTestAuthedClient } from "../helpers/supabase";
+
+// Local Supabase DB config (well-known demo)
+const DB_CONFIG = {
+  host: "127.0.0.1",
+  port: 54322,
+  user: "postgres",
+  password: "postgres",
+  database: "postgres",
+};
+
+// IDs cố định trên local dev DB
+const TEST_AUTH_UID = "a87b3a79-ad18-4eb2-883b-e5b9b0d305c2"; // auth.users (kame.ctb@gmail.com)
+const ADMIN_ROLE_ID = "2c45890c-0220-4a07-8b8b-889d79670758"; // role Admin
+const BRANCH_ID = "4"; // warehouse id (branch)
+
+let cleanupPublicUser = false;
+let cleanupUserRole: string | null = null;
+
+beforeAll(async () => {
+  // Dùng pg client (postgres superuser) để seed bypass RLS hoàn toàn
+  const pg = new Client(DB_CONFIG);
+  await pg.connect();
+  try {
+    // Đảm bảo test user tồn tại trong public.users (FK từ auth.users)
+    const { rows: existing } = await pg.query(
+      `SELECT id FROM users WHERE id = $1`,
+      [TEST_AUTH_UID]
+    );
+    if (existing.length === 0) {
+      await pg.query(
+        `INSERT INTO users(id, email, full_name, status)
+         VALUES($1, 'kame.test.kt@gmail.com', 'Test Kế Toán', 'active')
+         ON CONFLICT (id) DO NOTHING`,
+        [TEST_AUTH_UID]
+      );
+      cleanupPublicUser = true;
+    }
+
+    // Đảm bảo user_roles có Admin role cho test user
+    const { rows: existingRole } = await pg.query(
+      `SELECT id FROM user_roles WHERE user_id = $1 AND role_id = $2`,
+      [TEST_AUTH_UID, ADMIN_ROLE_ID]
+    );
+    if (existingRole.length === 0) {
+      const { rows: inserted } = await pg.query(
+        `INSERT INTO user_roles(user_id, role_id, branch_id)
+         VALUES($1, $2, $3)
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
+        [TEST_AUTH_UID, ADMIN_ROLE_ID, BRANCH_ID]
+      );
+      if (inserted[0]) cleanupUserRole = inserted[0].id;
+    }
+
+    // Reload PostgREST để schema fresh
+    await pg.query("NOTIFY pgrst, 'reload schema'");
+    await new Promise((r) => setTimeout(r, 800));
+  } finally {
+    await pg.end();
+  }
+
+  // Reset password test user để login được
+  await adminClient.auth.admin.updateUserById(TEST_AUTH_UID, {
+    password: "Test@123!",
+  });
+}, 30000);
+
+afterAll(async () => {
+  // Cleanup chỉ những gì test này tạo ra
+  if (!cleanupPublicUser && !cleanupUserRole) return;
+  const pg = new Client(DB_CONFIG);
+  await pg.connect();
+  try {
+    if (cleanupUserRole) {
+      await pg.query(`DELETE FROM user_roles WHERE id = $1`, [cleanupUserRole]);
+    }
+    if (cleanupPublicUser) {
+      await pg.query(`DELETE FROM users WHERE id = $1`, [TEST_AUTH_UID]);
+    }
+  } finally {
+    await pg.end();
+  }
+});
+
+describe("acc_create_journal_entry", () => {
+  it("tạo bút toán nháp cân Nợ=Có (Nợ156+Nợ1331 / Có331)", async () => {
+    const authedClient = await createTestAuthedClient();
+
+    const lines = [
+      {
+        account_code: "156",
+        debit: 1000000,
+        credit: 0,
+        description: "Nhập hàng",
+      },
+      {
+        account_code: "1331",
+        debit: 80000,
+        credit: 0,
+        description: "VAT đầu vào",
+      },
+      {
+        account_code: "331",
+        debit: 0,
+        credit: 1080000,
+        description: "Phải trả NCC",
+      },
+    ];
+
+    const { data, error } = await authedClient.rpc("acc_create_journal_entry", {
+      p_book: "actual",
+      p_entry_date: "2026-06-07",
+      p_doc_type: "purchase",
+      p_source_ref_type: "purchase_order",
+      p_source_ref_id: "TEST-ACC-001",
+      p_description: "Mua hàng test kế toán",
+      p_lines: lines,
+    });
+
+    expect(error).toBeNull();
+    expect(typeof data).toBe("number");
+    expect(data).toBeGreaterThan(0);
+
+    // Kiểm tra journal_entry status + total_debit/credit
+    const { data: entry, error: entryErr } = await adminClient
+      .from("journal_entries")
+      .select("status, total_debit, total_credit")
+      .eq("id", data)
+      .single();
+
+    expect(entryErr).toBeNull();
+    expect(entry?.status).toBe("draft");
+    expect(Number(entry?.total_debit)).toBe(1080000);
+    expect(Number(entry?.total_credit)).toBe(1080000);
+
+    // Cleanup bút toán test
+    await adminClient.from("journal_entries").delete().eq("id", data);
+  }, 30000);
+
+  it("bút toán lệch (Nợ 1.000.000 / Có 999.999) → lỗi cân bằng", async () => {
+    const authedClient = await createTestAuthedClient();
+
+    const lines = [
+      {
+        account_code: "156",
+        debit: 1000000,
+        credit: 0,
+        description: "Nhập hàng",
+      },
+      {
+        account_code: "331",
+        debit: 0,
+        credit: 999999,
+        description: "Phải trả NCC",
+      },
+    ];
+
+    const { data, error } = await authedClient.rpc("acc_create_journal_entry", {
+      p_book: "actual",
+      p_entry_date: "2026-06-07",
+      p_doc_type: "purchase",
+      p_source_ref_type: null,
+      p_source_ref_id: null,
+      p_description: "Bút toán lệch test",
+      p_lines: lines,
+    });
+
+    expect(error).toBeDefined();
+    expect(error).not.toBeNull();
+    expect(error!.message).toMatch(/cân|Nợ|Có/);
+    expect(data).toBeNull();
+  }, 30000);
+});
