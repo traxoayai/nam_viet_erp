@@ -842,3 +842,488 @@ describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)"
     await cleanupPeriod2026_07();
   }, 60000);
 });
+
+// ─── Edge: purchase không VAT ────────────────────────────────────────────────
+
+describe("gen_journal_purchase — edge: hóa đơn không VAT (tax=0)", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+
+  it("chỉ 2 dòng (Nợ156/Có331), không có dòng 1331", async () => {
+    const authedClient = await createTestAuthedClient();
+    const { Client } = await import("pg");
+
+    // Seed finance_invoice không có VAT
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    let invoiceId: number;
+    try {
+      const { rows } = await pg.query(
+        `INSERT INTO public.finance_invoices(
+           direction, status, invoice_number, invoice_date,
+           total_amount_pre_tax, tax_amount, total_amount_post_tax
+         ) VALUES ('inbound','verified','NOVAT-1','2026-06-01',500000,0,500000)
+         RETURNING id`
+      );
+      invoiceId = rows[0].id as number;
+    } finally {
+      await pg.end();
+    }
+
+    try {
+      const { data: entryId, error } = await authedClient.rpc(
+        "gen_journal_purchase",
+        { p_book: "vat", p_invoice_id: invoiceId }
+      );
+
+      expect(error).toBeNull();
+      expect(typeof entryId).toBe("number");
+      expect(entryId).toBeGreaterThan(0);
+
+      // Lấy các dòng bút toán
+      const pg2 = new Client(PG_CFG);
+      await pg2.connect();
+      let lines: { debit: number; credit: number; account_code: string }[];
+      try {
+        const { rows } = await pg2.query(
+          `SELECT jel.debit, jel.credit, coa.account_code
+           FROM public.journal_entry_lines jel
+           JOIN public.chart_of_accounts coa ON coa.id = jel.account_id
+           WHERE jel.entry_id = $1`,
+          [entryId]
+        );
+        lines = rows.map((r) => ({
+          debit: Number(r.debit),
+          credit: Number(r.credit),
+          account_code: r.account_code as string,
+        }));
+      } finally {
+        await pg2.end();
+      }
+
+      // Assert: đúng 2 dòng, không có 1331
+      expect(lines.length).toBe(2);
+      expect(lines.some((l) => l.account_code === "1331")).toBe(false);
+
+      // Assert: Nợ 156 = 500000, Có 331 = 500000
+      expect(
+        lines.some((l) => l.account_code === "156" && l.debit === 500000)
+      ).toBe(true);
+      expect(
+        lines.some((l) => l.account_code === "331" && l.credit === 500000)
+      ).toBe(true);
+
+      // Assert: SUM cân bằng
+      const sumDebit = lines.reduce((s, l) => s + l.debit, 0);
+      const sumCredit = lines.reduce((s, l) => s + l.credit, 0);
+      expect(sumDebit).toBe(500000);
+      expect(sumCredit).toBe(500000);
+
+      // Cleanup entry
+      const pg3 = new Client(PG_CFG);
+      await pg3.connect();
+      try {
+        await pg3.query(`DELETE FROM public.journal_entries WHERE id = $1`, [
+          entryId,
+        ]);
+      } finally {
+        await pg3.end();
+      }
+    } finally {
+      // Cleanup invoice
+      const pg4 = new Client(PG_CFG);
+      await pg4.connect();
+      try {
+        await pg4.query(`DELETE FROM public.finance_invoices WHERE id = $1`, [
+          invoiceId!,
+        ]);
+      } finally {
+        await pg4.end();
+      }
+    }
+  }, 30000);
+});
+
+// ─── E2E vòng đầy đủ kỳ 2026-08 (lãi 200.000) ──────────────────────────────
+
+describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+
+  /** Dọn sạch kỳ test 2026-08 và 2026-09 (carry-forward) sổ actual */
+  async function cleanupPeriods(months: number[]): Promise<void> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      for (const m of months) {
+        await pg.query(
+          `DELETE FROM public.journal_entry_lines
+           WHERE entry_id IN (
+             SELECT id FROM public.journal_entries
+             WHERE book = 'actual'
+               AND period_id IN (
+                 SELECT id FROM public.accounting_periods
+                 WHERE book='actual' AND year=2026 AND month=$1
+               )
+           )`,
+          [m]
+        );
+        await pg.query(
+          `DELETE FROM public.journal_entries
+           WHERE book = 'actual'
+             AND period_id IN (
+               SELECT id FROM public.accounting_periods
+               WHERE book='actual' AND year=2026 AND month=$1
+             )`,
+          [m]
+        );
+        await pg.query(
+          `DELETE FROM public.account_balances
+           WHERE book = 'actual'
+             AND period_id IN (
+               SELECT id FROM public.accounting_periods
+               WHERE book='actual' AND year=2026 AND month=$1
+             )`,
+          [m]
+        );
+        await pg.query(
+          `DELETE FROM public.accounting_periods
+           WHERE book='actual' AND year=2026 AND month=$1`,
+          [m]
+        );
+      }
+    } finally {
+      await pg.end();
+    }
+  }
+
+  it("doanh thu 1M - COGS 600K - chi phí 200K = lãi 200K, 4212 closing_credit−closing_debit=200000", async () => {
+    // Cleanup trước để đảm bảo kỳ sạch (kỳ 8 + kỳ 9 carry-forward)
+    await cleanupPeriods([8, 9, 10]);
+
+    const authedClient = await createTestAuthedClient();
+    const { Client } = await import("pg");
+
+    // (1) Purchase: insert finance_invoice + gen_journal_purchase + post
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    let invoiceId: number;
+    try {
+      const { rows } = await pg.query(
+        `INSERT INTO public.finance_invoices(
+           direction, status, invoice_number, invoice_date,
+           total_amount_pre_tax, tax_amount, total_amount_post_tax
+         ) VALUES ('inbound','verified','E2E-PUR','2026-08-05',500000,0,500000)
+         RETURNING id`
+      );
+      invoiceId = rows[0].id as number;
+    } finally {
+      await pg.end();
+    }
+
+    const { data: purId, error: purErr } = await authedClient.rpc(
+      "gen_journal_purchase",
+      { p_book: "actual", p_invoice_id: invoiceId }
+    );
+    expect(purErr).toBeNull();
+    expect(purId).toBeGreaterThan(0);
+
+    const { error: postPurErr } = await authedClient.rpc("post_journal_entry", {
+      p_entry_id: purId,
+    });
+    expect(postPurErr).toBeNull();
+
+    // (2) Sale: doanh thu 1.000.000, VAT=0
+    const { data: saleId, error: saleErr } = await authedClient.rpc(
+      "gen_journal_sale",
+      {
+        p_book: "actual",
+        p_source_id: "E2E-SO",
+        p_entry_date: "2026-08-10",
+        p_partner: "KH-E2E",
+        p_revenue: 1000000,
+        p_vat: 0,
+      }
+    );
+    expect(saleErr).toBeNull();
+    expect(saleId).toBeGreaterThan(0);
+
+    const { error: postSaleErr } = await authedClient.rpc(
+      "post_journal_entry",
+      {
+        p_entry_id: saleId,
+      }
+    );
+    expect(postSaleErr).toBeNull();
+
+    // (3) COGS: 600.000
+    const { data: cogsId, error: cogsErr } = await authedClient.rpc(
+      "gen_journal_cogs",
+      {
+        p_book: "actual",
+        p_source_id: "E2E-SO",
+        p_entry_date: "2026-08-10",
+        p_cogs: 600000,
+      }
+    );
+    expect(cogsErr).toBeNull();
+    expect(cogsId).toBeGreaterThan(0);
+
+    const { error: postCogsErr } = await authedClient.rpc(
+      "post_journal_entry",
+      {
+        p_entry_id: cogsId,
+      }
+    );
+    expect(postCogsErr).toBeNull();
+
+    // (4) Payment chi phí bán hàng: 200.000 (Nợ 6421 / Có 111)
+    const { data: payId, error: payErr } = await authedClient.rpc(
+      "gen_journal_payment",
+      {
+        p_book: "actual",
+        p_source_id: "E2E-PC",
+        p_entry_date: "2026-08-12",
+        p_amount: 200000,
+        p_category_account: "6421",
+        p_fund_account: "111",
+        p_partner: "NCC",
+        p_desc: "Chi vận chuyển",
+      }
+    );
+    expect(payErr).toBeNull();
+    expect(payId).toBeGreaterThan(0);
+
+    const { error: postPayErr } = await authedClient.rpc("post_journal_entry", {
+      p_entry_id: payId,
+    });
+    expect(postPayErr).toBeNull();
+
+    // (5) Khóa kỳ 2026-08
+    const { error: closeErr } = await authedClient.rpc("acc_close_period", {
+      p_book: "actual",
+      p_year: 2026,
+      p_month: 8,
+    });
+    expect(closeErr).toBeNull();
+
+    // (6) Verify kỳ 2026-08 status='closed'
+    const { data: period, error: periodErr } = await adminClient
+      .from("accounting_periods")
+      .select("status")
+      .eq("book", "actual")
+      .eq("year", 2026)
+      .eq("month", 8)
+      .single();
+
+    expect(periodErr).toBeNull();
+    expect(period?.status).toBe("closed");
+
+    // (7) Verify 4212: closing_credit − closing_debit = 200.000 (lãi)
+    const pg2 = new Client(PG_CFG);
+    await pg2.connect();
+    let account4212Id: string;
+    let periodId8: string;
+    try {
+      const { rows: accRows } = await pg2.query(
+        `SELECT id::text FROM public.chart_of_accounts WHERE account_code='4212' LIMIT 1`
+      );
+      expect(accRows[0]).toBeDefined();
+      account4212Id = accRows[0].id as string;
+
+      const { rows: perRows } = await pg2.query(
+        `SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=8 LIMIT 1`
+      );
+      expect(perRows[0]).toBeDefined();
+      periodId8 = perRows[0].id as string;
+    } finally {
+      await pg2.end();
+    }
+
+    const { data: bal4212, error: balErr } = await adminClient
+      .from("account_balances")
+      .select("closing_credit, closing_debit")
+      .eq("book", "actual")
+      .eq("account_id", account4212Id!)
+      .eq("period_id", periodId8!)
+      .single();
+
+    expect(balErr).toBeNull();
+    const net4212 =
+      Number(bal4212?.closing_credit) - Number(bal4212?.closing_debit);
+    // Lãi = 1.000.000 - 600.000 - 200.000 = 200.000 → Có 4212 net = 200.000
+    expect(net4212).toBe(200000);
+
+    // Cleanup (kỳ 8 + kỳ 9 carry-forward + invoice)
+    await cleanupPeriods([8, 9, 10]);
+    const pg3 = new Client(PG_CFG);
+    await pg3.connect();
+    try {
+      await pg3.query(
+        `DELETE FROM public.finance_invoices WHERE invoice_number='E2E-PUR'`
+      );
+    } finally {
+      await pg3.end();
+    }
+  }, 120000);
+});
+
+// ─── Edge: kỳ LỖ (kỳ 2026-09) ───────────────────────────────────────────────
+
+describe("acc_close_period — edge: kỳ lỗ (2026-09, actual)", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+
+  /** Dọn sạch kỳ test 2026-09 và kỳ carry-forward 2026-10 sổ actual */
+  async function cleanupLossPeriods(): Promise<void> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      for (const m of [9, 10]) {
+        await pg.query(
+          `DELETE FROM public.journal_entry_lines
+           WHERE entry_id IN (
+             SELECT id FROM public.journal_entries
+             WHERE book = 'actual'
+               AND period_id IN (
+                 SELECT id FROM public.accounting_periods
+                 WHERE book='actual' AND year=2026 AND month=$1
+               )
+           )`,
+          [m]
+        );
+        await pg.query(
+          `DELETE FROM public.journal_entries
+           WHERE book = 'actual'
+             AND period_id IN (
+               SELECT id FROM public.accounting_periods
+               WHERE book='actual' AND year=2026 AND month=$1
+             )`,
+          [m]
+        );
+        await pg.query(
+          `DELETE FROM public.account_balances
+           WHERE book = 'actual'
+             AND period_id IN (
+               SELECT id FROM public.accounting_periods
+               WHERE book='actual' AND year=2026 AND month=$1
+             )`,
+          [m]
+        );
+        await pg.query(
+          `DELETE FROM public.accounting_periods
+           WHERE book='actual' AND year=2026 AND month=$1`,
+          [m]
+        );
+      }
+    } finally {
+      await pg.end();
+    }
+  }
+
+  it("kỳ lỗ: bút toán kết chuyển lỗ có dòng Nợ 4212 > 0 (Nợ4212/Có911)", async () => {
+    // Cleanup kỳ 2026-09 và 2026-10
+    await cleanupLossPeriods();
+
+    const authedClient = await createTestAuthedClient();
+
+    // (1) Sale: doanh thu 100.000 (nhỏ hơn COGS → lỗ)
+    const { data: saleId, error: saleErr } = await authedClient.rpc(
+      "gen_journal_sale",
+      {
+        p_book: "actual",
+        p_source_id: "LOSS-SO",
+        p_entry_date: "2026-09-10",
+        p_partner: "KH",
+        p_revenue: 100000,
+        p_vat: 0,
+      }
+    );
+    expect(saleErr).toBeNull();
+    expect(saleId).toBeGreaterThan(0);
+
+    const { error: postSaleErr } = await authedClient.rpc(
+      "post_journal_entry",
+      {
+        p_entry_id: saleId,
+      }
+    );
+    expect(postSaleErr).toBeNull();
+
+    // (2) COGS: 600.000 → v_exp=600K, v_rev=100K → v_pl=-500K (lỗ)
+    const { data: cogsId, error: cogsErr } = await authedClient.rpc(
+      "gen_journal_cogs",
+      {
+        p_book: "actual",
+        p_source_id: "LOSS-SO",
+        p_entry_date: "2026-09-10",
+        p_cogs: 600000,
+      }
+    );
+    expect(cogsErr).toBeNull();
+    expect(cogsId).toBeGreaterThan(0);
+
+    const { error: postCogsErr } = await authedClient.rpc(
+      "post_journal_entry",
+      {
+        p_entry_id: cogsId,
+      }
+    );
+    expect(postCogsErr).toBeNull();
+
+    // (3) Khóa kỳ 2026-09
+    const { error: closeErr } = await authedClient.rpc("acc_close_period", {
+      p_book: "actual",
+      p_year: 2026,
+      p_month: 9,
+    });
+    expect(closeErr).toBeNull();
+
+    // (4) Verify: có bút toán closing với dòng Nợ 4212 > 0 (nhánh lỗ: Nợ 4212 / Có 911)
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    let hasDebit4212InClosing = false;
+    try {
+      const { rows } = await pg.query(
+        `SELECT jel.debit
+         FROM public.journal_entry_lines jel
+         JOIN public.chart_of_accounts coa ON coa.id = jel.account_id
+         JOIN public.journal_entries je ON je.id = jel.entry_id
+         JOIN public.accounting_periods ap ON ap.id = je.period_id
+         WHERE coa.account_code = '4212'
+           AND jel.debit > 0
+           AND je.doc_type = 'closing'
+           AND je.book = 'actual'
+           AND ap.year = 2026
+           AND ap.month = 9`
+      );
+      hasDebit4212InClosing = rows.length > 0;
+    } finally {
+      await pg.end();
+    }
+
+    // Bút toán kết chuyển lỗ: Nợ 4212 (-v_pl = 500K) / Có 911 500K
+    expect(hasDebit4212InClosing).toBe(true);
+
+    // Cleanup
+    await cleanupLossPeriods();
+  }, 60000);
+});
