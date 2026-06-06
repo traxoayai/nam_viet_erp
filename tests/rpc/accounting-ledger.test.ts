@@ -1179,6 +1179,233 @@ describe("E2E vòng đầy đủ — kỳ 2026-08 (actual, lãi 200.000)", () =>
   }, 120000);
 });
 
+// ─── Regression #2: carry-forward KHÔNG xóa phát sinh kỳ kế tiếp ──────────
+
+describe("Regression #2 — carry-forward giữ phát sinh kỳ N+1 (2026-10/11)", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+
+  /** Dọn sạch kỳ test 2026-10 và 2026-11 sổ actual */
+  async function cleanupPeriods1011(): Promise<void> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      for (const m of [10, 11, 12]) {
+        await pg.query(
+          `DELETE FROM public.journal_entry_lines
+           WHERE entry_id IN (
+             SELECT id FROM public.journal_entries
+             WHERE book='actual'
+               AND period_id IN (
+                 SELECT id FROM public.accounting_periods
+                 WHERE book='actual' AND year=2026 AND month=$1
+               )
+           )`,
+          [m]
+        );
+        await pg.query(
+          `DELETE FROM public.journal_entries
+           WHERE book='actual'
+             AND period_id IN (
+               SELECT id FROM public.accounting_periods
+               WHERE book='actual' AND year=2026 AND month=$1
+             )`,
+          [m]
+        );
+        await pg.query(
+          `DELETE FROM public.account_balances
+           WHERE book='actual'
+             AND period_id IN (
+               SELECT id FROM public.accounting_periods
+               WHERE book='actual' AND year=2026 AND month=$1
+             )`,
+          [m]
+        );
+        await pg.query(
+          `DELETE FROM public.accounting_periods
+           WHERE book='actual' AND year=2026 AND month=$1`,
+          [m]
+        );
+      }
+    } finally {
+      await pg.end();
+    }
+  }
+
+  it("đóng kỳ N (10/2026) KHÔNG xóa phát sinh kỳ N+1 (11/2026): 156 opening=700000, period=300000, closing=1000000", async () => {
+    await cleanupPeriods1011();
+
+    const authedClient = await createTestAuthedClient();
+    const { Client } = await import("pg");
+
+    // Bước 1: Tạo finance_invoice cho kỳ N (2026-10), inbound, 700000 không VAT
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    let invoiceN: number;
+    let invoiceN1: number;
+    try {
+      const { rows: r1 } = await pg.query(
+        `INSERT INTO public.finance_invoices(
+           direction, status, invoice_number, invoice_date,
+           total_amount_pre_tax, tax_amount, total_amount_post_tax
+         ) VALUES ('inbound','verified','REG2-OCT-2026','2026-10-15',700000,0,700000)
+         RETURNING id`
+      );
+      invoiceN = r1[0].id as number;
+
+      // Bước 2: Tạo finance_invoice cho kỳ N+1 (2026-11), inbound, 300000 không VAT
+      const { rows: r2 } = await pg.query(
+        `INSERT INTO public.finance_invoices(
+           direction, status, invoice_number, invoice_date,
+           total_amount_pre_tax, tax_amount, total_amount_post_tax
+         ) VALUES ('inbound','verified','REG2-NOV-2026','2026-11-05',300000,0,300000)
+         RETURNING id`
+      );
+      invoiceN1 = r2[0].id as number;
+    } finally {
+      await pg.end();
+    }
+
+    try {
+      // Bút toán kỳ N: Nợ156 700000 / Có331 700000
+      const { data: entryN, error: errN } = await authedClient.rpc(
+        "gen_journal_purchase",
+        { p_book: "actual", p_invoice_id: invoiceN }
+      );
+      expect(errN).toBeNull();
+      expect(entryN).toBeGreaterThan(0);
+
+      const { error: postNErr } = await authedClient.rpc("post_journal_entry", {
+        p_entry_id: entryN,
+      });
+      expect(postNErr).toBeNull();
+
+      // Bút toán kỳ N+1 (TRƯỚC khi đóng N): Nợ156 300000 / Có331 300000
+      const { data: entryN1, error: errN1 } = await authedClient.rpc(
+        "gen_journal_purchase",
+        { p_book: "actual", p_invoice_id: invoiceN1 }
+      );
+      expect(errN1).toBeNull();
+      expect(entryN1).toBeGreaterThan(0);
+
+      const { error: postN1Err } = await authedClient.rpc(
+        "post_journal_entry",
+        {
+          p_entry_id: entryN1,
+        }
+      );
+      expect(postN1Err).toBeNull();
+
+      // Verify kỳ N+1 TRƯỚC khi đóng N: 156 period_debit = 300000
+      const pg2 = new Client(PG_CFG);
+      await pg2.connect();
+      let account156Id: string;
+      let periodN1Id: string;
+      try {
+        const { rows: accRows } = await pg2.query(
+          `SELECT id FROM public.chart_of_accounts WHERE account_code='156' LIMIT 1`
+        );
+        expect(accRows[0]).toBeDefined();
+        account156Id = accRows[0].id as string;
+
+        const { rows: perRows } = await pg2.query(
+          `SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=11 LIMIT 1`
+        );
+        expect(perRows[0]).toBeDefined();
+        periodN1Id = perRows[0].id as string;
+      } finally {
+        await pg2.end();
+      }
+
+      const { data: balBefore, error: balBeforeErr } = await adminClient
+        .from("account_balances")
+        .select("period_debit, period_credit")
+        .eq("book", "actual")
+        .eq("account_id", account156Id!)
+        .eq("period_id", periodN1Id!)
+        .single();
+      expect(balBeforeErr).toBeNull();
+      expect(Number(balBefore?.period_debit)).toBe(300000);
+
+      // Đóng kỳ N (2026-10)
+      const { error: closeErr } = await authedClient.rpc("acc_close_period", {
+        p_book: "actual",
+        p_year: 2026,
+        p_month: 10,
+      });
+      expect(closeErr).toBeNull();
+
+      // VERIFY kỳ N+1 (2026-11) sau khi đóng N:
+      // TK 156: opening_debit=700000, period_debit=300000, closing_debit=1000000
+      const { data: bal156, error: bal156Err } = await adminClient
+        .from("account_balances")
+        .select(
+          "opening_debit, opening_credit, period_debit, period_credit, closing_debit, closing_credit"
+        )
+        .eq("book", "actual")
+        .eq("account_id", account156Id!)
+        .eq("period_id", periodN1Id!)
+        .single();
+
+      expect(bal156Err).toBeNull();
+      // opening phải = net closing kỳ N = 700000
+      expect(Number(bal156?.opening_debit)).toBe(700000);
+      expect(Number(bal156?.opening_credit)).toBe(0);
+      // period phải GIỮ NGUYÊN (không bị xóa bởi carry-forward)
+      expect(Number(bal156?.period_debit)).toBe(300000);
+      // closing = opening + period = 1000000 (điểm mấu chốt fix #2)
+      expect(Number(bal156?.closing_debit)).toBe(1000000);
+
+      // TK 331 (đối ứng): opening_credit=700000, period_credit=300000, closing_credit=1000000
+      const pg3 = new Client(PG_CFG);
+      await pg3.connect();
+      let account331Id: string;
+      try {
+        const { rows } = await pg3.query(
+          `SELECT id FROM public.chart_of_accounts WHERE account_code='331' LIMIT 1`
+        );
+        expect(rows[0]).toBeDefined();
+        account331Id = rows[0].id as string;
+      } finally {
+        await pg3.end();
+      }
+
+      const { data: bal331, error: bal331Err } = await adminClient
+        .from("account_balances")
+        .select(
+          "opening_debit, opening_credit, period_debit, period_credit, closing_debit, closing_credit"
+        )
+        .eq("book", "actual")
+        .eq("account_id", account331Id!)
+        .eq("period_id", periodN1Id!)
+        .single();
+
+      expect(bal331Err).toBeNull();
+      expect(Number(bal331?.opening_credit)).toBe(700000);
+      expect(Number(bal331?.period_credit)).toBe(300000);
+      expect(Number(bal331?.closing_credit)).toBe(1000000);
+    } finally {
+      // Cleanup invoices
+      const pg4 = new Client(PG_CFG);
+      await pg4.connect();
+      try {
+        await pg4.query(
+          `DELETE FROM public.finance_invoices WHERE invoice_number IN ('REG2-OCT-2026','REG2-NOV-2026')`
+        );
+      } finally {
+        await pg4.end();
+      }
+      await cleanupPeriods1011();
+    }
+  }, 120000);
+});
+
 // ─── Edge: kỳ LỖ (kỳ 2026-09) ───────────────────────────────────────────────
 
 describe("acc_close_period — edge: kỳ lỗ (2026-09, actual)", () => {

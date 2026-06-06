@@ -6,11 +6,15 @@ DECLARE
   v_period bigint; v_date date := (make_date(p_year,p_month,1) + interval '1 month' - interval '1 day')::date;
   v_rev numeric := 0; v_exp numeric := 0; v_pl numeric;
   v_lines jsonb; v_entry bigint; v_rec RECORD; v_next bigint; v_next_date date;
+  v_status text; v_next_status text;
 BEGIN
   PERFORM public.check_rpc_access('acc_close_period');
-  SELECT id INTO v_period FROM public.accounting_periods WHERE book=p_book AND year=p_year AND month=p_month;
+  SELECT id, status INTO v_period, v_status
+  FROM public.accounting_periods
+  WHERE book=p_book AND year=p_year AND month=p_month
+  FOR UPDATE;
   IF v_period IS NULL THEN RAISE EXCEPTION 'Chưa có kỳ %/% sổ %', p_month,p_year,p_book; END IF;
-  IF (SELECT status FROM public.accounting_periods WHERE id=v_period)='closed' THEN RAISE EXCEPTION 'Kỳ đã khóa'; END IF;
+  IF v_status='closed' THEN RAISE EXCEPTION 'Kỳ đã khóa'; END IF;
 
   -- (1) Kết chuyển doanh thu (5xx,7xx dư Có) -> 911: mỗi TK 1 dòng Nợ, tổng 1 dòng Có 911
   v_lines := '[]'::jsonb;
@@ -70,6 +74,10 @@ BEGIN
   -- (5) Bê số dư cuối kỳ -> đầu kỳ kế tiếp (chỉ TK tài sản/nguồn vốn: 1,2,3,4; bỏ 5,6,7,8,911)
   v_next_date := v_date + 1;
   v_next := public.acc_get_or_create_period(p_book, v_next_date);
+  SELECT status INTO v_next_status FROM public.accounting_periods WHERE id=v_next;
+  IF v_next_status = 'closed' THEN
+    RAISE EXCEPTION 'Kỳ kế tiếp đã khóa — không thể bê số dư. Mở lại kỳ sau trước khi đóng kỳ này.';
+  END IF;
   INSERT INTO public.account_balances(book,account_id,period_id,opening_debit,opening_credit,closing_debit,closing_credit)
   SELECT b.book, b.account_id, v_next,
          GREATEST(b.closing_debit-b.closing_credit,0), GREATEST(b.closing_credit-b.closing_debit,0),
@@ -80,8 +88,10 @@ BEGIN
     AND a.account_code NOT LIKE '7%' AND a.account_code NOT LIKE '8%' AND a.account_code <> '911'
     AND (b.closing_debit - b.closing_credit) <> 0
   ON CONFLICT (book,account_id,period_id) DO UPDATE SET
-    opening_debit=EXCLUDED.opening_debit, opening_credit=EXCLUDED.opening_credit,
-    closing_debit=EXCLUDED.closing_debit, closing_credit=EXCLUDED.closing_credit;
+    opening_debit  = EXCLUDED.opening_debit,
+    opening_credit = EXCLUDED.opening_credit,
+    closing_debit  = EXCLUDED.opening_debit  + account_balances.period_debit,
+    closing_credit = EXCLUDED.opening_credit + account_balances.period_credit;
 END $fn$;
 
 GRANT EXECUTE ON FUNCTION public.acc_close_period(text,int,int) TO authenticated, service_role;

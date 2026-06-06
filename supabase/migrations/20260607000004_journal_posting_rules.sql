@@ -9,6 +9,9 @@ BEGIN
   PERFORM public.check_rpc_access('gen_journal_purchase');
   SELECT * INTO v FROM public.finance_invoices WHERE id=p_invoice_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Hóa đơn #% không tồn tại', p_invoice_id; END IF;
+  IF v.direction IS DISTINCT FROM 'inbound' THEN
+    RAISE EXCEPTION 'gen_journal_purchase chỉ dùng cho hóa đơn MUA (inbound). HĐ #% có direction=%', p_invoice_id, COALESCE(v.direction,'(null)');
+  END IF;
   v_goods := COALESCE(v.total_amount_pre_tax,0);
   v_tax   := COALESCE(v.tax_amount,0);
   v_total := COALESCE(v.total_amount_post_tax, v_goods+v_tax);
