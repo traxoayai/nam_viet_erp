@@ -206,3 +206,265 @@ describe("financialReportsService.getIncomeStatement", () => {
     ).rejects.toThrow("DB error");
   });
 });
+
+// ─── getBalanceSheet ──────────────────────────────────────────────────────────
+
+describe("financialReportsService.getBalanceSheet", () => {
+  it("gọi đúng RPC get_balance_sheet với tham số p_book, p_year, p_month", async () => {
+    const mockRows = [
+      {
+        ma_so: "110",
+        ten_chi_tieu: "Tiền và tương đương tiền",
+        so_tien: 5000000,
+      },
+      { ma_so: "300", ten_chi_tieu: "Nợ phải trả", so_tien: 2000000 },
+    ];
+    mockSafeRpc.mockResolvedValueOnce({ data: mockRows, error: null });
+
+    const result = await financialReportsService.getBalanceSheet({
+      book: "INTERNAL",
+      year: 2026,
+      month: 6,
+    });
+
+    expect(mockSafeRpc).toHaveBeenCalledWith("get_balance_sheet", {
+      p_book: "INTERNAL",
+      p_year: 2026,
+      p_month: 6,
+    });
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({
+      ma_so: "110",
+      ten_chi_tieu: "Tiền và tương đương tiền",
+      so_tien: 5000000,
+    });
+  });
+
+  it("trả về [] khi data là null", async () => {
+    mockSafeRpc.mockResolvedValueOnce({ data: null, error: null });
+
+    const result = await financialReportsService.getBalanceSheet({
+      book: "TAX",
+      year: 2026,
+      month: 1,
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  it("ép kiểu số từ string nếu DB trả về string", async () => {
+    mockSafeRpc.mockResolvedValueOnce({
+      data: [
+        { ma_so: "140", ten_chi_tieu: "Hàng tồn kho", so_tien: "12345678" },
+      ],
+      error: null,
+    });
+
+    const result = await financialReportsService.getBalanceSheet({
+      book: "INTERNAL",
+      year: 2026,
+      month: 5,
+    });
+
+    expect(typeof result[0].so_tien).toBe("number");
+    expect(result[0].so_tien).toBe(12345678);
+  });
+
+  it("ném lỗi khi safeRpc throw", async () => {
+    mockSafeRpc.mockRejectedValueOnce(new Error("BS error"));
+
+    await expect(
+      financialReportsService.getBalanceSheet({
+        book: "INTERNAL",
+        year: 2026,
+        month: 6,
+      })
+    ).rejects.toThrow("BS error");
+  });
+});
+
+// ─── getVatDeclaration ────────────────────────────────────────────────────────
+
+describe("financialReportsService.getVatDeclaration", () => {
+  it("gọi đúng RPC get_vat_declaration với p_direction, p_year, p_month", async () => {
+    const mockRows = [
+      { tax_rate: 10, sum_pre_tax: 100000000, sum_vat: 10000000 },
+    ];
+    mockSafeRpc.mockResolvedValueOnce({ data: mockRows, error: null });
+
+    const result = await financialReportsService.getVatDeclaration({
+      direction: "outbound",
+      year: 2026,
+      month: 6,
+    });
+
+    expect(mockSafeRpc).toHaveBeenCalledWith("get_vat_declaration", {
+      p_direction: "outbound",
+      p_year: 2026,
+      p_month: 6,
+    });
+    expect(result[0]).toEqual({
+      tax_rate: 10,
+      sum_pre_tax: 100000000,
+      sum_vat: 10000000,
+    });
+  });
+
+  it("gọi đúng với direction inbound", async () => {
+    mockSafeRpc.mockResolvedValueOnce({ data: [], error: null });
+
+    await financialReportsService.getVatDeclaration({
+      direction: "inbound",
+      year: 2025,
+      month: 12,
+    });
+
+    expect(mockSafeRpc).toHaveBeenCalledWith("get_vat_declaration", {
+      p_direction: "inbound",
+      p_year: 2025,
+      p_month: 12,
+    });
+  });
+
+  it("trả về [] khi data là null", async () => {
+    mockSafeRpc.mockResolvedValueOnce({ data: null, error: null });
+
+    const result = await financialReportsService.getVatDeclaration({
+      direction: "inbound",
+      year: 2026,
+      month: 1,
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  it("ép kiểu số từ string nếu DB trả về string", async () => {
+    mockSafeRpc.mockResolvedValueOnce({
+      data: [{ tax_rate: "8", sum_pre_tax: "50000000", sum_vat: "4000000" }],
+      error: null,
+    });
+
+    const result = await financialReportsService.getVatDeclaration({
+      direction: "outbound",
+      year: 2026,
+      month: 5,
+    });
+
+    expect(typeof result[0].tax_rate).toBe("number");
+    expect(result[0].tax_rate).toBe(8);
+    expect(result[0].sum_pre_tax).toBe(50000000);
+    expect(result[0].sum_vat).toBe(4000000);
+  });
+
+  it("ném lỗi khi safeRpc throw", async () => {
+    mockSafeRpc.mockRejectedValueOnce(new Error("VAT error"));
+
+    await expect(
+      financialReportsService.getVatDeclaration({
+        direction: "inbound",
+        year: 2026,
+        month: 6,
+      })
+    ).rejects.toThrow("VAT error");
+  });
+});
+
+// ─── getCashFlow ──────────────────────────────────────────────────────────────
+
+describe("financialReportsService.getCashFlow", () => {
+  it("gọi đúng RPC get_cash_flow với p_book, p_year, p_month", async () => {
+    mockSafeRpc.mockResolvedValueOnce({
+      data: [
+        {
+          dong_tien_vao: 80000000,
+          dong_tien_ra: 50000000,
+          luu_chuyen_thuan: 30000000,
+        },
+      ],
+      error: null,
+    });
+
+    const result = await financialReportsService.getCashFlow({
+      book: "INTERNAL",
+      year: 2026,
+      month: 6,
+    });
+
+    expect(mockSafeRpc).toHaveBeenCalledWith("get_cash_flow", {
+      p_book: "INTERNAL",
+      p_year: 2026,
+      p_month: 6,
+    });
+    expect(result).toEqual({
+      dong_tien_vao: 80000000,
+      dong_tien_ra: 50000000,
+      luu_chuyen_thuan: 30000000,
+    });
+  });
+
+  it("đọc đúng phần tử đầu khi data là object (không bọc mảng)", async () => {
+    mockSafeRpc.mockResolvedValueOnce({
+      data: { dong_tien_vao: 1000, dong_tien_ra: 400, luu_chuyen_thuan: 600 },
+      error: null,
+    });
+
+    const result = await financialReportsService.getCashFlow({
+      book: "TAX",
+      year: 2026,
+      month: 3,
+    });
+
+    expect(result.luu_chuyen_thuan).toBe(600);
+  });
+
+  it("trả về object zero khi data là null", async () => {
+    mockSafeRpc.mockResolvedValueOnce({ data: null, error: null });
+
+    const result = await financialReportsService.getCashFlow({
+      book: "INTERNAL",
+      year: 2026,
+      month: 1,
+    });
+
+    expect(result).toEqual({
+      dong_tien_vao: 0,
+      dong_tien_ra: 0,
+      luu_chuyen_thuan: 0,
+    });
+  });
+
+  it("ép kiểu số từ string nếu DB trả về string", async () => {
+    mockSafeRpc.mockResolvedValueOnce({
+      data: [
+        {
+          dong_tien_vao: "12000000",
+          dong_tien_ra: "7000000",
+          luu_chuyen_thuan: "5000000",
+        },
+      ],
+      error: null,
+    });
+
+    const result = await financialReportsService.getCashFlow({
+      book: "INTERNAL",
+      year: 2026,
+      month: 5,
+    });
+
+    expect(typeof result.dong_tien_vao).toBe("number");
+    expect(result.dong_tien_vao).toBe(12000000);
+    expect(result.luu_chuyen_thuan).toBe(5000000);
+  });
+
+  it("ném lỗi khi safeRpc throw", async () => {
+    mockSafeRpc.mockRejectedValueOnce(new Error("CF error"));
+
+    await expect(
+      financialReportsService.getCashFlow({
+        book: "INTERNAL",
+        year: 2026,
+        month: 6,
+      })
+    ).rejects.toThrow("CF error");
+  });
+});

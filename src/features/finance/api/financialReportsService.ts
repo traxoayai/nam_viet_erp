@@ -41,6 +41,28 @@ export interface GetReportParams {
   month: number;
 }
 
+// ─── Types: Balance Sheet / VAT / Cash Flow ─────────────────────────────────
+
+export interface BalanceSheetRow {
+  ma_so: string;
+  ten_chi_tieu: string;
+  so_tien: number;
+}
+
+export interface VatDeclarationRow {
+  tax_rate: number;
+  sum_pre_tax: number;
+  sum_vat: number;
+}
+
+export interface CashFlow {
+  dong_tien_vao: number;
+  dong_tien_ra: number;
+  luu_chuyen_thuan: number;
+}
+
+export type InvoiceDirection = "inbound" | "outbound";
+
 // ─── Service ────────────────────────────────────────────────────────────────
 
 export const financialReportsService = {
@@ -102,6 +124,65 @@ export const financialReportsService = {
       tong_loi_nhuan_truoc_thue: Number(raw.tong_loi_nhuan_truoc_thue ?? 0),
       chi_phi_thue_tndn: Number(raw.chi_phi_thue_tndn ?? 0),
       loi_nhuan_sau_thue: Number(raw.loi_nhuan_sau_thue ?? 0),
+    };
+  },
+
+  /**
+   * Gọi RPC get_balance_sheet — trả danh sách dòng Bảng cân đối kế toán (B01a-DNN).
+   */
+  async getBalanceSheet(params: GetReportParams): Promise<BalanceSheetRow[]> {
+    const { data } = await safeRpc("get_balance_sheet", {
+      p_book: params.book,
+      p_year: params.year,
+      p_month: params.month,
+    });
+
+    return ((data ?? []) as BalanceSheetRow[]).map((r) => ({
+      ma_so: String(r.ma_so),
+      ten_chi_tieu: String(r.ten_chi_tieu),
+      so_tien: Number(r.so_tien ?? 0),
+    }));
+  },
+
+  /**
+   * Gọi RPC get_vat_declaration — trả bảng kê thuế GTGT theo chiều (mua/bán).
+   */
+  async getVatDeclaration(params: {
+    direction: InvoiceDirection;
+    year: number;
+    month: number;
+  }): Promise<VatDeclarationRow[]> {
+    const { data } = await safeRpc("get_vat_declaration", {
+      p_direction: params.direction,
+      p_year: params.year,
+      p_month: params.month,
+    });
+
+    return ((data ?? []) as VatDeclarationRow[]).map((r) => ({
+      tax_rate: Number(r.tax_rate ?? 0),
+      sum_pre_tax: Number(r.sum_pre_tax ?? 0),
+      sum_vat: Number(r.sum_vat ?? 0),
+    }));
+  },
+
+  /**
+   * Gọi RPC get_cash_flow — trả 1 dòng lưu chuyển tiền tệ (vào/ra/thuần).
+   */
+  async getCashFlow(params: GetReportParams): Promise<CashFlow> {
+    const { data } = await safeRpc("get_cash_flow", {
+      p_book: params.book,
+      p_year: params.year,
+      p_month: params.month,
+    });
+
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | CashFlow
+      | null
+      | undefined;
+    return {
+      dong_tien_vao: Number(row?.dong_tien_vao ?? 0),
+      dong_tien_ra: Number(row?.dong_tien_ra ?? 0),
+      luu_chuyen_thuan: Number(row?.luu_chuyen_thuan ?? 0),
     };
   },
 };

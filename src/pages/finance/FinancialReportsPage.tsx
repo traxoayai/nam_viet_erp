@@ -9,142 +9,33 @@ import {
   Row,
   Select,
   Space,
-  Table,
   Tabs,
   Typography,
 } from "antd";
 import dayjs from "dayjs";
 import { useState } from "react";
 
+import { BalanceSheetTable } from "./components/BalanceSheetTable";
+import { CashFlowTable } from "./components/CashFlowTable";
 import { IncomeStatementTable } from "./components/IncomeStatementTable";
+import { TrialBalanceTable } from "./components/TrialBalanceTable";
+import { VatDeclarationTable } from "./components/VatDeclarationTable";
 
 import type {
+  BalanceSheetRow,
+  CashFlow,
   GetReportParams,
   IncomeStatement,
   TrialBalanceRow,
+  VatDeclarationRow,
 } from "@/features/finance/api/financialReportsService";
 import type { Book } from "@/features/finance/types/accounting";
-import type { ColumnsType } from "antd/es/table";
 
 import { PERMISSIONS } from "@/features/auth/constants/permissions";
 import { financialReportsService } from "@/features/finance/api/financialReportsService";
 import { PermissionGuard } from "@/shared/components/auth/PermissionGuard";
-import { fmtMoney } from "@/shared/utils/money";
 
 const { Content } = Layout;
-const { Text } = Typography;
-
-// ─── Cột Bảng CĐTK ──────────────────────────────────────────────────────────
-
-const MONEY_CELL = (v: number) => (
-  <Text style={{ fontVariantNumeric: "tabular-nums" }}>
-    {v ? fmtMoney(v) : ""}
-  </Text>
-);
-
-const trialBalanceColumns: ColumnsType<TrialBalanceRow> = [
-  {
-    title: "Số hiệu TK",
-    dataIndex: "account_code",
-    width: 110,
-    fixed: "left" as const,
-  },
-  {
-    title: "Tên tài khoản",
-    dataIndex: "account_name",
-    ellipsis: true,
-    fixed: "left" as const,
-  },
-  {
-    title: "Dư đầu kỳ",
-    children: [
-      {
-        title: "Nợ",
-        dataIndex: "opening_debit",
-        align: "right" as const,
-        width: 140,
-        render: MONEY_CELL,
-      },
-      {
-        title: "Có",
-        dataIndex: "opening_credit",
-        align: "right" as const,
-        width: 140,
-        render: MONEY_CELL,
-      },
-    ],
-  },
-  {
-    title: "Phát sinh kỳ",
-    children: [
-      {
-        title: "Nợ",
-        dataIndex: "period_debit",
-        align: "right" as const,
-        width: 140,
-        render: MONEY_CELL,
-      },
-      {
-        title: "Có",
-        dataIndex: "period_credit",
-        align: "right" as const,
-        width: 140,
-        render: MONEY_CELL,
-      },
-    ],
-  },
-  {
-    title: "Dư cuối kỳ",
-    children: [
-      {
-        title: "Nợ",
-        dataIndex: "closing_debit",
-        align: "right" as const,
-        width: 140,
-        render: MONEY_CELL,
-      },
-      {
-        title: "Có",
-        dataIndex: "closing_credit",
-        align: "right" as const,
-        width: 140,
-        render: MONEY_CELL,
-      },
-    ],
-  },
-];
-
-// ─── Component tổng dòng CĐTK ───────────────────────────────────────────────
-
-function sumCol(rows: TrialBalanceRow[], key: keyof TrialBalanceRow): number {
-  return rows.reduce((acc, r) => acc + (Number(r[key]) || 0), 0);
-}
-
-function buildSummary(rows: TrialBalanceRow[]) {
-  const keys: (keyof TrialBalanceRow)[] = [
-    "opening_debit",
-    "opening_credit",
-    "period_debit",
-    "period_credit",
-    "closing_debit",
-    "closing_credit",
-  ];
-
-  return (
-    <Table.Summary fixed>
-      <Table.Summary.Row style={{ fontWeight: 700, background: "#fafafa" }}>
-        <Table.Summary.Cell index={0} colSpan={2}>
-          Tổng cộng
-        </Table.Summary.Cell>
-        {keys.map((k, i) => (
-          <Table.Summary.Cell key={k} index={i + 2} align="right">
-            {fmtMoney(sumCol(rows, k))}
-          </Table.Summary.Cell>
-        ))}
-      </Table.Summary.Row>
-    </Table.Summary>
-  );
-}
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -161,18 +52,38 @@ const FinancialReportsPage: React.FC = () => {
 
   const [trialData, setTrialData] = useState<TrialBalanceRow[]>([]);
   const [incomeData, setIncomeData] = useState<IncomeStatement | null>(null);
+  const [balanceData, setBalanceData] = useState<BalanceSheetRow[]>([]);
+  const [vatIn, setVatIn] = useState<VatDeclarationRow[]>([]);
+  const [vatOut, setVatOut] = useState<VatDeclarationRow[]>([]);
+  const [cashFlow, setCashFlow] = useState<CashFlow | null>(null);
   const [fetched, setFetched] = useState(false);
 
   const handleFetch = async () => {
     setLoading(true);
     const params: GetReportParams = { book, year, month };
     try {
-      const [trial, income] = await Promise.all([
+      const [trial, income, balance, vIn, vOut, cash] = await Promise.all([
         financialReportsService.getTrialBalance(params),
         financialReportsService.getIncomeStatement(params),
+        financialReportsService.getBalanceSheet(params),
+        financialReportsService.getVatDeclaration({
+          direction: "inbound",
+          year,
+          month,
+        }),
+        financialReportsService.getVatDeclaration({
+          direction: "outbound",
+          year,
+          month,
+        }),
+        financialReportsService.getCashFlow(params),
       ]);
       setTrialData(trial);
       setIncomeData(income);
+      setBalanceData(balance);
+      setVatIn(vIn);
+      setVatOut(vOut);
+      setCashFlow(cash);
       setFetched(true);
     } catch (err) {
       message.error(err instanceof Error ? err.message : "Lỗi tải báo cáo");
@@ -234,26 +145,47 @@ const FinancialReportsPage: React.FC = () => {
       label: "Bảng cân đối tài khoản",
       children: (
         <Card>
-          <Table<TrialBalanceRow>
-            dataSource={fetched ? trialData : []}
-            columns={trialBalanceColumns}
-            rowKey="account_code"
+          <TrialBalanceTable
+            data={trialData}
+            fetched={fetched}
             loading={loading}
-            size="small"
-            bordered
-            scroll={{ x: 1100 }}
-            pagination={false}
-            locale={{
-              emptyText: fetched
-                ? "Không có dữ liệu"
-                : "Chọn kỳ và nhấn Xem báo cáo",
-            }}
-            summary={
-              fetched && trialData.length > 0
-                ? () => buildSummary(trialData)
-                : undefined
-            }
           />
+        </Card>
+      ),
+    },
+    {
+      key: "balance",
+      label: "Bảng cân đối KT (B01a)",
+      children: (
+        <Card>
+          <BalanceSheetTable
+            data={balanceData}
+            fetched={fetched}
+            loading={loading}
+          />
+        </Card>
+      ),
+    },
+    {
+      key: "vat",
+      label: "Bảng kê thuế GTGT",
+      children: (
+        <Card>
+          <VatDeclarationTable
+            inbound={vatIn}
+            outbound={vatOut}
+            fetched={fetched}
+            loading={loading}
+          />
+        </Card>
+      ),
+    },
+    {
+      key: "cashflow",
+      label: "Lưu chuyển tiền tệ",
+      children: (
+        <Card>
+          <CashFlowTable data={cashFlow} fetched={fetched} />
         </Card>
       ),
     },
