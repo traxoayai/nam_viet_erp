@@ -138,6 +138,93 @@ export type Database = {
         };
         Relationships: [];
       };
+      account_balances: {
+        Row: {
+          account_id: string;
+          book: string;
+          closing_credit: number;
+          closing_debit: number;
+          id: number;
+          opening_credit: number;
+          opening_debit: number;
+          period_credit: number;
+          period_debit: number;
+          period_id: number;
+          updated_at: string;
+        };
+        Insert: {
+          account_id: string;
+          book: string;
+          closing_credit?: number;
+          closing_debit?: number;
+          id?: number;
+          opening_credit?: number;
+          opening_debit?: number;
+          period_credit?: number;
+          period_debit?: number;
+          period_id: number;
+          updated_at?: string;
+        };
+        Update: {
+          account_id?: string;
+          book?: string;
+          closing_credit?: number;
+          closing_debit?: number;
+          id?: number;
+          opening_credit?: number;
+          opening_debit?: number;
+          period_credit?: number;
+          period_debit?: number;
+          period_id?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_balances_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "chart_of_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "account_balances_period_id_fkey";
+            columns: ["period_id"];
+            isOneToOne: false;
+            referencedRelation: "accounting_periods";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      accounting_periods: {
+        Row: {
+          book: string;
+          closed_at: string | null;
+          id: number;
+          month: number;
+          opened_at: string;
+          status: string;
+          year: number;
+        };
+        Insert: {
+          book: string;
+          closed_at?: string | null;
+          id?: number;
+          month: number;
+          opened_at?: string;
+          status?: string;
+          year: number;
+        };
+        Update: {
+          book?: string;
+          closed_at?: string | null;
+          id?: number;
+          month?: number;
+          opened_at?: string;
+          status?: string;
+          year?: number;
+        };
+        Relationships: [];
+      };
       active_ingredients: {
         Row: {
           atc_code: string | null;
@@ -2367,7 +2454,9 @@ export type Database = {
           invoice_number: string | null;
           invoice_symbol: string | null;
           items_json: Json | null;
+          paid_amount: number;
           parsed_data: Json | null;
+          payment_status: string;
           raw_items: Json | null;
           status: string | null;
           supplier_address_raw: string | null;
@@ -2377,6 +2466,9 @@ export type Database = {
           tax_amount: number | null;
           total_amount_post_tax: number | null;
           total_amount_pre_tax: number | null;
+          total_discount_amount: number;
+          total_fee_amount: number;
+          total_goods_amount: number;
           updated_at: string | null;
         };
         Insert: {
@@ -2391,7 +2483,9 @@ export type Database = {
           invoice_number?: string | null;
           invoice_symbol?: string | null;
           items_json?: Json | null;
+          paid_amount?: number;
           parsed_data?: Json | null;
+          payment_status?: string;
           raw_items?: Json | null;
           status?: string | null;
           supplier_address_raw?: string | null;
@@ -2401,6 +2495,9 @@ export type Database = {
           tax_amount?: number | null;
           total_amount_post_tax?: number | null;
           total_amount_pre_tax?: number | null;
+          total_discount_amount?: number;
+          total_fee_amount?: number;
+          total_goods_amount?: number;
           updated_at?: string | null;
         };
         Update: {
@@ -2415,7 +2512,9 @@ export type Database = {
           invoice_number?: string | null;
           invoice_symbol?: string | null;
           items_json?: Json | null;
+          paid_amount?: number;
           parsed_data?: Json | null;
+          payment_status?: string;
           raw_items?: Json | null;
           status?: string | null;
           supplier_address_raw?: string | null;
@@ -2425,6 +2524,9 @@ export type Database = {
           tax_amount?: number | null;
           total_amount_post_tax?: number | null;
           total_amount_pre_tax?: number | null;
+          total_discount_amount?: number;
+          total_fee_amount?: number;
+          total_goods_amount?: number;
           updated_at?: string | null;
         };
         Relationships: [
@@ -2448,6 +2550,7 @@ export type Database = {
         Row: {
           amount: number;
           bank_reference_id: string | null;
+          book_type: string;
           business_type: Database["public"]["Enums"]["business_type"];
           cash_tally: Json | null;
           category_id: number | null;
@@ -2473,6 +2576,7 @@ export type Database = {
         Insert: {
           amount: number;
           bank_reference_id?: string | null;
+          book_type?: string;
           business_type?: Database["public"]["Enums"]["business_type"];
           cash_tally?: Json | null;
           category_id?: number | null;
@@ -2498,6 +2602,7 @@ export type Database = {
         Update: {
           amount?: number;
           bank_reference_id?: string | null;
+          book_type?: string;
           business_type?: Database["public"]["Enums"]["business_type"];
           cash_tally?: Json | null;
           category_id?: number | null;
@@ -2546,6 +2651,7 @@ export type Database = {
       };
       fund_accounts: {
         Row: {
+          account_id: string | null;
           account_number: string | null;
           balance: number;
           bank_id: number | null;
@@ -2562,6 +2668,7 @@ export type Database = {
           updated_at: string | null;
         };
         Insert: {
+          account_id?: string | null;
           account_number?: string | null;
           balance?: number;
           bank_id?: number | null;
@@ -2578,6 +2685,7 @@ export type Database = {
           updated_at?: string | null;
         };
         Update: {
+          account_id?: string | null;
           account_number?: string | null;
           balance?: number;
           bank_id?: number | null;
@@ -2594,6 +2702,13 @@ export type Database = {
           updated_at?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "fund_accounts_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "chart_of_accounts";
+            referencedColumns: ["account_code"];
+          },
           {
             foreignKeyName: "fund_accounts_bank_id_fkey";
             columns: ["bank_id"];
@@ -3199,6 +3314,116 @@ export type Database = {
             columns: ["source_warehouse_id"];
             isOneToOne: false;
             referencedRelation: "warehouses";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      journal_entries: {
+        Row: {
+          book: string;
+          created_at: string;
+          created_by: string | null;
+          description: string | null;
+          doc_type: string;
+          entry_date: string;
+          id: number;
+          period_id: number;
+          posted_at: string | null;
+          posted_by: string | null;
+          source_ref_id: string | null;
+          source_ref_type: string | null;
+          status: string;
+          total_credit: number;
+          total_debit: number;
+        };
+        Insert: {
+          book: string;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string | null;
+          doc_type: string;
+          entry_date: string;
+          id?: number;
+          period_id: number;
+          posted_at?: string | null;
+          posted_by?: string | null;
+          source_ref_id?: string | null;
+          source_ref_type?: string | null;
+          status?: string;
+          total_credit?: number;
+          total_debit?: number;
+        };
+        Update: {
+          book?: string;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string | null;
+          doc_type?: string;
+          entry_date?: string;
+          id?: number;
+          period_id?: number;
+          posted_at?: string | null;
+          posted_by?: string | null;
+          source_ref_id?: string | null;
+          source_ref_type?: string | null;
+          status?: string;
+          total_credit?: number;
+          total_debit?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "journal_entries_period_id_fkey";
+            columns: ["period_id"];
+            isOneToOne: false;
+            referencedRelation: "accounting_periods";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      journal_entry_lines: {
+        Row: {
+          account_id: string;
+          credit: number;
+          debit: number;
+          description: string | null;
+          entry_id: number;
+          id: number;
+          line_no: number;
+          partner_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          credit?: number;
+          debit?: number;
+          description?: string | null;
+          entry_id: number;
+          id?: number;
+          line_no?: number;
+          partner_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          credit?: number;
+          debit?: number;
+          description?: string | null;
+          entry_id?: number;
+          id?: number;
+          line_no?: number;
+          partner_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "journal_entry_lines_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "chart_of_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "journal_entry_lines_entry_id_fkey";
+            columns: ["entry_id"];
+            isOneToOne: false;
+            referencedRelation: "journal_entries";
             referencedColumns: ["id"];
           },
         ];
@@ -6978,6 +7203,26 @@ export type Database = {
         Args: { p_items: Json; p_warehouse_id: number };
         Returns: undefined;
       };
+      acc_close_period: {
+        Args: { p_book: string; p_month: number; p_year: number };
+        Returns: undefined;
+      };
+      acc_create_journal_entry: {
+        Args: {
+          p_book: string;
+          p_description: string;
+          p_doc_type: string;
+          p_entry_date: string;
+          p_lines: Json;
+          p_source_ref_id: string;
+          p_source_ref_type: string;
+        };
+        Returns: number;
+      };
+      acc_get_or_create_period: {
+        Args: { p_book: string; p_date: string };
+        Returns: number;
+      };
       add_item_to_check_session: {
         Args: { p_check_id: number; p_product_id: number };
         Returns: Json;
@@ -7371,6 +7616,17 @@ export type Database = {
         };
         Returns: number;
       };
+      create_invoice_payment: {
+        Args: {
+          p_actual_amount: number;
+          p_desc: string;
+          p_entry_date: string;
+          p_fund_account_id: number;
+          p_invoice_id: number;
+          p_partner: string;
+        };
+        Returns: Json;
+      };
       create_manual_transfer: {
         Args: {
           p_dest_warehouse_id: number;
@@ -7555,6 +7811,10 @@ export type Database = {
         Args: { p_data: Json; p_items: Json };
         Returns: number;
       };
+      create_vat_outbound_invoice: {
+        Args: { p_payload: Json };
+        Returns: number;
+      };
       deduct_vat_for_pos_export: {
         Args: { p_base_qty: number; p_product_id: number; p_vat_rate: number };
         Returns: undefined;
@@ -7704,6 +7964,56 @@ export type Database = {
       format_product_quantity: {
         Args: { p_product_id: number; p_qty: number };
         Returns: string;
+      };
+      gen_journal_cogs: {
+        Args: {
+          p_book: string;
+          p_cogs: number;
+          p_entry_date: string;
+          p_source_id: string;
+        };
+        Returns: number;
+      };
+      gen_journal_payment: {
+        Args: {
+          p_amount: number;
+          p_book: string;
+          p_category_account: string;
+          p_desc: string;
+          p_entry_date: string;
+          p_fund_account: string;
+          p_partner: string;
+          p_source_id: string;
+        };
+        Returns: number;
+      };
+      gen_journal_purchase: {
+        Args: { p_book: string; p_invoice_id: number };
+        Returns: number;
+      };
+      gen_journal_receipt: {
+        Args: {
+          p_amount: number;
+          p_book: string;
+          p_category_account: string;
+          p_desc: string;
+          p_entry_date: string;
+          p_fund_account: string;
+          p_partner: string;
+          p_source_id: string;
+        };
+        Returns: number;
+      };
+      gen_journal_sale: {
+        Args: {
+          p_book: string;
+          p_entry_date: string;
+          p_partner: string;
+          p_revenue: number;
+          p_source_id: string;
+          p_vat: number;
+        };
+        Returns: number;
       };
       generate_vaccine_timeline: {
         Args: {
@@ -8910,6 +9220,7 @@ export type Database = {
         Args: { p_amount: number; p_po_id: number };
         Returns: Json;
       };
+      post_journal_entry: { Args: { p_entry_id: number }; Returns: undefined };
       process_bulk_payment: {
         Args: {
           p_allocations: Json;
@@ -9078,6 +9389,10 @@ export type Database = {
       };
       search_products_for_b2b_order: {
         Args: { p_keyword: string; p_warehouse_id: number };
+        Returns: Json;
+      };
+      search_products_for_barcode_assign: {
+        Args: { p_keyword: string };
         Returns: Json;
       };
       search_products_for_purchase: {
@@ -9451,10 +9766,15 @@ export type Database = {
         Args: { p_items: Json; p_warehouse_id: number };
         Returns: Json;
       };
+      verify_and_process_vat_invoice: {
+        Args: { p_invoice_id: number };
+        Returns: undefined;
+      };
       verify_promotion_code: {
         Args: { p_code: string; p_customer_id: number; p_order_value: number };
         Returns: Json;
       };
+      void_journal_entry: { Args: { p_entry_id: number }; Returns: undefined };
     };
     Enums: {
       account_balance_type: "No" | "Co" | "LuongTinh";
