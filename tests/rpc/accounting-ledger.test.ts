@@ -573,3 +573,272 @@ describe("gen_journal_purchase / sale / cogs / payment", () => {
     await cleanupEntry(entryId as number);
   }, 30000);
 });
+
+// ─── acc_close_period tests ───────────────────────────────────────────────────
+
+describe("acc_close_period — khóa kỳ + kết chuyển (per-account, TT133)", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+
+  /** Resolve account_id (uuid) từ account_code */
+  async function resolveAccountId(code: string): Promise<string> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      const { rows } = await pg.query(
+        `SELECT id FROM public.chart_of_accounts WHERE account_code = $1 LIMIT 1`,
+        [code]
+      );
+      if (!rows[0])
+        throw new Error(`Không tìm thấy TK ${code} trong chart_of_accounts`);
+      return rows[0].id as string;
+    } finally {
+      await pg.end();
+    }
+  }
+
+  /** Dọn sạch toàn bộ dữ liệu kỳ test 2026-07 sổ actual */
+  async function cleanupPeriod2026_07(): Promise<void> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      // Xóa theo thứ tự FK: entry_lines -> entries -> balances -> period
+      await pg.query(
+        `DELETE FROM public.journal_entry_lines
+         WHERE entry_id IN (
+           SELECT id FROM public.journal_entries
+           WHERE book = 'actual'
+             AND period_id IN (
+               SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=7
+             )
+         )`
+      );
+      await pg.query(
+        `DELETE FROM public.journal_entries
+         WHERE book = 'actual'
+           AND period_id IN (
+             SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=7
+           )`
+      );
+      // Cũng dọn kỳ tháng 8 (được tạo tự động bởi carry-forward)
+      await pg.query(
+        `DELETE FROM public.journal_entry_lines
+         WHERE entry_id IN (
+           SELECT id FROM public.journal_entries
+           WHERE book = 'actual'
+             AND period_id IN (
+               SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=8
+             )
+         )`
+      );
+      await pg.query(
+        `DELETE FROM public.journal_entries
+         WHERE book = 'actual'
+           AND period_id IN (
+             SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=8
+           )`
+      );
+      await pg.query(
+        `DELETE FROM public.account_balances
+         WHERE book = 'actual'
+           AND period_id IN (
+             SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month IN (7,8)
+           )`
+      );
+      await pg.query(
+        `DELETE FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month IN (7,8)`
+      );
+    } finally {
+      await pg.end();
+    }
+  }
+
+  it("khóa kỳ 2026-07: lãi 400.000, 4212 closing_credit=400000, status=closed", async () => {
+    // Cleanup trước để đảm bảo không có dữ liệu thừa
+    await cleanupPeriod2026_07();
+
+    const authedClient = await createTestAuthedClient();
+
+    // (1) gen_journal_sale: doanh thu 1.000.000 (0 VAT)
+    const { data: saleId, error: saleErr } = await authedClient.rpc(
+      "gen_journal_sale",
+      {
+        p_book: "actual",
+        p_source_id: "SO-CLOSE",
+        p_entry_date: "2026-07-05",
+        p_partner: "KH",
+        p_revenue: 1000000,
+        p_vat: 0,
+      }
+    );
+    expect(saleErr).toBeNull();
+    expect(saleId).toBeGreaterThan(0);
+
+    // Post bút toán sale
+    const { error: postSaleErr } = await authedClient.rpc(
+      "post_journal_entry",
+      { p_entry_id: saleId }
+    );
+    expect(postSaleErr).toBeNull();
+
+    // (2) gen_journal_cogs: giá vốn 600.000
+    const { data: cogsId, error: cogsErr } = await authedClient.rpc(
+      "gen_journal_cogs",
+      {
+        p_book: "actual",
+        p_source_id: "SO-CLOSE",
+        p_entry_date: "2026-07-05",
+        p_cogs: 600000,
+      }
+    );
+    expect(cogsErr).toBeNull();
+    expect(cogsId).toBeGreaterThan(0);
+
+    // Post bút toán cogs
+    const { error: postCogsErr } = await authedClient.rpc(
+      "post_journal_entry",
+      { p_entry_id: cogsId }
+    );
+    expect(postCogsErr).toBeNull();
+
+    // (3) Khóa kỳ
+    const { error: closeErr } = await authedClient.rpc("acc_close_period", {
+      p_book: "actual",
+      p_year: 2026,
+      p_month: 7,
+    });
+    expect(closeErr).toBeNull();
+
+    // (4a) Verify: accounting_periods status = 'closed'
+    const { data: period, error: periodErr } = await adminClient
+      .from("accounting_periods")
+      .select("status, closed_at")
+      .eq("book", "actual")
+      .eq("year", 2026)
+      .eq("month", 7)
+      .single();
+
+    expect(periodErr).toBeNull();
+    expect(period?.status).toBe("closed");
+    expect(period?.closed_at).not.toBeNull();
+
+    // (4b) Verify: có >=1 journal_entries doc_type='closing' book='actual' status='posted'
+    const { data: closingEntries, error: ceErr } = await adminClient
+      .from("journal_entries")
+      .select("id, doc_type, status")
+      .eq("book", "actual")
+      .eq("doc_type", "closing")
+      .eq("status", "posted");
+
+    expect(ceErr).toBeNull();
+    expect(closingEntries).not.toBeNull();
+    expect(closingEntries!.length).toBeGreaterThanOrEqual(1);
+
+    // (4c) Verify: 4212 closing_credit = 400.000
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    let account4212Id: string;
+    let periodId: string;
+    try {
+      const { rows: accRows } = await pg.query(
+        `SELECT id FROM public.chart_of_accounts WHERE account_code = '4212' LIMIT 1`
+      );
+      expect(accRows[0]).toBeDefined();
+      account4212Id = accRows[0].id as string;
+
+      const { rows: perRows } = await pg.query(
+        `SELECT id FROM public.accounting_periods WHERE book='actual' AND year=2026 AND month=7 LIMIT 1`
+      );
+      expect(perRows[0]).toBeDefined();
+      periodId = perRows[0].id as string;
+    } finally {
+      await pg.end();
+    }
+
+    const { data: bal4212, error: balErr } = await adminClient
+      .from("account_balances")
+      .select("closing_credit, closing_debit, period_credit, period_debit")
+      .eq("book", "actual")
+      .eq("account_id", account4212Id!)
+      .eq("period_id", periodId!)
+      .single();
+
+    expect(balErr).toBeNull();
+    // Lãi = 1.000.000 - 600.000 = 400.000 → 4212 Có 400.000
+    expect(Number(bal4212?.closing_credit)).toBe(400000);
+
+    // (4d) Tùy chọn: Số dư net 5111 sau kết chuyển = 0 (period_credit - period_debit)
+    // Sau khi post closing entry Nợ 5111, period_debit của 5111 tăng thêm 1.000.000
+    // => net = (period_credit 1.000.000) - (period_debit 1.000.000) = 0
+    const account5111Id = await resolveAccountId("5111");
+    const { data: bal5111, error: bal5111Err } = await adminClient
+      .from("account_balances")
+      .select("period_debit, period_credit")
+      .eq("book", "actual")
+      .eq("account_id", account5111Id)
+      .eq("period_id", periodId!)
+      .single();
+
+    expect(bal5111Err).toBeNull();
+    const net5111 =
+      Number(bal5111?.period_credit) - Number(bal5111?.period_debit);
+    expect(net5111).toBe(0);
+
+    // (4e) Tùy chọn: Số dư net 632 sau kết chuyển = 0
+    const account632Id = await resolveAccountId("632");
+    const { data: bal632, error: bal632Err } = await adminClient
+      .from("account_balances")
+      .select("period_debit, period_credit")
+      .eq("book", "actual")
+      .eq("account_id", account632Id)
+      .eq("period_id", periodId!)
+      .single();
+
+    expect(bal632Err).toBeNull();
+    const net632 = Number(bal632?.period_debit) - Number(bal632?.period_credit);
+    expect(net632).toBe(0);
+
+    // Cleanup
+    await cleanupPeriod2026_07();
+  }, 120000);
+
+  it("gọi acc_close_period lần 2 → lỗi 'Kỳ đã khóa'", async () => {
+    await cleanupPeriod2026_07();
+    const authedClient = await createTestAuthedClient();
+
+    // Tạo minimal data và đóng kỳ
+    const { data: saleId } = await authedClient.rpc("gen_journal_sale", {
+      p_book: "actual",
+      p_source_id: "SO-CLOSE-2",
+      p_entry_date: "2026-07-10",
+      p_partner: "KH2",
+      p_revenue: 500000,
+      p_vat: 0,
+    });
+    await authedClient.rpc("post_journal_entry", { p_entry_id: saleId });
+    await authedClient.rpc("acc_close_period", {
+      p_book: "actual",
+      p_year: 2026,
+      p_month: 7,
+    });
+
+    // Gọi lần 2 → phải lỗi
+    const { error: closeErr2 } = await authedClient.rpc("acc_close_period", {
+      p_book: "actual",
+      p_year: 2026,
+      p_month: 7,
+    });
+    expect(closeErr2).not.toBeNull();
+    expect(closeErr2!.message).toMatch(/đã khóa/i);
+
+    await cleanupPeriod2026_07();
+  }, 60000);
+});
