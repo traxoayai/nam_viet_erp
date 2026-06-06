@@ -87,16 +87,24 @@ import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [
 import BlankLayout from "@/shared/ui/layouts/BlankLayout";
 import MainLayout from "@/shared/ui/layouts/MainLayout";
 import OnboardingLayout from "@/shared/ui/layouts/OnboardingLayout";
+// eslint-disable-next-line import/order
+import PurchaseOrderV2ListPage from "@/pages/Purchase-v2/PurchaseOrderV2ListPage";
+// eslint-disable-next-line import/order
+import PurchaseV2CreateEstimatePage from "@/pages/Purchase-v2/PurchaseV2CreateEstimatePage";
+// eslint-disable-next-line import/order
+import PurchaseV2CreateSinglePage from "@/pages/Purchase-v2/PurchaseV2CreateSinglePage";
+// eslint-disable-next-line import/order
+import PurchaseV2CreateFromVatPage from "@/pages/Purchase-v2/PurchaseV2CreateFromVatPage";
 
 // Lazy import (giữ tách riêng để chunk-split — không tham gia eslint import/order)
+
 const NotificationsPage = lazy(
   () => import("@/pages/notifications/NotificationsPage")
 );
 
-import PurchaseOrderV2ListPage from "@/pages/Purchase-v2/PurchaseOrderV2ListPage";
-import PurchaseV2CreateEstimatePage from "@/pages/Purchase-v2/PurchaseV2CreateEstimatePage";
-import PurchaseV2CreateSinglePage from "@/pages/Purchase-v2/PurchaseV2CreateSinglePage";
-import PurchaseV2CreateFromVatPage from "@/pages/Purchase-v2/PurchaseV2CreateFromVatPage";
+const JournalLedgerPage = lazy(
+  () => import("@/pages/finance/JournalLedgerPage")
+);
 
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
@@ -716,7 +724,13 @@ const routes: RouteObject[] = [
           },
           {
             path: "finance/accounting/journal",
-            element: <PagePlaceholder title="Sổ Nhật ký Chung" />,
+            element: (
+              <PermissionGuard permission={PERMISSIONS.FINANCE.VIEW_BALANCE}>
+                <Suspense fallback={null}>
+                  <JournalLedgerPage />
+                </Suspense>
+              </PermissionGuard>
+            ),
           },
           {
             path: "finance/accounting/misa-integration",

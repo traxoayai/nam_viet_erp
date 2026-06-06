@@ -84,6 +84,9 @@ export const PERMISSIONS = {
   },
   FINANCE: {
     VIEW_BALANCE: "finance.view_balance",
+    POST_JOURNAL: "finance.post_journal",
+    VOID_JOURNAL: "finance.void_journal",
+    CLOSE_PERIOD: "finance.close_period",
   },
   POS: {
     VIEW: "pos",
