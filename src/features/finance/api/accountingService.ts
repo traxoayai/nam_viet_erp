@@ -120,6 +120,38 @@ export const accountingService = {
     await safeRpc("void_journal_entry", { p_entry_id: entryId });
   },
 
+  /** Thanh toán HĐ + bù trừ chênh lệch 2 sổ (711/811).
+   *  entry_ids[0..1] = bút toán chính (INTERNAL+TAX);
+   *  entry_ids[2]    = bút toán bù trừ (chỉ INTERNAL, nếu có chênh lệch).
+   *  difference > 0: trả ít hơn HĐ; difference < 0: trả nhiều hơn HĐ.
+   */
+  async payInvoice(args: {
+    invoiceId: number;
+    actualAmount: number;
+    fundAccountId: number;
+    entryDate: string;
+    partner: string;
+    desc: string;
+  }): Promise<{
+    entry_ids: number[];
+    warning: string | null;
+    difference: number;
+  }> {
+    const { data } = await safeRpc("create_invoice_payment", {
+      p_invoice_id: args.invoiceId,
+      p_actual_amount: args.actualAmount,
+      p_fund_account_id: args.fundAccountId,
+      p_entry_date: args.entryDate,
+      p_partner: args.partner,
+      p_desc: args.desc,
+    });
+    return data as {
+      entry_ids: number[];
+      warning: string | null;
+      difference: number;
+    };
+  },
+
   async closePeriod(book: Book, year: number, month: number): Promise<void> {
     await safeRpc("acc_close_period", {
       p_book: book,

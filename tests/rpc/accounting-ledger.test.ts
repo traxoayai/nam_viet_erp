@@ -1406,6 +1406,461 @@ describe("Regression #2 — carry-forward giữ phát sinh kỳ N+1 (2026-10/11)
   }, 120000);
 });
 
+// ─── create_invoice_payment ──────────────────────────────────────────────────
+
+describe("create_invoice_payment — thanh toán HĐ + bù trừ chênh lệch 2 sổ", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+
+  let fundBankId: number; // fund có account_id='112', type='bank'
+  let fundCashId: number; // fund có account_id='111', type='cash'
+
+  /** Tạo finance_invoice test (inbound) qua pg superuser */
+  async function seedInvoice(opts: {
+    invoiceNumber: string;
+    total: number;
+  }): Promise<number> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      const { rows } = await pg.query(
+        `INSERT INTO public.finance_invoices(
+           direction, status, invoice_number, invoice_date,
+           total_amount_pre_tax, tax_amount, total_amount_post_tax
+         ) VALUES ('inbound','verified',$1,'2026-06-07',$2,0,$2)
+         RETURNING id`,
+        [opts.invoiceNumber, opts.total]
+      );
+      return rows[0].id as number;
+    } finally {
+      await pg.end();
+    }
+  }
+
+  /** Lấy tất cả dòng bút toán của entry (kèm account_code) */
+  async function fetchLines(
+    entryId: number
+  ): Promise<{ debit: number; credit: number; account_code: string }[]> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      const { rows } = await pg.query(
+        `SELECT jel.debit, jel.credit, coa.account_code
+         FROM public.journal_entry_lines jel
+         JOIN public.chart_of_accounts coa ON coa.id = jel.account_id
+         WHERE jel.entry_id = $1`,
+        [entryId]
+      );
+      return rows.map((r) => ({
+        debit: Number(r.debit),
+        credit: Number(r.credit),
+        account_code: r.account_code as string,
+      }));
+    } finally {
+      await pg.end();
+    }
+  }
+
+  /** Lấy book của journal_entry */
+  async function fetchEntryBook(entryId: number): Promise<string> {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      const { rows } = await pg.query(
+        `SELECT book FROM public.journal_entries WHERE id = $1`,
+        [entryId]
+      );
+      return rows[0]?.book as string;
+    } finally {
+      await pg.end();
+    }
+  }
+
+  beforeAll(async () => {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      // Seed fund_account bank (TK 112)
+      const { rows: bankRows } = await pg.query(
+        `INSERT INTO public.fund_accounts(name, type, account_id, initial_balance, balance, status)
+         VALUES('Test Bank 112','bank','112',0,0,'active')
+         RETURNING id`
+      );
+      fundBankId = bankRows[0].id as number;
+
+      // Seed fund_account cash (TK 111)
+      const { rows: cashRows } = await pg.query(
+        `INSERT INTO public.fund_accounts(name, type, account_id, initial_balance, balance, status)
+         VALUES('Test Cash 111','cash','111',0,0,'active')
+         RETURNING id`
+      );
+      fundCashId = cashRows[0].id as number;
+
+      await pg.query("NOTIFY pgrst, 'reload schema'");
+      await new Promise((r) => setTimeout(r, 500));
+    } finally {
+      await pg.end();
+    }
+  }, 30000);
+
+  afterAll(async () => {
+    const { Client } = await import("pg");
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      await pg.query(`DELETE FROM public.fund_accounts WHERE id IN ($1,$2)`, [
+        fundBankId,
+        fundCashId,
+      ]);
+    } finally {
+      await pg.end();
+    }
+  });
+
+  it("Case 1 — đúng bằng: total=1.000.000, actual=1.000.000, fund=bank → difference=0, 2 entry chính, payment_status=PAID", async () => {
+    const authedClient = await createTestAuthedClient();
+    const invoiceId = await seedInvoice({
+      invoiceNumber: "PAY-CASE1",
+      total: 1000000,
+    });
+
+    try {
+      const { data, error } = await authedClient.rpc("create_invoice_payment", {
+        p_invoice_id: invoiceId,
+        p_actual_amount: 1000000,
+        p_fund_account_id: fundBankId,
+        p_entry_date: "2026-06-07",
+        p_partner: "NCC-TEST",
+        p_desc: "Test thanh toán đúng bằng",
+      });
+
+      expect(error).toBeNull();
+      expect(data).not.toBeNull();
+
+      const result = data as {
+        entry_ids: number[];
+        warning: string | null;
+        difference: number;
+      };
+
+      // difference = 0
+      expect(Number(result.difference)).toBe(0);
+      // warning = null (fund là bank, không phải cash)
+      expect(result.warning).toBeNull();
+      // Đúng 2 entry (INTERNAL + TAX), không có entry bù trừ
+      expect(result.entry_ids.length).toBe(2);
+
+      // Kiểm tra dòng bút toán: mỗi entry phải có Nợ331=1.000.000 và Có112=1.000.000
+      for (const entryId of result.entry_ids) {
+        const lines = await fetchLines(entryId);
+        const line331 = lines.find((l) => l.account_code === "331");
+        const line112 = lines.find((l) => l.account_code === "112");
+        expect(line331).toBeDefined();
+        expect(line331!.debit).toBe(1000000);
+        expect(line112).toBeDefined();
+        expect(line112!.credit).toBe(1000000);
+        // Không có 711 hay 811
+        expect(lines.some((l) => l.account_code === "711")).toBe(false);
+        expect(lines.some((l) => l.account_code === "811")).toBe(false);
+      }
+
+      // Kiểm tra cả 2 sổ: entry[0] INTERNAL, entry[1] TAX (hoặc thứ tự bất kỳ nhưng phải có cả 2)
+      const books = await Promise.all(result.entry_ids.map(fetchEntryBook));
+      expect(books).toContain("INTERNAL");
+      expect(books).toContain("TAX");
+
+      // Kiểm tra finance_invoices
+      const { Client } = await import("pg");
+      const pg = new Client(PG_CFG);
+      await pg.connect();
+      try {
+        const { rows } = await pg.query(
+          `SELECT payment_status, paid_amount FROM public.finance_invoices WHERE id = $1`,
+          [invoiceId]
+        );
+        expect(rows[0].payment_status).toBe("PAID");
+        expect(Number(rows[0].paid_amount)).toBe(1000000);
+      } finally {
+        await pg.end();
+      }
+    } finally {
+      // Cleanup invoice (entries xóa cascade qua journal_entries)
+      const { Client } = await import("pg");
+      const pg = new Client(PG_CFG);
+      await pg.connect();
+      try {
+        await pg.query(
+          `DELETE FROM public.journal_entry_lines
+           WHERE entry_id IN (
+             SELECT id FROM public.journal_entries WHERE source_ref_id = $1
+           )`,
+          [invoiceId.toString()]
+        );
+        await pg.query(
+          `DELETE FROM public.journal_entries WHERE source_ref_id = $1`,
+          [invoiceId.toString()]
+        );
+        await pg.query(`DELETE FROM public.finance_invoices WHERE id = $1`, [
+          invoiceId,
+        ]);
+      } finally {
+        await pg.end();
+      }
+    }
+  }, 60000);
+
+  it("Case 2 — trả ít hơn: total=10.500.000, actual=10.000.000, fund=cash → diff=500.000, warning!=null, entry bù trừ Có711=500.000, sổ TAX không có 711", async () => {
+    const authedClient = await createTestAuthedClient();
+    const invoiceId = await seedInvoice({
+      invoiceNumber: "PAY-CASE2",
+      total: 10500000,
+    });
+
+    try {
+      const { data, error } = await authedClient.rpc("create_invoice_payment", {
+        p_invoice_id: invoiceId,
+        p_actual_amount: 10000000,
+        p_fund_account_id: fundCashId,
+        p_entry_date: "2026-06-07",
+        p_partner: "NCC-TEST",
+        p_desc: "Test trả ít hơn HĐ",
+      });
+
+      expect(error).toBeNull();
+      expect(data).not.toBeNull();
+
+      const result = data as {
+        entry_ids: number[];
+        warning: string | null;
+        difference: number;
+      };
+
+      // difference = 500.000 (trả ít)
+      expect(Number(result.difference)).toBe(500000);
+      // warning != null (total >= 5tr + cash)
+      expect(result.warning).not.toBeNull();
+      expect(result.warning).toMatch(/5 triệu|ngân hàng/i);
+      // 3 entry: 2 chính (INTERNAL+TAX) + 1 bù trừ INTERNAL
+      expect(result.entry_ids.length).toBe(3);
+
+      // Xác định entry bù trừ (entry thứ 3)
+      const diffEntryId = result.entry_ids[2];
+      const diffLines = await fetchLines(diffEntryId);
+
+      // Entry bù trừ INTERNAL: Nợ111=500.000 / Có711=500.000
+      const line711 = diffLines.find((l) => l.account_code === "711");
+      expect(line711).toBeDefined();
+      expect(line711!.credit).toBe(500000);
+
+      const line111_diff = diffLines.find(
+        (l) => l.account_code === "111" && l.debit > 0
+      );
+      expect(line111_diff).toBeDefined();
+      expect(line111_diff!.debit).toBe(500000);
+
+      // Kiểm tra sổ của entry bù trừ = INTERNAL
+      const diffBook = await fetchEntryBook(diffEntryId);
+      expect(diffBook).toBe("INTERNAL");
+
+      // Sổ TAX KHÔNG có TK 711 — tìm entry TAX trong 2 entry chính
+      const mainBooks = await Promise.all(
+        result.entry_ids.slice(0, 2).map(fetchEntryBook)
+      );
+      const taxEntryIdActual = result.entry_ids[mainBooks.indexOf("TAX")];
+      const taxLines = await fetchLines(taxEntryIdActual);
+      expect(taxLines.some((l) => l.account_code === "711")).toBe(false);
+
+      // payment_status = PAID
+      const { Client } = await import("pg");
+      const pg = new Client(PG_CFG);
+      await pg.connect();
+      try {
+        const { rows } = await pg.query(
+          `SELECT payment_status, paid_amount FROM public.finance_invoices WHERE id = $1`,
+          [invoiceId]
+        );
+        expect(rows[0].payment_status).toBe("PAID");
+        expect(Number(rows[0].paid_amount)).toBe(10500000);
+      } finally {
+        await pg.end();
+      }
+    } finally {
+      const { Client } = await import("pg");
+      const pg = new Client(PG_CFG);
+      await pg.connect();
+      try {
+        await pg.query(
+          `DELETE FROM public.journal_entry_lines
+           WHERE entry_id IN (
+             SELECT id FROM public.journal_entries WHERE source_ref_id = $1
+           )`,
+          [invoiceId.toString()]
+        );
+        await pg.query(
+          `DELETE FROM public.journal_entries WHERE source_ref_id = $1`,
+          [invoiceId.toString()]
+        );
+        await pg.query(`DELETE FROM public.finance_invoices WHERE id = $1`, [
+          invoiceId,
+        ]);
+      } finally {
+        await pg.end();
+      }
+    }
+  }, 60000);
+
+  it("Case 3 — trả nhiều hơn: total=1.000.000, actual=1.200.000, fund=bank → diff=-200.000, entry bù trừ Nợ811=200.000", async () => {
+    const authedClient = await createTestAuthedClient();
+    const invoiceId = await seedInvoice({
+      invoiceNumber: "PAY-CASE3",
+      total: 1000000,
+    });
+
+    try {
+      const { data, error } = await authedClient.rpc("create_invoice_payment", {
+        p_invoice_id: invoiceId,
+        p_actual_amount: 1200000,
+        p_fund_account_id: fundBankId,
+        p_entry_date: "2026-06-07",
+        p_partner: "NCC-TEST",
+        p_desc: "Test trả nhiều hơn HĐ",
+      });
+
+      expect(error).toBeNull();
+      expect(data).not.toBeNull();
+
+      const result = data as {
+        entry_ids: number[];
+        warning: string | null;
+        difference: number;
+      };
+
+      // difference = -200.000 (trả nhiều)
+      expect(Number(result.difference)).toBe(-200000);
+      // 3 entry: 2 chính + 1 bù trừ
+      expect(result.entry_ids.length).toBe(3);
+
+      // Entry bù trừ: Nợ811=200.000 / Có112=200.000
+      const diffEntryId = result.entry_ids[2];
+      const diffLines = await fetchLines(diffEntryId);
+
+      const line811 = diffLines.find((l) => l.account_code === "811");
+      expect(line811).toBeDefined();
+      expect(line811!.debit).toBe(200000);
+
+      const line112_credit = diffLines.find(
+        (l) => l.account_code === "112" && l.credit > 0
+      );
+      expect(line112_credit).toBeDefined();
+      expect(line112_credit!.credit).toBe(200000);
+
+      // Sổ bù trừ = INTERNAL
+      const diffBook = await fetchEntryBook(diffEntryId);
+      expect(diffBook).toBe("INTERNAL");
+
+      // payment_status = PAID
+      const { Client } = await import("pg");
+      const pg = new Client(PG_CFG);
+      await pg.connect();
+      try {
+        const { rows } = await pg.query(
+          `SELECT payment_status, paid_amount FROM public.finance_invoices WHERE id = $1`,
+          [invoiceId]
+        );
+        expect(rows[0].payment_status).toBe("PAID");
+        // paid_amount = v_total = 1.000.000 (công nợ chính thức)
+        expect(Number(rows[0].paid_amount)).toBe(1000000);
+      } finally {
+        await pg.end();
+      }
+    } finally {
+      const { Client } = await import("pg");
+      const pg = new Client(PG_CFG);
+      await pg.connect();
+      try {
+        await pg.query(
+          `DELETE FROM public.journal_entry_lines
+           WHERE entry_id IN (
+             SELECT id FROM public.journal_entries WHERE source_ref_id = $1
+           )`,
+          [invoiceId.toString()]
+        );
+        await pg.query(
+          `DELETE FROM public.journal_entries WHERE source_ref_id = $1`,
+          [invoiceId.toString()]
+        );
+        await pg.query(`DELETE FROM public.finance_invoices WHERE id = $1`, [
+          invoiceId,
+        ]);
+      } finally {
+        await pg.end();
+      }
+    }
+  }, 60000);
+
+  it("Case 4 — cảnh báo: total >= 5tr + fund=bank → warning=null (chỉ cash mới cảnh báo)", async () => {
+    const authedClient = await createTestAuthedClient();
+    const invoiceId = await seedInvoice({
+      invoiceNumber: "PAY-CASE4",
+      total: 6000000,
+    });
+
+    try {
+      const { data, error } = await authedClient.rpc("create_invoice_payment", {
+        p_invoice_id: invoiceId,
+        p_actual_amount: 6000000,
+        p_fund_account_id: fundBankId, // bank → KHÔNG cảnh báo
+        p_entry_date: "2026-06-07",
+        p_partner: "NCC-TEST",
+        p_desc: "Test cảnh báo bank vs cash",
+      });
+
+      expect(error).toBeNull();
+      expect(data).not.toBeNull();
+
+      const result = data as {
+        entry_ids: number[];
+        warning: string | null;
+        difference: number;
+      };
+      // Bank + >= 5tr → warning = null
+      expect(result.warning).toBeNull();
+      expect(Number(result.difference)).toBe(0);
+    } finally {
+      const { Client } = await import("pg");
+      const pg = new Client(PG_CFG);
+      await pg.connect();
+      try {
+        await pg.query(
+          `DELETE FROM public.journal_entry_lines
+           WHERE entry_id IN (
+             SELECT id FROM public.journal_entries WHERE source_ref_id = $1
+           )`,
+          [invoiceId.toString()]
+        );
+        await pg.query(
+          `DELETE FROM public.journal_entries WHERE source_ref_id = $1`,
+          [invoiceId.toString()]
+        );
+        await pg.query(`DELETE FROM public.finance_invoices WHERE id = $1`, [
+          invoiceId,
+        ]);
+      } finally {
+        await pg.end();
+      }
+    }
+  }, 60000);
+});
+
 // ─── Edge: kỳ LỖ (kỳ 2026-09) ───────────────────────────────────────────────
 
 describe("acc_close_period — edge: kỳ lỗ (2026-09, actual)", () => {

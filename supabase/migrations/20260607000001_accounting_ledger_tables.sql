@@ -70,9 +70,37 @@ CREATE TABLE IF NOT EXISTS public.account_balances (
 -- 5. Sửa bảng có sẵn (idempotent)
 ALTER TABLE public.fund_accounts
   ADD COLUMN IF NOT EXISTS account_id text REFERENCES public.chart_of_accounts(account_code);
+-- payment_status: UNPAID/PARTIAL/PAID (cột MỚI, chưa deploy prod → đổi an toàn)
+-- Nếu cột chưa tồn tại: ADD với CHECK mới luôn
+-- Nếu đã tồn tại với CHECK cũ: drop constraint cũ, migrate values, add CHECK mới
+DO $$
+BEGIN
+  -- Thêm cột nếu chưa có (lần đầu apply)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='finance_invoices' AND column_name='payment_status'
+  ) THEN
+    ALTER TABLE public.finance_invoices
+      ADD COLUMN payment_status text NOT NULL DEFAULT 'UNPAID'
+        CHECK (payment_status IN ('UNPAID','PARTIAL','PAID'));
+  ELSE
+    -- Xóa CHECK constraint cũ (nếu có)
+    ALTER TABLE public.finance_invoices
+      DROP CONSTRAINT IF EXISTS finance_invoices_payment_status_check;
+    -- Migrate giá trị cũ sang mới
+    UPDATE public.finance_invoices SET payment_status = 'UNPAID'   WHERE payment_status = 'chua_tt';
+    UPDATE public.finance_invoices SET payment_status = 'PARTIAL'  WHERE payment_status = 'tt_mot_phan';
+    UPDATE public.finance_invoices SET payment_status = 'PAID'     WHERE payment_status = 'da_tt';
+    -- Thêm CHECK mới
+    ALTER TABLE public.finance_invoices
+      ADD CONSTRAINT finance_invoices_payment_status_check
+        CHECK (payment_status IN ('UNPAID','PARTIAL','PAID'));
+    -- Đổi DEFAULT
+    ALTER TABLE public.finance_invoices
+      ALTER COLUMN payment_status SET DEFAULT 'UNPAID';
+  END IF;
+END $$;
 ALTER TABLE public.finance_invoices
-  ADD COLUMN IF NOT EXISTS payment_status text NOT NULL DEFAULT 'chua_tt'
-    CHECK (payment_status IN ('chua_tt','tt_mot_phan','da_tt')),
   ADD COLUMN IF NOT EXISTS paid_amount numeric NOT NULL DEFAULT 0;
 
 -- 6. RLS
