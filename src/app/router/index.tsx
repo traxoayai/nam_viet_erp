@@ -106,6 +106,10 @@ const JournalLedgerPage = lazy(
   () => import("@/pages/finance/JournalLedgerPage")
 );
 
+const FinancialReportsPage = lazy(
+  () => import("@/pages/finance/FinancialReportsPage")
+);
+
 //import CustomerSegmentsDetailPage from "@/pages/crm/CustomerSegmentsDetailPage";
 
 // --- HÀM TRỢ GIÚP TẠO PLACEHOLDER ---
@@ -735,6 +739,16 @@ const routes: RouteObject[] = [
           {
             path: "finance/accounting/misa-integration",
             element: <PagePlaceholder title="Tích hợp MISA" />,
+          },
+          {
+            path: "finance/accounting/reports",
+            element: (
+              <PermissionGuard permission={PERMISSIONS.FINANCE.VIEW_BALANCE}>
+                <Suspense fallback={null}>
+                  <FinancialReportsPage />
+                </Suspense>
+              </PermissionGuard>
+            ),
           },
 
           // --- CẬP NHẬT: KHO HÓA ĐƠN SỐ & SCAN AI ---

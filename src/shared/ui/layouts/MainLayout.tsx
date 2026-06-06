@@ -575,6 +575,10 @@ const finalMenuItems: MenuItem[] = [
           <Link to="/finance/accounting/misa-integration">Tích hợp MISA</Link>,
           "/finance/accounting/misa-integration"
         ),
+        getItem(
+          <Link to="/finance/accounting/reports">Báo Cáo Tài Chính</Link>,
+          "/finance/accounting/reports"
+        ),
       ]),
       getItem(
         <Link to="/finance/vat">Quản lý Hóa Đơn VAT (Xuất)</Link>,
