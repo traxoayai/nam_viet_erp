@@ -784,6 +784,39 @@ export type Database = {
           },
         ];
       };
+      bctc_line_mapping: {
+        Row: {
+          account_prefix: string;
+          id: number;
+          ma_so: string;
+          report: string;
+          side: string;
+          sign: number;
+          sort_order: number;
+          ten_chi_tieu: string;
+        };
+        Insert: {
+          account_prefix: string;
+          id?: number;
+          ma_so: string;
+          report: string;
+          side?: string;
+          sign?: number;
+          sort_order: number;
+          ten_chi_tieu: string;
+        };
+        Update: {
+          account_prefix?: string;
+          id?: number;
+          ma_so?: string;
+          report?: string;
+          side?: string;
+          sign?: number;
+          sort_order?: number;
+          ten_chi_tieu?: string;
+        };
+        Relationships: [];
+      };
       categories: {
         Row: {
           created_at: string;
@@ -5167,6 +5200,30 @@ export type Database = {
           },
         ];
       };
+      provinces: {
+        Row: {
+          code: string;
+          code_name: string | null;
+          created_at: string | null;
+          full_name: string | null;
+          name: string;
+        };
+        Insert: {
+          code: string;
+          code_name?: string | null;
+          created_at?: string | null;
+          full_name?: string | null;
+          name: string;
+        };
+        Update: {
+          code?: string;
+          code_name?: string | null;
+          created_at?: string | null;
+          full_name?: string | null;
+          name?: string;
+        };
+        Relationships: [];
+      };
       purchase_order_items: {
         Row: {
           allocated_shipping_fee: number | null;
@@ -6004,7 +6061,7 @@ export type Database = {
         Row: {
           created_at: string | null;
           customer_b2b_id: number;
-          district_code: string;
+          district_code: string | null;
           full_address: string;
           id: number;
           is_default: boolean | null;
@@ -6017,7 +6074,7 @@ export type Database = {
         Insert: {
           created_at?: string | null;
           customer_b2b_id: number;
-          district_code: string;
+          district_code?: string | null;
           full_address: string;
           id?: never;
           is_default?: boolean | null;
@@ -6030,7 +6087,7 @@ export type Database = {
         Update: {
           created_at?: string | null;
           customer_b2b_id?: number;
-          district_code?: string;
+          district_code?: string | null;
           full_address?: string;
           id?: never;
           is_default?: boolean | null;
@@ -6990,6 +7047,41 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "product_units";
             referencedColumns: ["id"];
+          },
+        ];
+      };
+      wards: {
+        Row: {
+          code: string;
+          code_name: string | null;
+          created_at: string | null;
+          full_name: string | null;
+          name: string;
+          province_code: string;
+        };
+        Insert: {
+          code: string;
+          code_name?: string | null;
+          created_at?: string | null;
+          full_name?: string | null;
+          name: string;
+          province_code: string;
+        };
+        Update: {
+          code?: string;
+          code_name?: string | null;
+          created_at?: string | null;
+          full_name?: string | null;
+          name?: string;
+          province_code?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wards_province_code_fkey";
+            columns: ["province_code"];
+            isOneToOne: false;
+            referencedRelation: "provinces";
+            referencedColumns: ["code"];
           },
         ];
       };
@@ -7974,6 +8066,10 @@ export type Database = {
         };
         Returns: number;
       };
+      gen_journal_for_sales_order: {
+        Args: { p_order_id: string };
+        Returns: Json;
+      };
       gen_journal_payment: {
         Args: {
           p_amount: number;
@@ -8116,6 +8212,14 @@ export type Database = {
         Returns: Json;
       };
       get_b2b_warehouse_id: { Args: never; Returns: number };
+      get_balance_sheet: {
+        Args: { p_book: string; p_month: number; p_year: number };
+        Returns: {
+          ma_so: string;
+          so_tien: number;
+          ten_chi_tieu: string;
+        }[];
+      };
       get_batch_valuation_grid: {
         Args: {
           p_limit?: number;
@@ -8139,6 +8243,14 @@ export type Database = {
           total_value: number;
           warehouse_id: number;
           warehouse_name: string;
+        }[];
+      };
+      get_cash_flow: {
+        Args: { p_book: string; p_month: number; p_year: number };
+        Returns: {
+          dong_tien_ra: number;
+          dong_tien_vao: number;
+          luu_chuyen_thuan: number;
         }[];
       };
       get_chat_customer_summary: { Args: { p_user_id: string }; Returns: Json };
@@ -8332,6 +8444,10 @@ export type Database = {
         }[];
       };
       get_inbound_detail: { Args: { p_po_id: number }; Returns: Json };
+      get_income_statement: {
+        Args: { p_book: string; p_month: number; p_year: number };
+        Returns: Json;
+      };
       get_inventory_check_list: {
         Args: { p_warehouse_id: number };
         Returns: {
@@ -8943,6 +9059,19 @@ export type Database = {
           status: string;
         }[];
       };
+      get_trial_balance: {
+        Args: { p_book: string; p_month: number; p_year: number };
+        Returns: {
+          account_code: string;
+          account_name: string;
+          closing_credit: number;
+          closing_debit: number;
+          opening_credit: number;
+          opening_debit: number;
+          period_credit: number;
+          period_debit: number;
+        }[];
+      };
       get_user_pending_revenue: {
         Args: { p_user_id: string };
         Returns: number;
@@ -8989,6 +9118,14 @@ export type Database = {
           min_order_value: number;
           promo_name: string;
           voucher_id: number;
+        }[];
+      };
+      get_vat_declaration: {
+        Args: { p_direction: string; p_month: number; p_year: number };
+        Returns: {
+          sum_pre_tax: number;
+          sum_vat: number;
+          tax_rate: number;
         }[];
       };
       get_warehouse_cabinets: {
