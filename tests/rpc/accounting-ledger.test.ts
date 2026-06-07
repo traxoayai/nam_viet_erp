@@ -2942,3 +2942,33 @@ describe("gen_journal_for_sales_order — ghi sổ doanh thu + giá vốn từ �
     expect((data as { is_write: boolean }).is_write).toBe(true);
   }, 30000);
 });
+
+// ─── Phase 0.4: gán account_id mặc định cho fund_accounts ─────────────────────
+describe("fund_accounts — gán TK đối ứng mặc định", () => {
+  it("quỹ bank → 112, quỹ tiền mặt thực → 111, quỹ 'Cấn trừ công nợ' giữ NULL", async () => {
+    const { data, error } = await adminClient
+      .from("fund_accounts")
+      .select("name, type, account_id");
+    expect(error).toBeNull();
+    const rows = data as {
+      name: string;
+      type: string;
+      account_id: string | null;
+    }[];
+
+    // Mọi quỹ ngân hàng phải có TK 112
+    const banks = rows.filter((r) => r.type === "bank");
+    expect(banks.length).toBeGreaterThan(0);
+    for (const b of banks) expect(b.account_id).toBe("112");
+
+    // Quỹ tiền mặt thực (không phải cấn trừ) → 111
+    const realCash = rows.filter(
+      (r) => r.type === "cash" && !/cấn trừ/i.test(r.name)
+    );
+    for (const cf of realCash) expect(cf.account_id).toBe("111");
+
+    // Quỹ cấn trừ công nợ KHÔNG bị gán 111 (giữ NULL để kế toán tự chọn)
+    const offset = rows.filter((r) => /cấn trừ/i.test(r.name));
+    for (const o of offset) expect(o.account_id).not.toBe("111");
+  }, 30000);
+});
