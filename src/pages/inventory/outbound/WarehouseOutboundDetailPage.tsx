@@ -29,6 +29,7 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { accountingService } from "@/features/finance/api/accountingService";
 import { outboundService } from "@/features/inventory/api/outboundService";
 import { PickingListTemplate } from "@/features/inventory/components/print/PickingListTemplate";
 import { ShippingLabelTemplate } from "@/features/inventory/components/print/ShippingLabelTemplate";
@@ -202,6 +203,9 @@ const WarehouseOutboundDetailPage = () => {
     try {
       await outboundService.confirmPacking(id);
       message.success("Thành công: Đã trừ kho & Đóng gói!");
+      // Ghi sổ doanh thu + giá vốn khi xuất kho (nháp, sổ INTERNAL) — non-blocking,
+      // KHÔNG chặn đóng gói. Đây là điểm ghi nhận DT cho đơn B2B (hàng đã rời kho).
+      void accountingService.postSalesOrderSafe(id);
       // Refetch to see new status (PACKED)
       await fetchDetail(id);
     } catch (error) {
@@ -444,7 +448,11 @@ const WarehouseOutboundDetailPage = () => {
       </Card>
 
       {/* CONTENT */}
-      <Card bodyStyle={{ padding: screens.md ? 0 : 8 }} bordered={false} style={{ background: "transparent" }}>
+      <Card
+        bodyStyle={{ padding: screens.md ? 0 : 8 }}
+        bordered={false}
+        style={{ background: "transparent" }}
+      >
         {screens.md ? (
           <Table
             columns={columns}
@@ -460,17 +468,25 @@ const WarehouseOutboundDetailPage = () => {
           <List
             dataSource={items}
             renderItem={(item, idx) => (
-              <Card 
-                size="small" 
-                style={{ 
-                  marginBottom: 12, 
-                  borderLeft: `4px solid ${item.quantity_picked >= item.quantity_ordered ? '#52c41a' : '#faad14'}`,
+              <Card
+                size="small"
+                style={{
+                  marginBottom: 12,
+                  borderLeft: `4px solid ${item.quantity_picked >= item.quantity_ordered ? "#52c41a" : "#faad14"}`,
                   borderRadius: 8,
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
                 }}
-                className={String(item.product_id) === highlightedKey ? "flash-row" : ""}
+                className={
+                  String(item.product_id) === highlightedKey ? "flash-row" : ""
+                }
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 8,
+                  }}
+                >
                   <Space>
                     <Tag color="geekblue" icon={<MapPin size={12} />}>
                       {item.shelf_location || "N/A"}
@@ -484,8 +500,8 @@ const WarehouseOutboundDetailPage = () => {
                     <Tag color="warning">Thiếu</Tag>
                   )}
                 </div>
-                
-                <Space style={{ marginBottom: 12, alignItems: 'flex-start' }}>
+
+                <Space style={{ marginBottom: 12, alignItems: "flex-start" }}>
                   <div
                     style={{
                       width: 48,
@@ -495,47 +511,104 @@ const WarehouseOutboundDetailPage = () => {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      overflow: 'hidden'
+                      overflow: "hidden",
                     }}
                   >
                     {item.image_url ? (
-                      <img src={item.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img
+                        src={item.image_url}
+                        alt=""
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
                     ) : (
                       <Package size={24} color="#ccc" />
                     )}
                   </div>
                   <div>
-                    <Text strong style={{ fontSize: 15 }}>{item.product_name}</Text>
+                    <Text strong style={{ fontSize: 15 }}>
+                      {item.product_name}
+                    </Text>
                     <br />
                     <Text type="secondary">{item.sku}</Text>
                   </div>
                 </Space>
 
-                {item.fefo_suggestion && (
-                  <div style={{ background: '#fafafa', padding: 8, borderRadius: 6, marginBottom: 12 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Gợi ý (FEFO):</Text>
+                {item.fefo_suggestion ? (
+                  <div
+                    style={{
+                      background: "#fafafa",
+                      padding: 8,
+                      borderRadius: 6,
+                      marginBottom: 12,
+                    }}
+                  >
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Gợi ý (FEFO):
+                    </Text>
                     <div style={{ fontSize: 13 }}>
                       Lô: <b>{item.fefo_suggestion.batch_code}</b> |{" "}
-                      <span style={{ color: dayjs(item.fefo_suggestion.expiry_date).diff(dayjs(), "day") < 30 ? "#faad14" : "inherit" }}>
-                        HSD: {dayjs(item.fefo_suggestion.expiry_date).format("DD/MM/YYYY")}
+                      <span
+                        style={{
+                          color:
+                            dayjs(item.fefo_suggestion.expiry_date).diff(
+                              dayjs(),
+                              "day"
+                            ) < 30
+                              ? "#faad14"
+                              : "inherit",
+                        }}
+                      >
+                        HSD:{" "}
+                        {dayjs(item.fefo_suggestion.expiry_date).format(
+                          "DD/MM/YYYY"
+                        )}
                       </span>
                     </div>
                   </div>
-                )}
+                ) : null}
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f5f5f5', padding: '8px 12px', borderRadius: 6 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    background: "#f5f5f5",
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                  }}
+                >
                   <div>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Yêu cầu</Text>
-                    <div style={{ fontSize: 16, fontWeight: 'bold' }}>{item.quantity_ordered} <Text type="secondary" style={{ fontSize: 13, fontWeight: 'normal' }}>{item.unit}</Text></div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Yêu cầu
+                    </Text>
+                    <div style={{ fontSize: 16, fontWeight: "bold" }}>
+                      {item.quantity_ordered}{" "}
+                      <Text
+                        type="secondary"
+                        style={{ fontSize: 13, fontWeight: "normal" }}
+                      >
+                        {item.unit}
+                      </Text>
+                    </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Đã nhặt</Text>
+                  <div style={{ textAlign: "right" }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Đã nhặt
+                    </Text>
                     <div>
                       <InputNumber
                         min={0}
                         value={item.quantity_picked}
                         onChange={(v) => handleManualChange(idx, v)}
-                        status={item.quantity_picked > item.quantity_ordered ? "error" : ""}
+                        status={
+                          item.quantity_picked > item.quantity_ordered
+                            ? "error"
+                            : ""
+                        }
                         style={{ width: 100 }}
                         disabled={orderInfo?.status !== "CONFIRMED"}
                       />
@@ -569,10 +642,10 @@ const WarehouseOutboundDetailPage = () => {
                 Hủy
               </Button>
             ) : null}
-            <Button 
-              type="primary" 
-              ghost 
-              icon={<Printer size={16} />} 
+            <Button
+              type="primary"
+              ghost
+              icon={<Printer size={16} />}
               onClick={() => printOrder({ id: orderInfo.id })}
             >
               In Đơn

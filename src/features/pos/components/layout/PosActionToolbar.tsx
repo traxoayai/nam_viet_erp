@@ -14,6 +14,7 @@ import { usePosCartStore } from "../../stores/usePosCartStore";
 import { PosCreateOrderPayload } from "../../types/pos.types";
 import { VatInvoiceModal } from "../modals/VatInvoiceModal";
 
+import { accountingService } from "@/features/finance/api/accountingService";
 import { useSubmitLock } from "@/shared/hooks/useSubmitLock";
 import { printPosBill, printInstruction } from "@/shared/utils/printTemplates";
 
@@ -61,11 +62,13 @@ export const PosActionToolbar = () => {
 
       try {
         message.loading({ content: "Đang xử lý...", key: "pos_checkout" });
-        await posService.createOrder(payload);
+        const orderId = await posService.createOrder(payload);
         message.success({
           content: "Thanh toán thành công!",
           key: "pos_checkout",
         });
+        // Ghi sổ doanh thu + giá vốn (nháp, sổ INTERNAL) — non-blocking, KHÔNG chặn bán hàng
+        void accountingService.postSalesOrderSafe(orderId);
         clearCart();
       } catch (err: unknown) {
         const errMsg =

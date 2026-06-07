@@ -93,6 +93,24 @@ export const accountingService = {
     } | null;
   },
 
+  /**
+   * Wrapper NON-BLOCKING của postSalesOrder để gọi từ luồng bán hàng/đóng gói:
+   * KHÔNG bao giờ throw (nuốt + log lỗi), không chặn nghiệp vụ doanh thu.
+   * Call site chỉ cần `void accountingService.postSalesOrderSafe(orderId)`.
+   */
+  async postSalesOrderSafe(orderId: string): Promise<void> {
+    try {
+      await accountingService.postSalesOrder(orderId);
+    } catch (e) {
+      // Lỗi kế toán (kỳ đã khóa, mạng...) KHÔNG được chặn bán hàng — chỉ log.
+      console.error(
+        "[accounting] postSalesOrder hook failed (đơn hàng vẫn OK):",
+        orderId,
+        e
+      );
+    }
+  },
+
   async postPayment(
     args: {
       sourceId: string;

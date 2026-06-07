@@ -214,4 +214,41 @@ describe("accountingService", () => {
       expect(res?.skipped).toBe("already_booked");
     });
   });
+
+  // ── postSalesOrderSafe (non-blocking wrapper) ─────────────────────────────
+  describe("postSalesOrderSafe (non-blocking)", () => {
+    it("gọi postSalesOrder (gen_journal_for_sales_order) với đúng orderId", async () => {
+      (safeRpc as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        data: {
+          entry_sale: 1,
+          entry_cogs: 2,
+          revenue: 1,
+          cogs: 1,
+          book: "INTERNAL",
+        },
+        error: null,
+      });
+
+      await accountingService.postSalesOrderSafe("ord-uuid-3");
+
+      expect(safeRpc).toHaveBeenCalledWith("gen_journal_for_sales_order", {
+        p_order_id: "ord-uuid-3",
+      });
+    });
+
+    it("KHÔNG throw khi postSalesOrder lỗi (nuốt + log) — non-blocking", async () => {
+      (safeRpc as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("Kỳ INTERNAL đã khóa")
+      );
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Không được reject — nếu throw, test sẽ fail
+      await expect(
+        accountingService.postSalesOrderSafe("ord-uuid-4")
+      ).resolves.toBeUndefined();
+
+      expect(errSpy).toHaveBeenCalled();
+      errSpy.mockRestore();
+    });
+  });
 });
