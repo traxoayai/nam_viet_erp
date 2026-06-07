@@ -2747,3 +2747,198 @@ describe("Phân quyền write kế toán (finance.post/void/close_journal)", () 
     expect(map["acc_close_period"]).toBe("finance.close_period");
   }, 30000);
 });
+
+// ─── Phase 4: gen_journal_for_sales_order (hook bán hàng/COGS → sổ INTERNAL) ───
+describe("gen_journal_for_sales_order — ghi sổ doanh thu + giá vốn từ đơn", () => {
+  const PG_CFG = {
+    host: "127.0.0.1",
+    port: 54322,
+    user: "postgres",
+    password: "postgres",
+    database: "postgres",
+  };
+  // 2 sản phẩm có sẵn trên local (actual_cost=100000/base unit) — chỉ ĐỌC, không sửa
+  const PROD_A = 2;
+  const PROD_B = 3;
+  const REVENUE = 500000;
+  let orderId: string | null = null;
+  let openingDebtOrderId: string | null = null;
+  // base_quantity do TRIGGER tính từ cấu hình đơn vị SP (không set tay được) →
+  // tính expected COGS từ chính DB sau khi tạo item (test đúng theo công thức RPC).
+  let expectedCogs = 0;
+
+  async function cleanupOrder(oid: string) {
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      await pg.query(
+        `DELETE FROM journal_entry_lines WHERE entry_id IN (
+           SELECT id FROM journal_entries WHERE source_ref_type='orders' AND source_ref_id=$1)`,
+        [oid]
+      );
+      await pg.query(
+        `DELETE FROM journal_entries WHERE source_ref_type='orders' AND source_ref_id=$1`,
+        [oid]
+      );
+      await pg.query(`DELETE FROM order_items WHERE order_id=$1`, [oid]);
+      await pg.query(`DELETE FROM orders WHERE id=$1`, [oid]);
+    } finally {
+      await pg.end();
+    }
+  }
+
+  async function cleanupPeriod() {
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      await pg.query(
+        `DELETE FROM accounting_periods WHERE book='INTERNAL' AND year=2028 AND month=5`
+      );
+    } catch {
+      /* còn entry tham chiếu (đã cleanup order trước) — bỏ qua */
+    } finally {
+      await pg.end();
+    }
+  }
+
+  beforeAll(async () => {
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      // Đơn bán thật: final_amount = REVENUE
+      const { rows } = await pg.query(
+        `INSERT INTO orders(code, order_type, final_amount, total_amount, created_at)
+         VALUES('TEST-ACC-ORD-P4','POS',$1,$1,'2028-05-10') RETURNING id`,
+        [REVENUE]
+      );
+      orderId = rows[0].id as string;
+      await pg.query(
+        `INSERT INTO order_items(order_id, product_id, quantity, uom, unit_price, is_gift) VALUES
+           ($1,$2,1,'Hộp',300000,false),
+           ($1,$3,1,'Hộp',200000,false)`,
+        [orderId, PROD_A, PROD_B]
+      );
+      // base_quantity được trigger tính → đọc lại expected COGS theo đúng công thức RPC
+      const { rows: cg } = await pg.query(
+        `SELECT COALESCE(SUM(oi.base_quantity * COALESCE(p.actual_cost,0)),0) c
+         FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=$1`,
+        [orderId]
+      );
+      expectedCogs = Number(cg[0].c);
+      // Đơn công nợ đầu kỳ (phải bị bỏ qua)
+      const { rows: r2 } = await pg.query(
+        `INSERT INTO orders(code, order_type, final_amount, total_amount, created_at)
+         VALUES('TEST-ACC-ORD-OPEN','opening_debt',999000,999000,'2028-05-10') RETURNING id`
+      );
+      openingDebtOrderId = r2[0].id as string;
+      await pg.query("NOTIFY pgrst, 'reload schema'");
+    } finally {
+      await pg.end();
+    }
+    await cleanupPeriod();
+  }, 60000);
+
+  afterAll(async () => {
+    if (orderId) await cleanupOrder(orderId);
+    if (openingDebtOrderId) await cleanupOrder(openingDebtOrderId);
+    await cleanupPeriod();
+  }, 60000);
+
+  it("sinh bút toán doanh thu (No131/Co5111) + giá vốn (No632/Co156) sổ INTERNAL, draft", async () => {
+    const client = await createTestAuthedClient();
+    const { data, error } = await client.rpc("gen_journal_for_sales_order", {
+      p_order_id: orderId,
+    });
+    expect(error).toBeNull();
+    const res = data as {
+      entry_sale: number | null;
+      entry_cogs: number | null;
+      revenue: number;
+      cogs: number;
+      book: string;
+    };
+    expect(Number(res.revenue)).toBe(REVENUE);
+    expect(Number(res.cogs)).toBe(expectedCogs);
+    expect(expectedCogs).toBeGreaterThan(0); // đảm bảo có giá vốn để kiểm
+    expect(res.book).toBe("INTERNAL");
+    expect(res.entry_sale).not.toBeNull();
+    expect(res.entry_cogs).not.toBeNull();
+
+    // Kiểm tra bút toán thực trong DB
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      const { rows: entries } = await pg.query(
+        `SELECT id, book, doc_type, status, total_debit, total_credit
+         FROM journal_entries WHERE source_ref_type='orders' AND source_ref_id=$1 ORDER BY doc_type`,
+        [orderId]
+      );
+      expect(entries.length).toBe(2);
+      for (const e of entries) {
+        expect(e.book).toBe("INTERNAL");
+        expect(e.status).toBe("draft");
+        expect(Number(e.total_debit)).toBe(Number(e.total_credit));
+      }
+      const sale = entries.find((e) => e.doc_type === "sale");
+      const cogs = entries.find((e) => e.doc_type === "cogs");
+      expect(Number(sale.total_debit)).toBe(REVENUE);
+      expect(Number(cogs.total_debit)).toBe(expectedCogs);
+
+      // Dòng 131/5111 của bút toán doanh thu
+      const { rows: lines } = await pg.query(
+        `SELECT a.account_code, l.debit, l.credit
+         FROM journal_entry_lines l JOIN chart_of_accounts a ON a.id=l.account_id
+         WHERE l.entry_id=$1 ORDER BY l.line_no`,
+        [sale.id]
+      );
+      const byCode = Object.fromEntries(lines.map((l) => [l.account_code, l]));
+      expect(Number(byCode["131"].debit)).toBe(REVENUE);
+      expect(Number(byCode["5111"].credit)).toBe(REVENUE);
+    } finally {
+      await pg.end();
+    }
+  }, 60000);
+
+  it("idempotent: gọi lần 2 trả skipped='already_booked', không tạo thêm bút toán", async () => {
+    const client = await createTestAuthedClient();
+    const { data, error } = await client.rpc("gen_journal_for_sales_order", {
+      p_order_id: orderId,
+    });
+    expect(error).toBeNull();
+    expect((data as { skipped?: string }).skipped).toBe("already_booked");
+
+    const pg = new Client(PG_CFG);
+    await pg.connect();
+    try {
+      const { rows } = await pg.query(
+        `SELECT count(*)::int n FROM journal_entries WHERE source_ref_type='orders' AND source_ref_id=$1`,
+        [orderId]
+      );
+      expect(rows[0].n).toBe(2); // vẫn 2, không nhân đôi
+    } finally {
+      await pg.end();
+    }
+  }, 60000);
+
+  it("bỏ qua đơn order_type='opening_debt'", async () => {
+    const client = await createTestAuthedClient();
+    const { data, error } = await client.rpc("gen_journal_for_sales_order", {
+      p_order_id: openingDebtOrderId,
+    });
+    expect(error).toBeNull();
+    expect((data as { skipped?: string }).skipped).toBe("opening_debt");
+  }, 60000);
+
+  it("rule mở cho mọi user đã đăng nhập (required_permission NULL) — POS gọi được", async () => {
+    const { data, error } = await adminClient
+      .from("rpc_access_rules")
+      .select("required_permission, is_write")
+      .eq("function_name", "gen_journal_for_sales_order")
+      .single();
+    expect(error).toBeNull();
+    expect(
+      (data as { required_permission: string | null }).required_permission
+    ).toBeNull();
+    expect((data as { is_write: boolean }).is_write).toBe(true);
+  }, 30000);
+});
