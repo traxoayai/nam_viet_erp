@@ -113,4 +113,22 @@ describe("ban do hanh chinh 2 cap: provinces + wards", () => {
     expect(wardErr).toBeNull();
     expect(wardCount ?? 0).toBeGreaterThanOrEqual(1);
   });
+
+  it("hardening: authenticated/anon CHỈ có SELECT (đã REVOKE ghi/TRUNCATE) trên provinces & wards", async () => {
+    const { rows } = await pg.query(
+      `SELECT table_name, grantee, privilege_type
+       FROM information_schema.role_table_grants
+       WHERE table_schema='public' AND table_name IN ('provinces','wards')
+         AND grantee IN ('authenticated','anon')
+       ORDER BY table_name, grantee, privilege_type`
+    );
+    const writePrivs = rows.filter((r) =>
+      ["INSERT", "UPDATE", "DELETE", "TRUNCATE"].includes(r.privilege_type)
+    );
+    // KHÔNG còn quyền ghi nào cho authenticated/anon
+    expect(writePrivs).toHaveLength(0);
+    // Vẫn còn SELECT (lookup read-all)
+    const selects = rows.filter((r) => r.privilege_type === "SELECT");
+    expect(selects.length).toBeGreaterThan(0);
+  });
 });

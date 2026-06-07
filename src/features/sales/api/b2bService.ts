@@ -5,6 +5,7 @@ import {
   B2BOrderDetail,
 } from "../types/b2b.types";
 
+import { accountingService } from "@/features/finance/api/accountingService";
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
@@ -186,6 +187,11 @@ export const b2bService = {
       .update({ status })
       .eq("id", id);
     if (error) throw error;
+    // Ghi sổ doanh thu + giá vốn khi đơn vào trạng thái ghi nhận (non-blocking).
+    // RPC tự status-gate (chỉ ghi PACKED/SHIPPING/DELIVERED/COMPLETED) + idempotent +
+    // advisory lock → gọi mọi lần đổi status đều an toàn, không nhân đôi. Vá lỗ hổng
+    // đơn set DELIVERED thẳng (không qua đóng gói) bị sót bút toán.
+    void accountingService.postSalesOrderSafe(id);
   },
 
   cancelOrderSafe: async (orderId: string, reason: string) => {
