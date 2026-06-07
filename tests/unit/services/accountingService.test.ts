@@ -177,4 +177,41 @@ describe("accountingService", () => {
       expect(safeRpc).toHaveBeenCalledTimes(2);
     });
   });
+
+  // ── postSalesOrder (Phase 4: hook bán hàng/COGS) ──────────────────────────
+  describe("postSalesOrder", () => {
+    it("gọi gen_journal_for_sales_order với p_order_id + trả data passthrough", async () => {
+      (safeRpc as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        data: {
+          entry_sale: 5,
+          entry_cogs: 6,
+          revenue: 500000,
+          cogs: 300000,
+          book: "INTERNAL",
+        },
+        error: null,
+      });
+
+      const res = await accountingService.postSalesOrder("ord-uuid-1");
+
+      expect(safeRpc).toHaveBeenCalledTimes(1);
+      expect(safeRpc).toHaveBeenCalledWith("gen_journal_for_sales_order", {
+        p_order_id: "ord-uuid-1",
+      });
+      expect(res?.revenue).toBe(500000);
+      expect(res?.cogs).toBe(300000);
+      expect(res?.book).toBe("INTERNAL");
+    });
+
+    it("trả skipped khi DB báo đã book / opening_debt", async () => {
+      (safeRpc as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        data: { skipped: "already_booked" },
+        error: null,
+      });
+
+      const res = await accountingService.postSalesOrder("ord-uuid-2");
+
+      expect(res?.skipped).toBe("already_booked");
+    });
+  });
 });

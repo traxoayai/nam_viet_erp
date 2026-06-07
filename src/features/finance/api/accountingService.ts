@@ -65,6 +65,34 @@ export const accountingService = {
     return ids;
   },
 
+  /**
+   * Ghi sổ bán hàng: sinh bút toán doanh thu + giá vốn (NHÁP, sổ INTERNAL) từ 1 đơn.
+   * Gọi NON-BLOCKING sau khi tạo đơn thành công — lỗi kế toán KHÔNG được chặn bán hàng
+   * (caller phải bọc try/catch). Idempotent ở DB (gọi lại trả `skipped`).
+   * ⚠️ Điểm kích hoạt theo nghiệp vụ: POS = lúc tạo đơn; B2B = lúc giao/xuất HĐ
+   * (KHÔNG gọi lúc tạo báo giá PENDING) — wiring do team chốt với PM.
+   */
+  async postSalesOrder(orderId: string): Promise<{
+    entry_sale: number | null;
+    entry_cogs: number | null;
+    revenue: number;
+    cogs: number;
+    book: string;
+    skipped?: string;
+  } | null> {
+    const { data } = await safeRpc("gen_journal_for_sales_order", {
+      p_order_id: orderId,
+    });
+    return data as {
+      entry_sale: number | null;
+      entry_cogs: number | null;
+      revenue: number;
+      cogs: number;
+      book: string;
+      skipped?: string;
+    } | null;
+  },
+
   async postPayment(
     args: {
       sourceId: string;
