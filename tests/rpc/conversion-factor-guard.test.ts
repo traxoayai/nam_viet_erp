@@ -74,7 +74,9 @@ describe("conversion_factor guard (migration 030000)", () => {
           final_amount: 10000,
           payment_method: "credit",
           payment_status: "unpaid",
-          source: "test",
+          // source bỏ trống -> dùng default 'erp' (giá trị source không liên quan
+          // mục đích test này; tránh để rớt order source='test' làm nhiễu
+          // get_sales_orders_view ở test khác — portal-hub).
         })
         .select("id")
         .single();

@@ -1,7 +1,8 @@
-import { defineConfig } from "vitest/config";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import fs from "fs";
+
+import { defineConfig } from "vitest/config";
 
 // ─── Windows drive-letter casing fix ─────────────────────────────────────
 // See vitest.config.ts for details. Keep both configs in sync.
@@ -26,6 +27,9 @@ export default defineConfig({
     hookTimeout: 30000,
     pool: "forks",
     forks: { singleFork: true },
+    // Backfill auth.users stub cho recipient notification thiếu (clone local) —
+    // tránh FK notifications_user_id_fkey rollback transaction. Xem file để rõ.
+    globalSetup: ["tests/helpers/integration-global-setup.ts"],
   },
   resolve: {
     alias: { "@": path.resolve(ROOT, "src") },

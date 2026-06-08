@@ -23,6 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 let b2bWarehouseId: number | null = null;
 let testCustomerId: number | null = null;
 let testProductId: number | null = null;
+let testUom: string | null = null;
 let authedClient: SupabaseClient | null = null;
 const createdOrderIds: string[] = [];
 
@@ -57,6 +58,19 @@ beforeAll(async () => {
       .limit(1)
       .maybeSingle();
     testProductId = stock?.product_id ?? null;
+  }
+
+  // Lấy ĐƠN VỊ HỢP LỆ động cho product (create_sales_order validate uom theo
+  // product_units) — KHÔNG hardcode "Hộp" vì tuỳ product trên clone có thể chỉ
+  // cấu hình "Gói"... -> tránh P0001 "Đơn vị không hợp lệ".
+  if (testProductId) {
+    const { data: pu } = await adminClient
+      .from("product_units")
+      .select("unit_name")
+      .eq("product_id", testProductId)
+      .limit(1)
+      .maybeSingle();
+    testUom = pu?.unit_name ?? null;
   }
 });
 
@@ -100,14 +114,15 @@ describe("_check_b2b_credit_exposure (DISABLED)", () => {
 // Dùng authedClient (signed-in với kame.ctb@gmail.com fixture local).
 describe("create_sales_order — B2B warehouse override (cần user auth)", () => {
   it("ignore p_warehouse_id client truyền, ép về kho B2B", async (ctx) => {
-    if (!authedClient || !testProductId || !testCustomerId) return ctx.skip();
+    if (!authedClient || !testProductId || !testCustomerId || !testUom)
+      return ctx.skip();
     const { data: resp, error } = await authedClient.rpc("create_sales_order", {
       p_items: [
         {
           product_id: testProductId,
           quantity: 1,
           unit_price: 1000,
-          uom: "Hộp",
+          uom: testUom,
           discount: 0,
         },
       ],

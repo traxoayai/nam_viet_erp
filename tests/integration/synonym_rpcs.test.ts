@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe as _describe, expect, it } from "vitest";
 import {
   adminClient,
   createUserClient,
+  findUserIdByEmail,
   isProduction,
 } from "../helpers/supabase";
 
@@ -42,14 +43,16 @@ describe("Synonym RPCs (list/add/delete/search/bulk_import)", () => {
     staffClient = await createUserClient(STAFF_EMAIL, STAFF_PASSWORD);
     customerClient = await createUserClient(CUSTOMER_EMAIL, CUSTOMER_PASSWORD);
 
-    const { data: staffSession } = await staffClient.auth.getUser();
-    const { data: customerSession } = await customerClient.auth.getUser();
-    if (!staffSession.user?.id)
-      throw new Error(`Staff fixture ${STAFF_EMAIL} not found`);
-    if (!customerSession.user?.id)
+    // Lấy user id qua admin lookup (deterministic) thay vì staffClient.auth.getUser()
+    // — getUser() đôi khi dính bug GoTrue local "Database error finding users".
+    // Pattern này khớp rls_chat_staff.test.ts (ổn định).
+    const staffId = await findUserIdByEmail(STAFF_EMAIL);
+    const customerId = await findUserIdByEmail(CUSTOMER_EMAIL);
+    if (!staffId) throw new Error(`Staff fixture ${STAFF_EMAIL} not found`);
+    if (!customerId)
       throw new Error(`Customer fixture ${CUSTOMER_EMAIL} not found`);
-    seed.staffUserId = staffSession.user.id;
-    seed.customerUserId = customerSession.user.id;
+    seed.staffUserId = staffId;
+    seed.customerUserId = customerId;
 
     // 2. Tạo role test có permission crm.chatbot.admin
     const roleName = `__test_synonym_rpc_${Date.now()}`;
