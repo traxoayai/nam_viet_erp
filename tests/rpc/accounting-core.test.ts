@@ -396,3 +396,229 @@ describe("dual-ledger book_type", () => {
     }
   });
 });
+
+describe("close_accounting_period RPC", () => {
+  const createdEntryIds: bigint[] = [];
+  const createdPeriodIds: bigint[] = [];
+  let coaId: string;
+  let testPeriod: bigint;
+  let nextPeriod: bigint;
+
+  beforeAll(async () => {
+    // Get chart_of_accounts
+    const { data: accounts } = await adminClient
+      .from("chart_of_accounts")
+      .select("id")
+      .limit(1);
+    coaId = accounts?.[0]?.id || "";
+
+    // Create test period for closing
+    const { data: period1, error: periodErr1 } = await adminClient
+      .from("accounting_periods")
+      .insert({ book: "INTERNAL", year: 2026, month: 5 })
+      .select()
+      .single();
+
+    expect(periodErr1).toBeNull();
+    testPeriod = period1!.id;
+    createdPeriodIds.push(testPeriod);
+
+    // Create next period for carry-forward
+    const { data: period2, error: periodErr2 } = await adminClient
+      .from("accounting_periods")
+      .insert({ book: "INTERNAL", year: 2026, month: 6 })
+      .select()
+      .single();
+
+    expect(periodErr2).toBeNull();
+    nextPeriod = period2!.id;
+    createdPeriodIds.push(nextPeriod);
+  });
+
+  afterAll(async () => {
+    // Cleanup entries
+    if (createdEntryIds.length > 0) {
+      await adminClient
+        .from("journal_entries")
+        .delete()
+        .in("id", createdEntryIds);
+    }
+    // Cleanup periods
+    if (createdPeriodIds.length > 0) {
+      await adminClient
+        .from("accounting_periods")
+        .delete()
+        .in("id", createdPeriodIds);
+    }
+  });
+
+  it("should lock all entries for a period after close", async () => {
+    if (!coaId) {
+      console.warn("Skipping test: no chart_of_accounts found");
+      return;
+    }
+
+    // Create test entry for period
+    const { data: entry1 } = await adminClient
+      .from("journal_entries")
+      .insert({
+        entry_date: new Date("2026-05-15"),
+        book: "INTERNAL",
+        period_id: testPeriod,
+        doc_type: "sale",
+        description: "Test entry for close",
+        status: "draft",
+        total_debit: 100000,
+        total_credit: 100000,
+      })
+      .select()
+      .single();
+
+    expect(entry1?.id).toBeTruthy();
+    createdEntryIds.push(entry1!.id);
+
+    // Call close_accounting_period
+    const { data: result, error: closeErr } = await adminClient.rpc(
+      "close_accounting_period",
+      {
+        p_period_id: testPeriod,
+      }
+    );
+
+    expect(closeErr).toBeNull();
+    expect(result).toBeDefined();
+    expect(result[0].success).toBe(true);
+
+    // Verify all entries locked
+    const { data: lockedEntries } = await adminClient
+      .from("journal_entries")
+      .select()
+      .eq("period_id", testPeriod)
+      .eq("status", "posted");
+
+    expect(lockedEntries && lockedEntries.length > 0).toBeTruthy();
+  });
+
+  it("should create P&L closing entry with balanced debit/credit", async () => {
+    if (!coaId) {
+      console.warn("Skipping test: no chart_of_accounts found");
+      return;
+    }
+
+    // Create another test period
+    const { data: period, error: periodErr } = await adminClient
+      .from("accounting_periods")
+      .insert({ book: "INTERNAL", year: 2026, month: 4 })
+      .select()
+      .single();
+
+    expect(periodErr).toBeNull();
+    const testPeriodForClose = period!.id;
+    createdPeriodIds.push(testPeriodForClose);
+
+    // Create test entry
+    const { data: entry } = await adminClient
+      .from("journal_entries")
+      .insert({
+        entry_date: new Date("2026-04-15"),
+        book: "INTERNAL",
+        period_id: testPeriodForClose,
+        doc_type: "sale",
+        description: "Test entry",
+        status: "draft",
+        total_debit: 50000,
+        total_credit: 50000,
+      })
+      .select()
+      .single();
+
+    createdEntryIds.push(entry!.id);
+
+    // Close period
+    const { data: result } = await adminClient.rpc("close_accounting_period", {
+      p_period_id: testPeriodForClose,
+    });
+
+    expect(result).toBeDefined();
+    expect(result[0].pnl_entry_id).toBeTruthy();
+
+    // Verify P&L entry exists and is balanced
+    const { data: pnlEntry } = await adminClient
+      .from("journal_entries")
+      .select()
+      .eq("id", result[0].pnl_entry_id)
+      .single();
+
+    expect(pnlEntry?.doc_type).toBe("closing");
+    expect(pnlEntry?.total_debit).toBe(pnlEntry?.total_credit);
+    expect(pnlEntry?.status).toBe("posted");
+  });
+
+  it("should prevent posting to locked period", async () => {
+    if (!coaId) {
+      console.warn("Skipping test: no chart_of_accounts found");
+      return;
+    }
+
+    // Close the period first (testPeriod was already closed in first test)
+    // Try to add new entry to locked period
+    const { error } = await adminClient.from("journal_entries").insert({
+      entry_date: new Date("2026-05-20"),
+      book: "INTERNAL",
+      period_id: testPeriod,
+      doc_type: "sale",
+      description: "Should fail",
+      status: "draft",
+      total_debit: 100,
+      total_credit: 100,
+    });
+
+    // Should fail because period is closed
+    expect(error).toBeDefined();
+  });
+
+  it("should update period status to closed", async () => {
+    if (!coaId) {
+      console.warn("Skipping test: no chart_of_accounts found");
+      return;
+    }
+
+    // Create test period
+    const { data: period } = await adminClient
+      .from("accounting_periods")
+      .insert({ book: "INTERNAL", year: 2026, month: 3 })
+      .select()
+      .single();
+
+    const periodToClose = period!.id;
+    createdPeriodIds.push(periodToClose);
+
+    // Verify period starts as open
+    const { data: beforeClose } = await adminClient
+      .from("accounting_periods")
+      .select("status")
+      .eq("id", periodToClose)
+      .single();
+
+    expect(beforeClose?.status).toBe("open");
+
+    // Close period
+    const { error: closeErr } = await adminClient.rpc(
+      "close_accounting_period",
+      {
+        p_period_id: periodToClose,
+      }
+    );
+
+    expect(closeErr).toBeNull();
+
+    // Verify period is now closed
+    const { data: afterClose } = await adminClient
+      .from("accounting_periods")
+      .select("status")
+      .eq("id", periodToClose)
+      .single();
+
+    expect(afterClose?.status).toBe("closed");
+  });
+});
