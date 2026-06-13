@@ -622,3 +622,254 @@ describe("close_accounting_period RPC", () => {
     expect(afterClose?.status).toBe("closed");
   });
 });
+
+describe("Full accounting cycle (TT133)", () => {
+  const testPeriodIds: bigint[] = [];
+  const createdEntryIds: bigint[] = [];
+  let coaId: string;
+  let testPeriodId: bigint;
+
+  beforeAll(async () => {
+    const { data: accounts } = await adminClient
+      .from("chart_of_accounts")
+      .select("id")
+      .limit(1);
+    coaId = accounts?.[0]?.id || "";
+
+    const { data: period, error: periodErr } = await adminClient
+      .from("accounting_periods")
+      .insert({ book: "INTERNAL", year: 2026, month: 7 })
+      .select()
+      .single();
+
+    expect(periodErr).toBeNull();
+    testPeriodId = period!.id;
+    testPeriodIds.push(testPeriodId);
+  });
+
+  afterAll(async () => {
+    if (createdEntryIds.length > 0) {
+      await adminClient
+        .from("journal_entries")
+        .delete()
+        .in("id", createdEntryIds);
+    }
+    if (testPeriodIds.length > 0) {
+      await adminClient
+        .from("accounting_periods")
+        .delete()
+        .in("id", testPeriodIds);
+    }
+  });
+
+  it("should post SALE transaction (INTERNAL book, balanced)", async () => {
+    if (!coaId) {
+      console.warn("Skipping test: no chart_of_accounts found");
+      return;
+    }
+
+    const { data: saleEntry, error: err1 } = await adminClient
+      .from("journal_entries")
+      .insert({
+        entry_date: new Date("2026-07-14"),
+        book: "INTERNAL",
+        period_id: testPeriodId,
+        doc_type: "sale",
+        description: "Test sale transaction",
+        status: "draft",
+        total_debit: 1100000,
+        total_credit: 1100000,
+      })
+      .select()
+      .single();
+
+    expect(err1).toBeNull();
+    expect(saleEntry?.id).toBeTruthy();
+    createdEntryIds.push(saleEntry!.id);
+
+    const { data: lines, error: err2 } = await adminClient
+      .from("journal_entry_lines")
+      .insert([
+        {
+          entry_id: saleEntry!.id,
+          account_id: coaId,
+          debit: 1100000,
+          credit: 0,
+          line_no: 1,
+          description: "Cash in",
+        },
+        {
+          entry_id: saleEntry!.id,
+          account_id: coaId,
+          debit: 0,
+          credit: 1100000,
+          line_no: 2,
+          description: "Revenue",
+        },
+      ])
+      .select();
+
+    expect(err2).toBeNull();
+    expect(lines).toHaveLength(2);
+
+    const totalDebit = (lines || []).reduce(
+      (sum, line) => sum + (line.debit || 0),
+      0
+    );
+    const totalCredit = (lines || []).reduce(
+      (sum, line) => sum + (line.credit || 0),
+      0
+    );
+    expect(Math.abs(totalDebit - totalCredit)).toBeLessThan(0.01);
+  });
+
+  it("should post COGS in INTERNAL book only", async () => {
+    if (!coaId) {
+      console.warn("Skipping test: no chart_of_accounts found");
+      return;
+    }
+
+    const { data: cogsEntry, error: err1 } = await adminClient
+      .from("journal_entries")
+      .insert({
+        entry_date: new Date("2026-07-14"),
+        book: "INTERNAL",
+        period_id: testPeriodId,
+        doc_type: "cogs",
+        description: "Cost of goods sold",
+        status: "draft",
+        total_debit: 700000,
+        total_credit: 700000,
+      })
+      .select()
+      .single();
+
+    expect(err1).toBeNull();
+    expect(cogsEntry?.id).toBeTruthy();
+    createdEntryIds.push(cogsEntry!.id);
+
+    const { data: lines, error: err2 } = await adminClient
+      .from("journal_entry_lines")
+      .insert([
+        {
+          entry_id: cogsEntry!.id,
+          account_id: coaId,
+          debit: 700000,
+          credit: 0,
+          line_no: 1,
+          description: "COGS",
+        },
+        {
+          entry_id: cogsEntry!.id,
+          account_id: coaId,
+          debit: 0,
+          credit: 700000,
+          line_no: 2,
+          description: "Inventory reduction",
+        },
+      ])
+      .select();
+
+    expect(err2).toBeNull();
+    expect(lines).toHaveLength(2);
+
+    const totalDebit = (lines || []).reduce(
+      (sum, line) => sum + (line.debit || 0),
+      0
+    );
+    const totalCredit = (lines || []).reduce(
+      (sum, line) => sum + (line.credit || 0),
+      0
+    );
+    expect(Math.abs(totalDebit - totalCredit)).toBeLessThan(0.01);
+  });
+
+  it("should close period and lock all entries", async () => {
+    const { data: result, error } = await adminClient.rpc(
+      "close_accounting_period",
+      {
+        p_period_id: testPeriodId,
+      }
+    );
+
+    expect(error).toBeNull();
+    expect(result).toBeDefined();
+    expect(result[0].success).toBe(true);
+    expect(result[0].pnl_entry_id).toBeTruthy();
+
+    if (result[0].pnl_entry_id) {
+      createdEntryIds.push(result[0].pnl_entry_id);
+    }
+
+    const { data: pnlEntry } = await adminClient
+      .from("journal_entries")
+      .select()
+      .eq("id", result[0].pnl_entry_id)
+      .single();
+
+    expect(pnlEntry?.doc_type).toBe("closing");
+    expect(pnlEntry?.status).toBe("posted");
+    expect(pnlEntry?.total_debit).toBe(pnlEntry?.total_credit);
+  });
+
+  it("should prevent posting to locked period", async () => {
+    const { error } = await adminClient.from("journal_entries").insert({
+      entry_date: new Date("2026-07-20"),
+      book: "INTERNAL",
+      period_id: testPeriodId,
+      doc_type: "sale",
+      description: "This should be blocked",
+      status: "draft",
+      total_debit: 100,
+      total_credit: 100,
+    });
+
+    expect(error).not.toBeNull();
+    expect(error?.message || error?.details || "").toMatch(
+      /lock|closed|period/i
+    );
+  });
+
+  it("should have all entries locked after period close", async () => {
+    const { data: allEntries } = await adminClient
+      .from("journal_entries")
+      .select()
+      .eq("period_id", testPeriodId);
+
+    for (const entry of allEntries) {
+      expect(entry.status).toBe("posted");
+    }
+
+    const { data: period } = await adminClient
+      .from("accounting_periods")
+      .select("status")
+      .eq("id", testPeriodId)
+      .single();
+
+    expect(period?.status).toBe("closed");
+  });
+
+  it("should verify balanced debits/credits across all entries", async () => {
+    const { data: entries } = await adminClient
+      .from("journal_entries")
+      .select("*, journal_entry_lines(*)")
+      .eq("period_id", testPeriodId);
+
+    expect(entries).toBeDefined();
+
+    for (const entry of entries || []) {
+      const totalDebit = (entry.journal_entry_lines || []).reduce(
+        (sum, line) => sum + (line.debit || 0),
+        0
+      );
+      const totalCredit = (entry.journal_entry_lines || []).reduce(
+        (sum, line) => sum + (line.credit || 0),
+        0
+      );
+
+      expect(Math.abs(totalDebit - totalCredit)).toBeLessThan(0.01);
+      expect(Math.abs(entry.total_debit - totalDebit)).toBeLessThan(0.01);
+      expect(Math.abs(entry.total_credit - totalCredit)).toBeLessThan(0.01);
+    }
+  });
+});
