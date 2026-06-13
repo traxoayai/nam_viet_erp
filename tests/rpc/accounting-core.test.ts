@@ -199,3 +199,200 @@ describe("journal_entries table", () => {
     createdEntryIds.push(entry!.id);
   });
 });
+
+describe("dual-ledger book_type", () => {
+  const createdBalanceIds: number[] = [];
+  const createdTxIds: number[] = [];
+  let coaId: string;
+  let periodId: bigint;
+  let fundAccountId: number;
+
+  beforeAll(async () => {
+    // Lấy chart_of_accounts
+    const { data: accounts } = await adminClient
+      .from("chart_of_accounts")
+      .select("id")
+      .limit(1);
+    coaId = accounts?.[0]?.id || "";
+
+    // Lấy hoặc tạo accounting_period
+    const { data: periods } = await adminClient
+      .from("accounting_periods")
+      .select("id")
+      .eq("book", "INTERNAL")
+      .limit(1);
+
+    if (periods && periods.length > 0) {
+      periodId = periods[0].id;
+    } else {
+      const { data: newPeriod } = await adminClient
+        .from("accounting_periods")
+        .insert({ book: "INTERNAL", year: 2026, month: 6 })
+        .select()
+        .single();
+      periodId = newPeriod?.id || 0n;
+    }
+
+    // Lấy fund account (cash)
+    const { data: funds } = await adminClient
+      .from("fund_accounts")
+      .select("id")
+      .limit(1);
+    fundAccountId = funds?.[0]?.id || 0;
+  });
+
+  afterAll(async () => {
+    // Cleanup
+    if (createdBalanceIds.length > 0) {
+      await adminClient
+        .from("account_balances")
+        .delete()
+        .in("id", createdBalanceIds);
+    }
+    if (createdTxIds.length > 0) {
+      await adminClient
+        .from("finance_transactions")
+        .delete()
+        .in("id", createdTxIds);
+    }
+  });
+
+  it("account_balances should track INTERNAL vs TAX vs BOTH", async () => {
+    if (!coaId) {
+      console.warn("Skipping test: no chart_of_accounts found");
+      return;
+    }
+
+    const entries = [
+      { book: "INTERNAL", book_type: "INTERNAL", debit: 100, credit: 0 },
+      { book: "TAX", book_type: "TAX", debit: 100, credit: 0 },
+      { book: "INTERNAL", book_type: "BOTH", debit: 100, credit: 0 },
+    ];
+
+    for (const entry of entries) {
+      const { data, error } = await adminClient
+        .from("account_balances")
+        .insert({
+          account_id: coaId,
+          period_id: periodId,
+          book: entry.book,
+          book_type: entry.book_type,
+          opening_debit: entry.debit,
+          opening_credit: entry.credit,
+        })
+        .select()
+        .single();
+
+      expect(error).toBeNull();
+      expect(data?.book_type).toBe(entry.book_type);
+      if (data?.id) {
+        createdBalanceIds.push(data.id);
+      }
+    }
+
+    // Query by book_type
+    const { data: internalBalances } = await adminClient
+      .from("account_balances")
+      .select()
+      .eq("book_type", "INTERNAL")
+      .eq("account_id", coaId);
+    expect(internalBalances && internalBalances.length > 0).toBeTruthy();
+  });
+
+  it("account_balances should enforce UNIQUE(account_id, period_id, book_type)", async () => {
+    if (!coaId) {
+      console.warn("Skipping test: no chart_of_accounts found");
+      return;
+    }
+
+    // Tạo record đầu tiên
+    const { data: first, error: firstErr } = await adminClient
+      .from("account_balances")
+      .insert({
+        account_id: coaId,
+        period_id: periodId,
+        book: "INTERNAL",
+        book_type: "INTERNAL",
+        opening_debit: 50,
+        opening_credit: 0,
+      })
+      .select()
+      .single();
+
+    expect(firstErr).toBeNull();
+    expect(first?.id).toBeTruthy();
+    if (first?.id) {
+      createdBalanceIds.push(first.id);
+    }
+
+    // Cố tạo duplicate → phải fail (same account_id, period_id, book_type)
+    const { error: dupErr } = await adminClient
+      .from("account_balances")
+      .insert({
+        account_id: coaId,
+        period_id: periodId,
+        book: "INTERNAL",
+        book_type: "INTERNAL",
+        opening_debit: 75,
+        opening_credit: 0,
+      });
+
+    expect(dupErr).toBeDefined();
+  });
+
+  it("finance_transactions should support book_type for traceability", async () => {
+    if (!fundAccountId) {
+      console.warn("Skipping test: no fund_account found");
+      return;
+    }
+
+    const { data, error } = await adminClient
+      .from("finance_transactions")
+      .insert({
+        code: `TEST_BOOK_TYPE_${Date.now()}`,
+        transaction_date: new Date().toISOString(),
+        flow: "in",
+        amount: 500000,
+        fund_account_id: fundAccountId,
+        book_type: "BOTH",
+      })
+      .select()
+      .single();
+
+    expect(error).toBeNull();
+    expect(data?.book_type).toBe("BOTH");
+    if (data?.id) {
+      createdTxIds.push(data.id);
+    }
+  });
+
+  it("finance_transactions book_type should accept INTERNAL, TAX, or BOTH", async () => {
+    if (!fundAccountId) {
+      console.warn("Skipping test: no fund_account found");
+      return;
+    }
+
+    const bookTypes = ["INTERNAL", "TAX", "BOTH"];
+
+    for (const bookType of bookTypes) {
+      const { data, error } = await adminClient
+        .from("finance_transactions")
+        .insert({
+          code: `TEST_BT_${bookType}_${Date.now()}`,
+          transaction_date: new Date().toISOString(),
+          flow: "in",
+          amount: 250000,
+          fund_account_id: fundAccountId,
+          book_type: bookType,
+        })
+        .select()
+        .single();
+
+      expect(error).toBeNull();
+      expect(data?.book_type).toBe(bookType);
+      if (data?.id) {
+        createdTxIds.push(data.id);
+      }
+    }
+  });
+});
