@@ -69,7 +69,6 @@ const WarehouseOutboundDetailPage = () => {
 
   useEffect(() => {
     if (id) fetchDetail(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchDetail = async (orderId: string) => {
@@ -385,7 +384,7 @@ const WarehouseOutboundDetailPage = () => {
   return (
     <div
       style={{
-        padding: screens.md ? 8 : 12,
+        padding: screens.md ? 24 : 12,
         paddingBottom: 100,
         background: "#f5f5f5",
         minHeight: "100vh",
@@ -625,7 +624,7 @@ const WarehouseOutboundDetailPage = () => {
       <Affix offsetBottom={0}>
         <div
           style={{
-            padding: "12px 24px",
+            padding: screens.md ? "16px 24px" : "12px 16px",
             background: "#fff",
             boxShadow: "0 -2px 8px rgba(0,0,0,0.1)",
             display: "flex",
@@ -647,10 +646,15 @@ const WarehouseOutboundDetailPage = () => {
               ghost
               icon={<Printer size={16} />}
               onClick={() => printOrder({ id: orderInfo.id })}
+              style={{ width: screens.xs ? "100%" : "auto" }}
             >
               In Đơn
             </Button>
-            <Button icon={<Printer size={16} />} onClick={handlePrintPicking}>
+            <Button
+              icon={<Printer size={16} />}
+              onClick={handlePrintPicking}
+              style={{ width: screens.xs ? "100%" : "auto" }}
+            >
               In phiếu nhặt
             </Button>
             <Space.Compact style={{ width: screens.xs ? "100%" : "auto" }}>
@@ -674,7 +678,11 @@ const WarehouseOutboundDetailPage = () => {
           <Space style={{ flexWrap: "wrap" }}>
             {isConfirmed ? (
               <>
-                <Button icon={<Save size={16} />} onClick={handleSaveDraft}>
+                <Button
+                  icon={<Save size={16} />}
+                  onClick={handleSaveDraft}
+                  style={{ width: screens.xs ? "100%" : "auto" }}
+                >
                   Lưu nháp
                 </Button>
                 <Button
@@ -682,6 +690,7 @@ const WarehouseOutboundDetailPage = () => {
                   icon={<CheckCircle size={16} />}
                   onClick={handleCompletePacking}
                   loading={submitting}
+                  style={{ width: screens.xs ? "100%" : "auto" }}
                 >
                   Đóng Gói (Trừ Kho)
                 </Button>
@@ -694,6 +703,7 @@ const WarehouseOutboundDetailPage = () => {
                 icon={<Truck size={16} />}
                 onClick={handleHandover}
                 loading={submitting}
+                style={{ width: screens.xs ? "100%" : "auto" }}
               >
                 Giao Vận Chuyển
               </Button>

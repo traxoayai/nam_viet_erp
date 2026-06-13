@@ -61,7 +61,12 @@ type ReceivedBatchRecord = InboundDetailItem & {
 // [FIX] Utility function to safely parse dates that might be in DD/MM/YYYY format
 const parseDateString = (dateStr?: string) => {
   if (!dateStr) return null;
-  const parsed = dayjs(dateStr, ["DD/MM/YYYY", "YYYY-MM-DDTHH:mm:ss.SSSZ", "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ssZ"]);
+  const parsed = dayjs(dateStr, [
+    "DD/MM/YYYY",
+    "YYYY-MM-DDTHH:mm:ss.SSSZ",
+    "YYYY-MM-DD",
+    "YYYY-MM-DDTHH:mm:ssZ",
+  ]);
   return parsed.isValid() ? parsed : dayjs(dateStr);
 };
 
@@ -414,7 +419,9 @@ const WarehouseReceiptPage = () => {
                   <span style={{ fontSize: 11 }}>
                     <b>HSD:</b>{" "}
                     {batch.expiry_date
-                      ? parseDateString(batch.expiry_date)?.format("DD/MM/YY") || "N/A"
+                      ? parseDateString(batch.expiry_date)?.format(
+                          "DD/MM/YY"
+                        ) || "N/A"
                       : "N/A"}{" "}
                     - ({batch.quantity} {record.unit})
                   </span>
@@ -579,14 +586,14 @@ const WarehouseReceiptPage = () => {
                   return false; // ngăn upload mặc định, hook tự upload qua storage
                 }}
               >
-                <Button 
+                <Button
                   type="primary"
-                  icon={<Upload size={16} />} 
+                  icon={<Upload size={16} />}
                   loading={isDocScanning}
-                  style={{ 
-                    background: 'linear-gradient(90deg, #1890ff, #722ed1)', 
-                    borderColor: 'transparent',
-                    boxShadow: '0 2px 4px rgba(114, 46, 209, 0.2)'
+                  style={{
+                    background: "linear-gradient(90deg, #1890ff, #722ed1)",
+                    borderColor: "transparent",
+                    boxShadow: "0 2px 4px rgba(114, 46, 209, 0.2)",
                   }}
                 >
                   Upload Hóa Đơn / Phiếu Xuất
@@ -598,7 +605,11 @@ const WarehouseReceiptPage = () => {
       </Card>
 
       {/* MAIN TABLE */}
-      <Card bodyStyle={{ padding: screens.md ? 0 : 8 }} bordered={false} style={{ background: "transparent" }}>
+      <Card
+        bodyStyle={{ padding: screens.md ? 0 : 8 }}
+        bordered={false}
+        style={{ background: "transparent" }}
+      >
         {screens.md ? (
           <Table
             columns={columns}
@@ -631,17 +642,27 @@ const WarehouseReceiptPage = () => {
               }
 
               return (
-                <Card 
-                  size="small" 
-                  style={{ 
-                    marginBottom: 12, 
-                    borderLeft: `4px solid ${tagColor === 'success' ? '#52c41a' : tagColor === 'warning' ? '#faad14' : tagColor === 'error' ? '#ff4d4f' : '#d9d9d9'}`,
+                <Card
+                  size="small"
+                  style={{
+                    marginBottom: 12,
+                    borderLeft: `4px solid ${tagColor === "success" ? "#52c41a" : tagColor === "warning" ? "#faad14" : tagColor === "error" ? "#ff4d4f" : "#d9d9d9"}`,
                     borderRadius: 8,
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
                   }}
-                  className={String(item.product_id) === highlightedKey ? "flash-row" : ""}
+                  className={
+                    String(item.product_id) === highlightedKey
+                      ? "flash-row"
+                      : ""
+                  }
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                    }}
+                  >
                     <Space>
                       <Tag color="geekblue" style={{ margin: 0 }}>
                         {item.shelf_location || "N/A"}
@@ -649,8 +670,14 @@ const WarehouseReceiptPage = () => {
                     </Space>
                     <Tag color={tagColor}>{tagText}</Tag>
                   </div>
-                  
-                  <Space style={{ marginBottom: 12, alignItems: 'flex-start', width: '100%' }}>
+
+                  <Space
+                    style={{
+                      marginBottom: 12,
+                      alignItems: "flex-start",
+                      width: "100%",
+                    }}
+                  >
                     <div
                       style={{
                         width: 48,
@@ -660,30 +687,62 @@ const WarehouseReceiptPage = () => {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        overflow: 'hidden'
+                        overflow: "hidden",
                       }}
                     >
                       {item.image_url ? (
-                        <img src={item.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <img
+                          src={item.image_url}
+                          alt=""
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
                       ) : (
                         <Package size={24} color="#ccc" />
                       )}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <Text strong style={{ fontSize: 15 }}>{item.product_name}</Text>
+                      <Text strong style={{ fontSize: 15 }}>
+                        {item.product_name}
+                      </Text>
                       <br />
                       <Text type="secondary">{item.sku}</Text>
                     </div>
                   </Space>
 
                   {/* Quantity Block */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f5f5f5', padding: '8px 12px', borderRadius: 6, marginBottom: 8 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: "#f5f5f5",
+                      padding: "8px 12px",
+                      borderRadius: 6,
+                      marginBottom: 8,
+                    }}
+                  >
                     <div>
-                      <Text type="secondary" style={{ fontSize: 12 }}>Cần nhập</Text>
-                      <div style={{ fontSize: 16, fontWeight: 'bold' }}>{remains} <Text type="secondary" style={{ fontSize: 13, fontWeight: 'normal' }}>{item.unit}</Text></div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Cần nhập
+                      </Text>
+                      <div style={{ fontSize: 16, fontWeight: "bold" }}>
+                        {remains}{" "}
+                        <Text
+                          type="secondary"
+                          style={{ fontSize: 13, fontWeight: "normal" }}
+                        >
+                          {item.unit}
+                        </Text>
+                      </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>Nhập Đợt Này</Text>
+                    <div style={{ textAlign: "right" }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Nhập Đợt Này
+                      </Text>
                       <div id={`qty-input-${item.product_id}`}>
                         <InputNumber
                           min={0}
@@ -703,10 +762,18 @@ const WarehouseReceiptPage = () => {
 
                   {/* Lot / Date Block */}
                   {item.stock_management_type === "lot_date" && input > 0 && (
-                    <div style={{ background: '#e6f7ff', padding: '8px 12px', borderRadius: 6 }}>
+                    <div
+                      style={{
+                        background: "#e6f7ff",
+                        padding: "8px 12px",
+                        borderRadius: 6,
+                      }}
+                    >
                       <Row gutter={[8, 8]}>
                         <Col span={12}>
-                          <Text type="secondary" style={{ fontSize: 12 }}>Số Lô</Text>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            Số Lô
+                          </Text>
                           <Input
                             placeholder="Số lô..."
                             value={item.input_lot}
@@ -720,7 +787,9 @@ const WarehouseReceiptPage = () => {
                           />
                         </Col>
                         <Col span={12}>
-                          <Text type="secondary" style={{ fontSize: 12 }}>Hạn sử dụng</Text>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            Hạn sử dụng
+                          </Text>
                           <DatePicker
                             style={{ width: "100%" }}
                             placeholder="HSD"
@@ -730,7 +799,7 @@ const WarehouseReceiptPage = () => {
                                 ? dayjs(item.input_expiry, [
                                     "DD/MM/YYYY",
                                     "YYYY-MM-DD",
-                                    "YYYY-MM-DDTHH:mm:ss.SSSZ"
+                                    "YYYY-MM-DDTHH:mm:ss.SSSZ",
                                   ])
                                 : null
                             }
@@ -759,27 +828,41 @@ const WarehouseReceiptPage = () => {
       <Affix offsetBottom={0}>
         <div
           style={{
-            padding: "16px 24px",
+            padding: screens.md ? "16px 24px" : "12px 16px",
             background: "#fff",
             boxShadow: "0 -2px 10px rgba(0,0,0,0.05)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px",
             borderTop: "1px solid #f0f0f0",
+            zIndex: 999,
           }}
         >
-          <Button icon={<Printer size={16} />} onClick={handlePrintPutaway}>
+          <Button
+            icon={<Printer size={16} />}
+            onClick={handlePrintPutaway}
+            style={{ minWidth: screens.xs ? "100%" : "auto" }}
+          >
             In Phiếu Xếp Kệ
           </Button>
 
-          <Space>
-            <Button onClick={() => navigate("/inventory/inbound")}>
+          <Space wrap style={{ flex: 1, justifyContent: "flex-end" }}>
+            <Button
+              onClick={() => navigate("/inventory/inbound")}
+              style={{ width: screens.xs ? "100%" : "auto" }}
+            >
               Thoát
             </Button>
             <Button
               onClick={handleSaveDraft}
               disabled={isDone}
-              style={{ borderColor: "#faad14", color: "#faad14" }}
+              style={{
+                borderColor: "#faad14",
+                color: "#faad14",
+                width: screens.xs ? "100%" : "auto",
+              }}
             >
               Lưu Nháp (F3)
             </Button>
@@ -789,9 +872,10 @@ const WarehouseReceiptPage = () => {
               size="large"
               onClick={handleSubmit}
               loading={isSubmitting}
-              disabled={isDone} // [NEW] Sử dụng biến isDone
+              disabled={isDone}
+              style={{ width: screens.xs ? "100%" : "auto" }}
             >
-              Hoàn tất Nhập Kho
+              Hoàn tát Nhập Kho
             </Button>
             <Button
               type="default"
@@ -801,6 +885,7 @@ const WarehouseReceiptPage = () => {
                 detail.po_info.status !== "pending" &&
                 detail.po_info.status !== "partial"
               }
+              style={{ width: screens.xs ? "100%" : "auto" }}
             >
               Phân bổ chi phí
             </Button>
