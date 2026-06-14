@@ -1,8 +1,13 @@
 ﻿/**
  * Invoice Form with Multi-VAT support per line item
  * Supports discount, fee, and VAT calculation (0%, 5%, 10%)
+ * Includes upload section to extract invoice data
  */
-import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
 import {
   Form,
   Card,
@@ -14,6 +19,8 @@ import {
   DatePicker,
   Typography,
   message,
+  Upload,
+  Spin,
 } from "antd";
 import dayjs from "dayjs";
 import React, { useState } from "react";
@@ -25,6 +32,8 @@ import type {
   VatRate,
 } from "@/features/finance/types/invoiceTypes";
 
+import { validateInvoiceDiscounts } from "@/features/finance/api/invoiceValidationService";
+import { useInvoiceExtraction } from "@/features/finance/hooks/useInvoiceExtraction";
 import { calculateInvoiceSummary } from "@/features/finance/utils/invoiceLineCalculations";
 
 const { Text } = Typography;
@@ -44,6 +53,30 @@ export default function InvoiceMultiVatForm({
   const [lines, setLines] = useState<InvoiceLineItem[]>(
     initialData?.items || []
   );
+  const { uploadAndExtract, loading: extracting } = useInvoiceExtraction();
+
+  const handleUploadInvoice = async (file: File) => {
+    // Build product lookup map (from invoice db or user's product list)
+    const productLookup: Record<string, number> = {};
+    // TODO: Populate from actual product database
+
+    const extracted = await uploadAndExtract(file, productLookup);
+    if (extracted?.items && extracted.items.length > 0) {
+      // Autofill form fields
+      form.setFieldsValue({
+        customer_name: extracted.customer_name || "",
+        invoice_number: extracted.invoice_number || "",
+      });
+      // Set items
+      setLines(extracted.items);
+      message.success("Tải hóa đơn thành công! Vui lòng kiểm tra và xác nhận.");
+    } else {
+      message.warning(
+        "Không lấy được dữ liệu từ hóa đơn. Vui lòng nhập thủ công."
+      );
+    }
+    return false; // Prevent default upload
+  };
 
   const addLine = () => {
     setLines([
@@ -81,9 +114,39 @@ export default function InvoiceMultiVatForm({
     }
 
     try {
+      // Build items_json for validation
+      const itemsJson = {
+        lines: lines.map((line) => {
+          const calc = calculateLine(line);
+          return {
+            product_id: line.product_id,
+            product_name: line.product_name,
+            quantity: line.quantity,
+            unit_price: line.unit_price,
+            discount_amount: line.discount_amount || 0,
+            vat_rate: line.vat_rate,
+            vat_amount: calc.tax,
+            line_total: calc.total,
+          };
+        }),
+      };
+
+      // Validate discount caps before submission
+      const discountTotal = values.discount_total || 0;
+      const validationResult = await validateInvoiceDiscounts(
+        itemsJson,
+        discountTotal
+      );
+      if (!validationResult.valid) {
+        message.error(
+          validationResult.error || "Chiết khấu vượt quá giới hạn cho phép"
+        );
+        return; // Stop submission
+      }
+
       const summary = calculateInvoiceSummary(
         lines,
-        values.discount_total || 0,
+        discountTotal,
         values.fee_total || 0
       );
 
@@ -93,22 +156,8 @@ export default function InvoiceMultiVatForm({
         customer_name: values.customer_name,
         customer_tax_code: values.customer_tax_code,
         customer_address: values.customer_address,
-        items_json: {
-          lines: lines.map((line) => {
-            const calc = calculateLine(line);
-            return {
-              product_id: line.product_id,
-              product_name: line.product_name,
-              quantity: line.quantity,
-              unit_price: line.unit_price,
-              discount_amount: line.discount_amount || 0,
-              vat_rate: line.vat_rate,
-              vat_amount: calc.tax,
-              line_total: calc.total,
-            };
-          }),
-        },
-        discount_total: values.discount_total || 0,
+        items_json: itemsJson,
+        discount_total: discountTotal,
         fee_total: values.fee_total || 0,
         notes: values.notes,
         summary,
@@ -275,6 +324,24 @@ export default function InvoiceMultiVatForm({
       </Card>
 
       <Card title="2. Chi Tiết Dòng Hàng" style={{ marginTop: 16 }}>
+        {/* Upload Section */}
+        <Spin spinning={extracting}>
+          <Upload
+            beforeUpload={handleUploadInvoice}
+            accept=".pdf,.jpg,.jpeg,.png"
+            maxCount={1}
+            style={{ marginBottom: 16 }}
+          >
+            <Button
+              icon={<UploadOutlined />}
+              loading={extracting}
+              disabled={extracting}
+            >
+              Tải hóa đơn (PDF/Ảnh)
+            </Button>
+          </Upload>
+        </Spin>
+
         <Table
           dataSource={lines}
           columns={columns}
