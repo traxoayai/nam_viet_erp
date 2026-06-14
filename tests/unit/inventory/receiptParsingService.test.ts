@@ -1,10 +1,10 @@
-// src/features/inventory/api/__tests__/receiptParsingService.unit.test.ts
+// tests/unit/inventory/receiptParsingService.test.ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   receiptParsingService,
   ParsedReceiptData,
   AnalyzeReceiptInvoiceResponse,
-} from "../receiptParsingService";
+} from "@/features/inventory/api/receiptParsingService";
 import * as safeRpcModule from "@/shared/lib/safeRpc";
 
 // Mock safeRpc
