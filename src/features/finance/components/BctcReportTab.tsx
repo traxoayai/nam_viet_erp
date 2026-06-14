@@ -1,4 +1,8 @@
-import { DownloadOutlined } from "@ant-design/icons";
+import {
+  DownloadOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+} from "@ant-design/icons";
 import {
   Card,
   Tabs,
@@ -9,6 +13,8 @@ import {
   Select,
   Empty,
   Spin,
+  Alert,
+  Tag,
 } from "antd";
 import dayjs from "dayjs";
 import { useState } from "react";
@@ -17,11 +23,13 @@ import {
   useBctcReport,
   exportBctcBalanceSheetPdf,
 } from "../hooks/useBctcReport";
+import { useReconciliationReport } from "../hooks/useReconciliationReport";
 
 import type {
   BalanceSheetRow,
   VatDeclarationRow,
 } from "../api/financialReportsService";
+import type { ReconciliationReportRow } from "../api/reconciliationService";
 import type { TableColumnsType } from "antd";
 
 interface BctcReportTabProps {
@@ -41,11 +49,21 @@ export default function BctcReportTab({
 }: BctcReportTabProps) {
   const [selectedYear, setSelectedYear] = useState(year);
   const [selectedMonth, setSelectedMonth] = useState(month);
+  const [selectedBook, setSelectedBook] = useState<"INTERNAL" | "TAX">(
+    "INTERNAL"
+  );
 
   const { balanceSheet, vatDeclaration, cashFlow, isLoading } = useBctcReport({
     year: selectedYear,
     month: selectedMonth,
   });
+
+  const { data: reconciliationData, isLoading: reconIsLoading } =
+    useReconciliationReport({
+      periodYear: selectedYear,
+      periodMonth: selectedMonth,
+      book: selectedBook,
+    });
 
   const handleDateChange = (date: dayjs.Dayjs | null) => {
     if (date) {
@@ -88,6 +106,65 @@ export default function BctcReportTab({
     },
   ];
 
+  // ─── Reconciliation columns ────────────────────────────────────────────────
+
+  const reconColumns: TableColumnsType<ReconciliationReportRow> = [
+    {
+      title: "Tài Khoản",
+      dataIndex: "account_code",
+      key: "account_code",
+      width: "15%",
+      align: "center",
+    },
+    {
+      title: "Tên Tài Khoản",
+      dataIndex: "account_name",
+      key: "account_name",
+      width: "30%",
+    },
+    {
+      title: "Số Dư GL (VND)",
+      dataIndex: "gl_balance",
+      key: "gl_balance",
+      width: "18%",
+      align: "right",
+      render: (text: number) =>
+        text?.toLocaleString("vi-VN", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        }) ?? "0",
+    },
+    {
+      title: "Số Dư BS (VND)",
+      dataIndex: "bs_balance",
+      key: "bs_balance",
+      width: "18%",
+      align: "right",
+      render: (text: number) =>
+        text?.toLocaleString("vi-VN", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        }) ?? "0",
+    },
+    {
+      title: "Trạng Thái",
+      dataIndex: "is_reconciled",
+      key: "is_reconciled",
+      width: "12%",
+      align: "center",
+      render: (reconciled: boolean) =>
+        reconciled ? (
+          <Tag icon={<CheckCircleOutlined />} color="success">
+            Hòa trộn
+          </Tag>
+        ) : (
+          <Tag icon={<ExclamationCircleOutlined />} color="error">
+            Chênh lệch
+          </Tag>
+        ),
+    },
+  ];
+
   // ─── VAT Declaration columns ────────────────────────────────────────────────
 
   const vatColumns: TableColumnsType<VatDeclarationRow> = [
@@ -126,6 +203,12 @@ export default function BctcReportTab({
 
   // ─── Tab items ───────────────────────────────────────────────────────────────
 
+  const reconSummary = {
+    total: reconciliationData.length,
+    reconciled: reconciliationData.filter((r) => r.is_reconciled).length,
+    unreconciled: reconciliationData.filter((r) => !r.is_reconciled).length,
+  };
+
   const tabItems = [
     {
       label: "Bảng Cân Đối",
@@ -162,6 +245,63 @@ export default function BctcReportTab({
           ) : (
             <Empty description="Không có dữ liệu" />
           )}
+        </Spin>
+      ),
+    },
+    {
+      label: "Sự Hòa Trộn",
+      key: "reconciliation",
+      children: (
+        <Spin spinning={reconIsLoading}>
+          <Space
+            direction="vertical"
+            style={{ width: "100%", marginBottom: "16px" }}
+            size="large"
+          >
+            <Select
+              style={{ width: 150 }}
+              value={selectedBook}
+              onChange={(val) => setSelectedBook(val)}
+              options={[
+                { label: "Sổ Thực Tế (Internal)", value: "INTERNAL" },
+                { label: "Sổ Thuế (Tax)", value: "TAX" },
+              ]}
+            />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: "16px",
+              }}
+            >
+              <Alert
+                message={`Tổng TK: ${reconSummary.total}`}
+                type="info"
+                showIcon
+              />
+              <Alert
+                message={`Hòa Trộn: ${reconSummary.reconciled}`}
+                type="success"
+                showIcon
+              />
+              <Alert
+                message={`Chênh Lệch: ${reconSummary.unreconciled}`}
+                type={reconSummary.unreconciled > 0 ? "warning" : "success"}
+                showIcon
+              />
+            </div>
+            {reconciliationData.length > 0 ? (
+              <Table
+                columns={reconColumns}
+                dataSource={reconciliationData}
+                rowKey={(record) => record.account_code}
+                pagination={false}
+                scroll={{ x: 1000 }}
+              />
+            ) : (
+              <Empty description="Không có dữ liệu" />
+            )}
+          </Space>
         </Spin>
       ),
     },
