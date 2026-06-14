@@ -354,7 +354,7 @@ Mỗi unit lưu `product_units` với `unit_type` enum. Hỗ trợ barcode riên
 - `timestamptz/bigint/uuid/date` → `|| null`, KHÔNG BAO GIỜ `|| ""`
 - Chỉ `text/varchar` mới được `|| ""`
 
-### Edge Functions
+### Edge Functions & RPC
 | Function | Mô tả |
 |----------|-------|
 | `scan-product-ai` | Gemini: scan ảnh/PDF SP → JSON |
@@ -365,6 +365,68 @@ Mỗi unit lưu `product_units` với `unit_type` enum. Hỗ trợ barcode riên
 | `webhook-timo` | Timo payment webhook |
 | `notify` | Notification engine (cron) |
 | `approve-registration` | B2B registration approval |
+| **`analyze_receipt_invoice`** | **[NEW] Phân tích hóa đơn/phiếu xuất qua Gemini Vision API** |
+
+### Receipt/Invoice Parsing (Phân Tích Hóa Đơn) — NEW
+
+**Tính năng**: Tự động phân tích ảnh hóa đơn/phiếu xuất, trích xuất nhà cung cấp, số HĐ, ngày, danh sách mặt hàng & số lượng.
+
+**Luồng**:
+1. User upload ảnh hóa đơn ở `WarehouseReceiptPage` (Upload button)
+2. `useReceiptParsing` hook chuyển file → base64
+3. Gọi RPC `analyze_receipt_invoice(base64, mimetype)`
+4. RPC gọi **Gemini Vision API** (v1.5-flash) với prompt structured JSON
+5. Gemini trả fields: `supplier_name`, `receipt_number`, `receipt_date`, `items[]`, `confidence_score`, `errors[]`
+6. UI hiển thị kết quả trong Card (xanh nếu thành công, đỏ nếu lỗi)
+7. Form item table được pre-fill với số lượng từ hóa đơn (manual click hoặc auto-assign qua barcode match)
+
+**RPC Signature**:
+```sql
+analyze_receipt_invoice(
+  p_image_base64 text,     -- Base64-encoded PNG/JPEG
+  p_image_mime_type text   -- "image/png" | "image/jpeg"
+)
+returns jsonb
+```
+
+**Response Structure**:
+```json
+{
+  "supplier_name": "ABC Supplier",
+  "receipt_date": "2026-06-14",
+  "receipt_number": "INV-001",
+  "items": [
+    {
+      "product_name": "Product A",
+      "quantity": 10,
+      "unit_price": 100,
+      "total_price": 1000,
+      "sku": "SKU-A",
+      "confidence": 95
+    }
+  ],
+  "total_amount": 1000,
+  "confidence_score": 95,
+  "errors": ["Any parsing issues..."]
+}
+```
+
+**Hooks & Services**:
+- `useReceiptParsing` (`src/features/inventory/hooks/useReceiptParsing.ts`) — manage file upload, base64 conversion, RPC call, state
+- `receiptParsingService` (`src/features/inventory/api/receiptParsingService.ts`) — RPC wrapper with types
+
+**Integration**:
+- `WarehouseReceiptPage.tsx` — Upload button calls `handleDocUploadWithParsing()`
+- Parse result displayed in Card above item table
+- Confidence score tagged (green ≥80%, orange ≥60%, red <60%)
+
+**Gotchas**:
+- API key via env var `VITE_GEMINI_API_KEY` (must set in `.env.local`)
+- Max file size: 10MB (enforced in hook)
+- MIME type must be `image/png` or `image/jpeg`
+- Gemini response → parse as JSON; if fail → return raw text + low confidence
+- Confidence <50% → show warning, still allow manual override
+- Items confidence stored per-item; overall score = weighted average
 
 ### Shared Components
 - `SmartTable`, `DebounceSelect`, `DebounceCustomerSelect`, `DebounceProductSelect`
