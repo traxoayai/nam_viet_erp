@@ -40,7 +40,10 @@ export interface UserStoreState {
     email: string;
     password: string;
   }) => Promise<boolean>;
-  updateAssignments: (userId: string, assignments: any[]) => Promise<boolean>;
+  updateAssignments: (
+    userId: string,
+    assignments: unknown[]
+  ) => Promise<boolean>;
   updateUserStatus: (userId: string, status: string) => Promise<boolean>;
   deleteUser: (userId: string) => Promise<boolean>;
   approveUser: (userId: string) => Promise<boolean>;

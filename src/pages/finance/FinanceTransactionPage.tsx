@@ -158,7 +158,7 @@ const FinanceTransactionPage = () => {
       key: "amount",
       align: "right" as const,
       width: 150,
-      render: (_: any, record: TransactionRecord) => (
+      render: (_: unknown, record: TransactionRecord) => (
         <span
           style={{
             color: record.flow === "in" ? "#52c41a" : "#f5222d",
@@ -209,7 +209,7 @@ const FinanceTransactionPage = () => {
       width: 200, // Tăng độ rộng một chút
       fixed: "right" as const,
       align: "center" as const,
-      render: (_: any, record: TransactionRecord) => (
+      render: (_: unknown, record: TransactionRecord) => (
         <Space size="small">
           {/* [NEW] Print Button */}
           <Tooltip title="In Phiếu">
@@ -374,10 +374,14 @@ const FinanceTransactionPage = () => {
                 onChange={(val) => logic.setFilters({ flow: val })}
               >
                 <Select.Option value="in">
-                  <Tag color="green" style={{ margin: 0 }}>Phiếu Thu (+)</Tag>
+                  <Tag color="green" style={{ margin: 0 }}>
+                    Phiếu Thu (+)
+                  </Tag>
                 </Select.Option>
                 <Select.Option value="out">
-                  <Tag color="red" style={{ margin: 0 }}>Phiếu Chi (-)</Tag>
+                  <Tag color="red" style={{ margin: 0 }}>
+                    Phiếu Chi (-)
+                  </Tag>
                 </Select.Option>
               </Select>
               <Select

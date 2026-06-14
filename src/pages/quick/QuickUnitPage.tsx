@@ -49,12 +49,12 @@ interface ProductRow {
   sku: string;
   imageUrl?: string;
   actual_cost: number;
-  
+
   base_unit: string; // Đơn vị gốc (Rate luôn = 1)
-  
-  retail_unit: string; 
+
+  retail_unit: string;
   retail_rate: number; // 1 Lẻ = ? Base
-  
+
   wholesale_unit: string;
   wholesale_rate: number; // 1 Sỉ = ? Base
 
@@ -82,7 +82,7 @@ const QuickUnitPage: React.FC = () => {
 
   // Excel Logic State
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
-  const [matchedData, setMatchedData] = useState<any[]>([]);
+  const [matchedData, setMatchedData] = useState<unknown[]>([]);
 
   const debouncedSearch = useDebounce(searchText, 500);
 
@@ -92,7 +92,7 @@ const QuickUnitPage: React.FC = () => {
   }, [debouncedSearch]);
 
   // --- CORE: QUERY PAGE & PAGE CHANGE ---
-  const handleTableChange = (newPagination: any) => {
+  const handleTableChange = (newPagination: unknown) => {
     loadProducts(newPagination.current, newPagination.pageSize);
   };
 
@@ -120,13 +120,19 @@ const QuickUnitPage: React.FC = () => {
       }
 
       // 3. Map dữ liệu DB -> State Table
-      const rows = data.map((p: any) => {
+      const rows = data.map((p: unknown) => {
         const units = p.product_units || [];
 
         // Lấy dữ liệu từ Object con (Trường hợp gọi getAllProductsLite)
-        const baseUnitObj = units.find((u: any) => u.is_base || u.unit_type === "base");
-        const retailUnitObj = units.find((u: any) => !u.is_base && u.unit_type === "retail");
-        const wholesaleUnitObj = units.find((u: any) => !u.is_base && u.unit_type === "wholesale");
+        const baseUnitObj = units.find(
+          (u: unknown) => u.is_base || u.unit_type === "base"
+        );
+        const retailUnitObj = units.find(
+          (u: unknown) => !u.is_base && u.unit_type === "retail"
+        );
+        const wholesaleUnitObj = units.find(
+          (u: unknown) => !u.is_base && u.unit_type === "wholesale"
+        );
 
         return {
           key: p.id,
@@ -135,16 +141,21 @@ const QuickUnitPage: React.FC = () => {
           sku: p.sku,
           imageUrl: p.image_url,
           actual_cost: p.actual_cost || 0,
-          
+
           // [CORE FIX]: Lấy data linh hoạt. Ưu tiên Object con -> sau đó là trường Phẳng từ RPC
           base_unit: baseUnitObj?.unit_name || p.base_unit || "Viên",
-          
+
           retail_unit: retailUnitObj?.unit_name || p.retail_unit || "",
-          retail_rate: retailUnitObj?.conversion_rate || p.retail_conversion_rate || 1,
-          
+          retail_rate:
+            retailUnitObj?.conversion_rate || p.retail_conversion_rate || 1,
+
           wholesale_unit: wholesaleUnitObj?.unit_name || p.wholesale_unit || "",
-          wholesale_rate: wholesaleUnitObj?.conversion_rate || p.wholesale_conversion_rate || p.items_per_carton || 1,
-          
+          wholesale_rate:
+            wholesaleUnitObj?.conversion_rate ||
+            p.wholesale_conversion_rate ||
+            p.items_per_carton ||
+            1,
+
           is_dirty: false,
         };
       });
@@ -177,9 +188,15 @@ const QuickUnitPage: React.FC = () => {
       const currentUnits = currentDetail.units || [];
 
       // Tìm ID cũ để update (tránh mất ID)
-      const oldBaseUnit = currentUnits.find((u: any) => u.unit_type === "base" || u.is_base);
-      const oldRetailUnit = currentUnits.find((u: any) => u.unit_type === "retail" && !u.is_base);
-      const oldWholesaleUnit = currentUnits.find((u: any) => u.unit_type === "wholesale" && !u.is_base);
+      const oldBaseUnit = currentUnits.find(
+        (u: unknown) => u.unit_type === "base" || u.is_base
+      );
+      const oldRetailUnit = currentUnits.find(
+        (u: unknown) => u.unit_type === "retail" && !u.is_base
+      );
+      const oldWholesaleUnit = currentUnits.find(
+        (u: unknown) => u.unit_type === "wholesale" && !u.is_base
+      );
 
       // Tạo Base Unit
       const baseUnitObj = {
@@ -194,32 +211,38 @@ const QuickUnitPage: React.FC = () => {
       };
 
       // Tạo Retail Unit (Nếu có nhập)
-      const retailUnitObj = row.retail_unit ? {
-        id: oldRetailUnit?.id,
-        unit_name: row.retail_unit,
-        unit_type: "retail",
-        conversion_rate: row.retail_rate || 1,
-        is_base: false,
-        is_direct_sale: true,
-        price: 0, 
-        product_id: row.id,
-      } : null;
+      const retailUnitObj = row.retail_unit
+        ? {
+            id: oldRetailUnit?.id,
+            unit_name: row.retail_unit,
+            unit_type: "retail",
+            conversion_rate: row.retail_rate || 1,
+            is_base: false,
+            is_direct_sale: true,
+            price: 0,
+            product_id: row.id,
+          }
+        : null;
 
       // Tạo Wholesale Unit (Nếu có nhập)
-      const wholesaleUnitObj = row.wholesale_unit ? {
-        id: oldWholesaleUnit?.id,
-        unit_name: row.wholesale_unit,
-        unit_type: "wholesale",
-        conversion_rate: row.wholesale_rate || 1,
-        is_base: false,
-        is_direct_sale: true,
-        price: 0,
-        product_id: row.id,
-      } : null;
+      const wholesaleUnitObj = row.wholesale_unit
+        ? {
+            id: oldWholesaleUnit?.id,
+            unit_name: row.wholesale_unit,
+            unit_type: "wholesale",
+            conversion_rate: row.wholesale_rate || 1,
+            is_base: false,
+            is_direct_sale: true,
+            price: 0,
+            product_id: row.id,
+          }
+        : null;
 
       // Gom mảng và lọc bỏ null
-      const newUnits = [baseUnitObj, retailUnitObj, wholesaleUnitObj].filter(Boolean);
-      
+      const newUnits = [baseUnitObj, retailUnitObj, wholesaleUnitObj].filter(
+        Boolean
+      );
+
       const payload = {
         ...currentDetail,
         units: newUnits,
@@ -250,7 +273,7 @@ const QuickUnitPage: React.FC = () => {
   };
 
   // Cập nhật state local khi gõ
-  const handleCellChange = (key: number, field: string, value: any) => {
+  const handleCellChange = (key: number, field: string, value: unknown) => {
     setProducts((prev) =>
       prev.map((item) => {
         if (item.key === key) {
@@ -299,14 +322,14 @@ const QuickUnitPage: React.FC = () => {
       const ab = e.target?.result;
       const wb = XLSX.read(ab, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const jsonData: any[] = XLSX.utils.sheet_to_json(ws);
+      const jsonData: unknown[] = XLSX.utils.sheet_to_json(ws);
       processExcelData(jsonData);
     };
     reader.readAsArrayBuffer(file);
     return false; // Prevent default upload
   };
 
-  const processExcelData = async (excelRows: any[]) => {
+  const processExcelData = async (excelRows: unknown[]) => {
     // 1. Chuẩn bị dữ liệu (Lấy cả Tên và SKU từ Excel)
     const itemsToMatch = excelRows
       .map((row) => {
@@ -341,7 +364,7 @@ const QuickUnitPage: React.FC = () => {
     // 2. Cấu hình Batching
     const BATCH_SIZE = 10;
     const totalBatches = Math.ceil(itemsToMatch.length / BATCH_SIZE);
-    let allServerMatches: any[] = [];
+    let allServerMatches: unknown[] = [];
 
     const hideLoading = message.loading(
       `Đang đối chiếu dữ liệu (0/${itemsToMatch.length})...`,
@@ -374,7 +397,7 @@ const QuickUnitPage: React.FC = () => {
       }
 
       // 3. Map kết quả trả về vào cấu trúc bảng Preview
-      const matches: any[] = [];
+      const matches: unknown[] = [];
 
       excelRows.forEach((row, index) => {
         const name =
@@ -393,7 +416,7 @@ const QuickUnitPage: React.FC = () => {
         if (!name) return;
 
         // [FIX] Chuẩn hóa để so sánh an toàn
-        const serverMatch = allServerMatches.find((m: any) => {
+        const serverMatch = allServerMatches.find((m: unknown) => {
           // So sánh tên (Trimmed)
           const nameMatch = m.excel_name === name;
 
@@ -473,17 +496,14 @@ const QuickUnitPage: React.FC = () => {
 
     try {
       // Gọi RPC mới
-      await safeRpc(
-        "bulk_update_product_units_for_quick_unit_page",
-        {
-          p_data: payload,
-        }
-      );
+      await safeRpc("bulk_update_product_units_for_quick_unit_page", {
+        p_data: payload,
+      });
 
       message.success(`Đã cập nhật quy cách cho ${payload.length} sản phẩm!`);
       setReviewModalVisible(false);
       loadProducts(pagination.current, pagination.pageSize); // Reload bảng
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       message.error("Lỗi cập nhật: " + err.message);
     } finally {
@@ -525,7 +545,9 @@ const QuickUnitPage: React.FC = () => {
       render: (text: string, record: ProductRow) => (
         <Input
           value={text}
-          onChange={(e) => handleCellChange(record.key, "base_unit", e.target.value)}
+          onChange={(e) =>
+            handleCellChange(record.key, "base_unit", e.target.value)
+          }
           onBlur={() => handleBlur(record)}
           style={{ borderColor: record.is_dirty ? "#1890ff" : undefined }}
           placeholder="Viên"
@@ -539,7 +561,9 @@ const QuickUnitPage: React.FC = () => {
       render: (text: string, record: ProductRow) => (
         <Input
           value={text}
-          onChange={(e) => handleCellChange(record.key, "retail_unit", e.target.value)}
+          onChange={(e) =>
+            handleCellChange(record.key, "retail_unit", e.target.value)
+          }
           onBlur={() => handleBlur(record)}
           style={{ borderColor: record.is_dirty ? "#1890ff" : undefined }}
           placeholder="Vỉ"
@@ -556,7 +580,10 @@ const QuickUnitPage: React.FC = () => {
           min={1}
           onChange={(v) => handleCellChange(record.key, "retail_rate", v)}
           onBlur={() => handleBlur(record)}
-          style={{ width: "100%", borderColor: record.is_dirty ? "#1890ff" : undefined }}
+          style={{
+            width: "100%",
+            borderColor: record.is_dirty ? "#1890ff" : undefined,
+          }}
         />
       ),
     },
@@ -567,7 +594,9 @@ const QuickUnitPage: React.FC = () => {
       render: (text: string, record: ProductRow) => (
         <Input
           value={text}
-          onChange={(e) => handleCellChange(record.key, "wholesale_unit", e.target.value)}
+          onChange={(e) =>
+            handleCellChange(record.key, "wholesale_unit", e.target.value)
+          }
           onBlur={() => handleBlur(record)}
           style={{ borderColor: record.is_dirty ? "#1890ff" : undefined }}
           placeholder="Hộp"
@@ -584,7 +613,10 @@ const QuickUnitPage: React.FC = () => {
           min={1}
           onChange={(v) => handleCellChange(record.key, "wholesale_rate", v)}
           onBlur={() => handleBlur(record)}
-          style={{ width: "100%", borderColor: record.is_dirty ? "#1890ff" : undefined }}
+          style={{
+            width: "100%",
+            borderColor: record.is_dirty ? "#1890ff" : undefined,
+          }}
         />
       ),
     },
@@ -592,7 +624,7 @@ const QuickUnitPage: React.FC = () => {
       title: "Trạng thái",
       width: 80,
       align: "center" as const,
-      render: (_: any, record: ProductRow) => {
+      render: (_: unknown, record: ProductRow) => {
         if (savingId === record.id)
           return <SyncOutlined spin style={{ color: "#1890ff" }} />;
         if (record.is_dirty === false)
@@ -605,82 +637,138 @@ const QuickUnitPage: React.FC = () => {
   ];
 
   const renderMobileCard = (item: ProductRow) => (
-    <Card 
-      key={item.key} 
-      size="small" 
-      style={{ marginBottom: 12, borderRadius: 12, border: item.is_dirty ? '1px solid #1890ff' : 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+    <Card
+      key={item.key}
+      size="small"
+      style={{
+        marginBottom: 12,
+        borderRadius: 12,
+        border: item.is_dirty ? "1px solid #1890ff" : "none",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+      }}
       styles={{ body: { padding: 12 } }}
     >
-      <Row wrap={false} align="middle" justify="space-between" style={{ marginBottom: 12 }}>
+      <Row
+        wrap={false}
+        align="middle"
+        justify="space-between"
+        style={{ marginBottom: 12 }}
+      >
         <Col flex="auto">
           <Space>
-            {item.imageUrl ? <Avatar shape="square" size={40} src={item.imageUrl} /> : <Avatar shape="square" size={40} icon={<FileImageOutlined />} style={{ backgroundColor: "#f0f0f0" }} />}
+            {item.imageUrl ? (
+              <Avatar shape="square" size={40} src={item.imageUrl} />
+            ) : (
+              <Avatar
+                shape="square"
+                size={40}
+                icon={<FileImageOutlined />}
+                style={{ backgroundColor: "#f0f0f0" }}
+              />
+            )}
             <div>
-              <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.2 }}>{item.name}</div>
-              <div style={{ fontSize: 12, color: '#888' }}>SKU: {item.sku}</div>
+              <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.2 }}>
+                {item.name}
+              </div>
+              <div style={{ fontSize: 12, color: "#888" }}>SKU: {item.sku}</div>
             </div>
           </Space>
         </Col>
         <Col>
-          <Button 
-            type="primary" 
-            shape="circle" 
-            icon={savingId === item.id ? <SyncOutlined spin /> : <CheckCircleOutlined />} 
+          <Button
+            type="primary"
+            shape="circle"
+            icon={
+              savingId === item.id ? (
+                <SyncOutlined spin />
+              ) : (
+                <CheckCircleOutlined />
+              )
+            }
             disabled={!item.is_dirty}
             onClick={() => handleSaveRow(item)}
           />
         </Col>
       </Row>
 
-      <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8 }}>
+      <div style={{ background: "#f8f9fa", padding: 12, borderRadius: 8 }}>
         <Row gutter={[8, 12]}>
           {/* Cấp 1: Base */}
           <Col span={24}>
-            <Text strong style={{ fontSize: 13, color: '#1677ff' }}>1. Đơn vị Cơ Sở (Kho)</Text>
+            <Text strong style={{ fontSize: 13, color: "#1677ff" }}>
+              1. Đơn vị Cơ Sở (Kho)
+            </Text>
             <Input
               value={item.base_unit}
-              onChange={(e) => handleCellChange(item.key, "base_unit", e.target.value)}
+              onChange={(e) =>
+                handleCellChange(item.key, "base_unit", e.target.value)
+              }
               placeholder="VD: Viên, Gói, Lọ"
-              style={{ marginTop: 4, borderColor: item.is_dirty ? "#1890ff" : undefined }}
+              style={{
+                marginTop: 4,
+                borderColor: item.is_dirty ? "#1890ff" : undefined,
+              }}
             />
           </Col>
 
           {/* Cấp 2: Retail */}
           <Col span={24}>
-            <Text strong style={{ fontSize: 13, color: '#52c41a' }}>2. Đơn vị Lẻ (Bán Quầy)</Text>
-            <Space.Compact style={{ width: '100%', marginTop: 4 }}>
+            <Text strong style={{ fontSize: 13, color: "#52c41a" }}>
+              2. Đơn vị Lẻ (Bán Quầy)
+            </Text>
+            <Space.Compact style={{ width: "100%", marginTop: 4 }}>
               <Input
-                style={{ width: '50%', borderColor: item.is_dirty ? "#1890ff" : undefined }}
+                style={{
+                  width: "50%",
+                  borderColor: item.is_dirty ? "#1890ff" : undefined,
+                }}
                 value={item.retail_unit}
-                onChange={(e) => handleCellChange(item.key, "retail_unit", e.target.value)}
+                onChange={(e) =>
+                  handleCellChange(item.key, "retail_unit", e.target.value)
+                }
                 placeholder="VD: Vỉ"
               />
               <InputNumber
-                style={{ width: '50%', borderColor: item.is_dirty ? "#1890ff" : undefined }}
+                style={{
+                  width: "50%",
+                  borderColor: item.is_dirty ? "#1890ff" : undefined,
+                }}
                 value={item.retail_rate}
                 min={1}
                 onChange={(v) => handleCellChange(item.key, "retail_rate", v)}
-                addonBefore={`= ? ${item.base_unit || 'Cơ sở'}`}
+                addonBefore={`= ? ${item.base_unit || "Cơ sở"}`}
               />
             </Space.Compact>
           </Col>
 
           {/* Cấp 3: Wholesale */}
           <Col span={24}>
-            <Text strong style={{ fontSize: 13, color: '#fa8c16' }}>3. Đơn vị Sỉ (Nhập/Bán Buôn)</Text>
-            <Space.Compact style={{ width: '100%', marginTop: 4 }}>
+            <Text strong style={{ fontSize: 13, color: "#fa8c16" }}>
+              3. Đơn vị Sỉ (Nhập/Bán Buôn)
+            </Text>
+            <Space.Compact style={{ width: "100%", marginTop: 4 }}>
               <Input
-                style={{ width: '50%', borderColor: item.is_dirty ? "#1890ff" : undefined }}
+                style={{
+                  width: "50%",
+                  borderColor: item.is_dirty ? "#1890ff" : undefined,
+                }}
                 value={item.wholesale_unit}
-                onChange={(e) => handleCellChange(item.key, "wholesale_unit", e.target.value)}
+                onChange={(e) =>
+                  handleCellChange(item.key, "wholesale_unit", e.target.value)
+                }
                 placeholder="VD: Hộp"
               />
               <InputNumber
-                style={{ width: '50%', borderColor: item.is_dirty ? "#1890ff" : undefined }}
+                style={{
+                  width: "50%",
+                  borderColor: item.is_dirty ? "#1890ff" : undefined,
+                }}
                 value={item.wholesale_rate}
                 min={1}
-                onChange={(v) => handleCellChange(item.key, "wholesale_rate", v)}
-                addonBefore={`= ? ${item.base_unit || 'Cơ sở'}`}
+                onChange={(v) =>
+                  handleCellChange(item.key, "wholesale_rate", v)
+                }
+                addonBefore={`= ? ${item.base_unit || "Cơ sở"}`}
               />
             </Space.Compact>
           </Col>
@@ -690,16 +778,35 @@ const QuickUnitPage: React.FC = () => {
   );
 
   return (
-    <div style={{ height: 'calc(100vh - 64px)', padding: isMobile ? 0 : '16px', backgroundColor: isMobile ? '#f5f5f5' : 'transparent' }}>
-      <Card 
-        style={{ height: '100%', display: 'flex', flexDirection: 'column', border: isMobile ? 'none' : undefined, borderRadius: isMobile ? 0 : 8 }}
-        bodyStyle={{ display: 'flex', flexDirection: 'column', flex: 1, padding: isMobile ? '8px' : '16px', overflow: 'hidden' }}
+    <div
+      style={{
+        height: "calc(100vh - 64px)",
+        padding: isMobile ? 0 : "16px",
+        backgroundColor: isMobile ? "#f5f5f5" : "transparent",
+      }}
+    >
+      <Card
+        style={{
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          border: isMobile ? "none" : undefined,
+          borderRadius: isMobile ? 0 : 8,
+        }}
+        bodyStyle={{
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          padding: isMobile ? "8px" : "16px",
+          overflow: "hidden",
+        }}
       >
         {/* Header Toolbar */}
         <Row gutter={[16, 16]} align="middle" style={{ marginBottom: 16 }}>
           <Col xs={24} md={8}>
             <Title level={4} style={{ margin: 0 }}>
-              <ThunderboltOutlined style={{ color: "#faad14" }} /> Cài đặt Quy Cách Nhanh
+              <ThunderboltOutlined style={{ color: "#faad14" }} /> Cài đặt Quy
+              Cách Nhanh
             </Title>
           </Col>
           <Col xs={24} md={8}>
@@ -733,10 +840,10 @@ const QuickUnitPage: React.FC = () => {
         </Row>
 
         {/* Khối Nội Dung */}
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
           {isMobile ? (
             <div style={{ paddingBottom: 60 }}>
-              {products.map(item => renderMobileCard(item))}
+              {products.map((item) => renderMobileCard(item))}
             </div>
           ) : (
             <Table
@@ -757,7 +864,7 @@ const QuickUnitPage: React.FC = () => {
               }}
               onChange={handleTableChange} // [IMPORTANT] Trigger loading on change
               size="middle"
-              scroll={{ x: 1000, y: 'calc(100vh - 280px)' }}
+              scroll={{ x: 1000, y: "calc(100vh - 280px)" }}
               bordered
             />
           )}
@@ -798,7 +905,7 @@ const QuickUnitPage: React.FC = () => {
               {
                 title: "Khớp với (Hệ thống)",
                 dataIndex: "match",
-                render: (match, record: any) => (
+                render: (match, record: unknown) => (
                   <div
                     style={{
                       padding: 8,

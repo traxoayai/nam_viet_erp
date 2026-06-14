@@ -1,6 +1,16 @@
 // src/features/medical/components/DoctorBlock4_Prescription.tsx
 import { CheckCircleOutlined, WarningOutlined } from "@ant-design/icons";
-import { Card, Button, Drawer, List, Space, Input, message, Modal, Select } from "antd";
+import {
+  Card,
+  Button,
+  Drawer,
+  List,
+  Space,
+  Input,
+  message,
+  Modal,
+  Select,
+} from "antd";
 import { Pill, FileText } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 
@@ -21,7 +31,7 @@ interface Props {
   onSendPharmacy?: (warehouseId: number) => void;
   sending?: boolean;
   isPrescriptionSent?: boolean;
-  pharmacyWarehouses?: {id: number, name: string}[];
+  pharmacyWarehouses?: { id: number; name: string }[];
   selectedPharmacy?: number;
   onPharmacyChange?: (value: number) => void;
 }
@@ -39,21 +49,18 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
   onPharmacyChange,
 }) => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [templateResults, setTemplateResults] = useState<any[]>([]);
+  const [templateResults, setTemplateResults] = useState<unknown[]>([]);
   const [searchingTemplates, setSearchingTemplates] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const searchTemplates = async (keyword: string) => {
     setSearchingTemplates(true);
     try {
-      const { data } = await safeRpc(
-        "search_prescription_templates",
-        {
-          p_keyword: keyword || "",
-        }
-      );
+      const { data } = await safeRpc("search_prescription_templates", {
+        p_keyword: keyword || "",
+      });
       setTemplateResults((data || []) as unknown as Record<string, unknown>[]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi tìm kiếm đơn mẫu: " + err.message);
     } finally {
       setSearchingTemplates(false);
@@ -75,14 +82,17 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
   }, [isDrawerOpen]);
   // Đã trích phần MOCK TYPE ra dùng Props
 
-  const applyTemplate = async (tpl: any) => {
+  const applyTemplate = async (tpl: unknown) => {
     const newItems = [...items];
     const newProducts = tpl.items.filter(
-      (tItem: any) => !newItems.find((i) => i.product_id === tItem.product_id)
+      (tItem: unknown) =>
+        !newItems.find((i) => i.product_id === tItem.product_id)
     );
 
     // Batch lookup product_unit_id cho tất cả sản phẩm mới
-    const productIds = newProducts.map((t: any) => t.product_id).filter(Boolean);
+    const productIds = newProducts
+      .map((t: unknown) => t.product_id)
+      .filter(Boolean);
     const unitMap = new Map<number, number>();
     if (productIds.length > 0) {
       const { data: units } = await supabase
@@ -91,14 +101,15 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
         .in("product_id", productIds);
       for (const pid of productIds) {
         const pUnits = (units || []).filter((u) => u.product_id === pid);
-        const best = pUnits.find((u) => u.unit_type === "retail")
-          || pUnits.find((u) => u.is_base)
-          || pUnits[0];
+        const best =
+          pUnits.find((u) => u.unit_type === "retail") ||
+          pUnits.find((u) => u.is_base) ||
+          pUnits[0];
         if (best) unitMap.set(pid, best.id);
       }
     }
 
-    newProducts.forEach((tItem: any) => {
+    newProducts.forEach((tItem: unknown) => {
       newItems.push({
         ...tItem,
         product_unit_id: unitMap.get(tItem.product_id) || 1,
@@ -127,9 +138,10 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
         .from("product_units")
         .select("id, unit_type, is_base")
         .eq("product_id", product.id);
-      const best = (units || []).find((u) => u.unit_type === "retail")
-        || (units || []).find((u) => u.is_base)
-        || (units || [])[0];
+      const best =
+        (units || []).find((u) => u.unit_type === "retail") ||
+        (units || []).find((u) => u.is_base) ||
+        (units || [])[0];
 
       const newItem: ClinicalPrescriptionItem = {
         product_id: product.id,
@@ -221,16 +233,19 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
             Đơn mẫu
           </Button>
 
-          {pharmacyWarehouses && pharmacyWarehouses.length > 0 && (
+          {pharmacyWarehouses && pharmacyWarehouses.length > 0 ? (
             <Select
               value={selectedPharmacy}
               onChange={onPharmacyChange}
               style={{ width: 180 }}
-              options={pharmacyWarehouses.map((w: any) => ({ label: w.name, value: w.id }))}
+              options={pharmacyWarehouses.map((w: unknown) => ({
+                label: w.name,
+                value: w.id,
+              }))}
               placeholder="Chọn quầy thuốc"
               size="small"
             />
-          )}
+          ) : null}
 
           <Button
             type={isPrescriptionSent ? "default" : "primary"}
@@ -242,7 +257,9 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
             icon={<CheckCircleOutlined />}
             disabled={readOnly || isPrescriptionSent || items.length === 0}
             loading={sending}
-            onClick={() => onSendPharmacy && onSendPharmacy(selectedPharmacy ?? 1)}
+            onClick={() =>
+              onSendPharmacy && onSendPharmacy(selectedPharmacy ?? 1)
+            }
           >
             {isPrescriptionSent ? "Đã Chuyển Nhà Thuốc" : "Chuyển Quầy Thuốc"}
           </Button>
@@ -281,8 +298,10 @@ export const DoctorBlock4_Prescription: React.FC<Props> = ({
             loading={searchingTemplates}
             renderItem={(item) => (
               <List.Item
+                key={item.id}
                 actions={[
                   <Button
+                    key="apply"
                     type="primary"
                     size="small"
                     onClick={() => applyTemplate(item)}

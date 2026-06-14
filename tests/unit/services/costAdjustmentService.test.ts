@@ -3,13 +3,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSafeRpc = vi.fn();
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 const mockFrom = vi.fn();
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {
-    from: (...args: any[]) => mockFrom(...args),
+    from: (...args: unknown[]) => mockFrom(...args),
   },
 }));
 
@@ -23,7 +23,9 @@ describe("costAdjustmentService", () => {
 
   describe("getValuationGrid", () => {
     it("calls get_batch_valuation_grid with defaults and silent", async () => {
-      mockSafeRpc.mockResolvedValue({ data: [{ batch_id: 1, total_count: 1 }] });
+      mockSafeRpc.mockResolvedValue({
+        data: [{ batch_id: 1, total_count: 1 }],
+      });
 
       const rows = await costAdjustmentService.getValuationGrid({});
 

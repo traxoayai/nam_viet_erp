@@ -1,10 +1,11 @@
-import React from 'react';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { Task } from '../api/taskService';
-import dayjs from 'dayjs';
-import { ClockCircleOutlined, CheckCircleFilled } from '@ant-design/icons';
-import { Tag, Avatar, Tooltip } from 'antd';
+import { ClockCircleOutlined, CheckCircleFilled } from "@ant-design/icons";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Tag, Avatar, Tooltip } from "antd";
+import dayjs from "dayjs";
+import React from "react";
+
+import { Task } from "../api/taskService";
 
 interface Props {
   task: Task;
@@ -13,15 +14,15 @@ interface Props {
 
 export const stripHtml = (html: string | null) => {
   if (!html) return "";
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = new DOMParser().parseFromString(html, "text/html");
   return doc.body.textContent || "";
 };
 
 const priorityColors = {
-  urgent: 'red',
-  high: 'orange',
-  medium: 'geekblue',
-  low: 'default'
+  urgent: "red",
+  high: "orange",
+  medium: "geekblue",
+  low: "default",
 };
 
 export const TaskCard: React.FC<Props> = ({ task, onClick }) => {
@@ -32,14 +33,15 @@ export const TaskCard: React.FC<Props> = ({ task, onClick }) => {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id, data: { type: 'Task', task } });
+  } = useSortable({ id: task.id, data: { type: "Task", task } });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
 
-  const isOverdue = task.status !== 'done' && dayjs(task.due_date).isBefore(dayjs());
+  const isOverdue =
+    task.status !== "done" && dayjs(task.due_date).isBefore(dayjs());
 
   return (
     <div
@@ -51,37 +53,52 @@ export const TaskCard: React.FC<Props> = ({ task, onClick }) => {
       className={`
         relative flex flex-col p-4 mb-3 bg-white rounded-xl cursor-grab active:cursor-grabbing
         border border-gray-100
-        ${isDragging ? 'opacity-80 rotate-3 scale-105 shadow-2xl z-50 border-blue-400' : 'shadow-sm hover:shadow-md'}
+        ${isDragging ? "opacity-80 rotate-3 scale-105 shadow-2xl z-50 border-blue-400" : "shadow-sm hover:shadow-md"}
         transition-all duration-200 ease-out
       `}
     >
       <div className="flex justify-between items-start mb-2">
-        <h4 className="m-0 font-semibold text-gray-800 text-sm">{task.title}</h4>
-        {task.status === 'done' && (
+        <h4 className="m-0 font-semibold text-gray-800 text-sm">
+          {task.title}
+        </h4>
+        {task.status === "done" && (
           <CheckCircleFilled className="text-green-500 text-lg animate-[ping_0.5s_ease-out_reverse]" />
         )}
       </div>
-      
-      {task.description && (
-        <p className="text-xs text-gray-500 line-clamp-2 mb-3 mt-0">{stripHtml(task.description)}</p>
-      )}
-      
+
+      {task.description ? (
+        <p className="text-xs text-gray-500 line-clamp-2 mb-3 mt-0">
+          {stripHtml(task.description)}
+        </p>
+      ) : null}
+
       <div className="flex items-center justify-between mt-auto">
-        <Tag color={priorityColors[task.priority]} className="rounded-md border-none font-medium text-[11px] m-0">
+        <Tag
+          color={priorityColors[task.priority]}
+          className="rounded-md border-none font-medium text-[11px] m-0"
+        >
           {task.priority.toUpperCase()}
         </Tag>
         <div className="flex items-center gap-2">
-          {task.assignee_id && (
-            <Tooltip title={task.assignee_name || 'Người nhận việc'}>
-              <Avatar size="small" src={task.assignee_avatar} className="bg-blue-100 text-blue-600 border border-blue-200">
-                 {task.assignee_name?.charAt(0) || 'U'}
+          {task.assignee_id ? (
+            <Tooltip title={task.assignee_name || "Người nhận việc"}>
+              <Avatar
+                size="small"
+                src={task.assignee_avatar}
+                className="bg-blue-100 text-blue-600 border border-blue-200"
+              >
+                {task.assignee_name?.charAt(0) || "U"}
               </Avatar>
             </Tooltip>
-          )}
+          ) : null}
           <div className="flex items-center gap-1">
-            <ClockCircleOutlined className={`text-xs ${isOverdue ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} />
-            <span className={`text-[11px] ${isOverdue ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
-              {dayjs(task.due_date).format('DD/MM')}
+            <ClockCircleOutlined
+              className={`text-xs ${isOverdue ? "text-red-500 animate-pulse" : "text-gray-400"}`}
+            />
+            <span
+              className={`text-[11px] ${isOverdue ? "text-red-500 font-medium" : "text-gray-500"}`}
+            >
+              {dayjs(task.due_date).format("DD/MM")}
             </span>
           </div>
         </div>

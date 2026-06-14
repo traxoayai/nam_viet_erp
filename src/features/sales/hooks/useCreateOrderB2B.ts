@@ -35,7 +35,6 @@ export const useCreateOrderB2B = () => {
       newTotalDebt: Number(summary.totalPayable) || 0,
       isOverLimit,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Zustand store ref ổn định, không cần trong deps
   }, [store.items, store.shippingFee, store.selectedVoucher, store.customer]);
 
   // --- 2. LOGIC VẬN CHUYỂN (SMART DELIVERY ESTIMATOR) ---
@@ -94,7 +93,6 @@ export const useCreateOrderB2B = () => {
         store.setShippingPartner(fullPartner);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Zustand store ref ổn định, không cần trong deps
     [shippingStore.partners, store.setShippingPartner]
   );
 

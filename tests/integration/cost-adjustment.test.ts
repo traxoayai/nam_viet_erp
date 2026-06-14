@@ -197,8 +197,8 @@ describe("bulk_update_batch_costs (integration)", () => {
     });
 
     expect(error).toBeNull();
-    expect((data as any)?.status).toBe("success");
-    expect((data as any)?.updated_count).toBe(1);
+    expect((data as unknown)?.status).toBe("success");
+    expect((data as unknown)?.updated_count).toBe(1);
 
     // Assert 1: batches.inbound_price updated
     const { data: batchAfter } = await adminClient
@@ -248,9 +248,9 @@ describe("bulk_update_batch_costs (integration)", () => {
     });
 
     expect(error).toBeNull();
-    expect((data as any)?.status).toBe("success");
-    expect((data as any)?.updated_count).toBe(0);
-    expect((data as any)?.skipped_count).toBeGreaterThanOrEqual(1);
+    expect((data as unknown)?.status).toBe("success");
+    expect((data as unknown)?.updated_count).toBe(0);
+    expect((data as unknown)?.skipped_count).toBeGreaterThanOrEqual(1);
 
     const { data: audits } = await adminClient
       .from("batch_revaluations")
@@ -268,7 +268,7 @@ describe("bulk_update_batch_costs (integration)", () => {
       p_reason: "bad_reason",
     });
 
-    expect((data as any)?.status).toBe("error");
+    expect((data as unknown)?.status).toBe("error");
 
     const { data: batchAfter } = await adminClient
       .from("batches")
@@ -285,8 +285,8 @@ describe("bulk_update_batch_costs (integration)", () => {
     });
 
     expect(error).toBeNull();
-    expect((data as any)?.status).toBe("success");
-    expect((data as any)?.updated_count).toBe(0);
-    expect((data as any)?.skipped_count).toBe(1);
+    expect((data as unknown)?.status).toBe("success");
+    expect((data as unknown)?.updated_count).toBe(0);
+    expect((data as unknown)?.skipped_count).toBe(1);
   });
 });

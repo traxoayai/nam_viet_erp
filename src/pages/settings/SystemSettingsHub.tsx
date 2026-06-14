@@ -173,24 +173,27 @@ const SystemSettingsHub: React.FC = () => {
   const { message } = AntApp.useApp();
 
   // Hàm render chung cho các List
-  const renderSettingList = (data: any[]) => (
+  const renderSettingList = (data: unknown[]) => (
     <List
       itemLayout="horizontal"
       dataSource={data}
-      renderItem={(item) => (
+      renderItem={(item: unknown) => {
+        const setting = item as Record<string, unknown>;
+        return (
         <List.Item
           onClick={() => {
+            const link = setting.link as string;
             // Kiểm tra link placeholder (tạm thời)
             if (
-              item.link.includes("placeholder") ||
-              item.link === "/settings/business/sales" ||
-              item.link === "/settings/business/loyalty" ||
-              item.link === "/settings/business/discounts" ||
-              item.link === "/settings/business/hr"
+              link.includes("placeholder") ||
+              link === "/settings/business/sales" ||
+              link === "/settings/business/loyalty" ||
+              link === "/settings/business/discounts" ||
+              link === "/settings/business/hr"
             ) {
-              message.info(`Chức năng "${item.title}" đang được phát triển.`);
+              message.info(`Chức năng "${setting.title}" đang được phát triển.`);
             }
-            navigate(item.link);
+            navigate(link);
           }}
           style={{
             cursor: "pointer",
@@ -202,7 +205,7 @@ const SystemSettingsHub: React.FC = () => {
           <List.Item.Meta
             avatar={
               <Avatar
-                icon={item.icon}
+                icon={setting.icon as React.ReactNode}
                 style={{
                   backgroundColor: "rgba(87, 106, 230, 0.1)",
                   color: "#576ae6",
@@ -211,13 +214,14 @@ const SystemSettingsHub: React.FC = () => {
             }
             title={
               <Text strong style={{ fontSize: "15px" }}>
-                {item.title}
+                {String(setting.title)}
               </Text>
             }
-            description={<Text type="secondary">{item.description}</Text>}
+            description={<Text type="secondary">{String(setting.description)}</Text>}
           />
         </List.Item>
-      )}
+        );
+      }}
     />
   );
 

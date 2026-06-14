@@ -1,10 +1,5 @@
 import { PlusOutlined, AuditOutlined, ShopOutlined } from "@ant-design/icons";
-import {
-  Button,
-  Tag,
-  Typography,
-  DatePicker,
-} from "antd";
+import { Button, Tag, Typography, DatePicker } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -12,10 +7,10 @@ import { useNavigate } from "react-router-dom";
 import { inventoryService } from "../api/inventoryService";
 import { CreateCheckModal } from "../components/CreateCheckModal";
 
+import { posService } from "@/features/pos/api/posService";
 import { FilterAction } from "@/shared/ui/listing/FilterAction";
 import { SmartTable } from "@/shared/ui/listing/SmartTable";
 import { StatHeader } from "@/shared/ui/listing/StatHeader";
-import { posService } from "@/features/pos/api/posService";
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -24,19 +19,16 @@ export const InventoryCheckList = () => {
   const navigate = useNavigate();
 
   // --- STATE DỮ LIỆU ---
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<unknown[]>([]);
 
   // --- STATE BỘ LỌC & PHÂN TRANG ---
   const [filters, setFilters] = useState({
     warehouseId: null as number | null,
     search: "",
     status: null as string | null,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    dateRange: null as any,
+    dateRange: null as unknown,
   });
 
   // [NEW] State phân trang
@@ -78,7 +70,7 @@ export const InventoryCheckList = () => {
       const res = await inventoryService.getCheckSessions({
         warehouseId: filters.warehouseId,
         search: filters.search,
-        status: filters.status as any,
+        status: filters.status as unknown,
         startDate: filters.dateRange
           ? filters.dateRange[0].toISOString()
           : undefined,
@@ -106,10 +98,8 @@ export const InventoryCheckList = () => {
     }
   };
 
-
   // Xử lý khi đổi trang trên Table
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleTableChange = (newPagination: any) => {
+  const handleTableChange = (newPagination: unknown) => {
     setPagination((prev) => ({
       ...prev,
       current: newPagination.current,
@@ -124,8 +114,7 @@ export const InventoryCheckList = () => {
       title: "Mã Phiếu",
       dataIndex: "code",
       key: "code",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      render: (text: string, record: any) => (
+      render: (text: string, record: unknown) => (
         <a
           onClick={() => navigate(`/inventory/stocktake/${record.id}`)}
           style={{ fontWeight: "bold", color: "#1890ff" }}
@@ -207,8 +196,7 @@ export const InventoryCheckList = () => {
       title: "",
       key: "action",
       width: 80,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Button
           size="small"
           icon={<AuditOutlined />}
@@ -227,7 +215,9 @@ export const InventoryCheckList = () => {
     },
     {
       title: "Kho đang kiểm",
-      value: warehouses.find((w) => w.id === filters.warehouseId)?.name || "Chưa chọn kho",
+      value:
+        warehouses.find((w) => w.id === filters.warehouseId)?.name ||
+        "Chưa chọn kho",
       color: "#faad14",
       icon: <ShopOutlined />,
     },

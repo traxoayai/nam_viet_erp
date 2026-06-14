@@ -58,6 +58,10 @@ import SupplierListPage from "@/pages/partners/SupplierListPage";
 import PortalDashboardPage from "@/pages/portal/PortalDashboardPage"; // [Plan 2]
 import PortalUsersPage from "@/pages/portal/PortalUsersPage"; // [Plan 2]
 import PosPage from "@/pages/pos/PosPage";
+import PurchaseOrderV2ListPage from "@/pages/Purchase-v2/PurchaseOrderV2ListPage";
+import PurchaseV2CreateEstimatePage from "@/pages/Purchase-v2/PurchaseV2CreateEstimatePage";
+import PurchaseV2CreateFromVatPage from "@/pages/Purchase-v2/PurchaseV2CreateFromVatPage";
+import PurchaseV2CreateSinglePage from "@/pages/Purchase-v2/PurchaseV2CreateSinglePage";
 import PurchaseCostingPage from "@/pages/purchasing/PurchaseCostingPage"; // [NEW]
 import PurchaseOrderDetail from "@/pages/purchasing/PurchaseOrderDetail";
 import PurchaseOrderMasterPage from "@/pages/purchasing/PurchaseOrderMasterPage";
@@ -87,14 +91,6 @@ import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [
 import BlankLayout from "@/shared/ui/layouts/BlankLayout";
 import MainLayout from "@/shared/ui/layouts/MainLayout";
 import OnboardingLayout from "@/shared/ui/layouts/OnboardingLayout";
-// eslint-disable-next-line import/order
-import PurchaseOrderV2ListPage from "@/pages/Purchase-v2/PurchaseOrderV2ListPage";
-// eslint-disable-next-line import/order
-import PurchaseV2CreateEstimatePage from "@/pages/Purchase-v2/PurchaseV2CreateEstimatePage";
-// eslint-disable-next-line import/order
-import PurchaseV2CreateSinglePage from "@/pages/Purchase-v2/PurchaseV2CreateSinglePage";
-// eslint-disable-next-line import/order
-import PurchaseV2CreateFromVatPage from "@/pages/Purchase-v2/PurchaseV2CreateFromVatPage";
 
 // Lazy import (giữ tách riêng để chunk-split — không tham gia eslint import/order)
 

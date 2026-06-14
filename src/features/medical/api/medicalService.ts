@@ -8,7 +8,13 @@ export const medicalService = {
       .from("service_packages")
       .select("id, name, sku, unit, price, type, clinical_category")
       .eq("status", "active")
-      .in("clinical_category", ["lab", "imaging", "procedure", "examination", "vaccination"]);
+      .in("clinical_category", [
+        "lab",
+        "imaging",
+        "procedure",
+        "examination",
+        "vaccination",
+      ]);
 
     if (keyword) {
       query = query.or(`name.ilike.%${keyword}%,sku.ilike.%${keyword}%`);
@@ -22,7 +28,7 @@ export const medicalService = {
     }
 
     // Map dữ liệu để tương thích với DebounceProductSelect
-    return (data || []).map((s: any) => ({
+    return (data || []).map((s: unknown) => ({
       id: s.id,
       name: s.name,
       sku: s.sku,

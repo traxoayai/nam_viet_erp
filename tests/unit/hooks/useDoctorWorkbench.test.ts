@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockSafeRpc = vi.fn();
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 // Mock supabase
@@ -134,11 +134,7 @@ describe("useDoctorWorkbench - safeRpc param structure verification", () => {
 
   it("create_medical_visit requires p_appointment_id, p_customer_id, p_data", () => {
     // Verify the expected parameter shape from the source code
-    const expectedParamKeys = [
-      "p_appointment_id",
-      "p_customer_id",
-      "p_data",
-    ];
+    const expectedParamKeys = ["p_appointment_id", "p_customer_id", "p_data"];
 
     mockSafeRpc.mockResolvedValue({ data: 1, error: null });
     mockSafeRpc("create_medical_visit", {

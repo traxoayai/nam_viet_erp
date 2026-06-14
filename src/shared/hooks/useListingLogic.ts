@@ -7,12 +7,12 @@ export interface ListingParams {
   page?: number;
   pageSize?: number;
   search?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface UseListingLogicProps<T> {
   fetcher: (params: ListingParams) => Promise<{ data: T[]; total: number }>;
-  defaultFilters?: Record<string, any>;
+  defaultFilters?: Record<string, unknown>;
 }
 
 export function useListingLogic<T>({
@@ -81,7 +81,7 @@ export function useListingLogic<T>({
     []
   );
 
-  const handleFilterChange = (key: string, value: any) => {
+  const handleFilterChange = (key: string, value: unknown) => {
     setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
   };
 

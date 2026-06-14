@@ -19,7 +19,7 @@ const B2B_LICENSE_BUCKET = "customer_b2b_licenses";
  * 1. Tải danh sách Khách hàng B2B (Đã phân trang)
  */
 export const fetchCustomers = async (
-  filters: any,
+  filters: unknown,
   page: number,
   pageSize: number,
   sortByDebt: "asc" | "desc" | null = null // [NEW] Thêm tham số
@@ -34,17 +34,17 @@ export const fetchCustomers = async (
   });
 
   const rawData = data || [];
-  
+
   // [NEW] Gộp dữ liệu Công nợ Realtime từ View b2b_customer_debt_view
   if (rawData.length > 0) {
-    const customerIds = rawData.map((c: any) => c.id);
+    const customerIds = rawData.map((c: unknown) => c.id);
     const { data: debtData } = await supabase
       .from("b2b_customer_debt_view")
       .select("customer_id, actual_current_debt")
       .in("customer_id", customerIds);
 
     if (debtData) {
-      const debtMap = debtData.reduce((acc: any, row: any) => {
+      const debtMap = debtData.reduce((acc: unknown, row: unknown) => {
         acc[row.customer_id] = row.actual_current_debt;
         return acc;
       }, {});
@@ -63,13 +63,15 @@ export const fetchCustomers = async (
 /**
  * 2. Tải chi tiết 1 Khách hàng B2B (Form Sửa)
  */
-export const fetchCustomerDetails = async (id: number): Promise<any> => {
+export const fetchCustomerDetails = async (id: number): Promise<unknown> => {
   const { data } = await safeRpc("get_customer_b2b_details", {
     p_id: id,
   });
-  
+
   // [NEW] Cập nhật Nợ từ View thay vì bảng cũ
-  const detail = data as unknown as { customer: Record<string, unknown> } | null;
+  const detail = data as unknown as {
+    customer: Record<string, unknown>;
+  } | null;
   if (detail && detail.customer) {
     const { data: debtData } = await supabase
       .from("b2b_customer_debt_view")
@@ -78,9 +80,9 @@ export const fetchCustomerDetails = async (id: number): Promise<any> => {
       .single();
 
     if (debtData) {
-       detail.customer.current_debt = debtData.actual_current_debt;
+      detail.customer.current_debt = debtData.actual_current_debt;
     } else {
-       detail.customer.current_debt = 0;
+      detail.customer.current_debt = 0;
     }
   }
 
@@ -190,7 +192,7 @@ export const importCustomers = async (file: File): Promise<number> => {
       const worksheet = workbook.Sheets[sheetName];
 
       // Đọc file (Ô trống -> null)
-      const rawData: any[] = XLSX.utils.sheet_to_json(worksheet, {
+      const rawData: unknown[] = XLSX.utils.sheet_to_json(worksheet, {
         defval: null,
       });
 
@@ -199,8 +201,8 @@ export const importCustomers = async (file: File): Promise<number> => {
         return;
       }
 
-      const cleanedArray = rawData.map((row: any) => {
-        const newRow: any = {
+      const cleanedArray = rawData.map((row: unknown) => {
+        const newRow: unknown = {
           // Khởi tạo giá trị mặc định để tránh undefined
           name: null,
           phone: null,
@@ -238,7 +240,7 @@ export const importCustomers = async (file: File): Promise<number> => {
       // [QUAN TRỌNG] BƯỚC LỌC DỮ LIỆU RÁC (FIX LỖI CỦA SẾP)
       // Chỉ lấy những dòng có Tên Công Ty
       const validArray = cleanedArray.filter(
-        (item: any) => item.name && String(item.name).trim() !== ""
+        (item: unknown) => item.name && String(item.name).trim() !== ""
       );
 
       if (validArray.length === 0) {
@@ -266,7 +268,9 @@ export const importCustomers = async (file: File): Promise<number> => {
 /**
  * 8. Xuất Excel (Lấy tất cả)
  */
-export const exportCustomers = async (filters: any): Promise<any[]> => {
+export const exportCustomers = async (
+  filters: unknown
+): Promise<Array<Record<string, unknown>>> => {
   const { data } = await safeRpc("export_customers_b2b_list", {
     search_query: filters.search_query || null,
     sales_staff_filter: filters.sales_staff_filter || null,

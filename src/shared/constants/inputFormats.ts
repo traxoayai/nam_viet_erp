@@ -4,6 +4,5 @@
 export const MONEY_INPUT_PROPS = {
   formatter: (v: number | string | undefined) =>
     `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ","),
-  parser: (v: string | undefined) =>
-    v!.replace(/,/g, "") as unknown as number,
+  parser: (v: string | undefined) => v!.replace(/,/g, "") as unknown as number,
 } as const;

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockSafeRpc = vi.fn();
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 // Mock supabase (used for realtime subscriptions and delete)
@@ -43,8 +43,8 @@ import { usePurchaseOrderMaster } from "@/features/purchasing/hooks/usePurchaseO
 // Lightweight hook renderer for server-side rendering
 function renderHookSync<T>(hookFn: () => T): T {
   let result: T;
-  const { createElement } = require("react");
-  const { renderToStaticMarkup } = require("react-dom/server");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
 
   function TestComponent() {
     result = hookFn();
@@ -104,7 +104,7 @@ describe("usePurchaseOrderMaster - fetchOrders status filter parsing", () => {
     await hook.fetchOrders();
 
     const call = mockSafeRpc.mock.calls.find(
-      (c: any[]) => c[0] === "get_purchase_orders_master"
+      (c: unknown[]) => c[0] === "get_purchase_orders_master"
     );
     expect(call).toBeDefined();
     expect(call![1]).toMatchObject({
@@ -127,7 +127,7 @@ describe("usePurchaseOrderMaster - empty string sanitization", () => {
     await hook.fetchOrders();
 
     const call = mockSafeRpc.mock.calls.find(
-      (c: any[]) => c[0] === "get_purchase_orders_master"
+      (c: unknown[]) => c[0] === "get_purchase_orders_master"
     );
     expect(call).toBeDefined();
     const params = call![1];

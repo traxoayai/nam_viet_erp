@@ -6,7 +6,7 @@ import React from "react";
 export interface FilterConfig {
   key: string;
   placeholder: string;
-  options?: { label: string; value: any }[];
+  options?: { label: string; value: unknown }[];
   style?: React.CSSProperties;
 }
 
@@ -26,8 +26,8 @@ interface Props {
   initialSearch?: string;
   onSearch?: (val: string) => void;
   filters?: FilterConfig[];
-  filterValues?: any;
-  onFilterChange?: (key: string, val: any) => void;
+  filterValues?: unknown;
+  onFilterChange?: (key: string, val: unknown) => void;
   actions?: ActionConfig[];
   onRefresh?: () => void;
 }
@@ -75,7 +75,9 @@ const FilterActionBase = ({
                 allowClear
                 options={f.options}
                 value={
-                  filterValues[f.key] ? String(filterValues[f.key]) : undefined
+                  (filterValues as Record<string, unknown>)[f.key]
+                    ? String((filterValues as Record<string, unknown>)[f.key])
+                    : undefined
                 }
                 onChange={(val) => onFilterChange && onFilterChange(f.key, val)}
               />

@@ -75,11 +75,11 @@ export interface AssetStoreState {
 
   loading: boolean;
   loadingDetails: boolean;
-  filters: any;
+  filters: unknown;
   totalCount: number; // Danh mục chung
 
   fetchAssetTypes: () => Promise<void>; // Hành động CRUD
-  fetchAssets: (filters: any) => Promise<void>;
+  fetchAssets: (filters: unknown) => Promise<void>;
   getAssetDetails: (id: number) => Promise<void>;
   createAsset: (
     assetData: AssetFormData,

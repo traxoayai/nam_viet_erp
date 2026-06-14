@@ -4,9 +4,9 @@ import { Alert, Button } from "antd";
 import React, { useMemo } from "react";
 
 interface Props {
-  vitals: any;
-  clinical: any;
-  patientInfo: any;
+  vitals: unknown;
+  clinical: unknown;
+  patientInfo: unknown;
   age: number;
   onSuggestionClick: (
     suggestion: string,
@@ -90,7 +90,7 @@ export const SmartClinicalAssistant: React.FC<Props> = ({
         {vitalAlerts.map((alert, idx) => (
           <Alert
             key={idx}
-            type={alert.type as any}
+            type={alert.type as unknown}
             message={
               <div className="flex justify-between items-center w-full">
                 <span>{alert.msg}</span>

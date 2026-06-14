@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSafeRpc = vi.fn();
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 describe("Portal Dashboard RPC", () => {
@@ -51,7 +51,7 @@ describe("Portal Dashboard RPC", () => {
 
     const { safeRpc } = await import("@/shared/lib/safeRpc");
     const { data } = await safeRpc("get_portal_dashboard_stats");
-    const stats = data as any;
+    const stats = data as unknown;
 
     expect(stats.daily_orders).toHaveLength(2);
     expect(stats.daily_orders[0]).toHaveProperty("date");

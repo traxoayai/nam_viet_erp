@@ -31,8 +31,8 @@ export const voucherService = {
     if (error) throw error;
 
     // Map dữ liệu cho đẹp
-    return data.map((item: any) => ({
-      target_name: item.customer_segments?.name || `Segment #${item.target_id}`,
+    return data.map((item: Record<string, unknown>) => ({
+      target_name: (item.customer_segments as Record<string, unknown> | undefined)?.name || `Segment #${item.target_id}`,
       distributed_at: item.created_at,
     }));
   },

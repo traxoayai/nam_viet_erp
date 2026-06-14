@@ -30,7 +30,7 @@ const TransferCreatePage: React.FC = () => {
   const { createTransfer, loading } = useTransferStore();
 
   // Data States
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<unknown[]>([]);
   const [items, setItems] = useState<TransferCartItem[]>([]);
 
   // Form States
@@ -44,7 +44,7 @@ const TransferCreatePage: React.FC = () => {
       try {
         const { data } = await getWarehouses({}, 1, 100);
         setWarehouses(data);
-      } catch (err) {
+      } catch (_err) {
         message.error("Lỗi tải danh sách kho");
       }
     };
@@ -66,7 +66,7 @@ const TransferCreatePage: React.FC = () => {
   };
 
   // 3. Handle Select Product (From Search)
-  const handleSelectProduct = (product: any) => {
+  const handleSelectProduct = (product: unknown) => {
     // Check duplicates
     if (items.some((i) => i.product_id === product.id)) {
       message.warning(`Sản phẩm "${product.name}" đã có trong danh sách`);

@@ -94,7 +94,6 @@ export const VatInvoiceModal: React.FC<Props> = ({
       form.resetFields();
       setVatItems([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, customer, orderItems]);
 
   // 2a. Trừ kho VAT sau khi xuất SEPAY thành công (single atomic RPC)

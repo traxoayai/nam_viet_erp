@@ -3,20 +3,24 @@ import { InboxOutlined } from "@ant-design/icons";
 import { Table, TableProps } from "antd";
 import React from "react"; // Thêm React
 
-interface Props<T> extends TableProps<T> {
+// Use any for TableProps spread to avoid generic variance issues
+interface Props extends TableProps<unknown> {
   emptyText?: string;
 }
 
-// Helper component để React.memo hoạt động tốt với Generic Type
-const SmartTableInner = <T extends object>({
+// Helper component
+export const SmartTable = ({
   emptyText,
   ...rest
-}: Props<T>) => {
+}: Props) => {
   return (
     <div style={{ background: "#fff", borderRadius: "0 0 8px 8px" }}>
       <Table
         {...rest}
-        rowKey={(record: any) => record.key || record.id}
+        rowKey={(record: unknown) =>
+          ((record as Record<string, unknown>)?.key ||
+            (record as Record<string, unknown>)?.id) as React.Key
+        }
         size="middle"
         locale={{
           emptyText: (
@@ -32,7 +36,4 @@ const SmartTableInner = <T extends object>({
       />
     </div>
   );
-};
-
-// Áp dụng React.memo
-export const SmartTable = React.memo(SmartTableInner) as typeof SmartTableInner;
+}

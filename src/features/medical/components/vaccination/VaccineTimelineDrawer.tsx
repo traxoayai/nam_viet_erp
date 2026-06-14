@@ -38,7 +38,7 @@ export const VaccineTimelineDrawer: React.FC<VaccineTimelineDrawerProps> = ({
   onClose,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [timelineData, setTimelineData] = useState<any[]>([]);
+  const [timelineData, setTimelineData] = useState<unknown[]>([]);
 
   const [rescheduleData, setRescheduleData] = useState<{
     recordId: number;
@@ -55,7 +55,7 @@ export const VaccineTimelineDrawer: React.FC<VaccineTimelineDrawerProps> = ({
     try {
       const data = await getCustomerTimeline(activeCustomerId);
       setTimelineData(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error("Lỗi khi tải Sổ tiêm chủng: " + error.message);
     } finally {
       setLoading(false);
@@ -84,7 +84,7 @@ export const VaccineTimelineDrawer: React.FC<VaccineTimelineDrawerProps> = ({
       );
       setRescheduleData(null);
       loadTimeline(); // Reload
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error("Lỗi khi dời lịch: " + error.message);
     } finally {
       setRescheduling(false);
@@ -120,7 +120,7 @@ export const VaccineTimelineDrawer: React.FC<VaccineTimelineDrawerProps> = ({
       }
 
       // Tên vắc xin (do join với bảng products)
-      // @ts-ignore
+      // @ts-expect-error products field exists but type not narrowed
       const productName = item.products?.name || "Vắc xin không xác định";
 
       const popoverContent = (

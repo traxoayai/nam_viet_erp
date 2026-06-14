@@ -27,7 +27,7 @@ export const supplierService = {
   },
 
   // [NEW] Import Excel (V33.2)
-  importSuppliersBulk: async (suppliers: any[]) => {
+  importSuppliersBulk: async (suppliers: unknown[]) => {
     // Backend V33.2 expects 'p_suppliers'
     const { data } = await safeRpc("import_suppliers_bulk", {
       p_suppliers: suppliers,

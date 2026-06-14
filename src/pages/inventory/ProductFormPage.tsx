@@ -86,7 +86,7 @@ const ProductFormPage: React.FC = () => {
   };
 
   // [NEW] Xử lý khi AI điền form
-  const handleAiFill = (aiData: any) => {
+  const handleAiFill = (aiData: unknown) => {
     const mappedData = aiService.mapAiDataToForm(aiData);
     form.setFieldsValue(mappedData);
     antMessage.success("Đã điền thông tin từ AI!");
@@ -501,7 +501,7 @@ const ProductFormPage: React.FC = () => {
                                     )
                                   }
                                   parser={(value) =>
-                                    value?.replace(/\$\s?|(,*)/g, "") as any
+                                    value?.replace(/\$\s?|(,*)/g, "") as unknown
                                   }
                                   addonAfter="Đơn vị/Thùng"
                                 />
@@ -650,7 +650,7 @@ const ProductFormPage: React.FC = () => {
                                           parser={(value) =>
                                             value
                                               ? value.replace(/\$\s?|(,*)/g, "")
-                                              : ("" as any)
+                                              : ("" as unknown)
                                           }
                                           addonAfter="đ"
                                         />

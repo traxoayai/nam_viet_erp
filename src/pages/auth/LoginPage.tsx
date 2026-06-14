@@ -26,14 +26,14 @@ const LoginPage = () => {
   const login = useAuthStore((state) => state.login);
   const user = useAuthStore((state) => state.user);
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: unknown) => {
     setLoading(true);
     try {
       // SỬA LỖI: Gọi hàm login (đã bao gồm fetchProfile)
       await login(values);
       message.success("Đăng nhập thành công!"); // (Không cần navigate, Gatekeeper sẽ tự điều hướng)
       // navigate("/");
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Sửa lỗi hiển thị (Bad Request là 'Invalid login credentials')
       let errorMessage = error.message;
       if (error.message.includes("400")) {
@@ -69,11 +69,11 @@ const LoginPage = () => {
             <img
               src={Logo}
               alt="Logo"
-              style={{ 
-                  width: 100, 
-                  // [FIX] Thêm display block và margin auto để căn giữa bất chấp Tailwind
-                  display: "block",
-                  margin: "0 auto 16px auto" 
+              style={{
+                width: 100,
+                // [FIX] Thêm display block và margin auto để căn giữa bất chấp Tailwind
+                display: "block",
+                margin: "0 auto 16px auto",
               }}
             />
 

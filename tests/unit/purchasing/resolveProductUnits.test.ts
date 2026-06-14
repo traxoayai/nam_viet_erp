@@ -1,39 +1,118 @@
 import { describe, it, expect } from "vitest";
+
 import { resolveProductUnits } from "@/pages/purchasing/utils/resolveProductUnits";
 
 // === Fixtures dựa trên data PROD thực tế ===
 
 /** Exforge: 3 đơn vị khác nhau, nhưng wholesale_unit === retail_unit === "Hộp" */
 const exforgeUnits = [
-  { id: 38427, unit_name: "Viên", unit_type: "base", is_base: true, conversion_rate: 1 },
-  { id: 38428, unit_name: "Vỉ", unit_type: "retail", is_base: false, conversion_rate: 14 },
-  { id: 38429, unit_name: "Hộp", unit_type: "wholesale", is_base: false, conversion_rate: 28 },
+  {
+    id: 38427,
+    unit_name: "Viên",
+    unit_type: "base",
+    is_base: true,
+    conversion_rate: 1,
+  },
+  {
+    id: 38428,
+    unit_name: "Vỉ",
+    unit_type: "retail",
+    is_base: false,
+    conversion_rate: 14,
+  },
+  {
+    id: 38429,
+    unit_name: "Hộp",
+    unit_type: "wholesale",
+    is_base: false,
+    conversion_rate: 28,
+  },
 ];
 
 /** Coversyl Plus: tất cả đều "Hộp" rate 1, nhưng có unit_type khác nhau */
 const coversylUnits = [
-  { id: 38010, unit_name: "Hộp", unit_type: "base", is_base: true, conversion_rate: 1 },
-  { id: 38011, unit_name: "Hộp", unit_type: "retail", is_base: false, conversion_rate: 1 },
-  { id: 38012, unit_name: "Hộp", unit_type: "wholesale", is_base: false, conversion_rate: 1 },
+  {
+    id: 38010,
+    unit_name: "Hộp",
+    unit_type: "base",
+    is_base: true,
+    conversion_rate: 1,
+  },
+  {
+    id: 38011,
+    unit_name: "Hộp",
+    unit_type: "retail",
+    is_base: false,
+    conversion_rate: 1,
+  },
+  {
+    id: 38012,
+    unit_name: "Hộp",
+    unit_type: "wholesale",
+    is_base: false,
+    conversion_rate: 1,
+  },
 ];
 
 /** Trileptal: 3 đơn vị rõ ràng, retail_unit !== wholesale_unit */
 const trileptalUnits = [
-  { id: 40521, unit_name: "Viên", unit_type: "base", is_base: true, conversion_rate: 1 },
-  { id: 40522, unit_name: "Vỉ", unit_type: "retail", is_base: false, conversion_rate: 10 },
-  { id: 40523, unit_name: "Hộp", unit_type: "wholesale", is_base: false, conversion_rate: 50 },
+  {
+    id: 40521,
+    unit_name: "Viên",
+    unit_type: "base",
+    is_base: true,
+    conversion_rate: 1,
+  },
+  {
+    id: 40522,
+    unit_name: "Vỉ",
+    unit_type: "retail",
+    is_base: false,
+    conversion_rate: 10,
+  },
+  {
+    id: 40523,
+    unit_name: "Hộp",
+    unit_type: "wholesale",
+    is_base: false,
+    conversion_rate: 50,
+  },
 ];
 
 /** Sản phẩm chỉ có 1 đơn vị base, không có wholesale/retail type */
 const singleUnitProduct = [
-  { id: 100, unit_name: "Chai", unit_type: "base", is_base: true, conversion_rate: 1 },
+  {
+    id: 100,
+    unit_name: "Chai",
+    unit_type: "base",
+    is_base: true,
+    conversion_rate: 1,
+  },
 ];
 
 /** Sản phẩm không có unit_type nhưng có name matching */
 const legacyUnits = [
-  { id: 200, unit_name: "Viên", unit_type: "base", is_base: true, conversion_rate: 1 },
-  { id: 201, unit_name: "Vỉ", unit_type: "base", is_base: false, conversion_rate: 10 },
-  { id: 202, unit_name: "Hộp", unit_type: "base", is_base: false, conversion_rate: 30 },
+  {
+    id: 200,
+    unit_name: "Viên",
+    unit_type: "base",
+    is_base: true,
+    conversion_rate: 1,
+  },
+  {
+    id: 201,
+    unit_name: "Vỉ",
+    unit_type: "base",
+    is_base: false,
+    conversion_rate: 10,
+  },
+  {
+    id: 202,
+    unit_name: "Hộp",
+    unit_type: "base",
+    is_base: false,
+    conversion_rate: 30,
+  },
 ];
 
 describe("resolveProductUnits", () => {
@@ -151,7 +230,13 @@ describe("resolveProductUnits", () => {
 
     it("không có is_base → fallback first element", () => {
       const noneBase = [
-        { id: 300, unit_name: "Tuýp", unit_type: "base", is_base: false, conversion_rate: 1 },
+        {
+          id: 300,
+          unit_name: "Tuýp",
+          unit_type: "base",
+          is_base: false,
+          conversion_rate: 1,
+        },
       ];
       const result = resolveProductUnits({
         wholesale_unit: null,

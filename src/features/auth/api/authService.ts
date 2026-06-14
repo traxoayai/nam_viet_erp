@@ -1,15 +1,16 @@
 // src/services/authService.ts
 import { UserProfile } from "@/features/auth/types/auth";
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 /**
  * 1. Đăng nhập
  */
-export const login = async (values: any) => {
+export const login = async (values: unknown) => {
+  const vals = values as Record<string, unknown>;
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: values.email,
-    password: values.password,
+    email: vals.email as string,
+    password: vals.password as string,
   });
   if (error) throw error;
   return data;
@@ -62,8 +63,8 @@ export const updateSelfPassword = async (newPassword: string) => {
 /**
  * 6. User tự cập nhật hồ sơ (Trang Canvas)
  */
-export const updateSelfProfile = async (profileData: any) => {
+export const updateSelfProfile = async (profileData: unknown) => {
   await safeRpc("update_self_profile", {
-    p_profile_data: profileData,
+    p_profile_data: profileData as unknown,
   });
 };

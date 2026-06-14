@@ -14,12 +14,13 @@ export const useB2BOrders = () => {
     pending_payment: 0,
   });
 
-  const fetcherAdapter = useCallback(async (params: any) => {
+  const fetcherAdapter = useCallback(async (params: unknown) => {
+    const p = params as Record<string, unknown>;
     const response = await b2bService.getOrders({
-      page: params.page,
-      pageSize: params.pageSize,
-      search: params.search,
-      status: params.status,
+      page: p.page as number,
+      pageSize: p.pageSize as number,
+      search: p.search as string,
+      status: p.status as string,
     });
 
     if (response.stats) {

@@ -26,9 +26,9 @@ interface ExcelItem {
 
 interface Props {
   open: boolean;
-  data: any[]; // Raw data from RPC
+  data: unknown[]; // Raw data from RPC
   onCancel: () => void;
-  onConfirm: (products: any[]) => void;
+  onConfirm: (products: unknown[]) => void;
 }
 
 export const ExcelPreviewModal: React.FC<Props> = ({
@@ -88,54 +88,62 @@ export const ExcelPreviewModal: React.FC<Props> = ({
   // 1. Hàm fetch dữ liệu đúng chuẩn RPC B2B
   const fetchProductOptions = async (search: string) => {
     try {
-    const { data } = await safeRpc(
-      "search_products_for_b2b_order",
-      {
+      const { data } = await safeRpc("search_products_for_b2b_order", {
         p_keyword: search || "",
         p_warehouse_id: DEFAULT_WAREHOUSE_ID,
-      }
-    );
+      });
 
-    // Map sang format mà Ant Design Select cần
-    const products = (data ?? []) as unknown as { id: number; name: string; sku: string; image_url?: string; wholesale_unit?: string }[];
-    return products.map((p) => ({
-      label: (
-        // CUSTOM UI HIỂN THỊ OPTION
-        <div
-          style={{ display: "flex", alignItems: "center", gap: 8, padding: 4 }}
-        >
-          <img
-            src={p.image_url || "https://via.placeholder.com/40"}
-            alt="img"
+      // Map sang format mà Ant Design Select cần
+      const products = (data ?? []) as unknown as {
+        id: number;
+        name: string;
+        sku: string;
+        image_url?: string;
+        wholesale_unit?: string;
+      }[];
+      return products.map((p) => ({
+        label: (
+          // CUSTOM UI HIỂN THỊ OPTION
+          <div
             style={{
-              width: 32,
-              height: 32,
-              objectFit: "cover",
-              borderRadius: 4,
-              border: "1px solid #eee",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: 4,
             }}
-          />
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontWeight: 500 }}>{p.name}</span>
-            <span style={{ fontSize: 11, color: "#666" }}>
-              {p.sku} | ĐV Sỉ:{" "}
-              <span style={{ color: "#1890ff" }}>
-                {p.wholesale_unit || "N/A"}
+          >
+            <img
+              src={p.image_url || "https://via.placeholder.com/40"}
+              alt="img"
+              style={{
+                width: 32,
+                height: 32,
+                objectFit: "cover",
+                borderRadius: 4,
+                border: "1px solid #eee",
+              }}
+            />
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span style={{ fontWeight: 500 }}>{p.name}</span>
+              <span style={{ fontSize: 11, color: "#666" }}>
+                {p.sku} | ĐV Sỉ:{" "}
+                <span style={{ color: "#1890ff" }}>
+                  {p.wholesale_unit || "N/A"}
+                </span>
               </span>
-            </span>
+            </div>
           </div>
-        </div>
-      ),
-      value: p.id,
-      // Dữ liệu thô để dùng khi select
-      product: p,
-    }));
+        ),
+        value: p.id,
+        // Dữ liệu thô để dùng khi select
+        product: p,
+      }));
     } catch {
       return [];
     }
   };
 
-  const handleProductChange = (key: string, selectedOption: any) => {
+  const handleProductChange = (key: string, selectedOption: unknown) => {
     setItems((prev) =>
       prev.map((item) => {
         if (item.key === key) {
@@ -170,7 +178,7 @@ export const ExcelPreviewModal: React.FC<Props> = ({
       title: "Dữ liệu Excel",
       key: "excel",
       width: 250,
-      render: (_: any, r: ExcelItem) => (
+      render: (_: unknown, r: ExcelItem) => (
         <div>
           <div style={{ fontWeight: 500 }}>{r.excel_name}</div>
           {r.excel_sku ? <Tag>{r.excel_sku}</Tag> : null}
@@ -180,7 +188,7 @@ export const ExcelPreviewModal: React.FC<Props> = ({
     {
       title: "Khớp với Sản phẩm Hệ thống",
       key: "system",
-      render: (_: any, r: ExcelItem) => (
+      render: (_: unknown, r: ExcelItem) => (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <DebounceSelect
             showSearch
@@ -196,7 +204,9 @@ export const ExcelPreviewModal: React.FC<Props> = ({
                   }
                 : undefined
             }
-            onChange={(_val: any, opt: any) => handleProductChange(r.key, opt)}
+            onChange={(_val: unknown, opt: unknown) =>
+              handleProductChange(r.key, opt)
+            }
           />
           {r.match_score !== undefined && r.match_score >= 0.8 && (
             <div style={{ fontSize: 11, color: "#52c41a" }}>
@@ -215,7 +225,7 @@ export const ExcelPreviewModal: React.FC<Props> = ({
       title: "",
       key: "action",
       width: 50,
-      render: (_: any, r: ExcelItem) => (
+      render: (_: unknown, r: ExcelItem) => (
         <Button
           type="text"
           danger

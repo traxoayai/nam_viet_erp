@@ -19,30 +19,30 @@ export const fetchCategories = async (): Promise<TransactionCategory[]> => {
 };
 
 // 2. Thêm Loại Thu/Chi
-export const addCategory = async (values: any) => {
+export const addCategory = async (values: Record<string, unknown>) => {
   const { error } = await supabase.from("transaction_categories").insert({
-    code: values.code,
-    name: values.name,
-    type: values.type,
-    account_id: values.accountId,
-    status: values.status,
-    description: values.description,
+    code: values.code as string,
+    name: values.name as string,
+    type: values.type as "thu" | "chi",
+    account_id: values.accountId as string,
+    status: values.status as "active" | "inactive",
+    description: values.description as string,
   });
   if (error) throw error;
   return true;
 };
 
 // 3. Cập nhật Loại Thu/Chi
-export const updateCategory = async (id: number, values: any) => {
+export const updateCategory = async (id: number, values: Record<string, unknown>) => {
   const { error } = await supabase
     .from("transaction_categories")
     .update({
-      code: values.code,
-      name: values.name,
-      type: values.type,
-      account_id: values.accountId,
-      status: values.status,
-      description: values.description,
+      code: values.code as string,
+      name: values.name as string,
+      type: values.type as "thu" | "chi",
+      account_id: values.accountId as string,
+      status: values.status as "active" | "inactive",
+      description: values.description as string,
     })
     .eq("id", id);
   if (error) throw error;

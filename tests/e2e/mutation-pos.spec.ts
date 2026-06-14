@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+
 import { login } from "./helpers/auth";
 
 test.describe("POS Checkout Flow", () => {
@@ -37,9 +38,11 @@ test.describe("POS Checkout Flow", () => {
     await page.waitForTimeout(5000);
 
     // Verify warehouse dropdown/select is visible
-    const warehouseSelect = page.locator(
-      ".ant-select:has-text('Kho'), [class*='warehouse'], label:has-text('Kho'), .ant-select-selection-item"
-    ).first();
+    const warehouseSelect = page
+      .locator(
+        ".ant-select:has-text('Kho'), [class*='warehouse'], label:has-text('Kho'), .ant-select-selection-item"
+      )
+      .first();
 
     const selectVisible = await warehouseSelect.isVisible().catch(() => false);
 

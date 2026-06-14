@@ -48,7 +48,7 @@ const LocationCell = ({
   onComplete,
   onVoiceStart,
   isListening,
-}: any) => {
+}: unknown) => {
   const [val, setVal] = useState({
     c: initialVal.cabinet || "",
     r: initialVal.row || "",
@@ -95,7 +95,7 @@ const LocationCell = ({
     }
   };
 
-  const handleKeyDown = async (e: any) => {
+  const handleKeyDown = async (e: unknown) => {
     if (e.key === "Enter") {
       const success = await handleSave();
       if (success && onComplete) onComplete();
@@ -213,10 +213,10 @@ export const QuickLocationUpdate = () => {
   const [warehouseId, setWarehouseId] = useState<number>(1);
 
   const [searchText, setSearchText] = useState("");
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const searchInputRef = useRef<any>(null);
+  const searchInputRef = useRef<unknown>(null);
 
   // [NEW] Voice State
   const [listeningRowId, setListeningRowId] = useState<number | null>(null);
@@ -233,7 +233,7 @@ export const QuickLocationUpdate = () => {
         const data = await posService.getActiveWarehouses();
         setWarehouses(data);
         if (data.length > 0) setWarehouseId(data[0].id);
-      } catch (err) {
+      } catch (_err) {
         message.error("Không thể tải danh sách kho");
       }
     };
@@ -250,7 +250,9 @@ export const QuickLocationUpdate = () => {
       try {
         const res = await posService.searchProducts(text, wId);
         // [FILTER] Chỉ lấy sản phẩm ACTIVE
-        const activeProducts = res.filter((p: any) => p.status === "active");
+        const activeProducts = res.filter(
+          (p: unknown) => p.status === "active"
+        );
         setProducts(activeProducts);
       } catch (err) {
         console.error(err);
@@ -323,7 +325,7 @@ export const QuickLocationUpdate = () => {
               );
               message.success("Đã lưu giọng nói!");
               // handleProductDone(); // Tùy chọn: Xong thì clear luôn
-            } catch (e) {
+            } catch (_e) {
               message.error("Lỗi lưu giọng nói");
             }
           }
@@ -368,7 +370,7 @@ export const QuickLocationUpdate = () => {
         return () => {
           try {
             scanner.clear();
-          } catch (e) {}
+          } catch (_e) {}
         };
       }, 100);
       return () => clearTimeout(timeoutId);
@@ -393,7 +395,7 @@ export const QuickLocationUpdate = () => {
     {
       title: "Sản phẩm",
       dataIndex: "name",
-      render: (_: any, r: any) => (
+      render: (_: unknown, r: unknown) => (
         <div>
           <div style={{ fontWeight: 600, fontSize: 14 }}>{r.name}</div>
           <Space size={4}>
@@ -407,7 +409,7 @@ export const QuickLocationUpdate = () => {
       title: "Vị trí",
       key: "location",
       width: 320,
-      render: (_: any, r: any) => (
+      render: (_: unknown, r: unknown) => (
         <LocationCell
           productId={r.id}
           warehouseId={warehouseId}
@@ -421,7 +423,7 @@ export const QuickLocationUpdate = () => {
     },
   ];
 
-  const renderMobileItem = (item: any) => (
+  const renderMobileItem = (item: unknown) => (
     <List.Item style={{ padding: "8px 0" }}>
       <Card
         size="small"

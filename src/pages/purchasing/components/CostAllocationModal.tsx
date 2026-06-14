@@ -27,12 +27,12 @@ interface CostAllocationModalProps {
   open: boolean;
   onCancel: () => void;
   items: POItem[]; // Danh sách items ban đầu
-  onConfirm: (data: any[]) => void; // Hàm submit về cha
+  onConfirm: (data: unknown[]) => void; // Hàm submit về cha
   loading?: boolean;
 }
 
 // Helper: Phân bổ phí vận chuyển
-const allocateShippingFee = (items: any[], totalShippingFee: number) => {
+const allocateShippingFee = (items: unknown[], totalShippingFee: number) => {
   const totalValue = items.reduce(
     (sum, item) => sum + item.unit_price * item.quantity,
     0
@@ -55,7 +55,7 @@ export const CostAllocationModal: React.FC<CostAllocationModalProps> = ({
   onConfirm,
   loading,
 }) => {
-  const [dataSource, setDataSource] = useState<any[]>([]);
+  const [dataSource, setDataSource] = useState<unknown[]>([]);
   const [totalShipping, setTotalShipping] = useState<number>(0);
   const [otherFee, setOtherFee] = useState<number>(0);
 
@@ -64,7 +64,7 @@ export const CostAllocationModal: React.FC<CostAllocationModalProps> = ({
     if (open && items.length > 0) {
       // Map items sang cấu trúc state local
       const mapped = items.map((i) => ({
-        id: (i as any).id || (i as any).item_id, // Important: need table ID
+        id: (i as unknown).id || (i as unknown).item_id, // Important: need table ID
         product_id: i.product_id,
         name: i.name,
         sku: i.sku,
@@ -94,7 +94,7 @@ export const CostAllocationModal: React.FC<CostAllocationModalProps> = ({
 
   // Recalculate Final Cost for ALL items
   // Formula: ((Price * Qty) - (Price * Qty * Rebate%) + (Price * Qty * VAT%) + Ship) / (Qty + Bonus)
-  const recalcCosts = (currentItems: any[]) => {
+  const recalcCosts = (currentItems: unknown[]) => {
     const calculated = currentItems.map((item) => {
       const rawTotal = item.unit_price * item.quantity;
       const rebateVal = rawTotal * (item.rebate_rate / 100);
@@ -132,7 +132,7 @@ export const CostAllocationModal: React.FC<CostAllocationModalProps> = ({
   };
 
   // Handle Cell Change
-  const handleItemChange = (key: any, field: string, val: number) => {
+  const handleItemChange = (key: unknown, field: string, val: number) => {
     const newData = [...dataSource];
     const index = newData.findIndex((item) => item.product_id === key); // Use product_id or id
     if (index > -1) {
@@ -153,12 +153,12 @@ export const CostAllocationModal: React.FC<CostAllocationModalProps> = ({
     0
   );
 
-  const columns: any[] = [
+  const columns: unknown[] = [
     {
       title: "Sản phẩm",
       dataIndex: "name",
       width: 250,
-      render: (text: string, r: any) => (
+      render: (text: string, r: unknown) => (
         <div>
           <Text strong>{text}</Text>
           <div>
@@ -172,7 +172,7 @@ export const CostAllocationModal: React.FC<CostAllocationModalProps> = ({
       dataIndex: "quantity",
       width: 80,
       align: "center",
-      render: (v: number, r: any) => `${v} ${r.uom}`,
+      render: (v: number, r: unknown) => `${v} ${r.uom}`,
     },
     {
       title: "Đơn giá",
@@ -185,7 +185,7 @@ export const CostAllocationModal: React.FC<CostAllocationModalProps> = ({
       title: "VAT %",
       dataIndex: "vat_rate",
       width: 80,
-      render: (v: number, r: any) => (
+      render: (v: number, r: unknown) => (
         <InputNumber
           min={0}
           max={100}
@@ -205,7 +205,7 @@ export const CostAllocationModal: React.FC<CostAllocationModalProps> = ({
       ),
       dataIndex: "rebate_rate",
       width: 80,
-      render: (v: number, r: any) => (
+      render: (v: number, r: unknown) => (
         <InputNumber
           min={0}
           max={100}
@@ -222,7 +222,7 @@ export const CostAllocationModal: React.FC<CostAllocationModalProps> = ({
       title: "Tặng (SL)",
       dataIndex: "bonus_quantity",
       width: 90,
-      render: (v: number, r: any) => (
+      render: (v: number, r: unknown) => (
         <InputNumber
           min={0}
           value={v}
@@ -237,7 +237,7 @@ export const CostAllocationModal: React.FC<CostAllocationModalProps> = ({
       title: "Phí Ship",
       dataIndex: "allocated_shipping_fee",
       width: 110,
-      render: (v: number, r: any) => (
+      render: (v: number, r: unknown) => (
         <InputNumber
           min={0}
           value={v}

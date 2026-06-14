@@ -9,12 +9,12 @@ import { useDebounce } from "@/shared/hooks/useDebounce";
 const { Text } = Typography;
 
 interface Props {
-  onSelect: (customer: any) => void;
+  onSelect: (customer: unknown) => void;
   style?: React.CSSProperties;
 }
 
 export const CustomerSearchB2B = ({ onSelect, style }: Props) => {
-  const [options, setOptions] = useState<any[]>([]);
+  const [options, setOptions] = useState<Array<{ label: React.ReactNode; value: number; customer: Record<string, unknown> }>>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 400);
@@ -29,27 +29,30 @@ export const CustomerSearchB2B = ({ onSelect, style }: Props) => {
       // Bỏ qua response stale
       if (reqId !== latestReqIdRef.current) return;
       setOptions(
-        data.map((c: any) => ({
-          label: (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "4px 0",
-              }}
-            >
-              <div>
-                <Text strong>{c.name}</Text>
-                <div style={{ fontSize: 11, color: "#888" }}>
-                  MST: {c.tax_code} | {c.phone}
+        data.map((c: unknown) => {
+          const customer = c as Record<string, unknown>;
+          return {
+            label: (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: "4px 0",
+                }}
+              >
+                <div>
+                  <Text strong>{String(customer.name)}</Text>
+                  <div style={{ fontSize: 11, color: "#888" }}>
+                    MST: {String(customer.tax_code)} | {String(customer.phone)}
+                  </div>
                 </div>
+                {customer.is_bad_debt ? <Tag color="red">Nợ xấu</Tag> : null}
               </div>
-              {c.is_bad_debt ? <Tag color="red">Nợ xấu</Tag> : null}
-            </div>
-          ),
-          value: c.id,
-          customer: c,
-        }))
+            ) as React.ReactNode,
+            value: customer.id as number,
+            customer: customer,
+          };
+        })
       );
     } catch (e) {
       if (reqId !== latestReqIdRef.current) return;
@@ -73,11 +76,12 @@ export const CustomerSearchB2B = ({ onSelect, style }: Props) => {
       loading={loading}
       options={options}
       style={{ width: "100%", ...style }}
-      onChange={(_, option: any) => {
-        if (option?.customer) {
+      onChange={(_, option: unknown) => {
+        const opt = option as Record<string, unknown>;
+        if (opt?.customer) {
           // Vô hiệu hoá in-flight requests khi user đã chọn xong
           latestReqIdRef.current += 1;
-          onSelect(option.customer);
+          onSelect(opt.customer);
         }
       }}
       notFoundContent={

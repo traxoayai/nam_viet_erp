@@ -11,8 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { supabase } from "@/shared/lib/supabaseClient";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db = supabase as unknown as SupabaseClient<any>;
+const db = supabase as unknown as SupabaseClient<unknown>;
 
 export interface ListJournalParams {
   book?: Book;

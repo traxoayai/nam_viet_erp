@@ -11,7 +11,7 @@ const { useBreakpoint } = Grid;
 interface WarehouseToolBarProps {
   onScan: (code: string) => void;
   onVoice?: (text: string) => void;
-  onAICamResult?: (data: any) => void;
+  onAICamResult?: (data: unknown) => void;
 
   // Tuỳ chọn
   enableScanner?: boolean;

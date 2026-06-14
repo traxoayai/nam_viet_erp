@@ -31,23 +31,26 @@ export const syncBanksFromVietQR = async (): Promise<number> => {
     throw new Error("Không thể kết nối đến máy chủ VietQR.");
   }
   const result = await response.json();
-  const banksFromAPI: any[] = result.data; //[cite: 2400];
+  const banksFromAPI: unknown[] = result.data; //[cite: 2400];
 
   if (!banksFromAPI || banksFromAPI.length === 0) {
     return 0;
   }
 
   // B2: Chuyển đổi dữ liệu từ API sang cấu trúc CSDL của Sếp
-  const recordsToUpsert = banksFromAPI.map((bank) => ({
-    name: bank.name,
-    code: bank.code,
-    bin: bank.bin,
-    short_name: bank.shortName, // Chú ý: API là shortName [cite: 2405]
-    logo: bank.logo,
-    status: "active" as const, // Mặc định là 'active'
-    transfer_supported: !!bank.transferSupported, // [cite: 2411]
-    lookup_supported: !!bank.lookupSupported, // [cite: 2412]
-  }));
+  const recordsToUpsert = banksFromAPI.map((bank: unknown) => {
+    const b = bank as Record<string, unknown>;
+    return {
+      name: b.name as string,
+      code: b.code as string,
+      bin: b.bin as string,
+      short_name: b.shortName as string, // Chú ý: API là shortName [cite: 2405]
+      logo: b.logo as string,
+      status: "active" as const, // Mặc định là 'active'
+      transfer_supported: !!(b.transferSupported as boolean), // [cite: 2411]
+      lookup_supported: !!(b.lookupSupported as boolean), // [cite: 2412]
+    };
+  });
 
   // B3: Dùng 'upsert' để Thêm mới hoặc Cập nhật nếu đã tồn tại
   // (Dùng 'bin' làm khóa chính để tránh trùng lặp) [cite: 2404]

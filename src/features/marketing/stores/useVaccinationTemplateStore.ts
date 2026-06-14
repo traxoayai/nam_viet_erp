@@ -25,12 +25,12 @@ interface StoreState {
   getTemplateDetails: (id: number) => Promise<void>;
   createTemplate: (
     data: VaccinationTemplateInput,
-    items: any[]
+    items: unknown[]
   ) => Promise<boolean>;
   updateTemplate: (
     id: number,
     data: VaccinationTemplateInput,
-    items: any[]
+    items: unknown[]
   ) => Promise<boolean>;
   deleteTemplate: (id: number) => Promise<void>;
 
@@ -51,8 +51,8 @@ export const useVaccinationTemplateStore = create<StoreState>((set, get) => ({
       // Gọi đúng tên service
       const data = await vaccinationService.getTemplates(search, status);
       set({ templates: data, loading: false });
-    } catch (error) {
-      console.error(error);
+    } catch (_error) {
+      console.error(_error);
       set({ loading: false });
     }
   },
@@ -63,8 +63,8 @@ export const useVaccinationTemplateStore = create<StoreState>((set, get) => ({
       const { template, items } =
         await vaccinationService.getTemplateDetails(id);
       set({ editingTemplate: { data: template, items }, loading: false });
-    } catch (error) {
-      console.error(error);
+    } catch (_error) {
+      console.error(_error);
       message.error("Lỗi tải chi tiết phác đồ");
       set({ loading: false });
     }
@@ -77,7 +77,7 @@ export const useVaccinationTemplateStore = create<StoreState>((set, get) => ({
       message.success("Tạo phác đồ thành công");
       get().fetchTemplates();
       return true;
-    } catch (error) {
+    } catch (_error) {
       message.error("Tạo thất bại");
       return false;
     } finally {
@@ -92,7 +92,7 @@ export const useVaccinationTemplateStore = create<StoreState>((set, get) => ({
       message.success("Cập nhật thành công");
       get().fetchTemplates();
       return true;
-    } catch (error) {
+    } catch (_error) {
       message.error("Cập nhật thất bại");
       return false;
     } finally {
@@ -106,7 +106,7 @@ export const useVaccinationTemplateStore = create<StoreState>((set, get) => ({
       await vaccinationService.deleteTemplate(id);
       message.success("Đã xóa phác đồ");
       get().fetchTemplates();
-    } catch (error) {
+    } catch (_error) {
       message.error("Xóa thất bại");
     } finally {
       set({ loading: false });

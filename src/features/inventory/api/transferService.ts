@@ -14,13 +14,10 @@ export const transferService = {
    * Calls RPC: create_auto_replenishment_request
    */
   createAutoReplenishment: async (destWarehouseId: number, note?: string) => {
-    const { data } = await safeRpc(
-      "create_auto_replenishment_request",
-      {
-        p_dest_warehouse_id: destWarehouseId,
-        p_note: note || "",
-      }
-    );
+    const { data } = await safeRpc("create_auto_replenishment_request", {
+      p_dest_warehouse_id: destWarehouseId,
+      p_note: note || "",
+    });
     return data; // Returns request_id
   },
 
@@ -64,7 +61,9 @@ export const transferService = {
     // I will assume it returns { data: [], total_count: 0 } or similar.
 
     // SAFEGUARD: If data is array directly, use it. If it has .data property, use that.
-    const result = data as unknown as { data?: TransferMaster[]; total_count?: number } | TransferMaster[];
+    const result = data as unknown as
+      | { data?: TransferMaster[]; total_count?: number }
+      | TransferMaster[];
     const resultData = (Array.isArray(result) ? result : result?.data) || [];
     const totalCount = (Array.isArray(result) ? 0 : result?.total_count) || 0;
 
@@ -117,7 +116,7 @@ export const transferService = {
       dest_warehouse_name: headerData.dest?.name,
     };
 
-    const transferItems = (items || []).map((item: any) => ({
+    const transferItems = (items || []).map((item: unknown) => ({
       ...item,
       // Map DB columns (snake_case qty_) to TS interface (quantity_)
       quantity_requested: item.qty_requested,
@@ -258,7 +257,7 @@ export const transferService = {
   fetchBatchesForTransfer: async (
     items: { product_id: number }[],
     warehouseId: number
-  ) => {
+  ): Promise<Record<number, Array<Record<string, unknown>>>> => {
     // Since we don't have a bulk RPC yet, we'll use Promise.all for V1
     // This is acceptable for typical transfer sizes (< 50 items)
     const promises = items.map((item) =>
@@ -273,7 +272,7 @@ export const transferService = {
 
     const results = await Promise.all(promises);
     // Convert to map: productId -> batches[]
-    const batchMap: Record<number, any[]> = {};
+    const batchMap: Record<number, Array<Record<string, unknown>>> = {};
     results.forEach((res) => {
       batchMap[res.productId] = res.batches;
     });
@@ -306,7 +305,7 @@ export const transferService = {
     });
     // Trả về tổng tồn kho (Base Unit) của tất cả các lô cộng lại
     const totalStock =
-      data?.reduce((sum: number, b: any) => sum + b.quantity, 0) || 0;
+      data?.reduce((sum: number, b: unknown) => sum + b.quantity, 0) || 0;
     return totalStock;
   },
 
@@ -325,10 +324,7 @@ export const transferService = {
       conversion_factor: number; // Hệ số quy đổi
     }>;
   }) => {
-    const { data } = await safeRpc(
-      "create_manual_transfer",
-      payload
-    );
+    const { data } = await safeRpc("create_manual_transfer", payload);
     return data; // { success: true, transfer_id: ... }
   },
 };

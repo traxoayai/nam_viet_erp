@@ -24,7 +24,10 @@ export interface InvoiceSummary {
 /**
  * Calculate line subtotal: qty * unit_price
  */
-export function calculateLineSubtotal(quantity: number, unit_price: number): number {
+export function calculateLineSubtotal(
+  quantity: number,
+  unit_price: number
+): number {
   return quantity * unit_price;
 }
 

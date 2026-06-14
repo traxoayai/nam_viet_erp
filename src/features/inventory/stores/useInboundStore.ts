@@ -2,7 +2,6 @@
 import { message } from "antd";
 import { create } from "zustand";
 
-import { supabase } from "@/shared/lib/supabaseClient";
 import { inboundService } from "../api/inboundService";
 import {
   InboundTask,
@@ -10,6 +9,8 @@ import {
   InboundDetailResponse,
   InboundDetailItem,
 } from "../types/inbound";
+
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // ID kho tổng B2B — ưu tiên hiển thị vị trí kệ của kho này nếu product có ở nhiều kho.
 // TODO: di chuyển sang config/warehouse_settings table khi multi-tenant.
@@ -81,7 +82,7 @@ export const useInboundStore = create<InboundState>((set, get) => ({
       const { filters } = get();
       const { data, total } = await inboundService.getInboundTasks(filters);
       set({ tasks: data, totalCount: total, loading: false });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to fetch inbound tasks", error);
       set({
         loading: false,
@@ -115,8 +116,8 @@ export const useInboundStore = create<InboundState>((set, get) => ({
         message.info("Đã phục hồi tiến độ làm việc lưu nháp.");
       }
 
-      const baseWorkingItems = hasDraft 
-        ? draftItems 
+      const baseWorkingItems = hasDraft
+        ? draftItems
         : (data.items || []).map((item) => ({
             ...item,
             input_quantity:
@@ -129,7 +130,7 @@ export const useInboundStore = create<InboundState>((set, get) => ({
 
       // Fetch shelf_location from product_inventory
       if (workingItems.length > 0) {
-        const productIds = workingItems.map(i => i.product_id);
+        const productIds = workingItems.map((i) => i.product_id);
         const { data: invData, error: invError } = await supabase
           .from("product_inventory")
           .select("product_id, shelf_location, warehouse_id")
@@ -174,25 +175,29 @@ export const useInboundStore = create<InboundState>((set, get) => ({
               });
             }
           }
-          workingItems = workingItems.map(item => ({
+          workingItems = workingItems.map((item) => ({
             ...item,
-            shelf_location: locationMap.get(item.product_id)?.shelf_location || "",
+            shelf_location:
+              locationMap.get(item.product_id)?.shelf_location || "",
           }));
 
           // Sort A-Z by shelf_location
           workingItems.sort((a, b) => {
-             const sa = (a.shelf_location || "").trim();
-             const sb = (b.shelf_location || "").trim();
-             if (!sa && !sb) return 0;
-             if (!sa) return 1;
-             if (!sb) return -1;
-             return sa.localeCompare(sb, "vi", { numeric: true, sensitivity: "base" });
+            const sa = (a.shelf_location || "").trim();
+            const sb = (b.shelf_location || "").trim();
+            if (!sa && !sb) return 0;
+            if (!sa) return 1;
+            if (!sb) return -1;
+            return sa.localeCompare(sb, "vi", {
+              numeric: true,
+              sensitivity: "base",
+            });
           });
         }
       }
 
       set({ detail: data, workingItems, loading: false });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to fetch inbound detail", error);
       set({
         loading: false,
@@ -236,7 +241,7 @@ export const useInboundStore = create<InboundState>((set, get) => ({
         p_items: itemsToProcess,
       });
       await get().fetchDetail(poId);
-    } catch (error: any) {
+    } catch (error: unknown) {
       set({ error: error.message });
       throw error;
     }

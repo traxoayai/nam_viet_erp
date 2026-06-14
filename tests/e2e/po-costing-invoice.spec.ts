@@ -6,6 +6,7 @@
  * Yêu cầu: DB phải có ít nhất 1 PO ở trạng thái PENDING
  */
 import { test, expect, Page } from "@playwright/test";
+
 import { login } from "./helpers/auth";
 
 // ================================================================
@@ -67,7 +68,9 @@ test.describe("Chốt Giá Vốn & Công Nợ", () => {
     await login(page);
   });
 
-  test("PO detail shows costing section for PENDING order", async ({ page }) => {
+  test("PO detail shows costing section for PENDING order", async ({
+    page,
+  }) => {
     const found = await openPendingPO(page);
     if (!found) {
       console.log("SKIP: Không có PO PENDING trong DB test");
@@ -79,7 +82,9 @@ test.describe("Chốt Giá Vốn & Công Nợ", () => {
     await expect(costingSection).toBeVisible({ timeout: 10000 });
   });
 
-  test("sticky footer shows Chốt Giá Vốn button for PENDING order", async ({ page }) => {
+  test("sticky footer shows Chốt Giá Vốn button for PENDING order", async ({
+    page,
+  }) => {
     const found = await openPendingPO(page);
     if (!found) {
       console.log("SKIP: Không có PO PENDING trong DB test");
@@ -95,7 +100,9 @@ test.describe("Chốt Giá Vốn & Công Nợ", () => {
     await expect(costBtn).toBeVisible({ timeout: 5000 });
   });
 
-  test("Chốt Giá Vốn button is disabled with text 'Đã Chốt' when already confirmed", async ({ page }) => {
+  test("Chốt Giá Vốn button is disabled with text 'Đã Chốt' when already confirmed", async ({
+    page,
+  }) => {
     await openFirstPO(page);
 
     // Scroll xuống
@@ -103,18 +110,24 @@ test.describe("Chốt Giá Vốn & Công Nợ", () => {
     await page.waitForTimeout(1000);
 
     // Nếu PO đã chốt giá vốn, nút phải disabled và hiển thị "Đã Chốt Giá Vốn"
-    const lockedBtn = page.locator("button:has-text('Đã Chốt Giá Vốn')").first();
+    const lockedBtn = page
+      .locator("button:has-text('Đã Chốt Giá Vốn')")
+      .first();
     if (await lockedBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await expect(lockedBtn).toBeDisabled();
     }
     // Nếu chưa chốt, nút "Chốt Giá Vốn & Công Nợ" phải enabled
-    const activeBtn = page.locator("button:has-text('Chốt Giá Vốn & Công Nợ')").first();
+    const activeBtn = page
+      .locator("button:has-text('Chốt Giá Vốn & Công Nợ')")
+      .first();
     if (await activeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await expect(activeBtn).toBeEnabled();
     }
   });
 
-  test("payment buttons remain visible after costing (status still PENDING)", async ({ page }) => {
+  test("payment buttons remain visible after costing (status still PENDING)", async ({
+    page,
+  }) => {
     const found = await openPendingPO(page);
     if (!found) {
       console.log("SKIP: Không có PO PENDING trong DB test");
@@ -130,7 +143,9 @@ test.describe("Chốt Giá Vốn & Công Nợ", () => {
     await expect(vcBtn).toBeVisible({ timeout: 5000 });
   });
 
-  test("Tổng thanh toán dự kiến = Tiền hàng + Phí VC (hiển thị riêng)", async ({ page }) => {
+  test("Tổng thanh toán dự kiến = Tiền hàng + Phí VC (hiển thị riêng)", async ({
+    page,
+  }) => {
     const found = await openPendingPO(page);
     if (!found) {
       console.log("SKIP: Không có PO PENDING trong DB test");
@@ -148,7 +163,9 @@ test.describe("Chốt Giá Vốn & Công Nợ", () => {
     await expect(phiVC).toBeVisible({ timeout: 5000 });
   });
 
-  test("status does NOT change to Hoàn tất after page reload (if not fully paid)", async ({ page }) => {
+  test("status does NOT change to Hoàn tất after page reload (if not fully paid)", async ({
+    page,
+  }) => {
     const found = await openPendingPO(page);
     if (!found) {
       console.log("SKIP: Không có PO PENDING trong DB test");
@@ -159,8 +176,12 @@ test.describe("Chốt Giá Vốn & Công Nợ", () => {
     const pendingTag = page.locator(".ant-tag:has-text('Đã đặt hàng')").first();
     const completedTag = page.locator(".ant-tag:has-text('Hoàn tất')").first();
 
-    const isPending = await pendingTag.isVisible({ timeout: 5000 }).catch(() => false);
-    const isCompleted = await completedTag.isVisible({ timeout: 3000 }).catch(() => false);
+    const isPending = await pendingTag
+      .isVisible({ timeout: 5000 })
+      .catch(() => false);
+    const isCompleted = await completedTag
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
 
     // Nếu PO đang PENDING thì phải giữ PENDING (không tự nhảy COMPLETED)
     if (isPending) {
@@ -188,7 +209,9 @@ test.describe("Invoice VAT - Đối Chiếu Hóa Đơn", () => {
     await expect(invoiceSection).toBeVisible({ timeout: 10000 });
   });
 
-  test("action buttons (Scan/XML/Liên kết) are in Card title area", async ({ page }) => {
+  test("action buttons (Scan/XML/Liên kết) are in Card title area", async ({
+    page,
+  }) => {
     const found = await openPendingPO(page);
     if (!found) {
       await openFirstPO(page);
@@ -210,7 +233,9 @@ test.describe("Invoice VAT - Đối Chiếu Hóa Đơn", () => {
     await expect(linkBtn).toBeVisible({ timeout: 5000 });
   });
 
-  test("action buttons are small size with colored borders", async ({ page }) => {
+  test("action buttons are small size with colored borders", async ({
+    page,
+  }) => {
     const found = await openPendingPO(page);
     if (!found) {
       await openFirstPO(page);
@@ -271,7 +296,9 @@ test.describe("Invoice VAT - Đối Chiếu Hóa Đơn", () => {
       await page.waitForTimeout(1000);
 
       // Modal phải có title chứa "XML"
-      const modalTitle = page.locator(".ant-modal-title:has-text('XML')").first();
+      const modalTitle = page
+        .locator(".ant-modal-title:has-text('XML')")
+        .first();
       await expect(modalTitle).toBeVisible({ timeout: 5000 });
 
       // Đóng modal
@@ -279,7 +306,9 @@ test.describe("Invoice VAT - Đối Chiếu Hóa Đơn", () => {
     }
   });
 
-  test("Liên kết HĐ button opens link modal with invoice list", async ({ page }) => {
+  test("Liên kết HĐ button opens link modal with invoice list", async ({
+    page,
+  }) => {
     const found = await openPendingPO(page);
     if (!found) {
       await openFirstPO(page);
@@ -293,7 +322,9 @@ test.describe("Invoice VAT - Đối Chiếu Hóa Đơn", () => {
       await page.waitForTimeout(2000);
 
       // Modal "Liên kết Hóa đơn có sẵn" phải hiển thị
-      const modalTitle = page.locator(".ant-modal-title:has-text('Liên kết')").first();
+      const modalTitle = page
+        .locator(".ant-modal-title:has-text('Liên kết')")
+        .first();
       await expect(modalTitle).toBeVisible({ timeout: 5000 });
 
       // Đóng modal

@@ -2,7 +2,7 @@ import { App, Form } from "antd";
 import { useState, useEffect } from "react";
 
 import { segmentationService } from "../api/segmentationService";
-import { CustomerSegmentRow, SegmentMemberDisplay } from "../types/segments"; // <-- Import từ segments.ts
+import { CustomerSegmentRow, SegmentMemberDisplay, CreateSegmentPayload } from "../types/segments"; // <-- Import từ segments.ts
 
 export const useSegmentManagement = () => {
   const { message } = App.useApp();
@@ -26,8 +26,8 @@ export const useSegmentManagement = () => {
     try {
       const data = await segmentationService.getSegments();
       setSegments(data);
-    } catch (err: any) {
-      message.error(err.message);
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : "Lỗi không xác định");
     } finally {
       setLoading(false);
     }
@@ -54,14 +54,26 @@ export const useSegmentManagement = () => {
     else setMembers([]);
   }, [selectedSegmentId]);
 
-  const handleCreateOrUpdate = async (values: any) => {
+  const handleCreateOrUpdate = async (values: Record<string, unknown>) => {
     try {
       setLoading(true);
       if (editingSegment) {
-        await segmentationService.updateSegment(editingSegment.id, values);
+        const payload: Partial<CreateSegmentPayload> = {
+          name: values.name as string,
+          type: values.type as "static" | "dynamic",
+          description: values.description as string | undefined,
+          is_active: values.is_active as boolean,
+        };
+        await segmentationService.updateSegment(editingSegment.id, payload);
         message.success("Cập nhật thành công");
       } else {
-        await segmentationService.createSegment(values);
+        const payload: CreateSegmentPayload = {
+          name: values.name as string,
+          type: values.type as "static" | "dynamic",
+          description: values.description as string | undefined,
+          is_active: values.is_active as boolean,
+        };
+        await segmentationService.createSegment(payload);
         message.success("Tạo thành công");
       }
       setIsModalOpen(false);
@@ -69,8 +81,8 @@ export const useSegmentManagement = () => {
       fetchSegments();
       if (editingSegment && selectedSegmentId === editingSegment.id)
         fetchMembers(editingSegment.id);
-    } catch (err: any) {
-      message.error(err.message);
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : "Lỗi không xác định");
     } finally {
       setLoading(false);
     }
@@ -82,8 +94,8 @@ export const useSegmentManagement = () => {
       message.success("Đã xóa");
       fetchSegments();
       if (selectedSegmentId === id) setSelectedSegmentId(null);
-    } catch (err: any) {
-      message.error(err.message);
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : "Lỗi không xác định");
     }
   };
 
@@ -93,8 +105,8 @@ export const useSegmentManagement = () => {
       await segmentationService.refreshSegment(id);
       message.success("Đã làm mới danh sách");
       await fetchMembers(id);
-    } catch (e: any) {
-      message.error(e.message);
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : "Lỗi không xác định");
     } finally {
       setLoadingMembers(false);
     }
@@ -107,8 +119,8 @@ export const useSegmentManagement = () => {
     setIsModalOpen(true);
   };
 
-  const openEditModal = (record: any) => {
-    setEditingSegment(record);
+  const openEditModal = (record: Record<string, unknown>) => {
+    setEditingSegment(record as CustomerSegmentRow);
     form.setFieldsValue(record);
     setIsModalOpen(true);
   };

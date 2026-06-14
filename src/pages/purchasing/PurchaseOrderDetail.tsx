@@ -49,7 +49,6 @@ const PurchaseOrderDetailContent = () => {
 
   const handleCostingComplete = useCallback(() => {
     logic.loadOrderDetail(Number(id));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- logic ref ổn định (custom hook); chỉ cần id
   }, [id, logic.loadOrderDetail]);
 
   const handleInvoiceComplete = useCallback(() => {

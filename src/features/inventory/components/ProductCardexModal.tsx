@@ -59,7 +59,7 @@ export const ProductCardexModal = ({
     {
       title: "Loại",
       dataIndex: "type",
-      render: (type: string, record: any) => (
+      render: (type: string, record: unknown) => (
         <Tag color={type === "in" ? "green" : "red"}>
           {type === "in" ? "NHẬP" : "XUẤT"} ({record.business_type})
         </Tag>
@@ -68,7 +68,7 @@ export const ProductCardexModal = ({
     {
       title: "Số lượng",
       dataIndex: "quantity",
-      render: (q: number, record: any) => (
+      render: (q: number, record: unknown) => (
         <span
           style={{
             color: record.type === "in" ? "green" : "red",

@@ -10,7 +10,7 @@ const { Text } = Typography;
 interface AIVisionCameraProps {
   visible: boolean;
   onClose: () => void;
-  onResult: (data: any) => void;
+  onResult: (data: unknown) => void;
 }
 
 export const AIVisionCamera = ({

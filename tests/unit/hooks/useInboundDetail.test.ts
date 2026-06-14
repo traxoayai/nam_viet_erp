@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockSafeRpc = vi.fn();
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 // Mock antd
@@ -36,7 +36,12 @@ vi.mock("@/shared/constants/defaults", () => ({
 
 // Mock the inbound store
 const mockWorkingItems = [
-  { product_id: 1, input_quantity: 10, input_lot: "LOT1", input_expiry: "2027-01-01" },
+  {
+    product_id: 1,
+    input_quantity: 10,
+    input_lot: "LOT1",
+    input_expiry: "2027-01-01",
+  },
 ];
 vi.mock("@/features/inventory/stores/useInboundStore", () => ({
   useInboundStore: vi.fn(() => ({
@@ -63,8 +68,8 @@ describe("useInboundDetail - safeRpc calls", () => {
     );
 
     // We need to render the hook to get handleSaveDraft
-    const { createElement } = require("react");
-    const { renderToStaticMarkup } = require("react-dom/server");
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
 
     let hookResult: ReturnType<typeof useInboundDetail>;
     function TestComponent() {
@@ -86,8 +91,8 @@ describe("useInboundDetail - safeRpc calls", () => {
       "@/features/inventory/hooks/useInboundDetail"
     );
 
-    const { createElement } = require("react");
-    const { renderToStaticMarkup } = require("react-dom/server");
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
 
     let hookResult: ReturnType<typeof useInboundDetail>;
     function TestComponent() {
@@ -99,7 +104,7 @@ describe("useInboundDetail - safeRpc calls", () => {
     await hookResult!.handleSaveDraft();
 
     const call = mockSafeRpc.mock.calls.find(
-      (c: any[]) => c[0] === "save_inbound_draft"
+      (c: unknown[]) => c[0] === "save_inbound_draft"
     );
     expect(call).toBeDefined();
     expect(typeof call![1].p_po_id).toBe("number");
@@ -111,8 +116,8 @@ describe("useInboundDetail - safeRpc calls", () => {
       "@/features/inventory/hooks/useInboundDetail"
     );
 
-    const { createElement } = require("react");
-    const { renderToStaticMarkup } = require("react-dom/server");
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
 
     let hookResult: ReturnType<typeof useInboundDetail>;
     function TestComponent() {

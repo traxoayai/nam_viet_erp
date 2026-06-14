@@ -72,11 +72,13 @@ const styles = {
   },
 };
 
-const currencyFormatter = (value: any) =>
+const currencyFormatter = (value: unknown) =>
   value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : "0";
 
-const currencyParser = (value: string | undefined) =>
-  value ? value.replace(/\$\s?|(,*)/g, "") : "";
+const currencyParser = (value: string | undefined): number | string => {
+  const parsed = value ? value.replace(/\$\s?|(,*)/g, "") : "";
+  return parsed ? parseFloat(parsed) : "";
+};
 
 const ServicePackagePage: React.FC = () => {
   const {
@@ -121,10 +123,10 @@ const ServicePackagePage: React.FC = () => {
   useEffect(() => {
     if (viewMode === "form") {
       if (editingPackage) {
-        const pkgData = editingPackage.package_data;
-        const items = editingPackage.package_items;
+        const pkgData = (editingPackage as Record<string, any>).package_data;
+        const items = (editingPackage as Record<string, any>).package_items;
 
-        setFormType((pkgData.type as any) || "service");
+        setFormType((pkgData?.type as "service" | "bundle") || "service");
         const itemsField =
           pkgData.type === "bundle" ? "packageItems" : "consumables";
 
@@ -136,12 +138,15 @@ const ServicePackagePage: React.FC = () => {
           applicableBranches: (pkgData.applicable_branches || []).map(String),
           applicableChannels: pkgData.applicable_channels || "all",
           clinicalCategory: pkgData.clinical_category || "none", // Map từ DB (snake_case) ra UI (camelCase)
-          [itemsField]: items.map((i: any) => ({
-            ...i,
-            id: i.item_id,
-            unitPrice: 0,
-            scheduleDays: i.schedule_days || 0,
-          })),
+          [itemsField]: items.map((i: unknown) => {
+            const item = i as Record<string, unknown>;
+            return {
+              ...item,
+              id: item.item_id,
+              unitPrice: 0,
+              scheduleDays: (item.schedule_days as number) || 0,
+            };
+          }),
         });
       } else {
         setFormType("service");
@@ -172,12 +177,15 @@ const ServicePackagePage: React.FC = () => {
 
       const itemsRaw =
         values.type === "bundle" ? values.packageItems : values.consumables;
-      const items = (itemsRaw || []).map((i: any) => ({
-        item_id: i.id,
-        quantity: i.quantity,
-        item_type: "product",
-        schedule_days: i.scheduleDays || 0,
-      }));
+      const items = (itemsRaw || []).map((i: unknown) => {
+        const item = i as Record<string, unknown>;
+        return {
+          item_id: item.id,
+          quantity: item.quantity,
+          item_type: "product",
+          schedule_days: (item.scheduleDays as number) || 0,
+        };
+      });
 
       const payload = {
         ...values,
@@ -199,8 +207,9 @@ const ServicePackagePage: React.FC = () => {
 
       let success = false;
       if (editingPackage) {
+        const pkgData = (editingPackage as Record<string, any>).package_data;
         success = await updatePackage(
-          editingPackage.package_data.id,
+          pkgData?.id,
           payload,
           items
         );
@@ -215,28 +224,36 @@ const ServicePackagePage: React.FC = () => {
     }
   };
 
-  const handleFormValuesChange = (changedValues: any, allValues: any) => {
-    if (changedValues.type) {
-      setFormType(changedValues.type);
+  const handleFormValuesChange = (
+    changedValues: unknown,
+    allValues: unknown
+  ) => {
+    const changed = changedValues as Record<string, unknown>;
+    const all = allValues as Record<string, unknown>;
+
+    if (changed.type && typeof changed.type === "string") {
+      setFormType(changed.type as "service" | "bundle");
       form.setFieldsValue({
-        unit: changedValues.type === "service" ? "Lần" : "Gói",
+        unit: changed.type === "service" ? "Lần" : "Gói",
       });
     }
 
-    const items = allValues.consumables || allValues.packageItems || [];
+    const items = (all.consumables || all.packageItems || []) as Array<Record<string, unknown>>;
     let totalCost = 0;
     let totalRetail = 0;
 
-    items.forEach((item: any) => {
-      if (item?.quantity && item?.unitPrice) {
-        totalCost += item.unitPrice * item.quantity;
-        totalRetail += item.unitPrice * 1.3 * item.quantity;
+    items.forEach((item: Record<string, unknown>) => {
+      const qty = item.quantity as number;
+      const price = item.unitPrice as number;
+      if (qty && price) {
+        totalCost += price * qty;
+        totalRetail += price * 1.3 * qty;
       }
     });
 
     form.setFieldValue("totalCostPrice", totalCost);
 
-    const salePrice = allValues.price || 0;
+    const salePrice = (all.price as number) || 0;
     if (totalRetail > 0 && salePrice > 0 && salePrice < totalRetail) {
       const discount = ((totalRetail - salePrice) / totalRetail) * 100;
       form.setFieldValue("discountPercent", discount.toFixed(1));
@@ -317,7 +334,7 @@ const ServicePackagePage: React.FC = () => {
         title: "Hành động",
         key: "actions",
         width: 100,
-        render: (_: any, record: ServicePackageRecord) => (
+        render: (_: unknown, record: ServicePackageRecord) => (
           <Space>
             <Tooltip title="Chỉnh sửa">
               <Button
@@ -483,7 +500,7 @@ const ServicePackagePage: React.FC = () => {
     // Component con để xử lý logic thêm hàng trong form
     const ItemsTableEditor = ({ listName }: { listName: string }) => {
       // State để clear ô tìm kiếm sau khi chọn
-      const [selectValue, setSelectValue] = useState<any>(null);
+      const [selectValue, setSelectValue] = useState<unknown>(null);
 
       return (
         <Form.List name={listName}>
@@ -494,30 +511,35 @@ const ServicePackagePage: React.FC = () => {
                 style={{ width: "100%", marginBottom: 16 }}
                 searchTypes={typesToSearch}
                 value={selectValue}
-                onChange={(_, option: any) => {
+                onChange={(_, option: unknown) => {
                   // --- BẮT ĐẦU ĐOẠN SỬA ---
                   // Kiểm tra an toàn: Nếu không có option hoặc product thì dừng ngay
-                  if (!option || !option.product) {
+                  const opt = option as Record<string, unknown> | null;
+                  if (!opt || !opt.product) {
                     console.warn("Không lấy được thông tin sản phẩm từ option");
                     return;
                   }
-                  const product = option.product;
+                  const product = opt.product as Record<string, unknown>;
                   // --- KẾT THÚC ĐOẠN SỬA ---
 
                   const currentItems = form.getFieldValue(listName) || [];
 
                   const existingIndex = currentItems.findIndex(
-                    (i: any) => i.id === product.id
+                    (i: unknown) => {
+                      const item = i as Record<string, unknown>;
+                      return item.id === product.id;
+                    }
                   );
 
                   if (existingIndex >= 0) {
+                    const existingItem = currentItems[existingIndex] as Record<string, unknown>;
                     const currentQty =
-                      currentItems[existingIndex].quantity || 0;
+                      (existingItem.quantity as number) || 0;
                     form.setFieldValue(
                       [listName, existingIndex, "quantity"],
                       currentQty + 1
                     );
-                    message.success(`Đã tăng số lượng: ${product.name}`);
+                    message.success(`Đã tăng số lượng: ${String(product.name)}`);
                   } else {
                     const newItem = {
                       id: product.id,
@@ -528,7 +550,7 @@ const ServicePackagePage: React.FC = () => {
                       scheduleDays: 0,
                     };
                     add(newItem);
-                    message.success(`Đã thêm: ${product.name}`);
+                    message.success(`Đã thêm: ${String(product.name)}`);
                   }
 
                   setTimeout(() => {
@@ -546,11 +568,14 @@ const ServicePackagePage: React.FC = () => {
               >
                 {() => (
                   <Table
-                    dataSource={fields.map((f) => ({
-                      ...form.getFieldValue(listName)[f.name],
-                      key: f.key,
-                      index: f.name,
-                    }))}
+                    dataSource={fields.map((f) => {
+                      const record = form.getFieldValue(listName)[f.name] as Record<string, unknown>;
+                      return {
+                        ...record,
+                        key: f.key,
+                        index: f.name,
+                      };
+                    })}
                     pagination={false}
                     size="small"
                     bordered
@@ -595,9 +620,11 @@ const ServicePackagePage: React.FC = () => {
                               title: "Nhắc lịch (Ngày)",
                               dataIndex: "scheduleDays",
                               width: 140,
-                              render: (_: any, record: any) => (
+                              render: (_: unknown, record: unknown) => {
+                                const rec = record as Record<string, unknown>;
+                                return (
                                 <Form.Item
-                                  name={[record.index, "scheduleDays"]}
+                                  name={[rec.index as number, "scheduleDays"]}
                                   noStyle
                                 >
                                   <InputNumber
@@ -606,7 +633,8 @@ const ServicePackagePage: React.FC = () => {
                                     style={{ width: "100%" }}
                                   />
                                 </Form.Item>
-                              ),
+                                );
+                              },
                             },
                           ]
                         : []),
@@ -620,14 +648,16 @@ const ServicePackagePage: React.FC = () => {
                       {
                         title: "",
                         width: 50,
-                        render: (_, record) => (
+                        render: (_, record: unknown) => {
+                          const rec = record as Record<string, unknown>;
+                          return (
                           <Button
                             type="text"
                             danger
                             size="small"
                             icon={<MinusCircleOutlined />}
                             onClick={() => {
-                              remove(record.index);
+                              remove(rec.index as number);
                               // Tính lại giá sau khi xóa
                               setTimeout(
                                 () =>
@@ -639,7 +669,8 @@ const ServicePackagePage: React.FC = () => {
                               );
                             }}
                           />
-                        ),
+                          );
+                        },
                       },
                     ]}
                   />
@@ -678,7 +709,7 @@ const ServicePackagePage: React.FC = () => {
                   <Divider type="vertical" />
                   <Title level={5} style={{ margin: 0 }}>
                     {editingPackage
-                      ? `Cập nhật: ${editingPackage.package_data.name}`
+                      ? `Cập nhật: ${(editingPackage as Record<string, any>).package_data?.name}`
                       : "Tạo Gói/Dịch vụ Mới"}
                   </Title>
                 </Space>
@@ -810,7 +841,7 @@ const ServicePackagePage: React.FC = () => {
                   <InputNumber
                     style={{ width: "100%" }}
                     formatter={(v) => currencyFormatter(v)}
-                    parser={(v) => currencyParser(v) as any}
+                    parser={currencyParser}
                     addonAfter="₫"
                   />
                 </Form.Item>

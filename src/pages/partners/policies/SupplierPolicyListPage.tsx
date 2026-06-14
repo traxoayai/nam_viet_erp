@@ -27,7 +27,7 @@ const { Title, Text } = Typography;
 const SupplierPolicyListPage: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<unknown[]>([]);
   const { suppliers, fetchCommonData } = useProductStore();
 
   // Filters
@@ -64,7 +64,7 @@ const SupplierPolicyListPage: React.FC = () => {
       title: "Tên Chương Trình / Hợp Đồng",
       dataIndex: "name",
       key: "name",
-      render: (text: string, record: any) => (
+      render: (text: string, record: unknown) => (
         <div>
           <div style={{ fontWeight: 600 }}>{text}</div>
           <Text type="secondary" style={{ fontSize: 12 }}>
@@ -88,7 +88,7 @@ const SupplierPolicyListPage: React.FC = () => {
     {
       title: "Thời gian áp dụng",
       key: "duration",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Space direction="vertical" size={0}>
           <Text>Từ: {dayjs(record.valid_from).format("DD/MM/YYYY")}</Text>
           <Text>Đến: {dayjs(record.valid_to).format("DD/MM/YYYY")}</Text>
@@ -98,7 +98,7 @@ const SupplierPolicyListPage: React.FC = () => {
     {
       title: "Trạng thái",
       key: "status",
-      render: (_: any, record: any) => {
+      render: (_: unknown, record: unknown) => {
         const now = dayjs();
         const start = dayjs(record.valid_from);
         const end = dayjs(record.valid_to);
@@ -111,7 +111,7 @@ const SupplierPolicyListPage: React.FC = () => {
     {
       title: "Hành động",
       key: "action",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Button
           icon={<EditOutlined />}
           size="small"

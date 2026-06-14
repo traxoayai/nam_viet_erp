@@ -14,7 +14,7 @@ export interface PolicyFormValues {
   name: string;
   document_code: string;
   type: ProgramType;
-  range_picker: [any, any]; // Dayjs array
+  range_picker: [unknown, unknown]; // Dayjs array
   description?: string;
   attachment_url?: string;
 
@@ -41,5 +41,5 @@ export interface PolicyGroupFormValue {
 
   // Scope
   product_ids: number[];
-  _product_display?: any[]; // For UI tags only
+  _product_display?: unknown[]; // For UI tags only
 }

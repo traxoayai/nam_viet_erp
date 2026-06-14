@@ -84,6 +84,9 @@ const B2COrderListPage = () => {
     useSalesOrders({ orderType: "POS,CLINICAL" });
   const { user } = useAuth();
 
+  // Type guard for stats
+  const typedStats = stats as { total_sales?: number; total_cash_pending?: number } | unknown;
+
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [pendingRevenue, setPendingRevenue] = useState<number>(0);
   const [creators, setCreators] = useState<UserRow[]>([]);
@@ -291,32 +294,35 @@ const B2COrderListPage = () => {
         title: "Mã đơn",
         dataIndex: "code",
         width: 170,
-        render: (text: string, record: SalesOrderRow) => (
-          <Space direction="vertical" size={0}>
-            <Button
-              type="link"
-              onClick={() => handleViewDetail(record)}
-              style={{
-                fontWeight: 600,
-                fontSize: 13,
-                padding: 0,
-                height: "auto",
-              }}
-            >
-              {text}
-            </Button>
-            {record.order_type === "POS" && (
-              <Tag color="blue" style={{ fontSize: 10 }}>
-                [Thuốc]
-              </Tag>
-            )}
-            {record.order_type === "CLINICAL" && (
-              <Tag color="orange" style={{ fontSize: 10 }}>
-                [Dịch vụ]
-              </Tag>
-            )}
-          </Space>
-        ),
+        render: (text: string, record: unknown) => {
+          const typedRecord = record as SalesOrderRow;
+          return (
+            <Space direction="vertical" size={0}>
+              <Button
+                type="link"
+                onClick={() => handleViewDetail(typedRecord)}
+                style={{
+                  fontWeight: 600,
+                  fontSize: 13,
+                  padding: 0,
+                  height: "auto",
+                }}
+              >
+                {text}
+              </Button>
+              {typedRecord.order_type === "POS" && (
+                <Tag color="blue" style={{ fontSize: 10 }}>
+                  [Thuốc]
+                </Tag>
+              )}
+              {typedRecord.order_type === "CLINICAL" && (
+                <Tag color="orange" style={{ fontSize: 10 }}>
+                  [Dịch vụ]
+                </Tag>
+              )}
+            </Space>
+          );
+        },
       },
       {
         title: "Ngày tạo",
@@ -351,14 +357,17 @@ const B2COrderListPage = () => {
         title: "Khách hàng",
         dataIndex: "customer_name",
         width: 200,
-        render: (name: string, r: SalesOrderRow) => (
-          <div>
-            <div style={{ fontWeight: 500 }}>{name || "Khách lẻ"}</div>
-            <div style={{ fontSize: 11, color: "#888" }}>
-              {r.customer_phone}
+        render: (name: string, record: unknown) => {
+          const r = record as SalesOrderRow;
+          return (
+            <div>
+              <div style={{ fontWeight: 500 }}>{name || "Khách lẻ"}</div>
+              <div style={{ fontSize: 11, color: "#888" }}>
+                {r.customer_phone}
+              </div>
             </div>
-          </div>
-        ),
+          );
+        },
       },
       {
         title: "Tổng tiền",
@@ -407,32 +416,35 @@ const B2COrderListPage = () => {
         key: "invoice_action",
         width: 120,
         align: "center" as const,
-        render: (_: unknown, record: SalesOrderRow) => (
-          <VatActionButton
-            invoice={
-              record.sales_invoice || { id: 0, code: "", status: "pending" }
-            }
-            // Filter & Map ID an toàn
-            orderItems={(record.order_items || [])
-              .filter((i) => i.product_id) // Ensure product_id exists
-              .map((i) => ({
-                ...i,
-                // [FIX CRITICAL] Map id = product_id (BigInt) cho Modal kho
-                id: Number(i.product_id),
-                name: i.product?.name || i.product_name,
-                unit: i.uom || i.product?.retail_unit || "Cái",
-                price: i.unit_price,
-                qty: i.quantity,
-              }))}
-            customer={{
-              name: record.customer_name,
-              phone: record.customer_phone,
-              tax_code: record.tax_code || "",
-              email: record.customer_email || "",
-            }}
-            onUpdate={() => refresh()}
-          />
-        ),
+        render: (_: unknown, record: unknown) => {
+          const typedRecord = record as SalesOrderRow;
+          return (
+            <VatActionButton
+              invoice={
+                typedRecord.sales_invoice || { id: 0, code: "", status: "pending" }
+              }
+              // Filter & Map ID an toàn
+              orderItems={(typedRecord.order_items || [])
+                .filter((i) => i.product_id) // Ensure product_id exists
+                .map((i) => ({
+                  ...i,
+                  // [FIX CRITICAL] Map id = product_id (BigInt) cho Modal kho
+                  id: Number(i.product_id),
+                  name: i.product?.name || i.product_name,
+                  unit: i.uom || i.product?.retail_unit || "Cái",
+                  price: i.unit_price,
+                  qty: i.quantity,
+                }))}
+              customer={{
+                name: typedRecord.customer_name,
+                phone: typedRecord.customer_phone,
+                tax_code: typedRecord.tax_code || "",
+                email: typedRecord.customer_email || "",
+              }}
+              onUpdate={() => refresh()}
+            />
+          );
+        },
       },
       {
         title: "",
@@ -448,13 +460,13 @@ const B2COrderListPage = () => {
   const statItems = [
     {
       title: "Tổng doanh số (Tháng)",
-      value: `${(stats?.total_sales || 0).toLocaleString()} ₫`,
+      value: `${((typedStats as any)?.total_sales || 0).toLocaleString()} ₫`,
       color: "#1890ff",
       icon: <ShopOutlined />,
     },
     {
       title: "Tiền mặt chờ nộp (Toàn CH)",
-      value: `${(stats?.total_cash_pending || 0).toLocaleString()} ₫`,
+      value: `${((typedStats as any)?.total_cash_pending || 0).toLocaleString()} ₫`,
       color: "#cf1322",
       icon: <AlertOutlined />,
     },
@@ -553,10 +565,13 @@ const B2COrderListPage = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
           preserveSelectedRowKeys: true,
-          getCheckboxProps: (r: SalesOrderRow) => ({
-            // Vẫn chỉ cho chọn đơn chưa nộp
-            disabled: r.remittance_status !== "pending",
-          }),
+          getCheckboxProps: (record: unknown) => {
+            const r = record as SalesOrderRow;
+            return {
+              // Vẫn chỉ cho chọn đơn chưa nộp
+              disabled: r.remittance_status !== "pending",
+            };
+          },
         }}
       />
 

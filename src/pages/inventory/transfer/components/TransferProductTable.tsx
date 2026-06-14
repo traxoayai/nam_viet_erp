@@ -4,14 +4,16 @@ import {
   ShopOutlined,
 } from "@ant-design/icons";
 import {
-  Table,
   Avatar,
-  Tag,
-  InputNumber,
-  Button,
-  Typography,
-  Tooltip,
   Badge,
+  Button,
+  Empty,
+  InputNumber,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
 } from "antd";
 import React from "react";
 
@@ -36,7 +38,7 @@ const TransferProductTable: React.FC<TransferProductTableProps> = ({
       dataIndex: "product_id",
       key: "product",
       width: 350,
-      render: (_: any, record: TransferCartItem) => (
+      render: (_: unknown, record: TransferCartItem) => (
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <Badge
             count={record.lot_hint ? "Lô cũ" : 0}
@@ -95,8 +97,11 @@ const TransferProductTable: React.FC<TransferProductTableProps> = ({
       title: "Tồn tại kho xuất",
       key: "stock",
       width: 150,
-      render: (_: any, record: TransferCartItem) => (
-        <Text strong style={{ color: record.current_stock > 0 ? '#13c2c2' : '#cf1322' }}>
+      render: (_: unknown, record: TransferCartItem) => (
+        <Text
+          strong
+          style={{ color: record.current_stock > 0 ? "#13c2c2" : "#cf1322" }}
+        >
           {record.stock_display || record.current_stock}
         </Text>
       ),
@@ -112,7 +117,7 @@ const TransferProductTable: React.FC<TransferProductTableProps> = ({
       title: "Số lượng chuyển",
       key: "quantity",
       width: 150,
-      render: (_: any, record: TransferCartItem) => (
+      render: (_: unknown, record: TransferCartItem) => (
         <Tooltip title={record.error} open={!!record.error}>
           <InputNumber
             min={1}
@@ -128,7 +133,7 @@ const TransferProductTable: React.FC<TransferProductTableProps> = ({
       title: "Quy đổi (ĐVCB)",
       key: "base_total",
       width: 150,
-      render: (_: any, record: TransferCartItem) => (
+      render: (_: unknown, record: TransferCartItem) => (
         <div>
           <Text strong>{Number(record.base_quantity).toLocaleString()}</Text>
           <div style={{ fontSize: 11, color: "#999" }}>
@@ -141,7 +146,7 @@ const TransferProductTable: React.FC<TransferProductTableProps> = ({
       title: "",
       key: "action",
       width: 60,
-      render: (_: any, record: TransferCartItem) => (
+      render: (_: unknown, record: TransferCartItem) => (
         <Button
           type="text"
           danger
@@ -169,6 +174,5 @@ const TransferProductTable: React.FC<TransferProductTableProps> = ({
     />
   );
 };
-import { Space, Empty } from "antd"; // Auto-fix import
 
 export default TransferProductTable;

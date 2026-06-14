@@ -47,7 +47,14 @@ const PortalDashboardPage = () => {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "60vh",
+        }}
+      >
         <Spin size="large" />
       </div>
     );
@@ -86,9 +93,7 @@ const PortalDashboardPage = () => {
       <Row gutter={[16, 16]}>
         {statCards.map((card) => (
           <Col xs={24} sm={12} lg={6} key={card.title}>
-            <Card
-              style={{ borderRadius: 8, background: card.color }}
-            >
+            <Card style={{ borderRadius: 8, background: card.color }}>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 {card.icon}
                 <Statistic

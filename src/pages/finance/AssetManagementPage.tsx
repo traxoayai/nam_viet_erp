@@ -104,7 +104,7 @@ const AssetManagementPage: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 500);
-  const [fileList, setFileList] = useState<any[]>([]); // --- HOOKS: Load dữ liệu chung và danh sách ---
+  const [fileList, setFileList] = useState<unknown[]>([]); // --- HOOKS: Load dữ liệu chung và danh sách ---
 
   useEffect(() => {
     fetchAssetTypes();
@@ -171,7 +171,10 @@ const AssetManagementPage: React.FC = () => {
     }
   }, [editingAssetId, currentAssetDetails, loadingDetails, form]); // --- HÀM TÍNH TOÁN (Logic Khấu hao) ---
 
-  const calculateDepreciation = (changedValues: any, allValues: any) => {
+  const calculateDepreciation = (
+    changedValues: unknown,
+    allValues: unknown
+  ) => {
     if (
       changedValues.cost !== undefined ||
       changedValues.depreciation_months !== undefined
@@ -253,7 +256,7 @@ const AssetManagementPage: React.FC = () => {
       const plans: MaintenancePlan[] = values.maintenance_plans || [];
       const history: MaintenanceHistory[] = (
         values.maintenance_history || []
-      ).map((h: any) => ({
+      ).map((h: unknown) => ({
         ...h,
         maintenance_date: h.maintenance_date?.format("YYYY-MM-DD"),
       }));
@@ -390,7 +393,7 @@ const AssetManagementPage: React.FC = () => {
         width: 120,
         align: "center" as const,
         fixed: "right" as const,
-        render: (_: any, record: AssetListRecord) => (
+        render: (_: unknown, record: AssetListRecord) => (
           <Space size="small">
                      
             <Tooltip title="Sửa chi tiết">
@@ -896,8 +899,8 @@ const AssetManagementPage: React.FC = () => {
                               <Title level={5}>Kế hoạch Bảo trì Định kỳ</Title> 
                            
               <Paragraph type="secondary">
-                Định nghĩa các "luật" bảo trì tự động. Hệ thống sẽ tự động tạo
-                việc cho người phụ trách.
+                Định nghĩa các &quot;luật&quot; bảo trì tự động. Hệ thống sẽ tự
+                động tạo việc cho người phụ trách.
               </Paragraph>
                              
               <Form.List name="maintenance_plans">

@@ -20,13 +20,13 @@ export const useShippingPartnerStore = create<ShippingPartnerStoreState>(
     totalCount: 0,
     filters: {}, // --- HÀM TẢI DỮ LIỆU ---
 
-    fetchPartners: async (newFilters: any) => {
+    fetchPartners: async (newFilters: unknown) => {
       const filters = { ...get().filters, ...newFilters };
       set({ loading: true, filters: filters });
       try {
         const { data, totalCount } = await service.fetchPartners(filters);
         set({ partners: data, totalCount, loading: false });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi tải danh sách đối tác vận chuyển:", error);
         set({ loading: false });
         throw error;
@@ -38,7 +38,7 @@ export const useShippingPartnerStore = create<ShippingPartnerStoreState>(
       try {
         const data = await service.fetchPartnerDetails(id);
         set({ editingPartner: data, loadingDetails: false });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi tải chi tiết đối tác:", error);
         set({ loadingDetails: false });
         throw error;
@@ -52,7 +52,7 @@ export const useShippingPartnerStore = create<ShippingPartnerStoreState>(
         await get().fetchPartners(get().filters); // Tải lại danh sách
         set({ loading: false, isModalVisible: false, editingPartner: null });
         return newId;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi tạo đối tác:", error);
         set({ loading: false });
         throw error;
@@ -66,7 +66,7 @@ export const useShippingPartnerStore = create<ShippingPartnerStoreState>(
         await get().fetchPartners(get().filters);
         set({ loading: false, isModalVisible: false, editingPartner: null });
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi cập nhật đối tác:", error);
         set({ loading: false });
         throw error;
@@ -80,7 +80,7 @@ export const useShippingPartnerStore = create<ShippingPartnerStoreState>(
         await get().fetchPartners(get().filters);
         set({ loading: false });
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi xóa (mềm) đối tác:", error);
         set({ loading: false });
         throw error;
@@ -94,7 +94,7 @@ export const useShippingPartnerStore = create<ShippingPartnerStoreState>(
         await get().fetchPartners(get().filters);
         set({ loading: false });
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi khôi phục đối tác:", error);
         set({ loading: false });
         throw error;

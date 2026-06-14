@@ -8,6 +8,7 @@
  * 4. Notification Bell — click navigate đúng trang
  */
 import { test, expect } from "@playwright/test";
+
 import { login } from "./helpers/auth";
 
 test.describe("Portal Hub — ERP Side", () => {
@@ -199,10 +200,10 @@ test.describe("Notification click navigation with seeded data", () => {
 
   test.afterAll(async () => {
     if (notiId) {
-      await fetch(
-        `${SUPABASE_URL}/rest/v1/notifications?id=eq.${notiId}`,
-        { method: "DELETE", headers },
-      );
+      await fetch(`${SUPABASE_URL}/rest/v1/notifications?id=eq.${notiId}`, {
+        method: "DELETE",
+        headers,
+      });
     }
   });
 
@@ -214,11 +215,12 @@ test.describe("Notification click navigation with seeded data", () => {
     // Get admin user ID via Auth Admin API
     const userRes = await fetch(
       `${SUPABASE_URL}/auth/v1/admin/users?per_page=50`,
-      { headers },
+      { headers }
     );
     const authData = await userRes.json();
-    const authUsers = (authData as { users?: Array<{ id: string; email?: string }> })
-      ?.users ?? [];
+    const authUsers =
+      (authData as { users?: Array<{ id: string; email?: string }> })?.users ??
+      [];
     const adminUser = authUsers.find((u) => u.email === "admin@test.com");
     if (!adminUser) {
       console.warn("No admin user found in auth, skipping test");
@@ -226,22 +228,19 @@ test.describe("Notification click navigation with seeded data", () => {
     }
 
     // Insert a test notification with category
-    const insertRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/notifications`,
-      {
-        method: "POST",
-        headers: { ...headers, Prefer: "return=representation" },
-        body: JSON.stringify({
-          user_id: adminUser.id,
-          title: "E2E Test — Đơn mua hàng mới",
-          message: "Đơn PO TEST-E2E đang chờ nhập kho.",
-          type: "info",
-          category: "purchase_order",
-          metadata: { po_id: 1, po_code: "TEST-E2E" },
-          is_read: false,
-        }),
-      },
-    );
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+      method: "POST",
+      headers: { ...headers, Prefer: "return=representation" },
+      body: JSON.stringify({
+        user_id: adminUser.id,
+        title: "E2E Test — Đơn mua hàng mới",
+        message: "Đơn PO TEST-E2E đang chờ nhập kho.",
+        type: "info",
+        category: "purchase_order",
+        metadata: { po_id: 1, po_code: "TEST-E2E" },
+        is_read: false,
+      }),
+    });
     expect(insertRes.ok).toBeTruthy();
     const inserted = await insertRes.json();
     notiId = Array.isArray(inserted) ? inserted[0]?.id : null;
@@ -277,7 +276,7 @@ test.describe("Notification click navigation with seeded data", () => {
       expect(page.url()).toContain("/purchase-orders");
     } else {
       console.warn(
-        "Seeded notification not found in popover (may need more wait time)",
+        "Seeded notification not found in popover (may need more wait time)"
       );
     }
   });

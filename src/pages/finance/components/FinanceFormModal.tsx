@@ -119,15 +119,11 @@ export const FinanceFormModal: React.FC<Props> = ({
     isB2BBulkPayment ? Number(partnerId) : undefined
   );
 
-  useEffect(
-    () => {
-      fetchFunds();
-      fetchBanks();
-      if (categories.length === 0) fetchCategories();
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+  useEffect(() => {
+    fetchFunds();
+    fetchBanks();
+    if (categories.length === 0) fetchCategories();
+  }, []);
 
   // [NEW] Check Pending Transactions
   useEffect(() => {
@@ -186,36 +182,27 @@ export const FinanceFormModal: React.FC<Props> = ({
         form.setFieldValue("fund_account_id", defaultFund.id);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialValues, funds]);
 
   // [NEW] Auto-fill Partner Details when Opened with Initial Values
-  useEffect(
-    () => {
-      if (open && initialValues?.partner_id && initialValues?.partner_type) {
-        // Trigger select partner to load bank info etc.
-        handleSelectPartner(
-          Number(initialValues.partner_id),
-          initialValues.partner_type as "customer" | "customer_b2b"
-        );
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [open, initialValues]
-  );
+  useEffect(() => {
+    if (open && initialValues?.partner_id && initialValues?.partner_type) {
+      // Trigger select partner to load bank info etc.
+      handleSelectPartner(
+        Number(initialValues.partner_id),
+        initialValues.partner_type as "customer" | "customer_b2b"
+      );
+    }
+  }, [open, initialValues]);
 
   const amount = Form.useWatch("amount", form);
   const desc = Form.useWatch("description", form);
 
-  useEffect(
-    () => {
-      if (flow === "out" && amount > 0) {
-        generateQR(amount, desc);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [amount, desc, manualBankInfo, flow]
-  );
+  useEffect(() => {
+    if (flow === "out" && amount > 0) {
+      generateQR(amount, desc);
+    }
+  }, [amount, desc, manualBankInfo, flow]);
 
   return (
     <Modal

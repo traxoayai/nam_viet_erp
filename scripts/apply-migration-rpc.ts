@@ -1,15 +1,14 @@
 import fs from "fs";
-import path from "path";
 
-import { createClient } from "@supabase/supabase-js";
+// import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = "https://iudkexocalqdhxuyjacu.supabase.co";
+// const SUPABASE_URL = "https://iudkexocalqdhxuyjacu.supabase.co";
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!SERVICE_ROLE_KEY) {
   throw new Error("SUPABASE_SERVICE_ROLE_KEY env var required");
 }
 
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+// const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 async function applyMigration() {
   const sqlFile =

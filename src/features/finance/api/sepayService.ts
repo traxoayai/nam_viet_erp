@@ -62,10 +62,13 @@ export const sepayService = {
       await new Promise((r) => setTimeout(r, intervalMs));
       const result = await this.checkInvoiceStatus(trackingCode);
       const status = result.data?.status;
-      if (status === "Success" || status === "completed" || status === "issued") return result;
+      if (status === "Success" || status === "completed" || status === "issued")
+        return result;
       if (status === "Failed" || status === "failed") {
         throw new Error(
-          result.data?.message || result.data?.error_message || "Xuất hóa đơn thất bại"
+          result.data?.message ||
+            result.data?.error_message ||
+            "Xuất hóa đơn thất bại"
         );
       }
     }

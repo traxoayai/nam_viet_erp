@@ -20,7 +20,7 @@ export const posService = {
         p_warehouse_id: warehouseId, // Truyền ID kho hiện tại của nhân viên
         p_limit: 20,
       });
-      return (data || []).map((item: any) => ({
+      return (data || []).map((item: unknown) => ({
         id: item.id,
         name: item.name,
         sku: item.sku,
@@ -69,7 +69,7 @@ export const posService = {
   },
 
   // 4. Tạo đơn hàng (Omnichannel V2)
-  async createOrder(payload: any): Promise<string> {
+  async createOrder(payload: unknown): Promise<string> {
     const { data } = await safeRpc("create_sales_order", payload);
     return data as string; // Trả về UUID của đơn hàng
   },

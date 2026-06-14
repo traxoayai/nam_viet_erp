@@ -11,7 +11,7 @@ const { mockSafeRpc, mockMessage } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 vi.mock("antd", () => ({
@@ -73,14 +73,17 @@ describe("useTransferStore", () => {
           source_warehouse_id: 1,
           dest_warehouse_id: 2,
           items: [],
-        } as any,
+        } as unknown,
       });
 
       await useTransferStore.getState().submitTransferShipment();
 
-      expect(mockSafeRpc).toHaveBeenCalledWith("confirm_transfer_outbound_fefo", {
-        p_transfer_id: 42,
-      });
+      expect(mockSafeRpc).toHaveBeenCalledWith(
+        "confirm_transfer_outbound_fefo",
+        {
+          p_transfer_id: 42,
+        }
+      );
     });
 
     it("shows success message on successful outbound", async () => {
@@ -92,7 +95,7 @@ describe("useTransferStore", () => {
           source_warehouse_id: 1,
           dest_warehouse_id: 2,
           items: [],
-        } as any,
+        } as unknown,
       });
 
       await useTransferStore.getState().submitTransferShipment();
@@ -120,7 +123,7 @@ describe("useTransferStore", () => {
           source_warehouse_id: 1,
           dest_warehouse_id: 2,
           items: [],
-        } as any,
+        } as unknown,
       });
 
       const result = await useTransferStore.getState().submitTransferShipment();
@@ -140,7 +143,7 @@ describe("useTransferStore", () => {
           source_warehouse_id: 1,
           dest_warehouse_id: 5, // Must match user's warehouse
           items: [],
-        } as any,
+        } as unknown,
       });
 
       await useTransferStore.getState().confirmTransferInbound();
@@ -160,7 +163,7 @@ describe("useTransferStore", () => {
           source_warehouse_id: 1,
           dest_warehouse_id: 9, // Must match override
           items: [],
-        } as any,
+        } as unknown,
       });
 
       await useTransferStore.getState().confirmTransferInbound(9);
@@ -180,7 +183,7 @@ describe("useTransferStore", () => {
           source_warehouse_id: 1,
           dest_warehouse_id: 5,
           items: [],
-        } as any,
+        } as unknown,
       });
 
       await useTransferStore.getState().confirmTransferInbound();
@@ -206,7 +209,7 @@ describe("useTransferStore", () => {
           source_warehouse_id: 1,
           dest_warehouse_id: 99, // Different from user warehouse (5)
           items: [],
-        } as any,
+        } as unknown,
       });
 
       const result = await useTransferStore.getState().confirmTransferInbound();
@@ -225,7 +228,7 @@ describe("useTransferStore", () => {
           source_warehouse_id: 1,
           dest_warehouse_id: 5,
           items: [],
-        } as any,
+        } as unknown,
       });
 
       const result = await useTransferStore.getState().confirmTransferInbound();

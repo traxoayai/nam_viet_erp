@@ -47,7 +47,7 @@ export function ConfirmPaidButton({
 }: Props) {
   const outstanding = Math.max(
     0,
-    (order.final_amount ?? 0) - (order.paid_amount ?? 0),
+    (order.final_amount ?? 0) - (order.paid_amount ?? 0)
   );
   const canConfirm =
     force ||

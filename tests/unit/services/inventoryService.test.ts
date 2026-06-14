@@ -4,10 +4,10 @@ const mockSafeRpc = vi.fn();
 const mockGetUser = vi.fn();
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/api/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {
@@ -54,7 +54,14 @@ describe("inventoryService", () => {
         po_id: 5,
         warehouse_id: 1,
         note: "Receipt note",
-        items: [{ product_id: 10, quantity: 50, lot_number: "LOT-1", expiry_date: "2027-01" }],
+        items: [
+          {
+            product_id: 10,
+            quantity: 50,
+            lot_number: "LOT-1",
+            expiry_date: "2027-01",
+          },
+        ],
       };
       mockSafeRpc.mockResolvedValue({ data: { id: 100 } });
       const result = await inventoryService.createReceipt(payload);
@@ -73,7 +80,9 @@ describe("inventoryService", () => {
     it("calls update_product_location with mapped params", async () => {
       mockSafeRpc.mockResolvedValue({ data: true });
       const result = await inventoryService.updateProductLocation(1, 10, {
-        cabinet: "A", row: "2", slot: "5",
+        cabinet: "A",
+        row: "2",
+        slot: "5",
       });
       expect(mockSafeRpc).toHaveBeenCalledWith("update_product_location", {
         p_warehouse_id: 1,
@@ -162,9 +171,13 @@ describe("inventoryService", () => {
   // --- getCabinets ---
   describe("getCabinets", () => {
     it("calls get_warehouse_cabinets and maps to names", async () => {
-      mockSafeRpc.mockResolvedValue({ data: [{ cabinet_name: "A" }, { cabinet_name: "B" }] });
+      mockSafeRpc.mockResolvedValue({
+        data: [{ cabinet_name: "A" }, { cabinet_name: "B" }],
+      });
       const result = await inventoryService.getCabinets(1);
-      expect(mockSafeRpc).toHaveBeenCalledWith("get_warehouse_cabinets", { p_warehouse_id: 1 });
+      expect(mockSafeRpc).toHaveBeenCalledWith("get_warehouse_cabinets", {
+        p_warehouse_id: 1,
+      });
       expect(result).toEqual(["A", "B"]);
     });
   });
@@ -196,7 +209,9 @@ describe("inventoryService", () => {
   // --- addItemToCheck ---
   describe("addItemToCheck", () => {
     it("calls add_item_to_check_session with correct params", async () => {
-      mockSafeRpc.mockResolvedValue({ data: { status: "success", item_id: 99 } });
+      mockSafeRpc.mockResolvedValue({
+        data: { status: "success", item_id: 99 },
+      });
       const result = await inventoryService.addItemToCheck(5, 20);
       expect(mockSafeRpc).toHaveBeenCalledWith("add_item_to_check_session", {
         p_check_id: 5,
@@ -208,8 +223,13 @@ describe("inventoryService", () => {
 
   describe("searchProductBatchesForStocktake", () => {
     it("calls search_product_batches_for_stocktake with silent option", async () => {
-      mockSafeRpc.mockResolvedValue({ data: [{ lot_number: "L1", quantity: 1 }] });
-      const rows = await inventoryService.searchProductBatchesForStocktake(3, 7);
+      mockSafeRpc.mockResolvedValue({
+        data: [{ lot_number: "L1", quantity: 1 }],
+      });
+      const rows = await inventoryService.searchProductBatchesForStocktake(
+        3,
+        7
+      );
       expect(mockSafeRpc).toHaveBeenCalledWith(
         "search_product_batches_for_stocktake",
         { p_product_id: 3, p_warehouse_id: 7 },
@@ -237,7 +257,12 @@ describe("inventoryService", () => {
   describe("getProductCardex", () => {
     it("calls get_product_cardex with all params", async () => {
       mockSafeRpc.mockResolvedValue({ data: [{ type: "in", quantity: 100 }] });
-      const result = await inventoryService.getProductCardex(10, 1, "2026-01-01", "2026-03-31");
+      const result = await inventoryService.getProductCardex(
+        10,
+        1,
+        "2026-01-01",
+        "2026-03-31"
+      );
       expect(mockSafeRpc).toHaveBeenCalledWith("get_product_cardex", {
         p_product_id: 10,
         p_warehouse_id: 1,

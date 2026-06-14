@@ -134,9 +134,10 @@ const BankListPage: React.FC = () => {
         key: "sync",
         duration: 2,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
       antMessage.error({
-        content: `Đồng bộ thất bại: ${error.message}`,
+        content: `Đồng bộ thất bại: ${errMsg}`,
         key: "sync",
       });
     }

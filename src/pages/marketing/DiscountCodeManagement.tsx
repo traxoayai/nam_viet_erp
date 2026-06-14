@@ -124,7 +124,7 @@ const DiscountCodeManagement = () => {
       // 1. Xử lý logic Voucher Tặng Riêng (Personal)
       if (values.type === "personal" && values.selected_customers) {
         const batchData = values.selected_customers.map(
-          (c: any, index: number) => ({
+          (c: unknown, index: number) => ({
             code:
               values.selected_customers.length > 1
                 ? `${values.code}-${index + 1}`
@@ -242,7 +242,7 @@ const DiscountCodeManagement = () => {
     },
     {
       title: "Giá trị",
-      render: (_: any, record: Promotion) => (
+      render: (_: unknown, record: Promotion) => (
         <Tag color={record.discount_type === "percent" ? "orange" : "green"}>
           {record.discount_type === "percent"
             ? `Giảm ${record.discount_value}%`
@@ -252,7 +252,7 @@ const DiscountCodeManagement = () => {
     },
     {
       title: "Đã dùng",
-      render: (_: any, record: Promotion) => (
+      render: (_: unknown, record: Promotion) => (
         <Text>
           {record.usage_count} / {record.total_usage_limit || "∞"}
         </Text>
@@ -272,7 +272,7 @@ const DiscountCodeManagement = () => {
       title: "Hành động",
       key: "action",
       align: "center" as const,
-      render: (_: any, record: Promotion) => (
+      render: (_: unknown, record: Promotion) => (
         <Space>
           <Tooltip title="QR Code">
             <Button

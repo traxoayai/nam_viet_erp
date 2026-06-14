@@ -4,17 +4,17 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const usePatientHistory = (customerId: number | undefined) => {
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<unknown[]>([]);
 
   // State chứa dữ liệu lịch sử sinh hiệu (để vẽ biểu đồ)
   const [vitalsHistory, setVitalsHistory] = useState<{
-    pulse: any[];
-    temperature: any[];
-    sp02: any[];
-    bp_systolic: any[];
-    bp_diastolic: any[];
-    weight: any[];
-    height: any[];
+    pulse: unknown[];
+    temperature: unknown[];
+    sp02: unknown[];
+    bp_systolic: unknown[];
+    bp_diastolic: unknown[];
+    weight: unknown[];
+    height: unknown[];
   }>({
     pulse: [],
     temperature: [],
@@ -64,8 +64,8 @@ export const usePatientHistory = (customerId: number | undefined) => {
         // 1. Xử lý dữ liệu cho Drawer (Danh sách khám)
         const formattedHistory = data?.map((visit) => {
           const flatMedicines =
-            visit.prescriptions?.flatMap((p: any) =>
-              p.items.map((i: any) => ({
+            visit.prescriptions?.flatMap((p: unknown) =>
+              p.items.map((i: unknown) => ({
                 product_id: i.product?.id,
                 product_name: i.product?.name,
                 quantity: i.quantity,
@@ -82,7 +82,7 @@ export const usePatientHistory = (customerId: number | undefined) => {
         // Lấy dữ liệu từ quá khứ đến hiện tại (reverse) và lọc bỏ giá trị null
         const processMetric = (key: string) =>
           data
-            ?.map((v: any) => ({ date: v.created_at, value: v[key] }))
+            ?.map((v: unknown) => ({ date: v.created_at, value: v[key] }))
             .filter((item) => item.value !== null && item.value > 0)
             .reverse() || [];
 
@@ -107,9 +107,9 @@ export const usePatientHistory = (customerId: number | undefined) => {
 
   // Logic Copy đơn thuốc
   const onCopyPrescription = (
-    oldPrescription: any[],
-    currentItems: any[],
-    setItems: (items: any[]) => void
+    oldPrescription: unknown[],
+    currentItems: unknown[],
+    setItems: (items: unknown[]) => void
   ) => {
     const newItems = oldPrescription.map((item) => ({
       product_id: item.product_id,

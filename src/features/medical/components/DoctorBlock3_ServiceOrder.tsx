@@ -11,8 +11,8 @@ const { Text } = Typography;
 
 interface Props {
   readOnly?: boolean;
-  serviceOrders?: any[]; // Danh sách các service order đã lưu / fetch
-  onCheckout?: (selectedServicesJson: any[]) => void;
+  serviceOrders?: unknown[]; // Danh sách các service order đã lưu / fetch
+  onCheckout?: (selectedServicesJson: unknown[]) => void;
 }
 
 export const DoctorBlock3_ServiceOrder: React.FC<Props> = ({
@@ -20,8 +20,8 @@ export const DoctorBlock3_ServiceOrder: React.FC<Props> = ({
   serviceOrders = [],
   onCheckout,
 }) => {
-  const [selectedServices, setSelectedServices] = useState<any[]>([]); // Dùng chung cho Table local state
-  const [searchValue, setSearchValue] = useState<any>(null);
+  const [selectedServices, setSelectedServices] = useState<unknown[]>([]); // Dùng chung cho Table local state
+  const [searchValue, setSearchValue] = useState<unknown>(null);
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -51,7 +51,7 @@ export const DoctorBlock3_ServiceOrder: React.FC<Props> = ({
     });
   }, [serviceOrders]);
 
-  const handleAddService = (_: any, option: any) => {
+  const handleAddService = (_: unknown, option: unknown) => {
     if (!option || !option.product) return;
     const service = option.product;
 
@@ -70,7 +70,7 @@ export const DoctorBlock3_ServiceOrder: React.FC<Props> = ({
     {
       title: "Tên dịch vụ / Chỉ định",
       dataIndex: "name",
-      render: (text: string, record: any) => (
+      render: (text: string, record: unknown) => (
         <Space direction="vertical" size={0}>
           <Space>
             <Text strong>{text || "Dịch vụ"}</Text>
@@ -108,7 +108,7 @@ export const DoctorBlock3_ServiceOrder: React.FC<Props> = ({
       title: "",
       key: "action",
       width: 50,
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Button
           type="text"
           danger
@@ -164,7 +164,7 @@ export const DoctorBlock3_ServiceOrder: React.FC<Props> = ({
                 ? {
                     selectedRowKeys,
                     onChange: setSelectedRowKeys,
-                    getCheckboxProps: (record: any) => ({
+                    getCheckboxProps: (record: unknown) => ({
                       disabled: !!record.payment_order_id,
                     }),
                   }

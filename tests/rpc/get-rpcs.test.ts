@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 function expectNoTypeError(error: { code?: string; message?: string } | null) {
@@ -29,7 +30,9 @@ describe("Assets RPCs", () => {
       .limit(1)
       .maybeSingle();
     if (!row) return;
-    const { error } = await adminClient.rpc("get_asset_details", { p_id: row.id });
+    const { error } = await adminClient.rpc("get_asset_details", {
+      p_id: row.id,
+    });
     expectNoTypeError(error);
   });
 
@@ -54,7 +57,9 @@ describe("Customers RPCs", () => {
       .limit(1)
       .maybeSingle();
     if (!row) return;
-    const { error } = await adminClient.rpc("get_customer_b2b_details", { p_id: row.id });
+    const { error } = await adminClient.rpc("get_customer_b2b_details", {
+      p_id: row.id,
+    });
     expectNoTypeError(error);
   });
 
@@ -65,7 +70,9 @@ describe("Customers RPCs", () => {
       .limit(1)
       .maybeSingle();
     if (!row) return;
-    const { error } = await adminClient.rpc("get_customer_b2c_details", { p_id: row.id });
+    const { error } = await adminClient.rpc("get_customer_b2c_details", {
+      p_id: row.id,
+    });
     expectNoTypeError(error);
   });
 
@@ -326,10 +333,13 @@ describe("Products RPCs", () => {
       .limit(1)
       .maybeSingle();
     if (!wh || !prod) return;
-    const { error } = await adminClient.rpc("search_product_batches_for_stocktake", {
-      p_product_id: prod.id,
-      p_warehouse_id: wh.id,
-    });
+    const { error } = await adminClient.rpc(
+      "search_product_batches_for_stocktake",
+      {
+        p_product_id: prod.id,
+        p_warehouse_id: wh.id,
+      }
+    );
     expectNoTypeError(error);
   });
 
@@ -635,9 +645,12 @@ describe("Clinical RPCs", () => {
       .limit(1)
       .maybeSingle();
     if (!row) return;
-    const { error } = await adminClient.rpc("get_prescription_template_details", {
-      p_id: row.id,
-    });
+    const { error } = await adminClient.rpc(
+      "get_prescription_template_details",
+      {
+        p_id: row.id,
+      }
+    );
     expectNoTypeError(error);
   });
 
@@ -648,9 +661,12 @@ describe("Clinical RPCs", () => {
       .limit(1)
       .maybeSingle();
     if (!row) return;
-    const { error } = await adminClient.rpc("get_vaccination_template_details", {
-      p_id: row.id,
-    });
+    const { error } = await adminClient.rpc(
+      "get_vaccination_template_details",
+      {
+        p_id: row.id,
+      }
+    );
     expectNoTypeError(error);
   });
 

@@ -1,13 +1,4 @@
 import {
-  CheckCircle,
-  XCircle,
-  Mail,
-  Phone,
-  FileText,
-  Clock,
-  Users,
-} from "lucide-react";
-import {
   Layout,
   Card,
   Table,
@@ -24,15 +15,26 @@ import {
   Tabs,
   Input,
 } from "antd";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
 import dayjs from "dayjs";
+import {
+  CheckCircle,
+  XCircle,
+  Mail,
+  Phone,
+  FileText,
+  Clock,
+  Users,
+} from "lucide-react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+
+import ApproveRegistrationModal from "./ApproveRegistrationModal";
+
 import {
   fetchPortalRegistrations,
   approvePortalRegistration,
   rejectPortalRegistration,
   type PortalRegistrationRequest,
 } from "@/features/sales/api/portalRegistrationService";
-import ApproveRegistrationModal from "./ApproveRegistrationModal";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -71,7 +73,7 @@ const PortalRegistrationPage: React.FC = () => {
         setLoading(false);
       }
     },
-    [activeTab, antMessage],
+    [activeTab, antMessage]
   );
 
   useEffect(() => {
@@ -107,7 +109,7 @@ const PortalRegistrationPage: React.FC = () => {
   const handleApproveConfirm = async (
     existingCustomerId: number | null,
     debtLimit: number,
-    paymentTerm: number,
+    paymentTerm: number
   ) => {
     if (!selectedRequest) return;
     setApproveLoading(true);
@@ -116,10 +118,10 @@ const PortalRegistrationPage: React.FC = () => {
         selectedRequest.id,
         existingCustomerId,
         debtLimit,
-        paymentTerm,
+        paymentTerm
       );
       antMessage.success(
-        `Đã phê duyệt thành công cho ${selectedRequest.business_name}`,
+        `Đã phê duyệt thành công cho ${selectedRequest.business_name}`
       );
       setApproveOpen(false);
       loadData();
@@ -137,7 +139,7 @@ const PortalRegistrationPage: React.FC = () => {
     try {
       await rejectPortalRegistration(selectedRequest.id, rejectReason);
       antMessage.warning(
-        `Đã từ chối yêu cầu của ${selectedRequest.business_name}`,
+        `Đã từ chối yêu cầu của ${selectedRequest.business_name}`
       );
       setRejectOpen(false);
       setRejectReason("");
@@ -177,19 +179,11 @@ const PortalRegistrationPage: React.FC = () => {
           <Text strong style={{ fontSize: "15px" }}>
             {record.business_name}
           </Text>
-          <Space
-            split={<div className="h-3 w-[1px] bg-gray-300 mx-1" />}
-          >
-            <Text
-              type="secondary"
-              className="flex items-center gap-1 text-xs"
-            >
+          <Space split={<div className="h-3 w-[1px] bg-gray-300 mx-1" />}>
+            <Text type="secondary" className="flex items-center gap-1 text-xs">
               <Mail size={12} /> {record.email}
             </Text>
-            <Text
-              type="secondary"
-              className="flex items-center gap-1 text-xs"
-            >
+            <Text type="secondary" className="flex items-center gap-1 text-xs">
               <Phone size={12} /> {record.phone}
             </Text>
           </Space>
@@ -215,11 +209,11 @@ const PortalRegistrationPage: React.FC = () => {
       render: (_: unknown, record: PortalRegistrationRequest) => (
         <Space direction="vertical" size={0}>
           <Text>{record.contact_name}</Text>
-          {record.contact_phone && (
+          {record.contact_phone ? (
             <Text type="secondary" style={{ fontSize: "12px" }}>
               {record.contact_phone}
             </Text>
-          )}
+          ) : null}
         </Space>
       ),
     },
@@ -260,17 +254,12 @@ const PortalRegistrationPage: React.FC = () => {
               onClick={() => showDetails(record)}
             />
           </Tooltip>
-          {isPending && (
+          {isPending ? (
             <>
               <Tooltip title="Duyệt hồ sơ">
                 <Button
                   type="text"
-                  icon={
-                    <CheckCircle
-                      size={20}
-                      className="text-green-600"
-                    />
-                  }
+                  icon={<CheckCircle size={20} className="text-green-600" />}
                   onClick={() => openApprove(record)}
                 />
               </Tooltip>
@@ -283,7 +272,7 @@ const PortalRegistrationPage: React.FC = () => {
                 />
               </Tooltip>
             </>
-          )}
+          ) : null}
         </Space>
       ),
     },
@@ -362,10 +351,7 @@ const PortalRegistrationPage: React.FC = () => {
         footer={
           isPending
             ? [
-                <Button
-                  key="back"
-                  onClick={() => setDetailOpen(false)}
-                >
+                <Button key="back" onClick={() => setDetailOpen(false)}>
                   Đóng
                 </Button>,
                 <Button
@@ -390,17 +376,14 @@ const PortalRegistrationPage: React.FC = () => {
                 </Button>,
               ]
             : [
-                <Button
-                  key="back"
-                  onClick={() => setDetailOpen(false)}
-                >
+                <Button key="back" onClick={() => setDetailOpen(false)}>
                   Đóng
                 </Button>,
               ]
         }
         width={700}
       >
-        {selectedRequest && (
+        {selectedRequest ? (
           <Descriptions bordered column={2} className="mt-4">
             <Descriptions.Item label="Doanh nghiệp" span={2}>
               <Text strong className="text-blue-600">
@@ -434,35 +417,27 @@ const PortalRegistrationPage: React.FC = () => {
               </div>
             </Descriptions.Item>
             <Descriptions.Item label="Trạng thái">
-              <Tag
-                color={
-                  STATUS_CONFIG[selectedRequest.status].color
-                }
-              >
+              <Tag color={STATUS_CONFIG[selectedRequest.status].color}>
                 {STATUS_CONFIG[selectedRequest.status].label}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="Thời gian gửi">
-              {dayjs(selectedRequest.created_at).format(
-                "DD/MM/YYYY HH:mm:ss",
-              )}
+              {dayjs(selectedRequest.created_at).format("DD/MM/YYYY HH:mm:ss")}
             </Descriptions.Item>
-            {selectedRequest.rejection_reason && (
+            {selectedRequest.rejection_reason ? (
               <Descriptions.Item label="Lý do từ chối" span={2}>
-                <Text type="danger">
-                  {selectedRequest.rejection_reason}
-                </Text>
+                <Text type="danger">{selectedRequest.rejection_reason}</Text>
               </Descriptions.Item>
-            )}
-            {selectedRequest.approved_at && (
+            ) : null}
+            {selectedRequest.approved_at ? (
               <Descriptions.Item label="Ngày duyệt" span={2}>
                 {dayjs(selectedRequest.approved_at).format(
-                  "DD/MM/YYYY HH:mm:ss",
+                  "DD/MM/YYYY HH:mm:ss"
                 )}
               </Descriptions.Item>
-            )}
+            ) : null}
           </Descriptions>
-        )}
+        ) : null}
       </Modal>
 
       {/* Approve Modal */}
@@ -485,14 +460,14 @@ const PortalRegistrationPage: React.FC = () => {
         cancelText="Hủy"
         confirmLoading={rejectLoading}
       >
-        {selectedRequest && (
+        {selectedRequest ? (
           <div className="mb-4">
             <Text>
               Từ chối yêu cầu từ{" "}
               <Text strong>{selectedRequest.business_name}</Text>?
             </Text>
           </div>
-        )}
+        ) : null}
         <Input.TextArea
           rows={4}
           placeholder="Lý do từ chối (không bắt buộc)..."

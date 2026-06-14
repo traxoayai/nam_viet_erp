@@ -3,10 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSafeRpc = vi.fn();
 
 vi.mock("@/shared/api/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 import { posService } from "@/features/pos/api/posService";
@@ -20,12 +20,22 @@ describe("posService", () => {
   describe("searchProducts", () => {
     it("calls search_products_pos with keyword, warehouse, and limit", async () => {
       mockSafeRpc.mockResolvedValue({
-        data: [{
-          id: 1, name: "Panadol", sku: "PAN-001", retail_price: 5000,
-          image_url: null, unit: "Vien", stock_quantity: 100, status: "active",
-          location_cabinet: "A", location_row: "1", location_slot: "3",
-          usage_instructions: {},
-        }],
+        data: [
+          {
+            id: 1,
+            name: "Panadol",
+            sku: "PAN-001",
+            retail_price: 5000,
+            image_url: null,
+            unit: "Vien",
+            stock_quantity: 100,
+            status: "active",
+            location_cabinet: "A",
+            location_row: "1",
+            location_slot: "3",
+            usage_instructions: {},
+          },
+        ],
       });
       const result = await posService.searchProducts("Pan", 2);
       expect(mockSafeRpc).toHaveBeenCalledWith("search_products_pos", {
@@ -55,17 +65,31 @@ describe("posService", () => {
 
     it("maps response fields correctly", async () => {
       mockSafeRpc.mockResolvedValue({
-        data: [{
-          id: 2, name: "Aspirin", sku: "ASP-01", retail_price: 3000,
-          image_url: "img.jpg", unit: "Hop", stock_quantity: 50, status: "active",
-          location_cabinet: null, location_row: null, location_slot: null,
-          usage_instructions: { "0_2": "1 vien" },
-        }],
+        data: [
+          {
+            id: 2,
+            name: "Aspirin",
+            sku: "ASP-01",
+            retail_price: 3000,
+            image_url: "img.jpg",
+            unit: "Hop",
+            stock_quantity: 50,
+            status: "active",
+            location_cabinet: null,
+            location_row: null,
+            location_slot: null,
+            usage_instructions: { "0_2": "1 vien" },
+          },
+        ],
       });
       const result = await posService.searchProducts("Asp");
       expect(result[0]).toMatchObject({
-        id: 2, name: "Aspirin", sku: "ASP-01", retail_price: 3000,
-        unit: "Hop", stock_quantity: 50,
+        id: 2,
+        name: "Aspirin",
+        sku: "ASP-01",
+        retail_price: 3000,
+        unit: "Hop",
+        stock_quantity: 50,
         usage_instructions: { "0_2": "1 vien" },
       });
     });
@@ -74,9 +98,13 @@ describe("posService", () => {
   // --- searchCustomers ---
   describe("searchCustomers", () => {
     it("calls search_customers_pos with keyword", async () => {
-      mockSafeRpc.mockResolvedValue({ data: [{ id: 1, name: "Nguyen Van A", phone: "0901" }] });
+      mockSafeRpc.mockResolvedValue({
+        data: [{ id: 1, name: "Nguyen Van A", phone: "0901" }],
+      });
       const result = await posService.searchCustomers("Nguyen");
-      expect(mockSafeRpc).toHaveBeenCalledWith("search_customers_pos", { p_keyword: "Nguyen" });
+      expect(mockSafeRpc).toHaveBeenCalledWith("search_customers_pos", {
+        p_keyword: "Nguyen",
+      });
       expect(result).toEqual([{ id: 1, name: "Nguyen Van A", phone: "0901" }]);
     });
 

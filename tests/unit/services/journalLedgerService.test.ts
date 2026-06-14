@@ -40,14 +40,14 @@ import { supabase } from "@/shared/lib/supabaseClient";
 
 // Helper lấy mock function từ mock module
 const getFrom = () =>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (supabase as unknown as any).from as ReturnType<typeof vi.fn>;
+  (supabase as unknown as unknown).from as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
   // Re-setup chains sau clearAllMocks
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const from = (supabase as unknown as any).from as ReturnType<typeof vi.fn>;
+  const from = (supabase as unknown as unknown).from as ReturnType<
+    typeof vi.fn
+  >;
   const builder = {
     select: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
@@ -64,14 +64,12 @@ beforeEach(() => {
   builder.lte.mockReturnValue(builder);
   from.mockReturnValue(builder);
   // Expose builder trên from mock để test có thể truy cập
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (from as any)._builder = builder;
+  (from as unknown)._builder = builder;
 });
 
 // Helper để lấy builder hiện tại
 const getBuilder = () =>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (getFrom() as any)._builder as Record<string, ReturnType<typeof vi.fn>>;
+  (getFrom() as unknown)._builder as Record<string, ReturnType<typeof vi.fn>>;
 
 // ────────────────────────────────────────────────────────────────────────────
 // listJournalEntries

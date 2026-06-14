@@ -26,7 +26,7 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
     // --- HÀM TẢI DỮ LIỆU ---
 
     fetchCustomers: async (
-      newFilters: any,
+      newFilters: unknown,
       sortDebt?: "asc" | "desc" | null
     ) => {
       const filters = { ...get().filters, ...newFilters };
@@ -53,7 +53,7 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
           totalCount: Number(totalCount),
           loading: false,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi tải danh sách khách hàng B2B:", error);
         set({ loading: false });
         throw error;
@@ -65,7 +65,7 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
       try {
         const data = await service.fetchCustomerDetails(id);
         set({ editingCustomer: data, loadingDetails: false });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi tải chi tiết khách hàng B2B:", error);
         set({ loadingDetails: false });
         throw error;
@@ -79,7 +79,7 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
         await get().fetchCustomers(get().filters);
         set({ loading: false, isFormView: false });
         return newId;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi tạo khách hàng B2B:", error);
         set({ loading: false });
         throw error;
@@ -93,7 +93,7 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
         await get().fetchCustomers(get().filters);
         set({ loading: false, isFormView: false });
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi cập nhật khách hàng B2B:", error);
         set({ loading: false });
         throw error;
@@ -107,7 +107,7 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
         await get().fetchCustomers(get().filters);
         set({ loading: false });
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi xóa (mềm) khách hàng B2B:", error);
         set({ loading: false });
         throw error;
@@ -121,7 +121,7 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
         await get().fetchCustomers(get().filters);
         set({ loading: false });
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi khôi phục khách hàng B2B:", error);
         set({ loading: false });
         throw error;
@@ -136,7 +136,7 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
         const data = await service.exportCustomers(filters);
         set({ loading: false });
         return data;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi xuất Excel B2B:", error);
         set({ loading: false });
         throw error;
@@ -152,7 +152,7 @@ export const useCustomerB2BStore = create<CustomerB2BStoreState>(
         await get().fetchCustomers(get().filters); // Tải lại
         set({ loading: false });
         return count;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi Store Import B2B:", error);
         set({ loading: false });
         throw error;

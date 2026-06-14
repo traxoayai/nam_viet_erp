@@ -5,7 +5,7 @@ import { PosCartTable } from "../PosCartTable";
 import { PosSearchInput } from "../PosSearchInput";
 
 interface Props {
-  searchRef?: React.Ref<any>;
+  searchRef?: React.Ref<unknown>;
 }
 
 export const PosLeftSection = ({ searchRef }: Props) => {

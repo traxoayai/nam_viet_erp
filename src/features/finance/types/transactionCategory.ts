@@ -57,7 +57,7 @@ export interface TransactionCategoryStoreState {
   showEditModal: (record: TransactionCategoryRecord) => void;
   closeModal: () => void;
 
-  addCategory: (values: any) => Promise<boolean>;
-  updateCategory: (id: number, values: any) => Promise<boolean>;
+  addCategory: (values: unknown) => Promise<boolean>;
+  updateCategory: (id: number, values: unknown) => Promise<boolean>;
   deleteCategory: (id: number) => Promise<boolean>;
 }

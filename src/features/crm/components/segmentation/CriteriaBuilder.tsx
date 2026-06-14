@@ -15,19 +15,19 @@ export const CriteriaBuilder: React.FC<CriteriaBuilderProps> = ({
   value = {},
   onChange,
 }) => {
-  const updateCriteria = (key: keyof SegmentCriteria, val: any) => {
+  const updateCriteria = (key: keyof SegmentCriteria, val: unknown) => {
     // Clone object để tránh mutate state trực tiếp
-    const newValue = { ...value };
+    const newValue = { ...value } as Record<string, unknown>;
 
     if (val === undefined || val === null || val === "") {
-      // [FIX] Ép kiểu any để delete không bị báo lỗi
-      delete (newValue as any)[key];
+      // [FIX] Delete key từ object
+      delete newValue[key as string];
     } else {
-      // [FIX] Ép kiểu any để gán dynamic value (vì val có thể là string hoặc number)
-      (newValue as any)[key] = val;
+      // [FIX] Gán dynamic value (vì val có thể là string hoặc number)
+      newValue[key as string] = val;
     }
 
-    onChange?.(newValue);
+    onChange?.(newValue as SegmentCriteria);
   };
 
   return (

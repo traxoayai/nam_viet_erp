@@ -88,8 +88,9 @@ const CompanyInfoPage: React.FC = () => {
             ]);
           }
         }
-      } catch (error: any) {
-        antMessage.error(`Lỗi khi tải thông tin: ${error.message}`);
+      } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        antMessage.error(`Lỗi khi tải thông tin: ${errMsg}`);
       } finally {
         setLoading(false);
       }
@@ -129,8 +130,9 @@ const CompanyInfoPage: React.FC = () => {
       if (error) throw error;
 
       antMessage.success({ content: "Lưu thông tin thành công!", key: "save" });
-    } catch (error: any) {
-      antMessage.error({ content: `Lỗi: ${error.message}`, key: "save" });
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      antMessage.error({ content: `Lỗi: ${errMsg}`, key: "save" });
     } finally {
       setLoading(false);
     }

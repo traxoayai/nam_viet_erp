@@ -53,7 +53,7 @@ export interface Product {
   wholesale_margin_type?: "percent" | "amount";
   retail_margin_value?: number;
   retail_margin_type?: "percent" | "amount";
-  inventory_settings?: any;
+  inventory_settings?: unknown;
 
   // Multi-unit V2
   units?: ProductUnit[];
@@ -80,7 +80,7 @@ export interface ProductStoreState {
   // Trạng thái
   loading: boolean;
   loadingDetails: boolean;
-  currentProduct: any | null;
+  currentProduct: unknown | null;
 
   // Lọc & Phân trang
   filters: ProductFilters;
@@ -94,8 +94,8 @@ export interface ProductStoreState {
   getProductDetails: (id: number) => Promise<void>;
 
   // Hàm ghi
-  addProduct: (data: any) => Promise<void>;
-  updateProduct: (id: number, data: any) => Promise<void>;
+  addProduct: (data: unknown) => Promise<void>;
+  updateProduct: (id: number, data: unknown) => Promise<void>;
   updateStatus: (
     ids: React.Key[],
     status: "active" | "inactive"
@@ -103,12 +103,12 @@ export interface ProductStoreState {
   deleteProducts: (ids: React.Key[]) => Promise<void>;
   checkAndDeleteProducts: (
     ids: React.Key[]
-  ) => Promise<{ success: boolean; dependencies?: any[] }>;
+  ) => Promise<{ success: boolean; dependencies?: unknown[] }>;
   checkAndUpdateStatus: (
     ids: React.Key[],
     status: "active" | "inactive"
-  ) => Promise<{ success: boolean; dependencies?: any[] }>; // [NEW]
-  exportToExcel: () => Promise<any[]>;
+  ) => Promise<{ success: boolean; dependencies?: unknown[] }>; // [NEW]
+  exportToExcel: () => Promise<Array<Record<string, unknown>>>;
 
   // Hàm tải danh mục
   fetchClassifications: () => Promise<void>;

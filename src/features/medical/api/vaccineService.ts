@@ -35,7 +35,8 @@ export const getCustomerTimeline = async (customerId: number) => {
 export const getVaccines = async (keyword?: string) => {
   const query = supabase
     .from("service_packages")
-    .select(`
+    .select(
+      `
       id, 
       name, 
       price, 
@@ -43,10 +44,11 @@ export const getVaccines = async (keyword?: string) => {
       service_package_items!inner(
         item_id
       )
-    `)
+    `
+    )
     .eq("status", "active")
     .eq("clinical_category", "vaccination") // Chỉ lấy Vắc-xin
-    .eq("type", "service")                  // 'service' là dịch vụ/mũi lẻ
+    .eq("type", "service") // 'service' là dịch vụ/mũi lẻ
     .ilike("name", `%${keyword || ""}%`)
     .limit(20);
 
@@ -55,22 +57,25 @@ export const getVaccines = async (keyword?: string) => {
     console.error("Error fetching single vaccines:", error);
     throw error;
   }
-  
+
   // Format lại data: Lấy item_id (ID lõi của lọ vắc xin) ra ngoài để nhét vào Sổ tiêm chủng
-  return data?.map((item: any) => ({
-      id: item.id,       // ID của Dịch vụ (Để tính tiền)
+  return (
+    data?.map((item: unknown) => ({
+      id: item.id, // ID của Dịch vụ (Để tính tiền)
       name: item.name,
       price: item.price,
       sku: item.sku,
-      product_id: item.service_package_items?.[0]?.item_id // Lấy ID lõi vắc-xin
-  })) || [];
+      product_id: item.service_package_items?.[0]?.item_id, // Lấy ID lõi vắc-xin
+    })) || []
+  );
 };
 
 // 2. Lấy danh sách Gói tiêm (Vaccine Bundles)
 export const getVaccinePackages = async (keyword?: string) => {
   const query = supabase
     .from("service_packages")
-    .select(`
+    .select(
+      `
       id, 
       name, 
       price, 
@@ -82,10 +87,11 @@ export const getVaccinePackages = async (keyword?: string) => {
         quantity,
         schedule_days
       )
-    `)
+    `
+    )
     .eq("status", "active")
     .eq("clinical_category", "vaccination") // Chỉ lấy Vắc-xin
-    .eq("type", "bundle")                   // 'bundle' là Gói combo
+    .eq("type", "bundle") // 'bundle' là Gói combo
     .ilike("name", `%${keyword || ""}%`)
     .limit(20);
 
@@ -106,7 +112,10 @@ export const generateTimeline = async (payload: {
   p_product_id?: number;
   p_consulted_by?: string;
 }) => {
-  const { data } = await safeRpc("generate_vaccine_timeline", payload as any);
+  const { data } = await safeRpc(
+    "generate_vaccine_timeline",
+    payload as unknown
+  );
   return data;
 };
 

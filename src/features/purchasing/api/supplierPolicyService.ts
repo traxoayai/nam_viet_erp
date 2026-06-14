@@ -6,7 +6,7 @@ import { supabase } from "@/shared/lib/supabaseClient";
 
 export const supplierPolicyService = {
   // LIST
-  getPolicies: async (filters: any) => {
+  getPolicies: async (filters: unknown) => {
     let query = supabase
       .from("supplier_programs")
       .select(
@@ -54,7 +54,7 @@ export const supplierPolicyService = {
   },
 
   // DATA MAPPING HELPER (DB -> FORM)
-  mapToFormState: (data: any): PolicyFormValues => {
+  mapToFormState: (data: unknown): PolicyFormValues => {
     return {
       supplier_id: data.supplier_id,
       name: data.name,
@@ -63,15 +63,15 @@ export const supplierPolicyService = {
       range_picker: [null, null], // Let UI handle conversion to Dayjs
       description: data.description,
       attachment_url: data.attachment_url,
-      groups: (data.groups || []).map((g: any) => ({
+      groups: (data.groups || []).map((g: unknown) => ({
         key: String(g.id), // Use ID as key
         id: g.id,
         name: g.name,
         rule_type: g.rule_type,
         price_basis: g.price_basis,
         rules: g.rules,
-        product_ids: g.scope.map((s: any) => s.product_id),
-        _product_display: g.scope.map((s: any) => s.product),
+        product_ids: g.scope.map((s: unknown) => s.product_id),
+        _product_display: g.scope.map((s: unknown) => s.product),
       })),
     };
   },
@@ -98,10 +98,7 @@ export const supplierPolicyService = {
       })),
     };
 
-    const { data } = await safeRpc(
-      "create_full_supplier_program",
-      payload
-    );
+    const { data } = await safeRpc("create_full_supplier_program", payload);
     return data;
   },
 
@@ -128,10 +125,7 @@ export const supplierPolicyService = {
       })),
     };
 
-    const { data } = await safeRpc(
-      "update_full_supplier_program",
-      payload
-    );
+    const { data } = await safeRpc("update_full_supplier_program", payload);
     return data;
   },
 };

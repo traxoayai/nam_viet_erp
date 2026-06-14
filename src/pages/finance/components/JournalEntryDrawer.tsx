@@ -114,7 +114,6 @@ export const JournalEntryDrawer: React.FC<Props> = ({
       .then(setLines)
       .catch((err: Error) => message.error(err.message))
       .finally(() => setLoadingLines(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, entry?.id]);
 
   const handlePost = async () => {

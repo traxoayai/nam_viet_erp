@@ -8,8 +8,9 @@
  * Bug đã regress nhiều lần → test này PHẢI bắt được.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
-import { adminClient } from "../helpers/supabase";
+
 import { seedRpcAccessRules } from "../helpers/seedRpcAccessRules";
+import { adminClient } from "../helpers/supabase";
 
 // ─── Shared params ──────────────────────────────────────────────────────────
 
@@ -23,9 +24,9 @@ let warehouseId: number | null = null;
 let unitPrice: number = 100000;
 
 /** Flag: có đủ seed data để test business logic không */
-function hasSeedData(): boolean {
-  return customerId !== null && productId !== null && warehouseId !== null;
-}
+// function _hasSeedData(): boolean {
+//   return customerId !== null && productId !== null && warehouseId !== null;
+// }
 
 function makeItems() {
   return JSON.stringify([
@@ -90,10 +91,7 @@ afterAll(async () => {
       .delete()
       .in("order_id", createdOrderIds);
 
-    await adminClient
-      .from("orders")
-      .delete()
-      .in("id", createdOrderIds);
+    await adminClient.from("orders").delete().in("id", createdOrderIds);
   }
 });
 
@@ -103,9 +101,7 @@ afterAll(async () => {
  * Nếu RPC thành công, lưu order ID để cleanup.
  * Return { data, error } nguyên bản.
  */
-async function callCreateSalesOrder(
-  overrides: Record<string, unknown> = {},
-) {
+async function callCreateSalesOrder(overrides: Record<string, unknown> = {}) {
   const params = { ...baseParams(), ...overrides };
   const result = await adminClient.rpc("create_sales_order", params);
 
@@ -114,7 +110,9 @@ async function callCreateSalesOrder(
     const orderId =
       typeof result.data === "number"
         ? result.data
-        : typeof result.data === "object" && result.data !== null && "id" in result.data
+        : typeof result.data === "object" &&
+            result.data !== null &&
+            "id" in result.data
           ? (result.data as { id: number }).id
           : null;
 
@@ -128,10 +126,14 @@ async function callCreateSalesOrder(
  * Kiểm tra lỗi KHÔNG phải lỗi type-cast timestamp (22007).
  * Nếu RPC fail vì auth/business logic, đó là OK — miễn không phải 22007.
  */
-function expectNotTimestampError(error: { code: string; message: string } | null) {
+function expectNotTimestampError(
+  error: { code: string; message: string } | null
+) {
   if (error) {
     expect(error.code).not.toBe("22007");
-    expect(error.message).not.toMatch(/invalid input syntax for type timestamp/i);
+    expect(error.message).not.toMatch(
+      /invalid input syntax for type timestamp/i
+    );
   }
 }
 

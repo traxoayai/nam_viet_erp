@@ -2,8 +2,9 @@
 import { message } from "antd";
 import { useState, useCallback, useMemo } from "react";
 
-import { safeRpc } from "@/shared/lib/safeRpc";
 import type { Json } from "@/shared/types/database.types";
+
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 export interface BookingCustomer {
   id: number;
@@ -51,7 +52,15 @@ export const useBookingResources = () => {
 
       if (data) {
         // Map to simpler interface
-        type CustomerRow = { id: number; name: string; phone: string; customer_code: string; dob: string | null; gender: string | null; address: string | null };
+        type CustomerRow = {
+          id: number;
+          name: string;
+          phone: string;
+          customer_code: string;
+          dob: string | null;
+          gender: string | null;
+          address: string | null;
+        };
         const rows = data as unknown as CustomerRow[];
         const mapped = rows.map((c) => ({
           id: c.id,
@@ -81,10 +90,7 @@ export const useBookingResources = () => {
     try {
       // Note: If get_users_with_roles doesn't exist, this will fail.
       // But we follow strict user instructions to use this RPC.
-      const { data } = await safeRpc(
-        "get_users_with_roles",
-        undefined
-      );
+      const { data } = await safeRpc("get_users_with_roles", undefined);
 
       if (data) {
         type UserRow = { id: string; name: string; role: string };
@@ -124,7 +130,12 @@ export const useBookingResources = () => {
       });
 
       if (data) {
-        type VaccineRow = { id: number; name: string; price: number; sku: string };
+        type VaccineRow = {
+          id: number;
+          name: string;
+          price: number;
+          sku: string;
+        };
         const rows = data as unknown as VaccineRow[];
         const vax = rows.map((v) => ({
           id: v.id,
@@ -164,7 +175,9 @@ export const useBookingResources = () => {
         return data;
       } catch (err: unknown) {
         console.error("Error creating customer:", err);
-        message.error(err instanceof Error ? err.message : "Không thể tạo khách hàng");
+        message.error(
+          err instanceof Error ? err.message : "Không thể tạo khách hàng"
+        );
         return null;
       } finally {
         setLoading(false);
@@ -194,7 +207,9 @@ export const useBookingResources = () => {
         return true;
       } catch (err: unknown) {
         console.error("Error updating customer:", err);
-        message.error(err instanceof Error ? err.message : "Không thể cập nhật khách hàng");
+        message.error(
+          err instanceof Error ? err.message : "Không thể cập nhật khách hàng"
+        );
         return false;
       } finally {
         setLoading(false);

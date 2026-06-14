@@ -26,7 +26,10 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
 
     // --- HÀM TẢI DỮ LIỆU ---
 
-    fetchCustomers: async (filters: any, sortDebt?: "asc" | "desc" | null) => {
+    fetchCustomers: async (
+      filters: unknown,
+      sortDebt?: "asc" | "desc" | null
+    ) => {
       // SỬA LỖI 1: Merge filters
       const finalFilters = { ...get().filters, ...filters };
       const { page, pageSize } = get();
@@ -47,7 +50,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
           currentSort // Truyền sort xuống service
         );
         set({ customers: data, totalCount, loading: false });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi tải danh sách khách hàng:", error);
         set({ loading: false });
         throw error; // SỬA LỖI 4: Ném lỗi ra
@@ -59,35 +62,35 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
       try {
         const data = await service.fetchCustomerDetails(id);
         set({ editingCustomer: data, loadingDetails: false }); // <-- SỬA LỖI 2
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi tải chi tiết khách hàng:", error);
         set({ loadingDetails: false }); // <-- SỬA LỖI 2
         throw error; // SỬA LỖI 4: Ném lỗi ra
       }
     }, // --- HÀM CRUD ---
 
-    createCustomer: async (data: any, guardians: any) => {
+    createCustomer: async (data: unknown, guardians: unknown) => {
       set({ loading: true });
       try {
         const newId = await service.createCustomer(data, guardians);
         await get().fetchCustomers(get().filters); // Tải lại danh sách
         set({ loading: false, isFormView: false });
         return newId;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi tạo khách hàng:", error);
         set({ loading: false });
         throw error; // SỬA LỖI 4: Ném lỗi ra
       }
     },
 
-    updateCustomer: async (id: number, data: any, guardians: any) => {
+    updateCustomer: async (id: number, data: unknown, guardians: unknown) => {
       set({ loading: true });
       try {
         await service.updateCustomer(id, data, guardians);
         await get().fetchCustomers(get().filters); // Tải lại danh sách
         set({ loading: false, isFormView: false });
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi cập nhật khách hàng:", error);
         set({ loading: false });
         throw error; // SỬA LỖI 4: Ném lỗi ra
@@ -101,7 +104,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
         await get().fetchCustomers(get().filters); // Tải lại danh sách
         set({ loading: false });
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi xóa (mềm) khách hàng:", error);
         set({ loading: false });
         throw error; // SỬA LỖI 4: Ném lỗi ra
@@ -115,7 +118,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
         await get().fetchCustomers(get().filters); // Tải lại danh sách
         set({ loading: false });
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi khôi phục khách hàng:", error);
         set({ loading: false });
         throw error;
@@ -130,7 +133,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
         const data = await service.exportCustomers(filters);
         set({ loading: false });
         return data;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi xuất Excel:", error);
         set({ loading: false });
         throw error;
@@ -144,7 +147,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
         await get().fetchCustomers(get().filters); // Tải lại
         set({ loading: false });
         return count;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi Store Import:", error);
         set({ loading: false });
         throw error;
@@ -181,7 +184,7 @@ export const useCustomerB2CStore = create<CustomerB2CStoreState>(
       try {
         const results = await service.searchGuardians(phone);
         return results;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Lỗi tìm kiếm giám hộ:", error);
         AGAIN: throw error; // SỬA LỖI 4: Ném lỗi ra
       }

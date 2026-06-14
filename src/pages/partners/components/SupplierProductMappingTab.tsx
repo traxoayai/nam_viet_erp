@@ -168,7 +168,6 @@ const SupplierProductMappingTab: React.FC<SupplierProductMappingTabProps> = ({
     if (vendorTaxCode) {
       fetchMappings();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchMappings ref ổn định trong scope component
   }, [vendorTaxCode]);
 
   useEffect(() => {
@@ -177,7 +176,6 @@ const SupplierProductMappingTab: React.FC<SupplierProductMappingTabProps> = ({
     } else {
       setProductUnits([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchProductUnits ref ổn định trong scope component
   }, [selectedProductId]);
 
   const fetchMappings = async () => {

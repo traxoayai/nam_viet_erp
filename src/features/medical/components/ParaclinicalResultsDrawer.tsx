@@ -56,7 +56,7 @@ export const ParaclinicalResultsDrawer: React.FC<Props> = ({
     {
       title: "Kết quả",
       key: "result",
-      render: (_: any, record: LabResult) => {
+      render: (_: unknown, record: LabResult) => {
         const status = getStatus(record);
 
         if (status === "high") {

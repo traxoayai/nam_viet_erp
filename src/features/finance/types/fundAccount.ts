@@ -36,7 +36,7 @@ export interface FundAccountStoreState {
   closeModal: () => void;
   setModalAccountType: (type: "cash" | "bank") => void;
 
-  addFundAccount: (values: any) => Promise<boolean>;
-  updateFundAccount: (id: number, values: any) => Promise<boolean>;
+  addFundAccount: (values: unknown) => Promise<boolean>;
+  updateFundAccount: (id: number, values: unknown) => Promise<boolean>;
   deleteFundAccount: (id: number) => Promise<boolean>;
 }

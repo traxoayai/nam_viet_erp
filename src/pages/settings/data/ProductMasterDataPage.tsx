@@ -59,10 +59,11 @@ const ProductMasterDataPage = () => {
         `Product_Master_Data_${new Date().toISOString().slice(0, 10)}.xlsx`
       );
       message.success({ content: "Tải xuống thành công!", key: "export" });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
+      const errMsg = error instanceof Error ? error.message : String(error);
       message.error({
-        content: "Lỗi tải xuống: " + error.message,
+        content: "Lỗi tải xuống: " + errMsg,
         key: "export",
       });
     } finally {
@@ -89,13 +90,13 @@ const ProductMasterDataPage = () => {
           return;
         }
 
-        const payload = parseExcelToPayload(rawData);
+        const payload = parseExcelToPayload(rawData) as unknown as Array<Record<string, unknown>>;
         if (payload.length === 0) {
-           message.warning("Không có dữ liệu hợp lệ (Thiếu cột SKU).");
-           setImportLoading(false);
-           return;
+          message.warning("Không có dữ liệu hợp lệ (Thiếu cột SKU).");
+          setImportLoading(false);
+          return;
         }
-        
+
         message.info(`Tìm thấy ${payload.length} dòng hợp lệ. Đang xử lý...`);
 
         // CHUNKING LOGIC (500 dòng / lần)
@@ -104,8 +105,8 @@ const ProductMasterDataPage = () => {
 
         for (let i = 0; i < totalChunks; i++) {
           const chunk = payload.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-          await productMasterService.importMasterData(chunk);
-          
+          await productMasterService.importMasterData(chunk as unknown as any);
+
           // Cập nhật thanh %
           const currentProgress = Math.round(((i + 1) / totalChunks) * 100);
           setProgress(currentProgress);
@@ -117,9 +118,10 @@ const ProductMasterDataPage = () => {
       };
 
       reader.readAsBinaryString(file);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      message.error("Lỗi Import: " + error.message);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      message.error("Lỗi Import: " + errMsg);
       setImportLoading(false);
     }
     return false; // Prevent auto upload của Antd
@@ -149,7 +151,7 @@ const ProductMasterDataPage = () => {
                 </li>
                 <li>
                   Nếu muốn chỉnh sửa Min/Max kho, hãy chắc chắn ID kho trong tên
-                  cột đúng định dạng "Kho [ID]...".
+                  cột đúng định dạng &quot;Kho [ID]...&quot;.
                 </li>
               </ul>
             }

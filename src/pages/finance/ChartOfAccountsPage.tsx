@@ -155,7 +155,7 @@ const ChartOfAccountsPage: React.FC = () => {
 
       // Tạo dữ liệu cho TreeSelect (bao gồm cả TK cha và con)
       setTreeSelectData(transformToTreeData(treeData));
-    } catch (error: any) {
+    } catch (error: unknown) {
       antMessage.error(`Lỗi khi tải hệ thống tài khoản: ${error.message}`);
     } finally {
       setLoading(false);
@@ -237,7 +237,7 @@ const ChartOfAccountsPage: React.FC = () => {
 
       await fetchAccounts(); // Tải lại toàn bộ cây
       handleModalClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       antMessage.error(`Lỗi khi lưu: ${error.message}`);
     } finally {
       setLoading(false);
@@ -262,7 +262,7 @@ const ChartOfAccountsPage: React.FC = () => {
       if (error) throw error;
       antMessage.success(`Đã xóa tài khoản ${record.name}`);
       await fetchAccounts(); // Tải lại cây
-    } catch (error: any) {
+    } catch (error: unknown) {
       antMessage.error(
         `Lỗi khi xóa: ${error.message}. Có thể tài khoản này đang được sử dụng.`
       );

@@ -1,8 +1,8 @@
 // src/features/finance/api/posTransactionService.ts
 import { RemittanceResponse } from "../types/pos.finance.types";
 
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const posTransactionService = {
   /**

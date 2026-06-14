@@ -86,7 +86,7 @@ const VaccinationTemplatePage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(
     undefined
   );
-  const [selectValue, setSelectValue] = useState<any>(null);
+  const [selectValue, setSelectValue] = useState<unknown>(null);
 
   useEffect(() => {
     fetchTemplates(searchText, statusFilter);
@@ -97,7 +97,7 @@ const VaccinationTemplatePage: React.FC = () => {
       if (editingTemplate) {
         form.setFieldsValue({
           ...editingTemplate.data,
-          schedules: editingTemplate.items.map((i: any) => ({
+          schedules: editingTemplate.items.map((i: unknown) => ({
             key: i.id,
             product_id: i.product_id,
             product_name: i.product_name,
@@ -138,7 +138,7 @@ const VaccinationTemplatePage: React.FC = () => {
         status: values.status,
       };
 
-      const items = (values.schedules || []).map((s: any) => ({
+      const items = (values.schedules || []).map((s: unknown) => ({
         product_id: s.product_id,
         shot_name: s.shotName,
         days_after_start: s.daysAfterStart,
@@ -163,7 +163,7 @@ const VaccinationTemplatePage: React.FC = () => {
   };
 
   // --- FIX LỖI 1: Sửa logic newList ---
-  const handleSelectProduct = (_: any, option: any) => {
+  const handleSelectProduct = (_: unknown, option: unknown) => {
     if (!option?.product) return;
     const product = option.product;
     const currentList = form.getFieldValue("schedules") || [];
@@ -202,7 +202,7 @@ const VaccinationTemplatePage: React.FC = () => {
         title: "Tên Phác đồ",
         dataIndex: "name",
         width: 250,
-        render: (text: string, r: any) => (
+        render: (text: string, r: unknown) => (
           <Space direction="vertical" size={0}>
             <Text strong style={{ fontSize: 15 }}>
               {text}
@@ -219,7 +219,7 @@ const VaccinationTemplatePage: React.FC = () => {
         title: "Độ tuổi",
         align: "center" as const,
         width: 150,
-        render: (_: any, r: any) => (
+        render: (_: unknown, r: unknown) => (
           <Tag color="cyan" style={{ fontSize: 13 }}>
             {formatAge(r.min_age_months)} - {formatAge(r.max_age_months)}
           </Tag>
@@ -253,7 +253,7 @@ const VaccinationTemplatePage: React.FC = () => {
         key: "action",
         width: 100,
         align: "right" as const,
-        render: (_: any, record: any) => (
+        render: (_: unknown, record: unknown) => (
           <Space>
             <Tooltip title="Sửa">
               <Button

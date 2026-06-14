@@ -11,7 +11,7 @@ export const useB2BOrders = () => {
     pending_payment: 0,
   });
 
-  const fetcherAdapter = useCallback(async (params: any) => {
+  const fetcherAdapter = useCallback(async (params: unknown) => {
     const response = await b2bService.getOrders({
       page: params.page,
       pageSize: params.pageSize,

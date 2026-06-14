@@ -85,14 +85,14 @@ const SupplierListPage: React.FC = () => {
   };
 
   // 1. Hàm nhận dữ liệu từ Modal -> Gọi API
-  const handleImportSubmit = async (data: any[]) => {
+  const handleImportSubmit = async (data: unknown[]) => {
     try {
       // Gọi Service
       await supplierService.importSuppliersBulk(data);
       antMessage.success(`Đã nhập thành công ${data.length} nhà cung cấp!`);
       setImportModalOpen(false);
       fetchSuppliers(); // Refresh lại danh sách
-    } catch (error: any) {
+    } catch (error: unknown) {
       antMessage.error("Lỗi nhập dữ liệu: " + error.message);
       throw error; // Throw to let Modal know it failed
     }

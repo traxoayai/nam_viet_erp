@@ -12,14 +12,14 @@ const { mockSafeRpc, mockGetUser, mockOnAuthStateChange, mockGetSelfProfile } =
   }));
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {
     auth: {
       getUser: () => mockGetUser(),
-      onAuthStateChange: (...args: any[]) => mockOnAuthStateChange(...args),
+      onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
     },
   },
 }));

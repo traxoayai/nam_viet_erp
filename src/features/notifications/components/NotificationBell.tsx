@@ -1,6 +1,15 @@
 // src/features/notifications/components/NotificationBell.tsx
 import { BellOutlined, RightOutlined, CheckOutlined } from "@ant-design/icons";
-import { Badge, Button, Divider, List, Popover, Typography, Empty, Avatar } from "antd";
+import {
+  Badge,
+  Button,
+  Divider,
+  List,
+  Popover,
+  Typography,
+  Empty,
+  Avatar,
+} from "antd";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { useEffect, useState } from "react";
@@ -99,7 +108,9 @@ export const NotificationBell = () => {
 
   const handleMarkAllRead = async () => {
     markAllAsRead();
-    await safeRpc("mark_all_my_notifications_read", undefined, { silent: true });
+    await safeRpc("mark_all_my_notifications_read", undefined, {
+      silent: true,
+    });
   };
 
   const handleViewAll = () => {
@@ -146,7 +157,9 @@ export const NotificationBell = () => {
                   description={
                     <div>
                       <div>{item.message}</div>
-                      <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>
+                      <div
+                        style={{ fontSize: 11, color: "#999", marginTop: 4 }}
+                      >
                         {dayjs(item.created_at).fromNow()}
                       </div>
                     </div>
@@ -158,7 +171,13 @@ export const NotificationBell = () => {
         />
       </div>
       <Divider style={{ margin: 0 }} />
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          padding: "8px 12px",
+        }}
+      >
         {unreadCount > 0 && (
           <Button
             type="link"

@@ -1,6 +1,14 @@
 // src/pages/quick/QuickPricePage.tsx
 import {} from "@ant-design/icons";
 import {
+  UploadOutlined,
+  ThunderboltOutlined,
+  CheckCircleOutlined,
+  DownloadOutlined,
+  FileImageOutlined,
+  SyncOutlined,
+} from "@ant-design/icons";
+import {
   Table,
   Input,
   InputNumber,
@@ -16,17 +24,9 @@ import {
   Col,
   Select,
   Pagination,
-  Grid,
   Avatar,
+  Grid,
 } from "antd";
-import {
-  UploadOutlined,
-  ThunderboltOutlined,
-  CheckCircleOutlined,
-  DownloadOutlined,
-  FileImageOutlined,
-  SyncOutlined,
-} from "@ant-design/icons";
 import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 
@@ -37,6 +37,7 @@ import { supabase } from "@/shared/lib/supabaseClient";
 const { Title, Text } = Typography;
 const { Search } = Input;
 const { Option } = Select;
+const { useBreakpoint } = Grid;
 
 interface ProductPriceRow {
   key: number;
@@ -72,7 +73,33 @@ const parseUnitType = (val: string): "amount" | "percent" => {
   return "amount";
 };
 
-const { useBreakpoint } = Grid;
+interface MatchedItem {
+  rowIndex: number;
+  excel: {
+    name: string;
+    sku: string;
+    cost?: number;
+    retailMargin?: number;
+    retailUnit: "percent" | "amount";
+    wholesaleMargin?: number;
+    wholesaleUnit: "percent" | "amount";
+    fixedRetailPrice?: number;
+    fixedWholesalePrice?: number;
+  };
+  match?: {
+    id: number;
+    name: string;
+    sku: string;
+  } | null;
+  score: number;
+}
+
+interface ProductUnit {
+  product_id: number;
+  unit_type?: string;
+  is_base?: boolean;
+  conversion_rate: number;
+}
 
 const QuickPricePage: React.FC = () => {
   const screens = useBreakpoint();
@@ -89,7 +116,7 @@ const QuickPricePage: React.FC = () => {
   const [searchText, setSearchText] = useState("");
 
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
-  const [matchedData, setMatchedData] = useState<any[]>([]);
+  const [matchedData, setMatchedData] = useState<MatchedItem[]>([]);
 
   const debouncedSearch = useDebounce(searchText, 500);
 
@@ -126,48 +153,63 @@ const QuickPricePage: React.FC = () => {
       );
       if (error) throw error;
 
-      const rows = (data || []).map((p: any) => {
-        const units = p.units || [];
-        const wholesaleUnitObj =
-          units.find((u: any) => u.unit_type === "wholesale") ||
-          units.find((u: any) => !u.is_base && u.conversion_rate > 1) ||
-          units.find((u: any) => u.is_base);
+      const rows = (data || []).map(
+        (p: {
+          id: number;
+          name: string;
+          sku: string;
+          image_url?: string;
+          actual_cost?: number;
+          retail_margin_value?: number;
+          retail_margin_type?: string;
+          wholesale_margin_value?: number;
+          wholesale_margin_type?: string;
+          units: ProductUnit[];
+        }) => {
+          const units = p.units || [];
+          const wholesaleUnitObj =
+            units.find((u: ProductUnit) => u.unit_type === "wholesale") ||
+            units.find(
+              (u: ProductUnit) => !u.is_base && u.conversion_rate > 1
+            ) ||
+            units.find((u: ProductUnit) => u.is_base);
 
-        const retailUnitObj =
-          units.find((u: any) => u.unit_type === "retail") ||
-          units.find((u: any) => u.is_base) ||
-          units[0];
-        const rate = wholesaleUnitObj?.conversion_rate || 1;
-        const retailRate = retailUnitObj?.conversion_rate || 1; // [NEW] Lấy hệ số lẻ
+          const retailUnitObj =
+            units.find((u: ProductUnit) => u.unit_type === "retail") ||
+            units.find((u: ProductUnit) => u.is_base) ||
+            units[0];
+          const rate = wholesaleUnitObj?.conversion_rate || 1;
+          const retailRate = retailUnitObj?.conversion_rate || 1; // [NEW] Lấy hệ số lẻ
 
-        // Hiển thị giá vốn theo đơn vị Buôn
-        const displayCost = (p.actual_cost || 0) * rate;
+          // Hiển thị giá vốn theo đơn vị Buôn
+          const displayCost = (p.actual_cost || 0) * rate;
 
-        return {
-          key: p.id,
-          id: p.id,
-          name: p.name,
-          sku: p.sku,
-          imageUrl: p.image_url,
-          base_unit: retailUnitObj?.unit_name || "---",
-          wholesale_unit: wholesaleUnitObj?.unit_name || "---",
-          wholesale_rate: rate,
-          retail_rate: retailRate, // [NEW]
-          retail_unit_name: retailUnitObj?.unit_name || "---", // [NEW]
-          actual_cost: displayCost,
+          return {
+            key: p.id,
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            imageUrl: p.image_url,
+            base_unit: retailUnitObj?.unit_name || "---",
+            wholesale_unit: wholesaleUnitObj?.unit_name || "---",
+            wholesale_rate: rate,
+            retail_rate: retailRate, // [NEW]
+            retail_unit_name: retailUnitObj?.unit_name || "---", // [NEW]
+            actual_cost: displayCost,
 
-          // Map đúng cột Margin từ DB
-          retail_margin: p.retail_margin_value || 0,
-          retail_margin_type: p.retail_margin_type || "amount",
-          retail_price: retailUnitObj?.price || 0,
+            // Map đúng cột Margin từ DB
+            retail_margin: p.retail_margin_value || 0,
+            retail_margin_type: p.retail_margin_type || "amount",
+            retail_price: retailUnitObj?.price || 0,
 
-          wholesale_margin: p.wholesale_margin_value || 0,
-          wholesale_margin_type: p.wholesale_margin_type || "amount",
-          wholesale_price: wholesaleUnitObj?.price || 0,
+            wholesale_margin: p.wholesale_margin_value || 0,
+            wholesale_margin_type: p.wholesale_margin_type || "amount",
+            wholesale_price: wholesaleUnitObj?.price || 0,
 
-          is_dirty: false,
-        };
-      });
+            is_dirty: false,
+          };
+        }
+      );
 
       setProducts(rows as ProductPriceRow[]);
       setPagination((prev) => ({
@@ -176,8 +218,10 @@ const QuickPricePage: React.FC = () => {
         pageSize,
         total: count || 0,
       }));
-    } catch (error: any) {
-      message.error("Lỗi tải: " + error.message);
+    } catch (error: unknown) {
+      const errorMsg =
+        error instanceof Error ? error.message : "Lỗi không xác định";
+      message.error("Lỗi tải: " + errorMsg);
     } finally {
       setLoading(false);
     }
@@ -187,9 +231,9 @@ const QuickPricePage: React.FC = () => {
   const calculateDependentValues = (
     item: ProductPriceRow,
     changedField: string,
-    value: any
+    value: unknown
   ): Partial<ProductPriceRow> => {
-    const updates: any = { [changedField]: value };
+    const updates: Record<string, unknown> = { [changedField]: value };
     const newItem = { ...item, ...updates };
 
     // Tính Giá Lẻ
@@ -232,7 +276,7 @@ const QuickPricePage: React.FC = () => {
     return updates;
   };
 
-  const handleCellChange = (key: number, field: string, value: any) => {
+  const handleCellChange = (key: number, field: string, value: unknown) => {
     setProducts((prev) =>
       prev.map((item) => {
         if (item.key === key) {
@@ -271,8 +315,9 @@ const QuickPricePage: React.FC = () => {
       setProducts((prev) =>
         prev.map((p) => (p.id === row.id ? { ...p, is_dirty: false } : p))
       );
-    } catch (e: any) {
-      message.error("Lỗi lưu: " + e.message);
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : "Lỗi không xác định";
+      message.error("Lỗi lưu: " + errorMsg);
     } finally {
       setSavingId(null);
     }
@@ -318,23 +363,23 @@ const QuickPricePage: React.FC = () => {
       const ab = e.target?.result;
       const wb = XLSX.read(ab, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const jsonData: any[] = XLSX.utils.sheet_to_json(ws);
+      const jsonData: unknown[] = XLSX.utils.sheet_to_json(ws);
       processExcelData(jsonData);
     };
     reader.readAsArrayBuffer(file);
     return false;
   };
 
-  const parseNumber = (val: any) => {
+  const parseNumber = (val: unknown): number | undefined => {
     if (val === undefined || val === null || String(val).trim() === "")
       return undefined;
     const num = Number(val);
     return isNaN(num) ? undefined : num;
   };
 
-  const processExcelData = async (rows: any[]) => {
+  const processExcelData = async (rows: Array<Record<string, unknown>>) => {
     const itemsToMatch = rows
-      .map((r) => ({
+      .map((r: Record<string, unknown>) => ({
         name: r["Tên sản phẩm"],
         sku: String(r["SKU"] || "").trim(),
         cost: parseNumber(r["Giá Vốn"]),
@@ -351,7 +396,7 @@ const QuickPricePage: React.FC = () => {
 
     // [FIX] Tách biến loading ra khỏi vòng lặp để tránh lỗi scope
     const hideLoading = message.loading("Đang đối chiếu...", 0);
-    let allServerMatches: any[] = [];
+    let allServerMatches: Array<Record<string, unknown>> = [];
 
     try {
       const BATCH_SIZE = 50;
@@ -373,7 +418,7 @@ const QuickPricePage: React.FC = () => {
 
       const result = itemsToMatch.map((excelItem, idx) => {
         const match = allServerMatches.find(
-          (m: any) =>
+          (m: Record<string, unknown>) =>
             (excelItem.sku && m.excel_sku === excelItem.sku) ||
             m.excel_name === excelItem.name
         );
@@ -393,8 +438,10 @@ const QuickPricePage: React.FC = () => {
 
       setMatchedData(result);
       setReviewModalVisible(true);
-    } catch (err: any) {
-      message.error("Lỗi: " + err.message);
+    } catch (err: unknown) {
+      const errorMsg =
+        err instanceof Error ? err.message : "Lỗi không xác định";
+      message.error("Lỗi: " + errorMsg);
     } finally {
       hideLoading(); // [FIX] Luôn tắt loading
     }
@@ -412,15 +459,16 @@ const QuickPricePage: React.FC = () => {
         .select("product_id, unit_type, is_base, conversion_rate")
         .in("product_id", productIds);
 
-      const payload: any[] = [];
+      const payload: Array<Record<string, unknown>> = [];
       const uiUpdates = new Map<number, Partial<ProductPriceRow>>();
 
       matchedItems.forEach((item) => {
-        const pid = item.match.id;
-        const pUnits = dbUnits?.filter((u: any) => u.product_id === pid) || [];
+        const pid = item.match!.id;
+        const pUnits =
+          dbUnits?.filter((u: ProductUnit) => u.product_id === pid) || [];
         const wholesaleUnit =
-          pUnits.find((u: any) => u.unit_type === "wholesale") ||
-          pUnits.find((u: any) => !u.is_base && u.conversion_rate > 1);
+          pUnits.find((u: ProductUnit) => u.unit_type === "wholesale") ||
+          pUnits.find((u: ProductUnit) => !u.is_base && u.conversion_rate > 1);
         const rate = wholesaleUnit?.conversion_rate || 1;
 
         const excelCost = item.excel.cost;
@@ -468,7 +516,7 @@ const QuickPricePage: React.FC = () => {
         });
 
         // Update UI Local (Giả lập hiển thị để user thấy ngay)
-        const updateObj: any = { is_dirty: false };
+        const updateObj: Record<string, unknown> = { is_dirty: false };
         if (excelCost !== undefined) updateObj.actual_cost = excelCost;
         if (retailPrice !== undefined) updateObj.retail_price = retailPrice;
         if (wholesalePrice !== undefined)
@@ -494,8 +542,10 @@ const QuickPricePage: React.FC = () => {
         );
       }
       setReviewModalVisible(false);
-    } catch (err: any) {
-      message.error("Lỗi lưu: " + err.message);
+    } catch (err: unknown) {
+      const errorMsg =
+        err instanceof Error ? err.message : "Lỗi không xác định";
+      message.error("Lỗi lưu: " + errorMsg);
     } finally {
       setLoading(false);
     }
@@ -507,7 +557,7 @@ const QuickPricePage: React.FC = () => {
       dataIndex: "name",
       key: "name",
       width: 300,
-      render: (_: any, record: ProductPriceRow) => (
+      render: (_: unknown, record: ProductPriceRow) => (
         <Space>
           {record.imageUrl ? (
             <img
@@ -527,7 +577,7 @@ const QuickPricePage: React.FC = () => {
       title: `Giá Vốn (${products[0]?.wholesale_unit || "ĐV Bán Buôn"})`,
       key: "actual_cost",
       width: 150,
-      render: (_: any, record: ProductPriceRow) => (
+      render: (_: unknown, record: ProductPriceRow) => (
         <InputNumber
           style={{ width: "100%" }}
           value={record.actual_cost}
@@ -545,7 +595,7 @@ const QuickPricePage: React.FC = () => {
       title: "Lãi Lẻ (Cấu hình)",
       key: "retail_margin",
       width: 180,
-      render: (_: any, record: ProductPriceRow) => (
+      render: (_: unknown, record: ProductPriceRow) => (
         <Space.Compact style={{ width: "100%" }}>
           <InputNumber
             style={{ width: "60%" }}
@@ -571,7 +621,7 @@ const QuickPricePage: React.FC = () => {
       title: `Giá Lẻ (${products[0]?.retail_unit_name || "ĐV Bán Lẻ"})`,
       key: "retail_price",
       width: 150,
-      render: (_: any, record: ProductPriceRow) => (
+      render: (_: unknown, record: ProductPriceRow) => (
         <div style={{ fontWeight: "bold", color: "#1677ff" }}>
           {new Intl.NumberFormat("vi-VN").format(record.retail_price)} ₫
         </div>
@@ -581,7 +631,7 @@ const QuickPricePage: React.FC = () => {
       title: "Lãi Buôn",
       key: "wholesale_margin",
       width: 180,
-      render: (_: any, record: ProductPriceRow) => (
+      render: (_: unknown, record: ProductPriceRow) => (
         <Space.Compact style={{ width: "100%" }}>
           <InputNumber
             style={{ width: "60%" }}
@@ -607,7 +657,7 @@ const QuickPricePage: React.FC = () => {
       title: `Giá Buôn (${products[0]?.wholesale_unit || "ĐV Bán Buôn"})`,
       key: "wholesale_price",
       width: 150,
-      render: (_: any, record: ProductPriceRow) => (
+      render: (_: unknown, record: ProductPriceRow) => (
         <div style={{ fontWeight: "bold", color: "#52c41a" }}>
           {new Intl.NumberFormat("vi-VN").format(record.wholesale_price)} ₫
         </div>
@@ -618,7 +668,7 @@ const QuickPricePage: React.FC = () => {
       key: "action",
       fixed: "right" as const,
       width: 100,
-      render: (_: any, record: ProductPriceRow) => (
+      render: (_: unknown, record: ProductPriceRow) => (
         <Button
           type="primary"
           icon={<CheckCircleOutlined />}
@@ -693,7 +743,9 @@ const QuickPricePage: React.FC = () => {
               formatter={(value) =>
                 `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
               }
-              parser={(value: any) => value?.replace(/\$\s?|(,*)/g, "")}
+              parser={(value: string | undefined) =>
+                value?.replace(/\$\s?|(,*)/g, "")
+              }
               onChange={(val) => handleCellChange(item.key, "actual_cost", val)}
             />
           </Col>

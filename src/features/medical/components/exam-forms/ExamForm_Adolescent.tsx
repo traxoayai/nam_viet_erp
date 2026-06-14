@@ -4,10 +4,10 @@ import { Card, Input, Row, Col, Select } from "antd";
 import React from "react";
 
 interface Props {
-  data: any;
+  data: unknown;
   onChange: (key: string, val: string) => void;
-  vitals?: any;
-  historyData?: any[];
+  vitals?: unknown;
+  historyData?: unknown[];
   patientDOB?: string;
   readOnly?: boolean;
 }

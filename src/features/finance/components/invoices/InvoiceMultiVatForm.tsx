@@ -2,13 +2,30 @@
  * Invoice Form with Multi-VAT support per line item
  * Supports discount, fee, and VAT calculation (0%, 5%, 10%)
  */
-import React, { useState } from "react";
-import { Form, Card, Table, Button, InputNumber, Select, Input, DatePicker, Typography, message } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+  Form,
+  Card,
+  Table,
+  Button,
+  InputNumber,
+  Select,
+  Input,
+  DatePicker,
+  Typography,
+  message,
+} from "antd";
 import dayjs from "dayjs";
+import React, { useState } from "react";
+
+import type {
+  InvoiceLineItem,
+  InvoiceFormData,
+  InvoiceSubmitPayload,
+  VatRate,
+} from "@/features/finance/types/invoiceTypes";
 
 import { calculateInvoiceSummary } from "@/features/finance/utils/invoiceLineCalculations";
-import type { InvoiceLineItem, InvoiceFormData, InvoiceSubmitPayload, VatRate } from "@/features/finance/types/invoiceTypes";
 
 const { Text } = Typography;
 
@@ -29,11 +46,26 @@ export default function InvoiceMultiVatForm({
   );
 
   const addLine = () => {
-    setLines([...lines, { key: `l-${Date.now()}-${Math.random()}`, product_name: "", quantity: 1, unit_price: 0, vat_rate: 10, discount_amount: 0 }]);
+    setLines([
+      ...lines,
+      {
+        key: `l-${Date.now()}-${Math.random()}`,
+        product_name: "",
+        quantity: 1,
+        unit_price: 0,
+        vat_rate: 10,
+        discount_amount: 0,
+      },
+    ]);
   };
-  const removeLine = (key: string) => setLines(lines.filter((l) => l.key !== key));
-  const updateLine = (key: string, field: keyof InvoiceLineItem, value: unknown) => {
-    setLines(lines.map((l) => l.key === key ? { ...l, [field]: value } : l));
+  const removeLine = (key: string) =>
+    setLines(lines.filter((l) => l.key !== key));
+  const updateLine = (
+    key: string,
+    field: keyof InvoiceLineItem,
+    value: unknown
+  ) => {
+    setLines(lines.map((l) => (l.key === key ? { ...l, [field]: value } : l)));
   };
   const calculateLine = (line: InvoiceLineItem) => {
     const subtotal = line.quantity * line.unit_price;
@@ -101,7 +133,9 @@ export default function InvoiceMultiVatForm({
       render: (_: string, record: InvoiceLineItem) => (
         <Input
           value={record.product_name}
-          onChange={(e) => updateLine(record.key, "product_name", e.target.value)}
+          onChange={(e) =>
+            updateLine(record.key, "product_name", e.target.value)
+          }
           placeholder="Nhập tên SP"
           size="small"
         />
@@ -259,9 +293,16 @@ export default function InvoiceMultiVatForm({
         </Button>
 
         <Card style={{ marginTop: 16 }} size="small">
-          <Text>Tổng: {summary.total_goods.toLocaleString("vi-VN")} | Chiết: {summary.total_discount.toLocaleString("vi-VN")} | Trước thuế: {summary.total_pre_tax.toLocaleString("vi-VN")}</Text>
+          <Text>
+            Tổng: {summary.total_goods.toLocaleString("vi-VN")} | Chiết:{" "}
+            {summary.total_discount.toLocaleString("vi-VN")} | Trước thuế:{" "}
+            {summary.total_pre_tax.toLocaleString("vi-VN")}
+          </Text>
           <br />
-          <Text strong>VAT: {summary.total_tax.toLocaleString("vi-VN")} | Sau thuế: {summary.total_post_tax.toLocaleString("vi-VN")} VND</Text>
+          <Text strong>
+            VAT: {summary.total_tax.toLocaleString("vi-VN")} | Sau thuế:{" "}
+            {summary.total_post_tax.toLocaleString("vi-VN")} VND
+          </Text>
         </Card>
       </Card>
 

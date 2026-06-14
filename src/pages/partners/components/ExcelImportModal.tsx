@@ -22,7 +22,7 @@ const { Text, Title } = Typography;
 interface ExcelImportModalProps {
   open: boolean;
   onCancel: () => void;
-  onImport: (data: any[]) => Promise<void>;
+  onImport: (data: unknown[]) => Promise<void>;
   templateType?: string;
 }
 
@@ -50,8 +50,8 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
 }) => {
   const [step, setStep] = useState(0);
 
-  const [previewData, setPreviewData] = useState<any[]>([]);
-  const [validData, setValidData] = useState<any[]>([]);
+  const [previewData, setPreviewData] = useState<unknown[]>([]);
+  const [validData, setValidData] = useState<unknown[]>([]);
   const [uploading, setUploading] = useState(false);
 
   // 1. Tải Template Động using xlsx
@@ -89,7 +89,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
         // Đọc raw data (dạng mảng array)
-        const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        const data: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
         if (data.length < 2) {
           message.error("File rỗng hoặc thiếu header!");
@@ -125,7 +125,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
   };
 
   // Helper to fix parsing logic dup
-  const fixedParsed = (data: any[][]) => {
+  const fixedParsed = (data: unknown[][]) => {
     return data
       .slice(1)
       .map((row, index) => {
@@ -166,7 +166,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
       await onImport(validData);
       // Let parent handle success message to avoid dup
       handleClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Parent handles error? Or we display it?
       // Usually modal displays error for better UX
       message.error(error.message || "Lỗi nhập liệu");

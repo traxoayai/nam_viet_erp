@@ -238,7 +238,7 @@ const TemplateManagerPage: React.FC = () => {
         width: 150,
         align: "center",
         fixed: "right",
-        render: (_: any, record: TemplateRecord) => (
+        render: (_: unknown, record: TemplateRecord) => (
           <Space size="small">
             <Tooltip title="Sửa (Vào Xưởng thiết kế)">
               <Button
@@ -288,7 +288,7 @@ const TemplateManagerPage: React.FC = () => {
                 Quản lý Mẫu & Biểu mẫu
               </Title>
               <Text type="secondary">
-                "Xưởng thiết kế" các mẫu Hóa đơn, Hợp đồng, Email...
+                &quot;Xưởng thiết kế&quot; các mẫu Hóa đơn, Hợp đồng, Email...
               </Text>
             </Col>
 
@@ -462,7 +462,7 @@ const TemplateManagerPage: React.FC = () => {
               bodyStyle={{ padding: 8 }}
             >
               <Paragraph type="secondary" style={{ padding: "0 8px 8px 8px" }}>
-                Nhấp vào 'Biến' để sao chép.
+                Nhấp vào &apos;Biến&apos; để sao chép.
               </Paragraph>
               <Collapse accordion ghost>
                 {variables.map((group) => (

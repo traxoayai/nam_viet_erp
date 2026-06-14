@@ -13,7 +13,7 @@ const { Sider } = Layout;
 const { Text, Title } = Typography;
 
 const ParaclinicalPage = () => {
-  const [selectedRequest, setSelectedRequest] = useState<any>(null);
+  const [selectedRequest, setSelectedRequest] = useState<unknown>(null);
 
   // Fetch queue
   const { data: queue = [], isLoading } = useQuery({

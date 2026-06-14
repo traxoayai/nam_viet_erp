@@ -132,7 +132,7 @@ export const PatientHistoryDrawer: React.FC<Props> = ({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {visit.flatMedicines.map((p: any, idx: number) => (
+                      {visit.flatMedicines.map((p: unknown, idx: number) => (
                         <div
                           key={idx}
                           className="flex justify-between items-start bg-teal-50/50 p-2 rounded border border-teal-100"

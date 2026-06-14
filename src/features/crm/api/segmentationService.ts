@@ -4,9 +4,10 @@ import {
   CustomerSegmentRow,
 } from "../types/segments"; // <-- Import từ segments.ts
 
+import type { Json } from "@/shared/lib/database.types";
+
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
-import type { Json } from "@/shared/lib/database.types";
 
 export const segmentationService = {
   async getSegments() {
@@ -61,14 +62,17 @@ export const segmentationService = {
 
     if (error) throw error;
 
-    return data.map((item: any) => ({
-      id: item.customers?.id,
-      name: item.customers?.name || "Unknown",
-      phone: item.customers?.phone,
-      gender: item.customers?.gender,
-      loyalty_points: item.customers?.loyalty_points,
-      added_at: item.added_at,
-    }));
+    return data.map((item: Record<string, unknown>) => {
+      const cust = item.customers as Record<string, unknown> | undefined;
+      return {
+        id: (cust?.id as number) || 0,
+        name: (cust?.name as string) || "Unknown",
+        phone: (cust?.phone as string) || null,
+        gender: (cust?.gender as string) || null,
+        loyalty_points: (cust?.loyalty_points as number) || null,
+        added_at: item.added_at as string,
+      };
+    });
   },
 
   async refreshSegment(segmentId: number) {

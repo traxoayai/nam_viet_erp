@@ -14,10 +14,10 @@ interface StoreState {
   loading: boolean;
   totalCount: number;
   viewMode: "list" | "form";
-  editingPackage: any | null; // Sẽ là ServicePackageDetail
+  editingPackage: unknown | null; // Sẽ là ServicePackageDetail
 
   // Actions
-  fetchPackages: (params?: any) => Promise<void>;
+  fetchPackages: (params?: unknown) => Promise<void>;
   createPackage: (
     data: ServicePackageInput,
     items: ServicePackageItemInput[]
@@ -54,8 +54,8 @@ export const useServicePackageStore = create<StoreState>((set, get) => ({
       const { data, totalCount } =
         await servicePackageService.fetchPackages(params);
       set({ packages: data, totalCount, loading: false });
-    } catch (error) {
-      console.error(error);
+    } catch (_error) {
+      console.error(_error);
       set({ loading: false });
     }
   },
@@ -65,8 +65,8 @@ export const useServicePackageStore = create<StoreState>((set, get) => ({
     try {
       const data = await servicePackageService.getPackageDetails(id);
       set({ editingPackage: data, loading: false });
-    } catch (error) {
-      console.error(error);
+    } catch (_error) {
+      console.error(_error);
       set({ loading: false });
     }
   },
@@ -78,8 +78,8 @@ export const useServicePackageStore = create<StoreState>((set, get) => ({
       message.success("Tạo gói thành công!");
       get().fetchPackages();
       return true;
-    } catch (error) {
-      console.error(error);
+    } catch (_error) {
+      console.error(_error);
       message.error("Tạo thất bại");
       return false;
     } finally {
@@ -94,7 +94,7 @@ export const useServicePackageStore = create<StoreState>((set, get) => ({
       message.success("Cập nhật thành công!");
       get().fetchPackages();
       return true;
-    } catch (error) {
+    } catch (_error) {
       message.error("Cập nhật thất bại");
       return false;
     } finally {
@@ -109,7 +109,7 @@ export const useServicePackageStore = create<StoreState>((set, get) => ({
       message.success("Đã xóa gói dịch vụ");
       get().fetchPackages();
       return true;
-    } catch (error) {
+    } catch (_error) {
       message.error("Xóa thất bại");
       return false;
     } finally {
@@ -124,7 +124,7 @@ export const useServicePackageStore = create<StoreState>((set, get) => ({
       message.success(`Đã xóa ${ids.length} gói dịch vụ`);
       get().fetchPackages();
       return true;
-    } catch (error) {
+    } catch (_error) {
       message.error("Xóa thất bại");
       return false;
     } finally {
@@ -139,7 +139,7 @@ export const useServicePackageStore = create<StoreState>((set, get) => ({
       message.success(`Đã cập nhật trạng thái ${ids.length} gói`);
       get().fetchPackages();
       return true;
-    } catch (error) {
+    } catch (_error) {
       message.error("Cập nhật trạng thái thất bại");
       return false;
     } finally {

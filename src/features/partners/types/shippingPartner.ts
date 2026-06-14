@@ -78,9 +78,9 @@ export interface ShippingPartnerStoreState {
   isModalVisible: boolean; // Theo Canvas, Sếp dùng Modal
   editingPartner: ShippingPartnerDetailsData | null;
   totalCount: number;
-  filters: any; // Hàm
+  filters: unknown; // Hàm
 
-  fetchPartners: (filters: any) => Promise<void>;
+  fetchPartners: (filters: unknown) => Promise<void>;
   getPartnerDetails: (id: number) => Promise<void>;
   createPartner: (
     data: ShippingPartnerFormData,

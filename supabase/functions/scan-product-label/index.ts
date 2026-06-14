@@ -3,19 +3,21 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
-serve(async (req)=>{
+serve(async (req) => {
   // 1. Handle CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", {
-      headers: corsHeaders
+      headers: corsHeaders,
     });
   }
   try {
     // 2. Config Validation
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiApiKey) throw new Error("Server Config Error: Missing GEMINI_API_KEY");
+    if (!geminiApiKey)
+      throw new Error("Server Config Error: Missing GEMINI_API_KEY");
     // 3. SMART PARSER (Robust V9 Standard)
     const rawBody = await req.text();
     let body;
@@ -25,7 +27,7 @@ serve(async (req)=>{
       if (typeof body === "string") {
         body = JSON.parse(body);
       }
-    } catch (e) {
+    } catch (_e) {
       throw new Error("Invalid JSON format.");
     }
     // Lấy dữ liệu
@@ -36,7 +38,10 @@ serve(async (req)=>{
     console.log(`[Label Scan] Processing: ${file_url}`);
     // 4. Download File
     const fileResponse = await fetch(file_url);
-    if (!fileResponse.ok) throw new Error(`Failed to download image. Status: ${fileResponse.status}`);
+    if (!fileResponse.ok)
+      throw new Error(
+        `Failed to download image. Status: ${fileResponse.status}`
+      );
     const arrayBuffer = await fileResponse.arrayBuffer();
     const base64Data = encodeBase64(arrayBuffer);
     // 5. Call Gemini API (Vision Mode)
@@ -61,25 +66,25 @@ serve(async (req)=>{
         {
           parts: [
             {
-              text: prompt
+              text: prompt,
             },
             {
               inline_data: {
                 mime_type: mime_type,
-                data: base64Data
-              }
-            }
-          ]
-        }
-      ]
+                data: base64Data,
+              },
+            },
+          ],
+        },
+      ],
     };
     console.log(`[Gemini] Scanning label...`);
     const aiResponse = await fetch(geminiUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(geminiBody)
+      body: JSON.stringify(geminiBody),
     });
     const aiData = await aiResponse.json();
     if (!aiResponse.ok) {
@@ -95,31 +100,37 @@ serve(async (req)=>{
     let parsedData;
     try {
       parsedData = JSON.parse(jsonStr);
-    } catch (e) {
+    } catch (_e) {
       console.error("AI Parse Error:", rawText);
       throw new Error("AI returned invalid JSON.");
     }
     console.log(`[Success] Label Data:`, JSON.stringify(parsedData));
-    return new Response(JSON.stringify({
-      success: true,
-      data: parsedData
-    }), {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json"
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: parsedData,
+      }),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
       }
-    });
+    );
   } catch (error) {
     console.error("[Fatal Error]:", error.message);
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message
-    }), {
-      status: 400,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json"
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message,
+      }),
+      {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
       }
-    });
+    );
   }
 });

@@ -5,25 +5,25 @@ import {
   CalendarOutlined,
 } from "@ant-design/icons";
 import {
-  Layout,
-  Spin,
-  Row,
-  Col,
-  Card,
-  Input,
   Badge,
-  message,
   Button,
-  Popover,
+  Card,
+  Col,
   DatePicker,
+  Input,
+  Layout,
+  message,
+  Popover,
+  Row,
+  Spin,
 } from "antd";
 import dayjs from "dayjs";
 import {
+  Activity,
+  BrainCircuit,
   FlaskConical,
   Globe,
-  Activity,
   Stethoscope,
-  BrainCircuit,
   Syringe,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -43,11 +43,11 @@ import { SmartClinicalAssistant } from "@/features/medical/components/SmartClini
 import { SmartScreeningChecklist } from "@/features/medical/components/SmartScreeningChecklist";
 import { VitalInput } from "@/features/medical/components/VitalInput";
 import { useDoctorWorkbench } from "@/features/medical/hooks/useDoctorWorkbench";
-import { usePatientHistory } from '@/features/medical/hooks/usePatientHistory';
+import { usePatientHistory } from "@/features/medical/hooks/usePatientHistory";
 
 // Hooks
-import { useRealtimeLabResults } from '@/features/medical/hooks/useRealtimeLabResults';
-import { supabase } from '@/shared/lib/supabaseClient';
+import { useRealtimeLabResults } from "@/features/medical/hooks/useRealtimeLabResults";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // Exam Forms
 
@@ -83,7 +83,7 @@ const DoctorPage = () => {
   // History Hook for "Copy Prescription"
   const { onCopyPrescription } = usePatientHistory(patientInfo?.id);
 
-  const handleCopyPrescription = (oldPrescription: any[]) => {
+  const handleCopyPrescription = (oldPrescription: unknown[]) => {
     if (isReadOnly)
       return message.warning("Phiếu đã hoàn thành, không thể sửa!");
     // Gọi logic copy từ hook usePatientHistory
@@ -96,7 +96,7 @@ const DoctorPage = () => {
 
   // Local state for Lab Results
   const [openLabDrawer, setOpenLabDrawer] = useState(false);
-  const [labResults, setLabResults] = useState<any[]>([]);
+  const [labResults, setLabResults] = useState<unknown[]>([]);
   const [imagingResults, setImagingResults] = useState("");
 
   // Fetch Lab Results
@@ -114,7 +114,7 @@ const DoctorPage = () => {
         const mappedTests = data
           .filter((d) => d.category === "lab")
           .flatMap((d) => {
-            return d.results_json ? (d.results_json as any).tests : [];
+            return d.results_json ? (d.results_json as unknown).tests : [];
           });
 
         const imgRes = data
@@ -169,18 +169,18 @@ const DoctorPage = () => {
     if (isReadOnly) return;
     message.info(`Đã thêm ${suggestion} vào ${type}`);
     if (type === "diagnosis") {
-      setClinical((prev: any) => ({ ...prev, diagnosis: suggestion }));
+      setClinical((prev: unknown) => ({ ...prev, diagnosis: suggestion }));
     }
   };
 
   const handleVitalChange = (key: string, val: number | null) => {
     if (isReadOnly) return;
-    setVitals((prev: any) => ({ ...prev, [key]: val }));
+    setVitals((prev: unknown) => ({ ...prev, [key]: val }));
   };
 
-  const handleClinicalChange = (key: string, val: any) => {
+  const handleClinicalChange = (key: string, val: unknown) => {
     if (isReadOnly) return;
-    setClinical((prev: any) => ({ ...prev, [key]: val }));
+    setClinical((prev: unknown) => ({ ...prev, [key]: val }));
   };
 
   if (loading && !patientInfo) {
@@ -193,7 +193,10 @@ const DoctorPage = () => {
 
   return (
     <Layout className="min-h-screen bg-gray-50">
-      <Content className="w-full px-4 py-3" style={{ maxWidth: 1600, margin: "0 auto" }}>
+      <Content
+        className="w-full px-4 py-3"
+        style={{ maxWidth: 1600, margin: "0 auto" }}
+      >
         {/* ROW 1: HEADER (Sticky) */}
         <div className="sticky top-0 z-50 mb-3 flex justify-between items-start gap-3 bg-white rounded-lg shadow-sm p-3">
           <div className="flex-1">
@@ -217,12 +220,15 @@ const DoctorPage = () => {
         </div>
 
         {/* THÔNG BÁO VẮC XIN ĐÃ MUA */}
-        {prePurchasedVaccines && prePurchasedVaccines.length > 0 && (
+        {prePurchasedVaccines && prePurchasedVaccines.length > 0 ? (
           <div className="bg-purple-50 border border-purple-200 text-purple-800 px-3 py-2 rounded-lg mb-3 text-sm font-medium flex items-center">
-            <Syringe size={16} className="mr-2 flex-shrink-0" /> Tiêm chủng đã TT:
-            {prePurchasedVaccines.map(v => ` ${v.products?.name} (Mũi ${v.dose_number})`).join(", ")}
+            <Syringe size={16} className="mr-2 flex-shrink-0" /> Tiêm chủng đã
+            TT:
+            {prePurchasedVaccines
+              .map((v) => ` ${v.products?.name} (Mũi ${v.dose_number})`)
+              .join(", ")}
           </div>
-        )}
+        ) : null}
 
         {/* SMART ASSISTANT */}
         <SmartClinicalAssistant
@@ -497,7 +503,9 @@ const DoctorPage = () => {
             onPrint={handlePrint}
             onScheduleFollowUp={handleScheduleFollowUp}
             loading={loading}
-            hasVaccines={prePurchasedVaccines && prePurchasedVaccines.length > 0}
+            hasVaccines={
+              prePurchasedVaccines ? prePurchasedVaccines.length > 0 : null
+            }
           />
         ) : (
           <div className="bg-white p-4 border-t border-gray-200 mt-4 flex justify-between items-center sticky bottom-0 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">

@@ -24,7 +24,12 @@ export const useWarehouseStore = create<WarehouseStoreState>((set, get) => ({
         page,
         pageSize
       );
-      set({ warehouses: data as unknown as import("@/features/inventory/types/warehouse").Warehouse[], totalCount, loading: false });
+      set({
+        warehouses:
+          data as unknown as import("@/features/inventory/types/warehouse").Warehouse[],
+        totalCount,
+        loading: false,
+      });
     } catch (error) {
       console.error("Lỗi khi tải Kho:", error);
       set({ loading: false });
@@ -41,7 +46,7 @@ export const useWarehouseStore = create<WarehouseStoreState>((set, get) => ({
     get().fetchWarehouses();
   },
 
-  addWarehouse: async (values: any) => {
+  addWarehouse: async (values: unknown) => {
     set({ loading: true });
     try {
       await warehouseService.addWarehouse(values);
@@ -54,7 +59,7 @@ export const useWarehouseStore = create<WarehouseStoreState>((set, get) => ({
     }
   },
 
-  updateWarehouse: async (id: number, values: any) => {
+  updateWarehouse: async (id: number, values: unknown) => {
     set({ loading: true });
     try {
       await warehouseService.updateWarehouse(id, values);

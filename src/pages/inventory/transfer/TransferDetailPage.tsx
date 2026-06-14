@@ -65,7 +65,7 @@ const TransferDetailPage: React.FC = () => {
   const [barcodeInput, setBarcodeInput] = useState("");
 
   // Ref for auto-focus
-  const barcodeInputRef = useRef<any>(null);
+  const barcodeInputRef = useRef<unknown>(null);
 
   useEffect(() => {
     if (id) {
@@ -316,7 +316,7 @@ const TransferDetailPage: React.FC = () => {
       title: "Thực xuất",
       key: "picked",
       width: 150,
-      render: (_: any, record: TransferItem) =>
+      render: (_: unknown, record: TransferItem) =>
         isPending ? (
           renderQuantityInput(record)
         ) : (
@@ -327,7 +327,7 @@ const TransferDetailPage: React.FC = () => {
       title: "Lô hàng (FEFO)",
       key: "batch",
       width: 200,
-      render: (_: any, record: TransferItem) =>
+      render: (_: unknown, record: TransferItem) =>
         isPending ? (
           renderBatchSelector(record)
         ) : (
@@ -340,7 +340,7 @@ const TransferDetailPage: React.FC = () => {
       title: "",
       key: "action",
       width: 50,
-      render: (_: any, record: TransferItem) =>
+      render: (_: unknown, record: TransferItem) =>
         isPending && (
           <Popconfirm
             title="Xóa sản phẩm này?"

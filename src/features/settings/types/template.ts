@@ -34,7 +34,7 @@ export interface TemplateStoreState {
   showEditor: (record?: TemplateRecord | null) => void;
   showList: () => void;
 
-  addTemplate: (values: any) => Promise<boolean>;
-  updateTemplate: (id: number, values: any) => Promise<boolean>;
+  addTemplate: (values: unknown) => Promise<boolean>;
+  updateTemplate: (id: number, values: unknown) => Promise<boolean>;
   deleteTemplate: (record: TemplateRecord) => Promise<boolean>;
 }

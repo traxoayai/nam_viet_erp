@@ -1,8 +1,8 @@
 // src/features/auth/api/userService.ts
 // --- BẢO MẬT: Đã xóa import supabaseAdmin để tránh lộ Service Key ---
 import { UserAssignment } from "@/features/auth/types/user";
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // 1. Lấy danh sách Users (Giữ nguyên)
 export const fetchUsersWithRoles = async () => {

@@ -13,8 +13,8 @@ import { PO_STATUS_CONFIG } from "@/shared/utils/purchaseConstants";
 interface PurchaseOrderTableProps {
   orders: PurchaseOrderMaster[];
   loading: boolean;
-  pagination: any;
-  setPagination: (val: any) => void;
+  pagination: unknown;
+  setPagination: (val: unknown) => void;
   onDelete?: (id: number) => void;
   onOpenPaymentModal: (order: PurchaseOrderMaster) => void;
   onClone?: (order: PurchaseOrderMaster) => void; // [NEW] Prop Clone
@@ -25,7 +25,7 @@ const getLogisticsInfo = (r: PurchaseOrderMaster) => {
   // Ưu tiên 1: Tên NCC Vận chuyển (Nếu chọn shipping_partner_id)
   // Giả sử rpc trả về shipping_partner_name, nếu chưa có thì dùng carrier_name
   // Note: r type definition might need update, casting for now if needed or relying on dynamic
-  const anyR = r as any;
+  const anyR = r as unknown;
   const name =
     anyR.shipping_partner_name || anyR.carrier_name || "Chưa chọn ĐVVC";
   const contact = anyR.carrier_phone || anyR.carrier_contact || "";
@@ -98,7 +98,7 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
             <div style={{ fontWeight: "normal" }}>{name}</div>
             <div style={{ fontSize: 12, color: "#666" }}>
               {contact ? <>{contact} • </> : null}
-              📦 {(r as any).total_packages || 1} kiện
+              📦 {(r as unknown).total_packages || 1} kiện
             </div>
             {/* Hiển thị Ngày/Giờ dự kiến nếu có */}
             <div
@@ -122,7 +122,7 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
       dataIndex: "delivery_status",
       width: 130,
       render: (status: string) => {
-        const map: any = {
+        const map: unknown = {
           draft: { color: "default", text: "Chờ" },
           pending: { color: "orange", text: "Chờ nhập" },
           partial: { color: "blue", text: "Nhập 1 phần" },
@@ -273,7 +273,7 @@ export const PurchaseOrderTable: React.FC<PurchaseOrderTableProps> = ({
     },
   ];
 
-  const handleTableChange = (newPagination: any) => {
+  const handleTableChange = (newPagination: unknown) => {
     setPagination({
       page: newPagination.current,
       pageSize: newPagination.pageSize,

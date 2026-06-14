@@ -32,6 +32,8 @@ import { Statistic } from "antd"; // [NEW]
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import SupplierProductMappingTab from "./components/SupplierProductMappingTab"; // [NEW]
+
 import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 import { financeService } from "@/features/finance/api/financeService";
 import { useBankStore } from "@/features/finance/stores/useBankStore";
@@ -40,7 +42,6 @@ import { useSupplierStore } from "@/features/purchasing/stores/supplierStore";
 import { FinanceFormModal } from "@/pages/finance/components/FinanceFormModal"; // [NEW]
 import { Access } from "@/shared/components/auth/Access"; // [NEW]
 import { PermissionGuard } from "@/shared/components/auth/PermissionGuard"; // [NEW]
-import SupplierProductMappingTab from "./components/SupplierProductMappingTab"; // [NEW]
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -71,7 +72,7 @@ const SupplierDetailPage: React.FC = () => {
   // [NEW] Finance States
   const [financeModalOpen, setFinanceModalOpen] = useState(false);
   const [financeModalFlow, setFinanceModalFlow] = useState<"in" | "out">("out"); // [NEW] Control Flow
-  const [quickInfo, setQuickInfo] = useState<any>(null);
+  const [quickInfo, setQuickInfo] = useState<unknown>(null);
   // [NEW] Công nợ lấy thẳng từ supplier_debt_view — single source. Tách khỏi
   // quickInfo.current_debt (RPC có thể trả số cached/lệch) để Statistic + Modal
   // prefill cùng dùng 1 số → tránh thanh toán quá/thiếu.
@@ -380,8 +381,8 @@ const SupplierDetailPage: React.FC = () => {
               key="mapping"
             >
               <Card bordered={false}>
-                <SupplierProductMappingTab 
-                  vendorTaxCode={currentSupplier?.tax_code || ""} 
+                <SupplierProductMappingTab
+                  vendorTaxCode={currentSupplier?.tax_code || ""}
                   vendorId={Number(id) || undefined}
                   vendorName={currentSupplier?.name || ""}
                 />

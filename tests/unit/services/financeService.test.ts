@@ -5,15 +5,15 @@ const mockSafeRpc = vi.fn();
 // (dùng cho supplier_debt_view & b2b_customer_debt_view). vi.hoisted đảm bảo
 // các biến này đã tồn tại trước khi vi.mock chạy.
 const mockSupabaseState = vi.hoisted(() => ({
-  maybeSingle: { data: null as any, error: null as any },
+  maybeSingle: { data: null as unknown, error: null as unknown },
   lastFromTable: null as string | null,
 }));
 
 vi.mock("@/shared/api/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {

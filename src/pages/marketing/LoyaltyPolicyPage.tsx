@@ -64,7 +64,7 @@ const styles = {
 };
 
 // Helper format tiền tệ
-const currencyFormatter = (value: any) =>
+const currencyFormatter = (value: unknown) =>
   value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : "";
 const currencyParser = (value: string | undefined) =>
   value ? value.replace(/đ\s?|(,*)/g, "") : "";
@@ -336,7 +336,7 @@ const LoyaltyPolicyPage = () => {
                                             }
                                             parser={
                                               type === "fixed"
-                                                ? (currencyParser as any)
+                                                ? (currencyParser as unknown)
                                                 : (v) => v
                                             }
                                             addonAfter={
@@ -362,7 +362,7 @@ const LoyaltyPolicyPage = () => {
                                   style={{ width: "100%" }}
                                   min={0}
                                   formatter={currencyFormatter}
-                                  parser={currencyParser as any}
+                                  parser={currencyParser as unknown}
                                   addonAfter="đ"
                                 />
                               </Form.Item>

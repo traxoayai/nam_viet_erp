@@ -39,7 +39,7 @@ dayjs.extend(customParseFormat);
 const { Title, Text } = Typography;
 
 // --- HÀM XỬ LÝ NGÀY THÁNG EXCEL ---
-const parseExcelDate = (val: any): string | null => {
+const parseExcelDate = (val: unknown): string | null => {
   if (!val) return null;
   if (typeof val === "number") {
     const date = new Date(Math.round((val - 25569) * 86400 * 1000));
@@ -57,7 +57,7 @@ const parseExcelDate = (val: any): string | null => {
 export const OpeningStockImport = () => {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<unknown[]>([]);
   const [uploading, setUploading] = useState(false);
   const [successResult, setSuccessResult] = useState<{
     code: string;
@@ -70,7 +70,7 @@ export const OpeningStockImport = () => {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(
     null
   );
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<unknown[]>([]);
 
   useEffect(() => {
     const fetchWarehouses = async () => {
@@ -139,7 +139,7 @@ export const OpeningStockImport = () => {
       }
 
       const itemsToMatch = rawData
-        .map((row: any) => ({
+        .map((row: unknown) => ({
           excel_name: row["TenSP"] || row["product_name"] || "",
           excel_sku: String(row["MaSP"] || row["product_code"] || "").trim(),
           raw_row: row,
@@ -150,7 +150,7 @@ export const OpeningStockImport = () => {
         `Đang đối chiếu ${itemsToMatch.length} dòng...`,
         0
       );
-      let allServerMatches: any[] = [];
+      let allServerMatches: unknown[] = [];
 
       try {
         const BATCH_SIZE = 50;
@@ -162,15 +162,12 @@ export const OpeningStockImport = () => {
             (i + 1) * BATCH_SIZE
           );
 
-          const { data } = await safeRpc(
-            "match_products_from_excel",
-            {
-              p_data: batchItems.map((item) => ({
-                name: item.excel_name,
-                sku: item.excel_sku,
-              })),
-            }
-          );
+          const { data } = await safeRpc("match_products_from_excel", {
+            p_data: batchItems.map((item) => ({
+              name: item.excel_name,
+              sku: item.excel_sku,
+            })),
+          });
           if (data) allServerMatches = [...allServerMatches, ...data];
         }
 
@@ -178,7 +175,7 @@ export const OpeningStockImport = () => {
           const row = item.raw_row;
 
           const match = allServerMatches.find(
-            (m: any) =>
+            (m: unknown) =>
               (item.excel_sku && m.excel_sku === item.excel_sku) ||
               m.excel_name === item.excel_name
           );
@@ -271,7 +268,7 @@ export const OpeningStockImport = () => {
         setData(mappedData);
         setCurrentStep(1);
         message.success("Đã đối chiếu xong!");
-      } catch (err: any) {
+      } catch (err: unknown) {
         message.error("Lỗi đối chiếu: " + err.message);
       } finally {
         hideLoading();
@@ -286,25 +283,29 @@ export const OpeningStockImport = () => {
     setIsVerifyModalOpen(true);
   };
 
-  const handleProductSelected = (product: any) => {
+  const handleProductSelected = (product: unknown) => {
     if (editingRowKey === null) return;
     fetchProductUnitsForSelected(product);
   };
 
-  const fetchProductUnitsForSelected = async (product: any) => {
+  const fetchProductUnitsForSelected = async (product: unknown) => {
     const { data: units } = await supabase
       .from("product_units")
       .select("*")
       .eq("product_id", product.id);
 
     // Tìm các đơn vị đặc trưng
-    const wholesaleUnit = units?.find((u: any) => u.unit_type === "wholesale");
-    const retailUnit = units?.find((u: any) => u.unit_type === "retail");
+    const wholesaleUnit = units?.find(
+      (u: unknown) => u.unit_type === "wholesale"
+    );
+    const retailUnit = units?.find((u: unknown) => u.unit_type === "retail");
 
     // Logic tìm "Large Unit" mặc định để hiển thị
     const largeUnit =
       wholesaleUnit ||
-      units?.sort((a: any, b: any) => b.conversion_rate - a.conversion_rate)[0];
+      units?.sort(
+        (a: unknown, b: unknown) => b.conversion_rate - a.conversion_rate
+      )[0];
     const hasLargeUnit = largeUnit && (largeUnit.conversion_rate ?? 0) > 1;
 
     const newData = [...data];
@@ -371,21 +372,24 @@ export const OpeningStockImport = () => {
         };
       });
 
-      const { data: res } = await safeRpc(
-        "import_opening_stock_v3_by_id",
-        {
-          p_stock_array: payload,
-          p_user_id: user?.id ?? "",
-          p_warehouse_id: selectedWarehouseId,
-        }
-      );
-      const result = res as unknown as { imported_count: number; receipt_code: string };
+      const { data: res } = await safeRpc("import_opening_stock_v3_by_id", {
+        p_stock_array: payload,
+        p_user_id: user?.id ?? "",
+        p_warehouse_id: selectedWarehouseId,
+      });
+      const result = res as unknown as {
+        imported_count: number;
+        receipt_code: string;
+      };
       message.success(
         `Đã nhập kho và ghi nhận giá trị cho ${result.imported_count} dòng!`
       );
-      setSuccessResult({ code: result.receipt_code, count: result.imported_count });
+      setSuccessResult({
+        code: result.receipt_code,
+        count: result.imported_count,
+      });
       setCurrentStep(2);
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error("Lỗi: " + error.message);
     } finally {
       setUploading(false);
@@ -396,7 +400,7 @@ export const OpeningStockImport = () => {
     {
       title: "Dữ liệu Excel",
       width: 200,
-      render: (_: any, r: any) => (
+      render: (_: unknown, r: unknown) => (
         <div>
           <div style={{ fontWeight: 600 }}>{r.excel_name}</div>
           <div style={{ fontSize: 12, color: "#888" }}>Mã: {r.excel_code}</div>
@@ -406,7 +410,7 @@ export const OpeningStockImport = () => {
     {
       title: "Sản phẩm Hệ thống",
       width: 320,
-      render: (_: any, r: any) => {
+      render: (_: unknown, r: unknown) => {
         const prod = r.matched_product;
         return (
           <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
@@ -453,7 +457,7 @@ export const OpeningStockImport = () => {
     {
       title: "SL & Quy đổi",
       width: 250,
-      render: (_: any, r: any) => {
+      render: (_: unknown, r: unknown) => {
         const prod = r.matched_product;
         if (!prod) return <Text disabled>---</Text>;
 
@@ -522,7 +526,7 @@ export const OpeningStockImport = () => {
       title: "Giá Vốn",
       width: 130,
       dataIndex: "cost_price",
-      render: (val: number, r: any) => (
+      render: (val: number, r: unknown) => (
         <InputNumber
           value={val}
           formatter={(value) =>
@@ -546,7 +550,7 @@ export const OpeningStockImport = () => {
       title: "Thành Tiền",
       width: 140,
       align: "right" as const,
-      render: (_: any, r: any) => (
+      render: (_: unknown, r: unknown) => (
         <Text strong style={{ color: "#1890ff" }}>
           {(r.quantity * (r.cost_price || 0)).toLocaleString()}
         </Text>
@@ -555,7 +559,7 @@ export const OpeningStockImport = () => {
     {
       title: "Lô - Hạn SD",
       width: 220,
-      render: (_: any, r: any) => (
+      render: (_: unknown, r: unknown) => (
         <Space direction="vertical" size={4} style={{ width: "100%" }}>
           <Input
             placeholder="Số Lô"
@@ -587,7 +591,7 @@ export const OpeningStockImport = () => {
     {
       title: "",
       width: 50,
-      render: (_: any, r: any) => (
+      render: (_: unknown, r: unknown) => (
         <Button
           danger
           type="text"

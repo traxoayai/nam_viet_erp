@@ -38,14 +38,18 @@ export const ConnectPage = () => {
   // Load data lần đầu
   useEffect(() => {
     fetchPosts(activeTab);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
+  }, []);
   const showCreateButton =
     activeTab === "feedback" ||
     (activeTab === "news" && CURRENT_USER_ROLE === "admin");
 
   // Helper render Tab
-  const TabButton = ({ id, label, icon: Icon }: any) => (
+  interface TabButtonProps {
+    id: string;
+    label: string;
+    icon: React.ElementType;
+  }
+  const TabButton = ({ id, label, icon: Icon }: TabButtonProps) => (
     <button
       onClick={() => setActiveTab(id)}
       className={`relative flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${

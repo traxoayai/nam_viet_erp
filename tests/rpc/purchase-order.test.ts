@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 /**
@@ -113,7 +114,9 @@ describe("purchase order RPCs", () => {
     // Lỗi phải là business logic (supplier không tồn tại, Unauthorized, v.v.)
     // KHÔNG được là FK constraint violation trên shipping_partner_id
     if (error) {
-      expect(error.message).not.toMatch(/foreign key constraint.*shipping_partner_id/i);
+      expect(error.message).not.toMatch(
+        /foreign key constraint.*shipping_partner_id/i
+      );
     }
   });
 

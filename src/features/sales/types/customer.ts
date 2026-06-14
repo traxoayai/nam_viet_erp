@@ -111,18 +111,22 @@ export interface CustomerB2CStoreState {
   editingCustomer: CustomerDetailsData | null;
   editingCustomerType: CustomerB2CType; // 'CaNhan' hoặc 'ToChuc'
   totalCount: number; // --- Hàm hành động ---
-  filters: any;
+  filters: unknown;
   page: number; // <-- Phân trang
   pageSize: number; // <-- Số nội dung hiển thị / trang
   sortDebt: "asc" | "desc" | null; // [NEW]
 
   fetchCustomers: (
-    filters: any,
+    filters: unknown,
     sortDebt?: "asc" | "desc" | null
   ) => Promise<void>;
   getCustomerDetails: (id: number) => Promise<void>;
-  createCustomer: (data: any, guardians: any) => Promise<number | null>;
-  updateCustomer: (id: number, data: any, guardians: any) => Promise<boolean>;
+  createCustomer: (data: unknown, guardians: unknown) => Promise<number | null>;
+  updateCustomer: (
+    id: number,
+    data: unknown,
+    guardians: unknown
+  ) => Promise<boolean>;
   deleteCustomer: (id: number) => Promise<boolean>; // --- Quản lý UI ---
   reactivateCustomer: (id: number) => Promise<boolean>;
   exportToExcel: () => Promise<CustomerListRecord[]>;

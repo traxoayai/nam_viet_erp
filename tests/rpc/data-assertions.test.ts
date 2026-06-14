@@ -3,6 +3,7 @@
  * Smoke tests chỉ check "không lỗi". Tests này check "trả về data đúng".
  */
 import { describe, it, expect } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 async function tableCount(table: string): Promise<number> {
@@ -206,9 +207,7 @@ describe("Data assertions — listing RPCs return data", () => {
     const count = await columnNonEmptyCount("products", "manufacturer_name");
     if (count === 0) return;
 
-    const { data, error } = await adminClient.rpc(
-      "get_distinct_manufacturers"
-    );
+    const { data, error } = await adminClient.rpc("get_distinct_manufacturers");
     expect(error).toBeNull();
     expect(data).not.toBeNull();
     expect((data as unknown[]).length).toBeGreaterThan(0);

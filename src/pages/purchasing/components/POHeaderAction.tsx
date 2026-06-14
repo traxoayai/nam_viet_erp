@@ -88,7 +88,7 @@ const POHeaderAction = ({
 
           <Col>
             <Space size="small">
-              {isEditMode && (
+              {isEditMode ? (
                 <Button
                   icon={<PrinterOutlined />}
                   onClick={onPrint}
@@ -99,9 +99,9 @@ const POHeaderAction = ({
                 >
                   In đơn
                 </Button>
-              )}
+              ) : null}
 
-              {isEditMode && canCancel && (
+              {isEditMode && canCancel ? (
                 <Button
                   danger
                   icon={<CloseCircleOutlined />}
@@ -113,7 +113,7 @@ const POHeaderAction = ({
                 >
                   Hủy đơn
                 </Button>
-              )}
+              ) : null}
 
               {(poStatus === "DRAFT" || !isEditMode) && (
                 <>
@@ -135,7 +135,7 @@ const POHeaderAction = ({
                 </>
               )}
 
-              {canEdit && (
+              {canEdit ? (
                 <>
                   <Button
                     type="primary"
@@ -160,13 +160,16 @@ const POHeaderAction = ({
                     Thanh toán VC
                   </Button>
                 </>
-              )}
+              ) : null}
 
-              {showDrawerButtons && (
+              {showDrawerButtons ? (
                 <>
                   <Button
                     type="primary"
-                    style={{ backgroundColor: "#722ed1", borderColor: "#722ed1" }}
+                    style={{
+                      backgroundColor: "#722ed1",
+                      borderColor: "#722ed1",
+                    }}
                     icon={<CalculatorOutlined />}
                     onClick={onOpenCosting}
                   >
@@ -174,14 +177,17 @@ const POHeaderAction = ({
                   </Button>
                   <Button
                     type="primary"
-                    style={{ backgroundColor: "#13c2c2", borderColor: "#13c2c2" }}
+                    style={{
+                      backgroundColor: "#13c2c2",
+                      borderColor: "#13c2c2",
+                    }}
                     icon={<FileTextOutlined />}
                     onClick={onOpenInvoice}
                   >
                     Hóa Đơn VAT
                   </Button>
                 </>
-              )}
+              ) : null}
             </Space>
           </Col>
         </Row>

@@ -40,7 +40,7 @@ export interface CostingData {
 
 interface PurchaseCostingSectionProps {
   poId: number | string;
-  poItems: any[];
+  poItems: unknown[];
   shippingFee: number;
   supplierId?: number;
   onComplete?: () => void;
@@ -64,7 +64,9 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
   });
 
   const costingTotal = logic.costingItems.reduce(
-    (sum, item) => sum + item.final_unit_cost * (item.quantity_ordered + item.bonus_quantity),
+    (sum, item) =>
+      sum +
+      item.final_unit_cost * (item.quantity_ordered + item.bonus_quantity),
     0
   );
 
@@ -109,7 +111,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
     {
       title: "Rebate %",
       width: 100,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <InputNumber
           min={0}
           max={100}
@@ -123,7 +125,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
     {
       title: "VAT %",
       width: 100,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <InputNumber
           min={0}
           max={100}
@@ -135,7 +137,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
     {
       title: "SL Tặng (Bonus)",
       width: 110,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <InputNumber
           min={0}
           value={r.bonus_quantity}
@@ -149,7 +151,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
     {
       title: "Phí Ship PB",
       width: 130,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <InputNumber
           style={{ width: "100%" }}
           formatter={(value) =>
@@ -170,7 +172,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
       width: 150,
       fixed: "right" as const,
       align: "right" as const,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <Tag color="green" style={{ fontSize: 14, padding: "4px 8px" }}>
           {formatCurrency(r.final_unit_cost)}
         </Tag>
@@ -181,7 +183,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
   const giftColumns = [
     {
       title: "Tên Quà Tặng",
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <Input
           value={r.name}
           onChange={(e) => logic.updateGift(r.key, "name", e.target.value)}
@@ -192,7 +194,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
     {
       title: "Mã quản lý",
       width: 150,
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <Input
           value={r.code}
           onChange={(e) => logic.updateGift(r.key, "code", e.target.value)}
@@ -203,7 +205,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
     {
       title: "SL",
       width: 100,
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <InputNumber
           min={1}
           value={r.quantity}
@@ -214,7 +216,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
     {
       title: "ĐVT",
       width: 100,
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <Input
           value={r.unit_name}
           onChange={(e) => logic.updateGift(r.key, "unit_name", e.target.value)}
@@ -224,7 +226,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
     {
       title: "Giá trị (Ước tính)",
       width: 150,
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <InputNumber
           style={{ width: "100%" }}
           formatter={(value) =>
@@ -240,7 +242,7 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
     },
     {
       width: 50,
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <Button
           danger
           type="text"
@@ -345,7 +347,6 @@ const PurchaseCostingSection: React.FC<PurchaseCostingSectionProps> = ({
           locale={{ emptyText: "Chưa có quà tặng nào" }}
         />
       </Card>
-
 
       <UpdatePriceModal
         visible={logic.showPriceModal}

@@ -29,7 +29,7 @@ export const DoctorPrescriptionTable: React.FC<Props> = ({
   const updateItem = (
     productId: number,
     field: keyof ClinicalPrescriptionItem,
-    value: any
+    value: unknown
   ) => {
     setItems(
       items.map((i) =>
@@ -114,7 +114,7 @@ export const DoctorPrescriptionTable: React.FC<Props> = ({
     {
       width: 50,
       align: "center" as const,
-      render: (_: any, r: ClinicalPrescriptionItem) => (
+      render: (_: unknown, r: ClinicalPrescriptionItem) => (
         <Button
           type="text"
           danger

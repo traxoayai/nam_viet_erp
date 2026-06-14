@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+
 import { login } from "./helpers/auth";
 
 test.describe("Portal Notification Management", () => {
@@ -18,7 +19,9 @@ test.describe("Portal Notification Management", () => {
     expect(await errors.count()).toBe(0);
 
     // Page title should be visible
-    const heading = page.locator("h2").filter({ hasText: "Quản lý thông báo Portal" });
+    const heading = page
+      .locator("h2")
+      .filter({ hasText: "Quản lý thông báo Portal" });
     await expect(heading).toBeVisible({ timeout: 10000 });
   });
 
@@ -27,7 +30,9 @@ test.describe("Portal Notification Management", () => {
     await page.waitForTimeout(3000);
 
     // "Gửi thông báo" tab should be active by default (first tab)
-    const composeTab = page.locator(".ant-tabs-tab").filter({ hasText: "Gửi thông báo" });
+    const composeTab = page
+      .locator(".ant-tabs-tab")
+      .filter({ hasText: "Gửi thông báo" });
     await expect(composeTab).toBeVisible({ timeout: 10000 });
 
     // The form should be visible inside the tab content
@@ -53,34 +58,50 @@ test.describe("Portal Notification Management", () => {
     await page.waitForTimeout(3000);
 
     // Notification type radio buttons
-    const promoRadio = page.locator(".ant-radio-button-wrapper").filter({ hasText: "Khuyến mãi" });
+    const promoRadio = page
+      .locator(".ant-radio-button-wrapper")
+      .filter({ hasText: "Khuyến mãi" });
     await expect(promoRadio).toBeVisible({ timeout: 10000 });
 
-    const systemRadio = page.locator(".ant-radio-button-wrapper").filter({ hasText: "Hệ thống" });
+    const systemRadio = page
+      .locator(".ant-radio-button-wrapper")
+      .filter({ hasText: "Hệ thống" });
     await expect(systemRadio).toBeVisible();
 
     // Target radio buttons
-    const allRadio = page.locator(".ant-radio-wrapper").filter({ hasText: "Tất cả khách hàng" });
+    const allRadio = page
+      .locator(".ant-radio-wrapper")
+      .filter({ hasText: "Tất cả khách hàng" });
     await expect(allRadio).toBeVisible();
 
-    const specificRadio = page.locator(".ant-radio-wrapper").filter({ hasText: "Chọn khách cụ thể" });
+    const specificRadio = page
+      .locator(".ant-radio-wrapper")
+      .filter({ hasText: "Chọn khách cụ thể" });
     await expect(specificRadio).toBeVisible();
   });
 
-  test("fill compose form and submit shows confirm dialog", async ({ page }) => {
+  test("fill compose form and submit shows confirm dialog", async ({
+    page,
+  }) => {
     await page.goto("/portal/notifications");
     await page.waitForTimeout(3000);
 
     // Select type = Khuyến mãi (should be default but click to be sure)
-    const promoRadio = page.locator(".ant-radio-button-wrapper").filter({ hasText: "Khuyến mãi" });
+    const promoRadio = page
+      .locator(".ant-radio-button-wrapper")
+      .filter({ hasText: "Khuyến mãi" });
     await promoRadio.click();
 
     // Target = Tất cả (should be default)
-    const allRadio = page.locator(".ant-radio-wrapper").filter({ hasText: "Tất cả khách hàng" });
+    const allRadio = page
+      .locator(".ant-radio-wrapper")
+      .filter({ hasText: "Tất cả khách hàng" });
     await allRadio.click();
 
     // Fill title
-    const titleInput = page.locator("input").filter({ has: page.locator("[id]") })
+    const titleInput = page
+      .locator("input")
+      .filter({ has: page.locator("[id]") })
       .or(page.locator("input[placeholder*='VD']"))
       .first();
     await titleInput.fill("E2E Test — Giảm 10% toàn bộ");
@@ -90,21 +111,28 @@ test.describe("Portal Notification Management", () => {
     await bodyTextarea.fill("Đây là nội dung test từ Playwright E2E.");
 
     // Submit the form
-    const submitBtn = page.locator("button").filter({ hasText: "Gửi thông báo" });
+    const submitBtn = page
+      .locator("button")
+      .filter({ hasText: "Gửi thông báo" });
     await submitBtn.click();
 
     // Confirm dialog should appear
-    const confirmDialog = page.locator(".ant-modal-confirm, .ant-modal").filter({
-      hasText: "Xác nhận gửi thông báo",
-    });
+    const confirmDialog = page
+      .locator(".ant-modal-confirm, .ant-modal")
+      .filter({
+        hasText: "Xác nhận gửi thông báo",
+      });
     await expect(confirmDialog).toBeVisible({ timeout: 10000 });
 
     // Dialog should mention the title
-    const dialogContent = page.locator(".ant-modal-confirm-content, .ant-modal-body");
+    const dialogContent = page.locator(
+      ".ant-modal-confirm-content, .ant-modal-body"
+    );
     await expect(dialogContent.first()).toContainText("E2E Test");
 
     // Cancel to avoid actually sending in E2E
-    const cancelBtn = page.locator(".ant-modal-confirm-btns button, .ant-modal-footer button")
+    const cancelBtn = page
+      .locator(".ant-modal-confirm-btns button, .ant-modal-footer button")
       .filter({ hasText: "Hủy" });
     await cancelBtn.click();
 
@@ -117,7 +145,9 @@ test.describe("Portal Notification Management", () => {
     await page.waitForTimeout(3000);
 
     // Click on "Lịch sử gửi" tab
-    const historyTab = page.locator(".ant-tabs-tab").filter({ hasText: "Lịch sử gửi" });
+    const historyTab = page
+      .locator(".ant-tabs-tab")
+      .filter({ hasText: "Lịch sử gửi" });
     await historyTab.click();
     await page.waitForTimeout(2000);
 
@@ -126,9 +156,7 @@ test.describe("Portal Notification Management", () => {
     await expect(table.first()).toBeVisible({ timeout: 10000 });
 
     // Verify table has expected column headers
-    const headerRow = page.locator(
-      ".ant-table-thead th, thead th"
-    );
+    const headerRow = page.locator(".ant-table-thead th, thead th");
     const headerTexts = await headerRow.allTextContents();
     const joined = headerTexts.join(" ");
 

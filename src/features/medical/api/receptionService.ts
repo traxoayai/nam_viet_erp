@@ -66,7 +66,15 @@ export const receptionService = {
     // Tạm gọi bảng user_profiles hoặc bảng profiles (nếu có mapping). Ta dùng rpc hoặc query cơ bản.
     // Nếu ứng dụng đang dùng sys_users hoặc profiles:
     // "profiles" không có trong generated DB types, bypass type check
-    const { data } = await (supabase as unknown as { from: (t: string) => { select: (s: string) => PromiseLike<{ data: { id: string; full_name: string; email: string }[] | null }> } })
+    const { data } = await (
+      supabase as unknown as {
+        from: (t: string) => {
+          select: (s: string) => PromiseLike<{
+            data: { id: string; full_name: string; email: string }[] | null;
+          }>;
+        };
+      }
+    )
       .from("profiles")
       .select("id, full_name, email");
     return data || [];
@@ -74,7 +82,7 @@ export const receptionService = {
 
   // 7. Cập nhật trạng thái (Check-in / Hủy)
   updateStatus: async (id: string, status: string, cancelReason?: string) => {
-    const payload: any = { status, updated_at: new Date().toISOString() };
+    const payload: unknown = { status, updated_at: new Date().toISOString() };
     if (cancelReason) payload.note = `[Hủy: ${cancelReason}]`; // Hoặc lưu vào cột cancel_reason nếu có
 
     const { error } = await supabase
@@ -89,10 +97,12 @@ export const receptionService = {
 export const getMedicalPackages = async (keyword?: string) => {
   const query = supabase
     .from("service_packages")
-    .select(`
+    .select(
+      `
       id, name, price, status, clinical_category,
       service_package_items(item_id, products(name), quantity)
-    `)
+    `
+    )
     .eq("status", "active")
     .eq("type", "bundle")
     .neq("clinical_category", "vaccination") // Tuyệt đối không lôi Vắc-xin vào đây

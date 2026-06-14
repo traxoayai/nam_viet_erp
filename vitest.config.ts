@@ -1,7 +1,8 @@
-import { defineConfig } from "vitest/config";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import fs from "fs";
+
+import { defineConfig } from "vitest/config";
 
 // ─── Windows drive-letter casing fix ─────────────────────────────────────
 // Vitest 4.x crashes with "Cannot read properties of undefined (reading 'config')"

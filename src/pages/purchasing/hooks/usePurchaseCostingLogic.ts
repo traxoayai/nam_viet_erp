@@ -34,7 +34,7 @@ export interface GiftItem {
 
 interface UsePurchaseCostingLogicParams {
   poId: number | string;
-  poItems: any[];
+  poItems: unknown[];
   shippingFee: number;
   supplierId?: number;
   onComplete?: () => void;
@@ -50,20 +50,20 @@ export const usePurchaseCostingLogic = ({
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [showPriceModal, setShowPriceModal] = useState(false);
-  const [preUpdateCosts, setPreUpdateCosts] = useState<any[]>([]);
+  const [preUpdateCosts, setPreUpdateCosts] = useState<unknown[]>([]);
 
   const [costingItems, setCostingItems] = useState<CostingItem[]>([]);
   const [giftItems, setGiftItems] = useState<GiftItem[]>([]);
 
   const [totalShippingFee, setTotalShippingFee] = useState<number>(0);
   const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
-  const [programOptions, setProgramOptions] = useState<any[]>([]);
+  const [programOptions, setProgramOptions] = useState<unknown[]>([]);
 
   // --- INIT: từ parent PO data ---
   useEffect(() => {
     if (!poItems || poItems.length === 0) return;
 
-    const items: CostingItem[] = poItems.map((i: any) => ({
+    const items: CostingItem[] = poItems.map((i: unknown) => ({
       id: i.id,
       product_id: i.product_id,
       sku: i.sku,
@@ -90,7 +90,7 @@ export const usePurchaseCostingLogic = ({
         const programs =
           await purchaseOrderService.getActiveProgramsBySupplier(supplierId);
         setProgramOptions(
-          programs.map((p: any) => ({
+          programs.map((p: unknown) => ({
             label: p.name,
             value: p.id,
           }))
@@ -190,7 +190,7 @@ export const usePurchaseCostingLogic = ({
   }, []);
 
   const updateGift = useCallback(
-    (key: string, field: keyof GiftItem, value: any) => {
+    (key: string, field: keyof GiftItem, value: unknown) => {
       setGiftItems((prev) =>
         prev.map((g) => (g.key === key ? { ...g, [field]: value } : g))
       );
@@ -224,13 +224,13 @@ export const usePurchaseCostingLogic = ({
         let bonusCount = 0;
         let giftCount = 0;
 
-        groups.forEach((group: any) => {
+        groups.forEach((group: unknown) => {
           const rules = group.rules || {};
           const ruleType = group.type || "rebate_revenue";
 
           const groupProductIds = programItems
-            .filter((pi: any) => pi.group_id === group.id)
-            .map((pi: any) => pi.product_id);
+            .filter((pi: unknown) => pi.group_id === group.id)
+            .map((pi: unknown) => pi.product_id);
 
           if (groupProductIds.length === 0) return;
 
@@ -354,7 +354,7 @@ export const usePurchaseCostingLogic = ({
       await purchaseOrderService.confirmCosting(payload);
       message.success("Xác nhận giá vốn thành công!");
       setShowPriceModal(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       message.error("Lỗi: " + err.message);
     } finally {

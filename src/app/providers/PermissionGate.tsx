@@ -47,13 +47,14 @@ export const PermissionGate: React.FC<{ children: React.ReactNode }> = ({
             enableHighAccuracy: false,
           });
         });
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.warn("Lỗi GPS:", e);
         // Thay vì chặn (throw e), ta chỉ thông báo và cho qua
         let gpsMsg =
           "Không lấy được vị trí. Một số tính năng Check-in có thể bị hạn chế.";
 
-        if (e.code === 1) {
+        const error = e as Record<string, unknown>;
+        if (error.code === 1) {
           // User denied
           gpsMsg =
             "Bạn đã chặn quyền Vị trí. Hãy bật lại trong Cài đặt Safari.";
@@ -70,19 +71,20 @@ export const PermissionGate: React.FC<{ children: React.ReactNode }> = ({
           video: true,
         });
         stream.getTracks().forEach((track) => track.stop());
-      } catch (mediaError: any) {
+      } catch (mediaError: unknown) {
         console.error("Lỗi Media:", mediaError);
 
         // Vẫn ưu tiên cảnh báo, nhưng không chặn cửa vào App trừ khi Sếp yêu cầu gắt gao
         // Ở đây ta soft-fail luôn cho chắc ăn trên các dòng máy lạ
+        const err = mediaError as Record<string, unknown>;
         if (
-          mediaError.name === "NotAllowedError" ||
-          mediaError.name === "PermissionDeniedError"
+          err.name === "NotAllowedError" ||
+          err.name === "PermissionDeniedError"
         ) {
           message.error(
             "Thiếu quyền Mic/Camera. Tính năng Voice/Scan sẽ không hoạt động."
           );
-        } else if (mediaError.name === "NotReadableError") {
+        } else if (err.name === "NotReadableError") {
           message.warning("Thiết bị đang bận (Mic/Cam). Vui lòng thử lại sau.");
         } else {
           message.warning("Không thể truy cập Mic/Camera.");
@@ -96,11 +98,12 @@ export const PermissionGate: React.FC<{ children: React.ReactNode }> = ({
       setTimeout(() => {
         setIsGranted(true);
       }, 500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Khối này chỉ chạy nếu có lỗi hệ thống nghiêm trọng khác ngoài các khối try/catch con ở trên
       console.error(error);
+      const err = error as Record<string, unknown>;
       message.error({
-        content: "Lỗi khởi tạo: " + (error.message || "Không xác định"),
+        content: "Lỗi khởi tạo: " + (err.message || "Không xác định"),
         duration: 5,
       });
     } finally {

@@ -11,7 +11,7 @@ const { Text } = Typography;
 
 interface Props {
   deliveryMethod: "internal" | "app" | "coach";
-  setDeliveryMethod: (val: any) => void;
+  setDeliveryMethod: (val: "internal" | "app" | "coach") => void;
   shippingPartnerId?: number;
   setShippingPartner: (id: number) => void;
   estimatedDeliveryText: string;

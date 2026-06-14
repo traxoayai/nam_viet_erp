@@ -2,6 +2,7 @@
  * Unit tests: InvoiceMultiVatForm — payload structure and type validation
  */
 import { describe, it, expect, vi } from "vitest";
+
 import type { InvoiceSubmitPayload } from "@/features/finance/types/invoiceTypes";
 
 describe("InvoiceMultiVatForm", () => {
@@ -51,9 +52,33 @@ describe("InvoiceMultiVatForm", () => {
         customer_tax_code: "9876543210",
         items_json: {
           lines: [
-            { product_name: "SP1", quantity: 5, unit_price: 100, discount_amount: 0, vat_rate: 0, vat_amount: 0, line_total: 500 },
-            { product_name: "SP2", quantity: 10, unit_price: 100, discount_amount: 0, vat_rate: 5, vat_amount: 50, line_total: 1050 },
-            { product_name: "SP3", quantity: 20, unit_price: 100, discount_amount: 0, vat_rate: 10, vat_amount: 200, line_total: 2200 },
+            {
+              product_name: "SP1",
+              quantity: 5,
+              unit_price: 100,
+              discount_amount: 0,
+              vat_rate: 0,
+              vat_amount: 0,
+              line_total: 500,
+            },
+            {
+              product_name: "SP2",
+              quantity: 10,
+              unit_price: 100,
+              discount_amount: 0,
+              vat_rate: 5,
+              vat_amount: 50,
+              line_total: 1050,
+            },
+            {
+              product_name: "SP3",
+              quantity: 20,
+              unit_price: 100,
+              discount_amount: 0,
+              vat_rate: 10,
+              vat_amount: 200,
+              line_total: 2200,
+            },
           ],
         },
         discount_total: 0,
@@ -84,7 +109,15 @@ describe("InvoiceMultiVatForm", () => {
         customer_tax_code: "1111111111",
         items_json: {
           lines: [
-            { product_name: "SP", quantity: 10, unit_price: 100, discount_amount: 50, vat_rate: 10, vat_amount: 95, line_total: 1045 },
+            {
+              product_name: "SP",
+              quantity: 10,
+              unit_price: 100,
+              discount_amount: 50,
+              vat_rate: 10,
+              vat_amount: 95,
+              line_total: 1045,
+            },
           ],
         },
         discount_total: 100,

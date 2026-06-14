@@ -12,10 +12,10 @@ interface Props {
     id: number;
     code: string;
     status: string; // 'pending' | 'processing' | 'issued' | 'verified'
-    items_json?: any;
+    items_json?: unknown;
   };
-  orderItems: any[];
-  customer: any;
+  orderItems: unknown[];
+  customer: unknown;
   onUpdate?: () => void;
 }
 
@@ -44,7 +44,7 @@ export const VatActionButton: React.FC<Props> = ({
           : "Đã cập nhật trạng thái!"
       );
       if (onUpdate) onUpdate();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       message.error("Lỗi cập nhật trạng thái: " + err.message);
     } finally {

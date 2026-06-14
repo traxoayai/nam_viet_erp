@@ -1,4 +1,6 @@
 // src/services/assetService.ts
+import type { Json } from "@/shared/lib/database.types";
+
 import {
   AssetFormData,
   MaintenancePlan,
@@ -7,9 +9,8 @@ import {
   AssetType,
 } from "@/features/finance/types/asset";
 import { uploadFile } from "@/shared/api/storageService";
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
-import type { Json } from "@/shared/lib/database.types";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // Hàm hỗ trợ TẢI ẢNH TÀI SẢN
 export const uploadAssetImage = async (file: File) => {
@@ -28,13 +29,13 @@ export const fetchAssetTypes = async (): Promise<AssetType[]> => {
 
 // --- 2. CỖ MÁY: LẤY DANH SÁCH TÀI SẢN ---
 export const fetchAssets = async (
-  filters: any
+  filters: Record<string, unknown>
 ): Promise<{ data: AssetListRecord[]; totalCount: number }> => {
   const { data } = await safeRpc("get_assets_list", {
-    search_query: filters.search_query || null,
-    type_filter: filters.asset_type_id || null,
-    branch_filter: filters.branch_id || null,
-    status_filter: filters.status || null, //-- BỎ PHÂN TRANG (Tạm thời cho list)
+    search_query: (filters.search_query ? (filters.search_query as string) : null) as any,
+    type_filter: (filters.asset_type_id ? (filters.asset_type_id as number) : null) as any,
+    branch_filter: (filters.branch_id ? (filters.branch_id as number) : null) as any,
+    status_filter: (filters.status ? (filters.status as string) : null) as any, //-- BỎ PHÂN TRANG (Tạm thời cho list)
   });
 
   const totalCount = data && data.length > 0 ? data[0].total_count : 0;
@@ -42,7 +43,7 @@ export const fetchAssets = async (
 };
 
 // --- 3. CỖ MÁY: LẤY CHI TIẾT TÀI SẢN ---
-export const fetchAssetDetails = async (id: number): Promise<any> => {
+export const fetchAssetDetails = async (id: number): Promise<unknown> => {
   const { data } = await safeRpc("get_asset_details", { p_id: id });
   return data;
 };

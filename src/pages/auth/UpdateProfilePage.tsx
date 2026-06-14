@@ -80,8 +80,11 @@ const UpdateProfilePage: React.FC = () => {
   const { profile, updateProfile, logout } = useAuthStore();
   const [loading, setLoading] = useState(false); // State cho Upload
   const { banks, fetchBanks } = useBankStore();
-  const [fileList, setFileList] = useState<any[]>([]);
-  const [cccdFiles, setCccdFiles] = useState<{ truoc: any[]; sau: any[] }>({
+  const [fileList, setFileList] = useState<unknown[]>([]);
+  const [cccdFiles, setCccdFiles] = useState<{
+    truoc: unknown[];
+    sau: unknown[];
+  }>({
     truoc: [],
     sau: [],
   });
@@ -109,7 +112,7 @@ const UpdateProfilePage: React.FC = () => {
     fetchBanks();
   }, [fetchBanks]);
 
-  const handleSave = async (values: any) => {
+  const handleSave = async (values: unknown) => {
     setLoading(true);
     const msgKey = "update_profile";
     antMessage.loading({ content: "Đang lưu hồ sơ...", key: msgKey });
@@ -153,14 +156,17 @@ const UpdateProfilePage: React.FC = () => {
       setTimeout(() => {
         logout(); // navigate('/login') sẽ tự động kích hoạt
       }, 5000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi lưu profile:", error);
       antMessage.error({ content: `Lỗi: ${error.message}`, key: msgKey });
       setLoading(false);
     }
   };
 
-  const handleUploadChange = (type: string, { fileList: newFileList }: any) => {
+  const handleUploadChange = (
+    type: string,
+    { fileList: newFileList }: unknown
+  ) => {
     if (type === "avatar") setFileList(newFileList);
     else if (type === "cccd_truoc")
       setCccdFiles({ ...cccdFiles, truoc: newFileList });

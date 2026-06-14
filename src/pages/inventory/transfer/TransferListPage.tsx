@@ -147,7 +147,7 @@ const TransferListPage: React.FC = () => {
       title: "Hành động",
       key: "action",
       align: "center" as const,
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Button
           type="text"
           icon={<EyeOutlined />}

@@ -199,7 +199,7 @@ const WarehouseInboundPage = () => {
       title: "Thao tác",
       align: "center" as const,
       width: 130,
-      render: (_: any, record: InboundTask) => {
+      render: (_: unknown, record: InboundTask) => {
         // Chuẩn hóa status để kiểm tra
         const currentStatus = (record.status || "").toLowerCase();
         const isDone =

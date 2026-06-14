@@ -46,7 +46,7 @@ import { moneySum, fmtMoney } from "@/shared/utils/money";
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
-const statusMap: any = {
+const statusMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
   draft: {
     color: "orange",
     text: "Chờ đối chiếu",
@@ -76,13 +76,13 @@ const InvoiceVerifySection = ({
   const { message } = App.useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any[]>([]);
-  const [filters, setFilters] = useState<any>({});
+  const [data, setData] = useState<unknown[]>([]);
+  const [filters, setFilters] = useState<unknown>({});
   const [stats, setStats] = useState({ pending: 0, amount: 0 });
   const [isXmlUploadOpen, setIsXmlUploadOpen] = useState(false);
   const [isScanUploadOpen, setIsScanUploadOpen] = useState(false);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
-  const [unlinkedInvoices, setUnlinkedInvoices] = useState<any[]>([]);
+  const [unlinkedInvoices, setUnlinkedInvoices] = useState<unknown[]>([]);
   const [linkLoading, setLinkLoading] = useState(false);
 
   // Fetch invoices linked to this PO
@@ -104,10 +104,10 @@ const InvoiceVerifySection = ({
         return;
       }
 
-      const invoiceIds = allocations.map((a: any) => a.invoice_id);
+      const invoiceIds = allocations.map((a) => (a as Record<string, unknown>).invoice_id) as number[];
       const allocationMap = Object.fromEntries(
-        allocations.map((a: any) => [a.invoice_id, a.allocated_amount])
-      );
+        allocations.map((a) => [(a as Record<string, unknown>).invoice_id, (a as Record<string, unknown>).allocated_amount])
+      ) as Record<number, number>;
 
       let query = supabase
         .from("finance_invoices")
@@ -115,29 +115,31 @@ const InvoiceVerifySection = ({
         .in("id", invoiceIds)
         .order("created_at", { ascending: false });
 
-      if (filters.status) query = query.eq("status", filters.status);
-      if (filters.search) {
+      if ((filters as Record<string, unknown>).status) query = query.eq("status", (filters as Record<string, unknown>).status as string);
+      if ((filters as Record<string, unknown>).search) {
         query = query.or(
-          `invoice_number.ilike.%${filters.search}%,supplier_name_raw.ilike.%${filters.search}%`
+          `invoice_number.ilike.%${(filters as Record<string, unknown>).search}%,supplier_name_raw.ilike.%${(filters as Record<string, unknown>).search}%`
         );
       }
 
       const { data: invoices, error } = await query;
       if (error) throw error;
 
-      const mapped = (invoices || []).map((inv: any) => ({
-        ...inv,
-        allocated_amount: allocationMap[inv.id] || 0,
-      }));
+      const mapped = (invoices || []).map((inv: unknown) => {
+        const invRec = inv as Record<string, unknown>;
+        return {
+          ...invRec,
+          allocated_amount: allocationMap[invRec.id as number] || 0,
+        };
+      });
 
       setData(mapped);
 
       const pendingCount = mapped.filter(
-        (i: any) => i.status === "draft"
+        (i: unknown) => (i as Record<string, unknown>).status === "draft"
       ).length;
-      const totalAmt = moneySum(
-        mapped.map((i: any) => i.total_amount_post_tax || 0)
-      );
+      const amounts: number[] = mapped.map((i: unknown) => (i as Record<string, unknown>).total_amount_post_tax as number || 0);
+      const totalAmt = (moneySum(amounts) as number) || 0;
       setStats({ pending: pendingCount, amount: totalAmt });
     } catch (err) {
       console.error("Fetch PO invoices error:", err);
@@ -177,9 +179,9 @@ const InvoiceVerifySection = ({
   };
 
   // Link existing invoice to this PO
-  const [linkFilters, setLinkFilters] = useState<any>({});
+  const [linkFilters, setLinkFilters] = useState<unknown>({});
 
-  const fetchUnlinkedInvoices = async (overrideFilters?: any) => {
+  const fetchUnlinkedInvoices = async (overrideFilters?: unknown) => {
     setLinkLoading(true);
     try {
       const f = overrideFilters || linkFilters;
@@ -188,7 +190,9 @@ const InvoiceVerifySection = ({
       const { data: allAllocations } = await supabase
         .from("finance_invoice_allocations")
         .select("invoice_id");
-      const allLinkedIds = (allAllocations || []).map((a: any) => a.invoice_id);
+      const allLinkedIds = ((allAllocations || []).map(
+        (a: unknown) => (a as Record<string, unknown>).invoice_id
+      ) as number[]);
 
       let query = supabase
         .from("finance_invoices")
@@ -199,25 +203,25 @@ const InvoiceVerifySection = ({
         .order("created_at", { ascending: false })
         .limit(100);
 
-      if (f.search) {
+      if ((f as Record<string, unknown>).search) {
         query = query.or(
-          `invoice_number.ilike.%${f.search}%,supplier_name_raw.ilike.%${f.search}%`
+          `invoice_number.ilike.%${(f as Record<string, unknown>).search}%,supplier_name_raw.ilike.%${(f as Record<string, unknown>).search}%`
         );
       }
-      if (f.status) {
-        query = query.eq("status", f.status);
+      if ((f as Record<string, unknown>).status) {
+        query = query.eq("status", (f as Record<string, unknown>).status as string);
       }
-      if (f.dateFrom && f.dateTo) {
+      if ((f as Record<string, unknown>).dateFrom && (f as Record<string, unknown>).dateTo) {
         query = query
-          .gte("invoice_date", f.dateFrom)
-          .lte("invoice_date", f.dateTo);
+          .gte("invoice_date", (f as Record<string, unknown>).dateFrom as string)
+          .lte("invoice_date", (f as Record<string, unknown>).dateTo as string);
       }
 
       const { data: allInvoices, error } = await query;
       if (error) throw error;
 
       const available = (allInvoices || []).filter(
-        (inv: any) => !allLinkedIds.includes(inv.id)
+        (inv: unknown) => !allLinkedIds.includes((inv as Record<string, unknown>).id as number)
       );
 
       setUnlinkedInvoices(available);
@@ -234,7 +238,10 @@ const InvoiceVerifySection = ({
     await fetchUnlinkedInvoices({});
   };
 
-  const handleLinkInvoice = async (invoiceId: number, totalAmount: number = 0) => {
+  const handleLinkInvoice = async (
+    invoiceId: number,
+    totalAmount: number = 0
+  ) => {
     try {
       const { error } = await supabase
         .from("finance_invoice_allocations")
@@ -248,8 +255,8 @@ const InvoiceVerifySection = ({
       message.success("Đã liên kết hóa đơn với đơn mua hàng");
       setIsLinkModalOpen(false);
       fetchData();
-    } catch (err: any) {
-      message.error("Lỗi liên kết: " + err.message);
+    } catch (err: unknown) {
+      message.error("Lỗi liên kết: " + (err instanceof Error ? err.message : "Lỗi không xác định"));
     }
   };
 
@@ -259,10 +266,10 @@ const InvoiceVerifySection = ({
       dataIndex: "status",
       width: 140,
       render: (status: string) => {
-        const s = statusMap[status] || { color: "default", text: status };
+        const s = (statusMap[status] || { color: "default", text: status }) as Record<string, unknown>;
         return (
-          <Tag icon={s.icon} color={s.color}>
-            {s.text}
+          <Tag icon={s.icon as React.ReactNode} color={s.color as string}>
+            {s.text as React.ReactNode}
           </Tag>
         );
       },
@@ -270,14 +277,17 @@ const InvoiceVerifySection = ({
     {
       title: "Số Hóa Đơn",
       dataIndex: "invoice_number",
-      render: (text: string, record: any) => (
-        <div>
-          <Text strong>{text || "(Chưa có số)"}</Text>
-          <div style={{ fontSize: 12, color: "#888" }}>
-            KH: {record.invoice_symbol}
+      render: (text: string, record: unknown) => {
+        const rec = record as Record<string, unknown>;
+        return (
+          <div>
+            <Text strong>{text || "(Chưa có số)"}</Text>
+            <div style={{ fontSize: 12, color: "#888" }}>
+              KH: {rec.invoice_symbol as React.ReactNode}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: "Ngày HĐ",
@@ -288,8 +298,8 @@ const InvoiceVerifySection = ({
       title: "Nhà Cung Cấp",
       dataIndex: "supplier_name_raw",
       ellipsis: true,
-      render: (text: string, record: any) =>
-        text || record.suppliers?.name || "--",
+      render: (text: string, record: unknown) =>
+        (text as React.ReactNode) || ((record as Record<string, unknown>).suppliers as Record<string, unknown>)?.name as React.ReactNode || "--",
     },
     {
       title: "Tổng Tiền",
@@ -300,49 +310,52 @@ const InvoiceVerifySection = ({
     {
       title: "Hành động",
       align: "center" as const,
-      render: (_: any, record: any) => (
-        <Space>
-          <Tooltip
-            title={
-              record.status === "draft" ? "Đối chiếu ngay" : "Xem chi tiết"
-            }
-          >
-            <Button
-              type={record.status === "draft" ? "primary" : "default"}
-              size="small"
-              icon={
-                record.status === "draft" ? <ScanOutlined /> : <EyeOutlined />
+      render: (_: unknown, record: unknown) => {
+        const rec = record as Record<string, unknown>;
+        return (
+          <Space>
+            <Tooltip
+              title={
+                rec.status === "draft" ? "Đối chiếu ngay" : "Xem chi tiết"
               }
-              onClick={() =>
-                navigate(
-                  `/finance/invoices/verify/${record.id}?returnTo=${encodeURIComponent(`/purchase-orders/${poId}?tab=invoice`)}`
-                )
-              }
-            />
-          </Tooltip>
-          <Popconfirm
-            title="Gỡ liên kết hóa đơn khỏi đơn hàng?"
-            onConfirm={() => handleUnlink(record.id)}
-          >
-            <Tooltip title="Gỡ liên kết">
-              <Button icon={<DisconnectOutlined />} size="small" type="text" />
-            </Tooltip>
-          </Popconfirm>
-          <Popconfirm
-            title="Xóa hóa đơn này?"
-            onConfirm={() => handleDelete(record.id)}
-          >
-            <Tooltip title="Xóa hóa đơn">
+            >
               <Button
-                danger
-                icon={<DeleteOutlined />}
+                type={rec.status === "draft" ? "primary" : "default"}
                 size="small"
-                type="text"
+                icon={
+                  rec.status === "draft" ? <ScanOutlined /> : <EyeOutlined />
+                }
+                onClick={() =>
+                  navigate(
+                    `/finance/invoices/verify/${rec.id}?returnTo=${encodeURIComponent(`/purchase-orders/${poId}?tab=invoice`)}`
+                  )
+                }
               />
             </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
+            <Popconfirm
+              title="Gỡ liên kết hóa đơn khỏi đơn hàng?"
+              onConfirm={() => handleUnlink(rec.id as number)}
+            >
+              <Tooltip title="Gỡ liên kết">
+                <Button icon={<DisconnectOutlined />} size="small" type="text" />
+              </Tooltip>
+            </Popconfirm>
+            <Popconfirm
+              title="Xóa hóa đơn này?"
+              onConfirm={() => handleDelete(rec.id as number)}
+            >
+              <Tooltip title="Xóa hóa đơn">
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  size="small"
+                  type="text"
+                />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -352,10 +365,10 @@ const InvoiceVerifySection = ({
       dataIndex: "status",
       width: 140,
       render: (status: string) => {
-        const s = statusMap[status] || { color: "default", text: status };
+        const s = (statusMap[status] || { color: "default", text: status }) as Record<string, unknown>;
         return (
-          <Tag icon={s.icon} color={s.color}>
-            {s.text}
+          <Tag icon={s.icon as React.ReactNode} color={s.color as string}>
+            {s.text as React.ReactNode}
           </Tag>
         );
       },
@@ -363,14 +376,17 @@ const InvoiceVerifySection = ({
     {
       title: "Số Hóa Đơn",
       dataIndex: "invoice_number",
-      render: (text: string, record: any) => (
-        <div>
-          <Text strong>{text || "(Chưa có số)"}</Text>
-          <div style={{ fontSize: 12, color: "#888" }}>
-            KH: {record.invoice_symbol}
+      render: (text: string, record: unknown) => {
+        const rec = record as Record<string, unknown>;
+        return (
+          <div>
+            <Text strong>{text || "(Chưa có số)"}</Text>
+            <div style={{ fontSize: 12, color: "#888" }}>
+              KH: {rec.invoice_symbol as React.ReactNode}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: "Ngày HĐ",
@@ -381,8 +397,8 @@ const InvoiceVerifySection = ({
       title: "Nhà Cung Cấp",
       dataIndex: "supplier_name_raw",
       ellipsis: true,
-      render: (text: string, record: any) =>
-        text || record.suppliers?.name || "--",
+      render: (text: string, record: unknown) =>
+        (text as React.ReactNode) || ((record as Record<string, unknown>).suppliers as Record<string, unknown>)?.name as React.ReactNode || "--",
     },
     {
       title: "Tổng Tiền",
@@ -394,15 +410,20 @@ const InvoiceVerifySection = ({
       title: "Hành động",
       align: "center" as const,
       width: 100,
-      render: (_: any, record: any) => (
-        <Button
-          type="primary"
-          size="small"
-          onClick={() => handleLinkInvoice(record.id, record.total_amount_post_tax || 0)}
-        >
-          Liên kết
-        </Button>
-      ),
+      render: (_: unknown, record: unknown) => {
+        const rec = record as Record<string, unknown>;
+        return (
+          <Button
+            type="primary"
+            size="small"
+            onClick={() =>
+              handleLinkInvoice(rec.id as number, (rec.total_amount_post_tax as number) || 0)
+            }
+          >
+            Liên kết
+          </Button>
+        );
+      },
     },
   ];
 
@@ -410,7 +431,11 @@ const InvoiceVerifySection = ({
     <div>
       <Row gutter={12} style={{ marginBottom: 12 }} align="stretch">
         <Col span={12} style={{ display: "flex" }}>
-          <Card bordered={false} styles={{ body: { padding: "12px 16px" } }} style={{ flex: 1 }}>
+          <Card
+            bordered={false}
+            styles={{ body: { padding: "12px 16px" } }}
+            style={{ flex: 1 }}
+          >
             <Statistic
               title="Hóa đơn chờ đối chiếu"
               value={stats.pending}
@@ -420,7 +445,11 @@ const InvoiceVerifySection = ({
           </Card>
         </Col>
         <Col span={12} style={{ display: "flex" }}>
-          <Card bordered={false} styles={{ body: { padding: "12px 16px" } }} style={{ flex: 1 }}>
+          <Card
+            bordered={false}
+            styles={{ body: { padding: "12px 16px" } }}
+            style={{ flex: 1 }}
+          >
             <Statistic
               title="Tổng tiền hóa đơn"
               value={stats.amount}
@@ -487,7 +516,7 @@ const InvoiceVerifySection = ({
                 prefix={<SearchOutlined />}
                 placeholder="Tìm số hóa đơn, NCC..."
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setFilters({ ...filters, search: e.target.value })
+                  setFilters({ ...(filters as Record<string, unknown>), search: e.target.value })
                 }
                 allowClear
               />
@@ -497,7 +526,7 @@ const InvoiceVerifySection = ({
                 placeholder="Trạng thái"
                 allowClear
                 style={{ width: "100%" }}
-                onChange={(val) => setFilters({ ...filters, status: val })}
+                onChange={(val) => setFilters({ ...(filters as Record<string, unknown>), status: val })}
               >
                 <Select.Option value="draft">Chờ đối chiếu</Select.Option>
                 <Select.Option value="verified">Đã nhập kho</Select.Option>
@@ -508,11 +537,15 @@ const InvoiceVerifySection = ({
                 <Button icon={<SyncOutlined />} onClick={fetchData}>
                   Làm mới
                 </Button>
-                {onOpenCreateInvoice && (
-                  <Button type="primary" icon={<FileTextOutlined />} onClick={onOpenCreateInvoice}>
+                {onOpenCreateInvoice ? (
+                  <Button
+                    type="primary"
+                    icon={<FileTextOutlined />}
+                    onClick={onOpenCreateInvoice}
+                  >
                     Tạo Hóa Đơn Mới
                   </Button>
-                )}
+                ) : null}
               </Space>
             </Col>
           </Row>
@@ -557,7 +590,7 @@ const InvoiceVerifySection = ({
                 placeholder="Tìm số hóa đơn, NCC..."
                 allowClear
                 onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                  const newFilters = { ...linkFilters, search: e.target.value };
+                  const newFilters = { ...(linkFilters as Record<string, unknown>), search: e.target.value };
                   setLinkFilters(newFilters);
                   fetchUnlinkedInvoices(newFilters);
                 }}
@@ -569,7 +602,7 @@ const InvoiceVerifySection = ({
                 allowClear
                 style={{ width: "100%" }}
                 onChange={(val: string) => {
-                  const newFilters = { ...linkFilters, status: val };
+                  const newFilters = { ...(linkFilters as Record<string, unknown>), status: val };
                   setLinkFilters(newFilters);
                   fetchUnlinkedInvoices(newFilters);
                 }}
@@ -581,11 +614,12 @@ const InvoiceVerifySection = ({
             <Col span={7}>
               <RangePicker
                 style={{ width: "100%" }}
-                onChange={(dates: any) => {
+                onChange={(dates: unknown) => {
+                  const datesArr = dates as unknown[];
                   const newFilters = {
-                    ...linkFilters,
-                    dateFrom: dates?.[0]?.toISOString(),
-                    dateTo: dates?.[1]?.toISOString(),
+                    ...(linkFilters as Record<string, unknown>),
+                    dateFrom: datesArr?.[0] && (datesArr[0] as { toISOString: () => string }).toISOString(),
+                    dateTo: datesArr?.[1] && (datesArr[1] as { toISOString: () => string }).toISOString(),
                   };
                   setLinkFilters(newFilters);
                   fetchUnlinkedInvoices(newFilters);
@@ -595,7 +629,7 @@ const InvoiceVerifySection = ({
             <Col span={4} style={{ textAlign: "right" }}>
               <Button
                 icon={<SyncOutlined />}
-                onClick={() => fetchUnlinkedInvoices(linkFilters)}
+                onClick={() => fetchUnlinkedInvoices(linkFilters as Record<string, unknown>)}
               >
                 Làm mới
               </Button>

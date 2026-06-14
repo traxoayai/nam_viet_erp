@@ -22,9 +22,10 @@ export const useAssetStore = create<AssetStoreState>((set, get) => ({
     }
   },
 
-  fetchAssets: async (newFilters: any) => {
+  fetchAssets: async (newFilters: unknown) => {
     // Merge filter mới vào filter cũ
-    const filters = { ...get().filters, ...newFilters };
+    const newF = newFilters as Record<string, unknown>;
+    const filters = { ...get().filters, ...newF };
     set({ loading: true, filters: filters }); // Cập nhật filters mới
     try {
       const { data, totalCount } = await service.fetchAssets(filters); // Gửi filter đã merge
@@ -40,7 +41,10 @@ export const useAssetStore = create<AssetStoreState>((set, get) => ({
     set({ loadingDetails: true, currentAssetDetails: null });
     try {
       const data = await service.fetchAssetDetails(id);
-      set({ currentAssetDetails: data, loadingDetails: false });
+      set({
+        currentAssetDetails: (data as unknown) || null,
+        loadingDetails: false
+      });
     } catch (error) {
       console.error("Lỗi tải chi tiết tài sản:", error);
       set({ loadingDetails: false });

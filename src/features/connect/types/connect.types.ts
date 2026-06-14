@@ -44,5 +44,5 @@ export interface CreatePostPayload {
   p_is_anonymous?: boolean;
   p_must_confirm?: boolean;
   p_reward_points?: number;
-  p_attachments?: any[];
+  p_attachments?: unknown[];
 }

@@ -1,4 +1,3 @@
-import { Users, Plus, Clock } from "lucide-react";
 import { UserOutlined } from "@ant-design/icons";
 import {
   Layout,
@@ -12,9 +11,13 @@ import {
   Empty,
   Input,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import React, { useState, useEffect, useCallback } from "react";
 import dayjs from "dayjs";
+import { Users, Plus, Clock } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+
+import CreatePortalUserModal from "./CreatePortalUserModal";
+
+import type { ColumnsType } from "antd/es/table";
 
 import {
   fetchPortalUsers,
@@ -22,7 +25,6 @@ import {
   togglePortalUserStatus,
   type PortalUserRow,
 } from "@/features/sales/api/portalUserService";
-import CreatePortalUserModal from "./CreatePortalUserModal";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -49,7 +51,7 @@ const PortalUsersPage: React.FC = () => {
         setLoading(false);
       }
     },
-    [search, antMessage],
+    [search, antMessage]
   );
 
   useEffect(() => {
@@ -69,7 +71,7 @@ const PortalUsersPage: React.FC = () => {
       antMessage.success(
         newStatus === "active"
           ? `Đã kích hoạt ${record.display_name ?? record.email}`
-          : `Đã vô hiệu hóa ${record.display_name ?? record.email}`,
+          : `Đã vô hiệu hóa ${record.display_name ?? record.email}`
       );
       loadData();
     } catch (err: unknown) {
@@ -87,7 +89,7 @@ const PortalUsersPage: React.FC = () => {
       antMessage.success(
         result.action === "invite"
           ? `Đã gửi lại email mời cho ${record.email}`
-          : `Đã gửi email đặt lại mật khẩu cho ${record.email}`,
+          : `Đã gửi email đặt lại mật khẩu cho ${record.email}`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -133,9 +135,7 @@ const PortalUsersPage: React.FC = () => {
       key: "role",
       width: 100,
       render: (role: string) => (
-        <Tag color={role === "owner" ? "blue" : "default"}>
-          {role}
-        </Tag>
+        <Tag color={role === "owner" ? "blue" : "default"}>{role}</Tag>
       ),
     },
     {
@@ -144,7 +144,8 @@ const PortalUsersPage: React.FC = () => {
       width: 140,
       render: (_: unknown, record: PortalUserRow) => {
         if (record.is_banned) return <Tag color="volcano">Bị khoá</Tag>;
-        if (record.status === "active") return <Tag color="green">Hoạt động</Tag>;
+        if (record.status === "active")
+          return <Tag color="green">Hoạt động</Tag>;
         return <Tag color="red">Vô hiệu</Tag>;
       },
     },
@@ -213,9 +214,7 @@ const PortalUsersPage: React.FC = () => {
             </div>
             Quản lý Portal Users
           </Title>
-          <Text type="secondary">
-            Quản lý tài khoản người dùng B2B Portal
-          </Text>
+          <Text type="secondary">Quản lý tài khoản người dùng B2B Portal</Text>
         </div>
         <Space>
           <Input.Search
@@ -245,9 +244,7 @@ const PortalUsersPage: React.FC = () => {
           rowKey="id"
           pagination={{ pageSize: 15 }}
           locale={{
-            emptyText: (
-              <Empty description="Không có portal user nào" />
-            ),
+            emptyText: <Empty description="Không có portal user nào" />,
           }}
           scroll={{ x: 1200 }}
         />

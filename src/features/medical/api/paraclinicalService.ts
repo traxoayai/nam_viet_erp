@@ -51,7 +51,7 @@ export const paraclinicalService = {
   // Gọi RPC đẩy kết quả
   async submitResult(payload: {
     request_id: number;
-    results_json?: any;
+    results_json?: unknown;
     imaging_result?: string;
     status: "draft" | "completed";
   }) {

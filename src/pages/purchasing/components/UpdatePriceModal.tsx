@@ -11,12 +11,12 @@ import {
 } from "antd";
 import React, { useEffect, useState } from "react";
 
-import { safeRpc } from "@/shared/lib/safeRpc";
-import { supabase } from "@/shared/lib/supabaseClient";
 import {
   resolveProductUnits,
   type ProductUnit,
 } from "@/pages/purchasing/utils/resolveProductUnits";
+import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 import { formatCurrency } from "@/shared/utils/format";
 
 const { Text } = Typography;

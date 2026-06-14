@@ -8,8 +8,7 @@ import { supabase } from "@/shared/lib/supabaseClient";
 
 export const purchaseOrderService = {
   // 1. Lấy danh sách PO
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy filters shape, refactor riêng PR
-  async getPOs(filters: any, page: number, pageSize: number) {
+  async getPOs(filters: unknown, page: number, pageSize: number) {
     const { data } = await safeRpc("get_purchase_orders_master", {
       p_page: page,
       p_page_size: pageSize,
@@ -40,8 +39,7 @@ export const purchaseOrderService = {
     delivery_method?: string;
     shipping_partner_id?: number;
     shipping_fee?: number;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy createPO items shape, refactor riêng PR
-    items: any[];
+    items: unknown[];
     status: "DRAFT" | "PENDING";
   }) {
     // Mapping tham số chuẩn xác 100% với RPC create_purchase_order
@@ -78,8 +76,7 @@ export const purchaseOrderService = {
   },
 
   // 4. Cập nhật Đơn Nháp (Update)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy updatePO shape, refactor riêng PR
-  async updatePO(id: number, payload: any, items: any[]) {
+  async updatePO(id: number, payload: unknown, items: unknown[]) {
     // [LOGIC] Combine Date + Time for p_expected_delivery_time
     let fullDateTime = null;
     if (payload.expected_delivery_date) {
@@ -223,8 +220,7 @@ export const purchaseOrderService = {
       if (!groups || groups.length === 0) return { groups: [], items: [] };
 
       // 2. Lấy danh sách Group IDs
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- supabase select * type loose
-      const groupIds = groups.map((g: any) => g.id);
+      const groupIds = groups.map((g: unknown) => g.id);
 
       // 3. Fetch Products theo Group IDs
       const { data: items, error: errItems } = await supabase
@@ -242,8 +238,7 @@ export const purchaseOrderService = {
   },
 
   // 10. Chốt nhập kho & Tính giá vốn (V34)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy itemsData shape, refactor riêng PR
-  async confirmPOFinancials(poId: number, itemsData: any[]) {
+  async confirmPOFinancials(poId: number, itemsData: unknown[]) {
     const { data } = await safeRpc("confirm_purchase_order_financials", {
       p_po_id: poId,
       p_items_data: itemsData,

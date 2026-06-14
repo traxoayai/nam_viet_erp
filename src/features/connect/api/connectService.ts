@@ -2,6 +2,7 @@
 import { ConnectPost, CreatePostPayload } from "../types/connect.types";
 
 import type { Database } from "@/shared/lib/database.types";
+
 import { safeRpc } from "@/shared/lib/safeRpc";
 import { supabase } from "@/shared/lib/supabaseClient";
 
@@ -16,7 +17,12 @@ export const connectService = {
     });
 
     // RPC trả về attachments dạng Json, cần map về obj nếu chưa đúng format
-    type PostRow = ConnectPost & { attachments: string | { name: string; url: string; type: string }[] | null };
+    type PostRow = ConnectPost & {
+      attachments:
+        | string
+        | { name: string; url: string; type: string }[]
+        | null;
+    };
     const rows = (data || []) as unknown as PostRow[];
     return rows.map((post) => ({
       ...post,
@@ -37,7 +43,8 @@ export const connectService = {
       p_is_anonymous: payload.p_is_anonymous,
       p_must_confirm: payload.p_must_confirm,
       p_reward_points: payload.p_reward_points,
-      p_attachments: payload.p_attachments as unknown as Database["public"]["Functions"]["create_connect_post"]["Args"]["p_attachments"],
+      p_attachments:
+        payload.p_attachments as unknown as Database["public"]["Functions"]["create_connect_post"]["Args"]["p_attachments"],
     });
   },
 

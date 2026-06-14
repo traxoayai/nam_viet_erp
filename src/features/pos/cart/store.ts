@@ -12,8 +12,7 @@ import {
 interface PosCartState {
   items: CartItem[];
   // Legacy: customer shape chưa chuẩn hoá (id, name, debt_amount, ...) → refactor riêng PR.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  customer: any | null;
+  customer: unknown | null;
   isInvoiceRequested: boolean; // Khách có yêu cầu xuất VAT không?
   selectedVoucher: PosVoucher | null;
 
@@ -21,11 +20,9 @@ interface PosCartState {
   addToCart: (product: PosProductSearchResult) => void;
   removeFromCart: (id: number) => void;
   updateQuantity: (id: number, qty: number) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- value type phụ thuộc field name, cần discriminated union
-  updateItemField: (id: number, field: keyof CartItem, value: any) => void;
+  updateItemField: (id: number, field: keyof CartItem, value: unknown) => void;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- xem note customer
-  setCustomer: (cust: any) => void;
+  setCustomer: (cust: unknown) => void;
   toggleInvoiceRequest: () => void; // Đổi tên hàm VAT
   applyVoucher: (voucher: PosVoucher | null) => void;
   clearCart: () => void;

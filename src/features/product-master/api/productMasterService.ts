@@ -25,7 +25,10 @@ export const productMasterService = {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        allData = [...allData, ...(data as unknown as ProductMasterExportItem[])];
+        allData = [
+          ...allData,
+          ...(data as unknown as ProductMasterExportItem[]),
+        ];
 
         // Nếu số lượng lấy về ít hơn limit -> Đã là trang cuối
         if (data.length < PAGE_SIZE) {

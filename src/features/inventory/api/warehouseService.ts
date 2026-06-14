@@ -40,7 +40,7 @@ export const getWarehouses = async (
 };
 
 // 2. CỖ MÁY API: TẠO MỚI
-export const addWarehouse = async (values: any) => {
+export const addWarehouse = async (values: unknown) => {
   const { error } = await supabase.from("warehouses").insert({
     name: values.name,
     code: values.code || null,
@@ -58,7 +58,7 @@ export const addWarehouse = async (values: any) => {
 };
 
 // 3. CỖ MÁY API: CẬP NHẬT
-export const updateWarehouse = async (id: number, values: any) => {
+export const updateWarehouse = async (id: number, values: unknown) => {
   const { error } = await supabase
     .from("warehouses")
     .update({

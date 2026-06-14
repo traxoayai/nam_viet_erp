@@ -14,13 +14,13 @@ import { printLabResult } from "@/shared/utils/printTemplates";
 const { Text } = Typography;
 
 interface Props {
-  request: any;
+  request: unknown;
   onComplete: () => void;
 }
 
 export const LabWorkspace = ({ request, onComplete }: Props) => {
   // Refs cho quản lý focus (Numpad UX)
-  const inputRefs = useRef<{ [key: string]: any }>({});
+  const inputRefs = useRef<{ [key: string]: unknown }>({});
 
   const [results, setResults] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,7 +32,7 @@ export const LabWorkspace = ({ request, onComplete }: Props) => {
   });
 
   // Hàm đánh giá KQ dựa trên cấu hình (Màu sắc Warning)
-  const evaluateResult = (val: string, conf: any) => {
+  const evaluateResult = (val: string, conf: unknown) => {
     if (!val) return null;
     if (conf.value_type === "quantitative") {
       const num = parseFloat(val);
@@ -77,7 +77,7 @@ export const LabWorkspace = ({ request, onComplete }: Props) => {
   };
 
   // Hàm xử lý Numpad Keydown (Enter / Up / Down / + / -)
-  const handleKeyDown = (e: any, index: number, conf: any) => {
+  const handleKeyDown = (e: unknown, index: number, conf: unknown) => {
     // Hỗ trợ nhập nhanh định tính
     if (conf.value_type === "qualitative") {
       if (e.key === "+" || e.key === "Add") {
@@ -164,7 +164,7 @@ export const LabWorkspace = ({ request, onComplete }: Props) => {
   };
 
   const handlePrint = () => {
-    const testsToPrint = config.map((c: any) => ({
+    const testsToPrint = config.map((c: unknown) => ({
       name: c.indicator_name,
       value: results[c.indicator_code] || "",
       unit: c.unit,
@@ -188,7 +188,7 @@ export const LabWorkspace = ({ request, onComplete }: Props) => {
     setIsSubmitting(true);
     try {
       // Build JSON
-      const tests = config.map((c: any) => ({
+      const tests = config.map((c: unknown) => ({
         indicator_code: c.indicator_code,
         indicator_name: c.indicator_name,
         value: results[c.indicator_code] || "",
@@ -208,14 +208,14 @@ export const LabWorkspace = ({ request, onComplete }: Props) => {
       } else {
         message.success("Đã lưu nháp!");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error(error.message || "Có lỗi xảy ra");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const evaluateResultText = (val: string, conf: any) => {
+  const evaluateResultText = (val: string, conf: unknown) => {
     if (!val) return "";
     if (conf.value_type === "quantitative") {
       const num = parseFloat(val);
@@ -236,12 +236,12 @@ export const LabWorkspace = ({ request, onComplete }: Props) => {
       dataIndex: "display_order",
       width: 60,
       align: "center" as const,
-      render: (_: any, __: any, index: number) => index + 1,
+      render: (_: unknown, __: unknown, index: number) => index + 1,
     },
     {
       title: "Tên xét nghiệm",
       dataIndex: "indicator_name",
-      render: (txt: string, r: any) => (
+      render: (txt: string, r: unknown) => (
         <div>
           <div className="font-bold text-gray-800">{txt}</div>
           <div className="text-xs text-blue-500">{r.indicator_code}</div>
@@ -252,7 +252,7 @@ export const LabWorkspace = ({ request, onComplete }: Props) => {
       title: "Kết quả",
       dataIndex: "result",
       width: 200,
-      render: (_: any, record: any, index: number) => {
+      render: (_: unknown, record: unknown, index: number) => {
         let colorClass = "";
         const ev = evaluateResultText(results[record.indicator_code], record);
         if (ev === "High" || ev === "Low" || ev === "Positive")
@@ -285,7 +285,7 @@ export const LabWorkspace = ({ request, onComplete }: Props) => {
       dataIndex: "eval",
       align: "center" as const,
       width: 120,
-      render: (_: any, record: any) =>
+      render: (_: unknown, record: unknown) =>
         evaluateResult(results[record.indicator_code], record),
     },
     {
@@ -293,7 +293,7 @@ export const LabWorkspace = ({ request, onComplete }: Props) => {
       dataIndex: "range",
       width: 150,
       align: "center" as const,
-      render: (_: any, r: any) => {
+      render: (_: unknown, r: unknown) => {
         if (r.value_type === "quantitative") {
           if (r.min_normal && r.max_normal)
             return `${r.min_normal} - ${r.max_normal}`;

@@ -25,32 +25,34 @@ export const ConnectList = () => {
     toggleLikeAction,
   } = useConnectStore();
 
-  const handleAction = (e: any, action: string, post: any) => {
+  const handleAction = (e: React.MouseEvent, action: string, post: unknown) => {
     e.stopPropagation();
+    const p = post as any;
 
     if (action === "delete") {
       Modal.confirm({
         title: "Xóa bài đăng?",
-        content: `Bạn có chắc muốn xóa "${post.title}" không? Hành động này không thể hoàn tác.`,
+        content: `Bạn có chắc muốn xóa "${p.title}" không? Hành động này không thể hoàn tác.`,
         okText: "Xóa ngay",
         okType: "danger",
         cancelText: "Hủy",
-        onOk: () => deletePost(post.id),
+        onOk: () => deletePost(p.id),
       });
     }
     if (action === "edit") {
-      setEditingPost(post);
+      setEditingPost(p);
     }
     if (action === "lock") {
-      const actionText = post.is_locked ? "Mở khóa" : "Khóa";
-      toggleLockPost(post).then(() =>
+      const actionText = p.is_locked ? "Mở khóa" : "Khóa";
+      toggleLockPost(p).then(() =>
         message.success(`Đã ${actionText} thành công!`)
       );
     }
   };
 
-  const StatusBadge = ({ post }: { post: any }) => {
-    const map: any = {
+  const StatusBadge = ({ post }: { post: unknown }) => {
+    const p = post as Record<string, unknown>;
+    const map: Record<string, { color: string; text: string }> = {
       high: {
         color: "text-red-700 bg-red-50 border-red-200",
         text: "Quan trọng",
@@ -68,8 +70,8 @@ export const ConnectList = () => {
         text: "Đã duyệt",
       },
     };
-    let statusKey = post.priority === "high" ? "high" : "normal";
-    if (post.category === "feedback") statusKey = post.status;
+    let statusKey = p.priority === "high" ? "high" : "normal";
+    if (p.category === "feedback") statusKey = p.status as string;
     const conf = map[statusKey] || map.normal;
     return (
       <span

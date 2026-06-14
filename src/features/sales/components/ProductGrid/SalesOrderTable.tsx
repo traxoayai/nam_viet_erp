@@ -20,7 +20,7 @@ const { Text } = Typography;
 interface Props {
   items: CartItem[];
   onAddItem: (product: ProductB2B) => void;
-  onUpdateItem: (key: string, field: keyof CartItem, value: any) => void;
+  onUpdateItem: (key: string, field: keyof CartItem, value: string | number | null | undefined) => void;
   onRemoveItem: (key: string) => void;
 }
 
@@ -35,12 +35,12 @@ export const SalesOrderTable = ({
       title: "STT",
       width: 50,
       align: "center" as const,
-      render: (_: any, __: any, index: number) => index + 1,
+      render: (_: unknown, __: unknown, index: number) => index + 1,
     },
     {
       title: "Sản phẩm",
       width: 350,
-      render: (_: any, r: CartItem) => (
+      render: (_: unknown, r: CartItem) => (
         <Space align="start">
           <Avatar
             shape="square"
@@ -71,7 +71,7 @@ export const SalesOrderTable = ({
     {
       title: "Tồn kho",
       width: 140,
-      render: (_: any, r: CartItem) => (
+      render: (_: unknown, r: CartItem) => (
         <StockStatusCell
           stock={r.stock_quantity}
           ordered={r.quantity}
@@ -82,7 +82,7 @@ export const SalesOrderTable = ({
     {
       title: "Số lượng",
       width: 100,
-      render: (_: any, r: CartItem) => (
+      render: (_: unknown, r: CartItem) => (
         <InputNumber
           min={1}
           value={r.quantity}
@@ -102,14 +102,14 @@ export const SalesOrderTable = ({
       title: "Thành tiền",
       align: "right" as const,
       width: 140,
-      render: (_: any, r: CartItem) => (
+      render: (_: unknown, r: CartItem) => (
         <Text strong>{r.total.toLocaleString()} ₫</Text>
       ),
     },
     {
       width: 50,
       align: "center" as const,
-      render: (_: any, r: CartItem) => (
+      render: (_: unknown, r: CartItem) => (
         <Button
           type="text"
           danger

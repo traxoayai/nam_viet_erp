@@ -2,11 +2,11 @@
 import { notification } from "antd";
 import React, { createContext, useEffect, useRef } from "react";
 
-import { supabase } from "@/shared/lib/supabaseClient"; // Đảm bảo đường dẫn đúng alias @
 import {
   useNotificationStore,
   AppNotification,
 } from "@/features/settings/stores/useNotificationStore";
+import { supabase } from "@/shared/lib/supabaseClient"; // Đảm bảo đường dẫn đúng alias @
 
 export const NotificationContext = createContext({});
 

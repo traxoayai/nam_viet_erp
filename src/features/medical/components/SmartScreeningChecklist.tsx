@@ -9,8 +9,8 @@ import {
 
 interface Props {
   age: number;
-  clinical: any;
-  onChange: (key: string, value: any) => void;
+  clinical: unknown;
+  onChange: (key: string, value: unknown) => void;
   isVaccinationFlow?: boolean;
 }
 
@@ -119,7 +119,7 @@ export const SmartScreeningChecklist: React.FC<Props> = ({
           <span className="font-bold text-purple-700 flex items-center gap-2">
             <Syringe size={16} /> Tiêm chủng
           </span>
-          <Badge status={vacResult.status as any} text={vacResult.text} />
+          <Badge status={vacResult.status as unknown} text={vacResult.text} />
         </div>
       ),
       children: (

@@ -1,8 +1,8 @@
 // src/features/product/stores/productStore.ts
 import { create } from "zustand";
 
-import { Warehouse } from "@/features/inventory/types/warehouse";
 import * as warehouseService from "@/features/inventory/api/warehouseService";
+import { Warehouse } from "@/features/inventory/types/warehouse";
 import * as productService from "@/features/product/api/productService";
 import {
   Product,
@@ -78,7 +78,7 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
       set({
         warehouses: warehousesResult.data as unknown as Warehouse[],
         suppliers: suppliersResult,
-        // products: productsResult as any, // REMOVED: Conflict with fetchProducts
+        // products: productsResult as unknown, // REMOVED: Conflict with fetchProducts
       });
     } catch (error) {
       console.error("Lỗi khi tải dữ liệu chung:", error);
@@ -90,14 +90,14 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
   fetchClassifications: async () => {
     try {
       const [catData, manData] = await Promise.all([
-        safeRpc("get_distinct_categories").then(r => r.data),
-        safeRpc("get_distinct_manufacturers").then(r => r.data),
+        safeRpc("get_distinct_categories").then((r) => r.data),
+        safeRpc("get_distinct_manufacturers").then((r) => r.data),
       ]);
 
       set({
-        uniqueCategories: (catData || []).map((i: any) => i.category_name),
+        uniqueCategories: (catData || []).map((i: unknown) => i.category_name),
         uniqueManufacturers: (manData || []).map(
-          (i: any) => i.manufacturer_name
+          (i: unknown) => i.manufacturer_name
         ),
       });
     } catch (error) {
@@ -119,14 +119,14 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
 
   // --- HÀNH ĐỘNG CẬP NHẬT DỮ LIỆU ---
 
-  updateProduct: async (id: number, data: any) => {
+  updateProduct: async (id: number, data: unknown) => {
     set({ loading: true });
     await productService.updateProduct(id, data);
     await get().fetchProducts();
     set({ loading: false });
   },
 
-  addProduct: async (data: any) => {
+  addProduct: async (data: unknown) => {
     set({ loading: true });
     await productService.addProduct(data);
     await get().fetchProducts();
@@ -151,7 +151,9 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
     set({ loading: true });
     try {
       // 1. Check Dependencies
-      const dependencies = await productService.checkDependencies(ids) as unknown[];
+      const dependencies = (await productService.checkDependencies(
+        ids
+      )) as unknown[];
 
       if (dependencies && dependencies.length > 0) {
         set({ loading: false });
@@ -181,7 +183,9 @@ export const useProductStore = create<ProductStoreState>((set, get) => ({
       // If status === 'inactive', check dependencies first.
 
       if (status === "inactive") {
-        const dependencies = await productService.checkDependencies(ids) as unknown[];
+        const dependencies = (await productService.checkDependencies(
+          ids
+        )) as unknown[];
         if (dependencies && dependencies.length > 0) {
           set({ loading: false });
           return { success: false, dependencies };

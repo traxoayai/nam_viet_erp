@@ -60,7 +60,7 @@ export const aiService = {
       }
 
       return data as AiExtractedData;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Client Scan Exception:", err);
       throw new Error(err.message || "Lỗi khi xử lý tập tin.");
     }

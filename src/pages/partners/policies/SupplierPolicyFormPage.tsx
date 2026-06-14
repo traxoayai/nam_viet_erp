@@ -64,7 +64,7 @@ const SupplierPolicyFormPage: React.FC = () => {
       ];
 
       form.setFieldsValue(mapped);
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error("Lỗi tải dữ liệu: " + error.message);
       navigate("/partners/policies");
     } finally {
@@ -87,7 +87,7 @@ const SupplierPolicyFormPage: React.FC = () => {
         message.success("Tạo mới thành công!");
       }
       navigate("/partners/policies");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       message.error("Lỗi lưu dữ liệu: " + error.message);
     } finally {
@@ -96,7 +96,7 @@ const SupplierPolicyFormPage: React.FC = () => {
   };
 
   // Handle Product Selection from Modal
-  const handleProductSelect = (products: any[]) => {
+  const handleProductSelect = (products: unknown[]) => {
     if (activeGroupIndex === null) return;
 
     const groups = form.getFieldValue("groups");

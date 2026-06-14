@@ -24,6 +24,18 @@ export default [
 
   // Cấu hình cho các file TypeScript
   ...tseslint.configs.recommended,
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
 
   // Cấu hình chuyên biệt cho React
   {

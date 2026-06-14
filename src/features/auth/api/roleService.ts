@@ -1,7 +1,7 @@
 // src/services/roleService.ts
 import { Permission, Role } from "@/features/auth/types/role";
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 // 1. Tải danh sách Vai trò
 export const fetchRoles = async (): Promise<Role[]> => {

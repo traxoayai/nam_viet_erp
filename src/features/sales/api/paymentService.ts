@@ -26,7 +26,7 @@ export const paymentService = {
   async recordManualPayment(
     orderId: string,
     amount?: number,
-    note?: string,
+    note?: string
   ): Promise<ManualPaymentResult> {
     const { data, error } = await safeRpc("record_manual_payment_received", {
       p_order_id: orderId,

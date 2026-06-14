@@ -1,4 +1,5 @@
 import { describe as _describe, it, expect } from "vitest";
+
 import { adminClient, isProduction } from "../helpers/supabase";
 
 // Skip mutation tests on production to avoid side effects
@@ -222,7 +223,7 @@ describe("Inventory Mutation RPCs", () => {
     });
     expectValidError(error);
     if (!error) {
-      expect((data as any)?.status).toBe("error");
+      expect((data as unknown)?.status).toBe("error");
     }
   });
 
@@ -234,7 +235,7 @@ describe("Inventory Mutation RPCs", () => {
     });
     expectValidError(error);
     if (!error) {
-      expect((data as any)?.status).toBe("error");
+      expect((data as unknown)?.status).toBe("error");
     }
   });
 

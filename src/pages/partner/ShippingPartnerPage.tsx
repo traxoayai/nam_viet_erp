@@ -188,7 +188,7 @@ const ShippingPartnerPage: React.FC = () => {
         speed_hours: 24, // Mặc định 24h
         base_fee: 0, // Mặc định 0đ
       };
-      const rulesData = (values.deliveryRules || []).map((r: any) => ({
+      const rulesData = (values.deliveryRules || []).map((r: unknown) => ({
         zone_name: r.zone_name,
         speed_hours: r.speed_hours,
         fee: r.fee,
@@ -207,7 +207,7 @@ const ShippingPartnerPage: React.FC = () => {
           key: msgKey,
         });
       } // Store đã tự đóng Modal
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi Save:", error);
       antMessage.error({
         content: `Lưu thất bại: ${error.message}`,
@@ -223,7 +223,7 @@ const ShippingPartnerPage: React.FC = () => {
         try {
           await deletePartner(record.id);
           antMessage.success("Đã cập nhật trạng thái.");
-        } catch (error: any) {
+        } catch (error: unknown) {
           antMessage.error(error.message);
         }
       },
@@ -233,7 +233,7 @@ const ShippingPartnerPage: React.FC = () => {
     try {
       await reactivatePartner(record.id);
       antMessage.success(`Đã hợp tác trở lại với "${record.name}".`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       antMessage.error(error.message);
     }
   }; // --- GIAO DIỆN (Views) ---
@@ -263,7 +263,7 @@ const ShippingPartnerPage: React.FC = () => {
         text: partnerTypeMap[key as ShippingPartnerType].text,
         value: key,
       })),
-      onFilter: (value: any, record) => record.type === value,
+      onFilter: (value: unknown, record) => record.type === value,
     },
     {
       title: "Giờ Cut-off",
@@ -300,7 +300,7 @@ const ShippingPartnerPage: React.FC = () => {
         text: statusMap[key as ShippingPartnerStatus].text,
         value: key,
       })),
-      onFilter: (value: any, record) => record.status === value,
+      onFilter: (value: unknown, record) => record.status === value,
     },
     {
       title: "Hành động",
@@ -308,7 +308,7 @@ const ShippingPartnerPage: React.FC = () => {
       width: 120,
       align: "center",
       fixed: "right",
-      render: (_: any, record: ShippingPartnerListRecord) => (
+      render: (_: unknown, record: ShippingPartnerListRecord) => (
         <Space size="small">
           <Access permission={PERMISSIONS.PARTNER.SHIPPING.EDIT}>
             <Tooltip title="Sửa">

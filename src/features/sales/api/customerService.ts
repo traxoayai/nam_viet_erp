@@ -15,7 +15,7 @@ const CCCD_BUCKET = "customer_identity";
  * 1. Tải danh sách Khách hàng B2C (Phân trang & Tìm kiếm 2 chiều)
  */
 export const fetchCustomers = async (
-  filters: any,
+  filters: unknown,
   page: number,
   pageSize: number,
   sortByDebt: "asc" | "desc" | null = null // [NEW] Thêm tham số
@@ -36,7 +36,7 @@ export const fetchCustomers = async (
 /**
  * 2. Tải chi tiết 1 Khách hàng (Form Sửa)
  */
-export const fetchCustomerDetails = async (id: number): Promise<any> => {
+export const fetchCustomerDetails = async (id: number): Promise<unknown> => {
   const { data } = await safeRpc("get_customer_b2c_details", {
     p_id: id,
   });
@@ -47,8 +47,8 @@ export const fetchCustomerDetails = async (id: number): Promise<any> => {
  * 3. Tạo Khách hàng mới
  */
 export const createCustomer = async (
-  customerData: any,
-  guardians: any[]
+  customerData: unknown,
+  guardians: unknown[]
 ): Promise<number | null> => {
   const { data } = await safeRpc("create_customer_b2c", {
     p_customer_data: customerData,
@@ -62,8 +62,8 @@ export const createCustomer = async (
  */
 export const updateCustomer = async (
   id: number,
-  customerData: any,
-  guardians: any[]
+  customerData: unknown,
+  guardians: unknown[]
 ): Promise<boolean> => {
   await safeRpc("update_customer_b2c", {
     p_id: id,
@@ -129,7 +129,7 @@ export const importCustomers = async (file: File): Promise<number> => {
       const worksheet = workbook.Sheets[sheetName];
 
       // Đọc file Excel (Ô trống -> null)
-      const rawData: any[] = XLSX.utils.sheet_to_json(worksheet, {
+      const rawData: unknown[] = XLSX.utils.sheet_to_json(worksheet, {
         defval: null,
       });
 
@@ -141,7 +141,7 @@ export const importCustomers = async (file: File): Promise<number> => {
       const cleanedArray = rawData.map((row) => {
         // A. KHỞI TẠO OBJECT CHUẨN VỚI GIÁ TRỊ NULL (Reset toàn bộ)
         // Đảm bảo dù Excel thiếu cột thì DB vẫn nhận được null
-        const newRow: any = {
+        const newRow: unknown = {
           type: null,
           customer_code: null,
           name: null,
@@ -234,8 +234,8 @@ export const importCustomers = async (file: File): Promise<number> => {
       // // --- [CHÈN LOG VÀO ĐÂY] ---
       // console.log("=== DEBUG IMPORT DATA ===");
       // console.log("Toàn bộ dữ liệu gửi đi:", validArray);
-      // console.log("Dòng CaNhan:", validArray.find((x: any) => x.type === 'CaNhan'));
-      // console.log("Dòng ToChuc:", validArray.find((x: any) => x.type === 'ToChuc'));
+      // console.log("Dòng CaNhan:", validArray.find((x: unknown) => x.type === 'CaNhan'));
+      // console.log("Dòng ToChuc:", validArray.find((x: unknown) => x.type === 'ToChuc'));
       // // --------------------------
 
       console.log("Data Sent to DB:", validArray);
@@ -255,7 +255,7 @@ export const importCustomers = async (file: File): Promise<number> => {
  * 6b. Xuất Excel (Lấy tất cả)
  */
 export const exportCustomers = async (
-  filters: any
+  filters: unknown
 ): Promise<CustomerListRecord[]> => {
   const { data } = await safeRpc("export_customers_b2c_list", {
     search_query: filters.search_query || null,

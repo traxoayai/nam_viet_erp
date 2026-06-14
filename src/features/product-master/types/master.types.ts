@@ -25,7 +25,7 @@ export interface ProductMasterImportRow {
 
   // Dynamic Settings (FE tự parse các cột Min/Max Warehouse thành mảng này)
   // Lưu ý: Key của object này sẽ là dynamic khi đọc Excel (e.g. "Kho [1] - Min")
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ProductMasterExportItem {

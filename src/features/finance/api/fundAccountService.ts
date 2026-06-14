@@ -24,32 +24,34 @@ export const fetchFundAccounts = async () => {
 };
 
 // 2. Thêm Tài khoản/Quỹ
-export const addFundAccount = async (values: any) => {
+export const addFundAccount = async (values: Record<string, unknown>) => {
+  const type = values.type as "cash" | "bank";
   const { error } = await supabase.from("fund_accounts").insert({
-    name: values.name,
-    type: values.type,
-    location: values.type === "cash" ? values.location : null,
-    account_number: values.type === "bank" ? values.accountNumber : null,
-    bank_id: values.type === "bank" ? values.bankId : null,
-    initial_balance: values.initialBalance || 0,
-    status: values.status,
+    name: values.name as string,
+    type: type,
+    location: type === "cash" ? (values.location as string | null) : null,
+    account_number: type === "bank" ? (values.accountNumber as string | null) : null,
+    bank_id: type === "bank" ? (values.bankId as number | null) : null,
+    initial_balance: (values.initialBalance as number) || 0,
+    status: values.status as "active" | "locked",
   });
   if (error) throw error;
   return true;
 };
 
 // 3. Cập nhật Tài khoản/Quỹ
-export const updateFundAccount = async (id: number, values: any) => {
+export const updateFundAccount = async (id: number, values: Record<string, unknown>) => {
+  const type = values.type as "cash" | "bank";
   const { error } = await supabase
     .from("fund_accounts")
     .update({
-      name: values.name,
-      type: values.type,
-      location: values.type === "cash" ? values.location : null,
-      account_number: values.type === "bank" ? values.accountNumber : null,
-      bank_id: values.type === "bank" ? values.bankId : null,
+      name: values.name as string,
+      type: type,
+      location: type === "cash" ? (values.location as string | null) : null,
+      account_number: type === "bank" ? (values.accountNumber as string | null) : null,
+      bank_id: type === "bank" ? (values.bankId as number | null) : null,
       // Không cho cập nhật số dư ban đầu
-      status: values.status,
+      status: values.status as "active" | "locked",
     })
     .eq("id", id);
   if (error) throw error;

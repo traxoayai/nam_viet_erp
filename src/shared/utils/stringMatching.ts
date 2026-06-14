@@ -33,16 +33,25 @@ export const calculateSimilarity = (s1: string, s2: string): number => {
 };
 
 // 3. Hàm Tìm Sản phẩm khớp nhất trong danh sách
+interface Product {
+  name: unknown;
+  [key: string]: unknown;
+}
+
 export const findBestMatch = (
   excelName: string,
-  systemProducts: any[],
+  systemProducts: unknown[],
   threshold = 0.3 // Ngưỡng tối thiểu để coi là có liên quan
 ) => {
-  let bestMatch = null;
+  let bestMatch: Product | null = null;
   let highestScore = 0;
 
-  for (const product of systemProducts) {
-    const score = calculateSimilarity(excelName, product.name);
+  for (const productRaw of systemProducts) {
+    const product = productRaw as Product;
+    const score = calculateSimilarity(
+      excelName,
+      String(product?.name || "")
+    );
 
     // Nếu điểm cao hơn kỷ lục hiện tại -> Ghi nhận
     if (score > highestScore) {

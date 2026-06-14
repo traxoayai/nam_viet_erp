@@ -45,7 +45,7 @@ export const useWarehouseTools = (onBarcodeScanned: (code: string) => void) => {
       );
     }
 
-    const SpeechRecognition = (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = (window as unknown).webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     recognition.lang = "vi-VN";
     recognition.continuous = false;
@@ -53,7 +53,7 @@ export const useWarehouseTools = (onBarcodeScanned: (code: string) => void) => {
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: unknown) => {
       const transcript = event.results[0][0].transcript;
       message.info(`Nghe được: "${transcript}"`);
       onResult(transcript);
@@ -77,7 +77,7 @@ export const useWarehouseTools = (onBarcodeScanned: (code: string) => void) => {
         );
       }
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error("Lỗi đọc ảnh: " + error.message);
       return null;
     } finally {

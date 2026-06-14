@@ -35,10 +35,10 @@ export const Access: React.FC<AccessProps> = ({
             display: "inline-block",
           }}
         >
-          {React.cloneElement(
-            children as React.ReactElement,
-            { disabled: true, onClick: undefined } as any
-          )}
+          {React.cloneElement(children as React.ReactElement<any>, {
+            disabled: true,
+            onClick: undefined,
+          })}
         </span>
       </Tooltip>
     );

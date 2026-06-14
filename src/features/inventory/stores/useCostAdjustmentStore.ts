@@ -193,7 +193,7 @@ export const useCostAdjustmentStore = create<CostAdjustmentState>(
         get().clearPending();
         await Promise.all([get().fetchGrid(), get().fetchStats()]);
         return true;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[CostAdjustment] apply failed", err);
         message.error(err?.message || "Không lưu được thay đổi");
         return false;

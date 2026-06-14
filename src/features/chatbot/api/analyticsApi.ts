@@ -40,7 +40,7 @@ export async function fetchStatsOverview(
   const { data, error } = await safeRpc("chat_stats_overview", {
     p_from: f.from,
     p_to: f.to,
-    p_platform: (f.platform ?? null) as any,
+    p_platform: f.platform ?? undefined,
   });
   if (error) throw error;
   return data as unknown as ChatStatsOverview;
@@ -52,7 +52,7 @@ export async function fetchSessionsPerDay(
   const { data, error } = await safeRpc("chat_sessions_per_day", {
     p_from: f.from,
     p_to: f.to,
-    p_platform: (f.platform ?? null) as any,
+    p_platform: f.platform ?? undefined,
   });
   if (error) throw error;
   return (data ?? []) as unknown as SessionPerDay[];

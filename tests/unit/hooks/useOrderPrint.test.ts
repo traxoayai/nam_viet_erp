@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockSafeRpc = vi.fn();
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 // Mock antd
@@ -36,7 +36,7 @@ vi.mock("@/shared/utils/printUtils", () => ({
 const mockGetOrderDetail = vi.fn();
 vi.mock("@/features/sales/api/b2bService", () => ({
   b2bService: {
-    getOrderDetail: (...args: any[]) => mockGetOrderDetail(...args),
+    getOrderDetail: (...args: unknown[]) => mockGetOrderDetail(...args),
   },
 }));
 
@@ -108,7 +108,7 @@ describe("useOrderPrint - safeRpc calls", () => {
     });
 
     const call = mockSafeRpc.mock.calls.find(
-      (c: any[]) => c[0] === "get_customer_debt_info"
+      (c: unknown[]) => c[0] === "get_customer_debt_info"
     );
     expect(call).toBeDefined();
     expect(call![1].p_customer_id).toBe(55); // Should be Number, not string
@@ -208,8 +208,9 @@ describe("useOrderPrint - safeRpc calls", () => {
         payment_status: "partial",
       });
 
-      const callArgs = (generateB2BOrderHTML as ReturnType<typeof vi.fn>).mock
-        .calls.at(-1)?.[0];
+      const callArgs = (
+        generateB2BOrderHTML as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)?.[0];
       expect(callArgs.old_debt).toBe(serverDebt - thisOrderUnpaid); // 800_000
       expect(callArgs.total_payable_display).toBe(serverDebt); // 1_000_000
     }
@@ -254,8 +255,9 @@ describe("useOrderPrint - safeRpc calls", () => {
         payment_status: "unpaid",
       });
 
-      const callArgs = (generateB2BOrderHTML as ReturnType<typeof vi.fn>).mock
-        .calls.at(-1)?.[0];
+      const callArgs = (
+        generateB2BOrderHTML as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)?.[0];
       expect(callArgs.old_debt).toBe(serverDebt); // 500_000
       expect(callArgs.total_payable_display).toBe(serverDebt + thisOrderUnpaid); // 700_000
     }

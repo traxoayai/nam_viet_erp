@@ -3,6 +3,7 @@
  * TDD: Pure function tests without React dependency
  */
 import { describe, it, expect } from "vitest";
+
 import {
   calculateLineSubtotal,
   calculateLineAfterDiscount,

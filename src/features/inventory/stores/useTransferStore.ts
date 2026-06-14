@@ -35,13 +35,15 @@ interface TransferState {
   cancelRequest: (id: number, reason: string) => Promise<boolean>;
   deleteRequest: (id: number) => Promise<boolean>;
 
-  shippingDraft: Record<number, any[]>; // itemId -> picked batches
-  availableBatchesMap: Record<number, any[]>; // productId -> all available batches
+  shippingDraft: Record<number, Array<Record<string, unknown>>>; // itemId -> picked batches
+  availableBatchesMap: Record<number, Array<Record<string, unknown>>>; // productId -> all available batches
   scannedCode: string;
   isAllocationDone: boolean;
 
-  loadAvailableBatches: (productId: number) => Promise<any[]>;
-  setShippingDraft: (itemId: number, batches: any[]) => void;
+  loadAvailableBatches: (
+    productId: number
+  ) => Promise<Array<Record<string, unknown>>>;
+  setShippingDraft: (itemId: number, batches: unknown[]) => void;
   initTransferOperation: (id: number) => Promise<void>;
   handleBarcodeScan: (code: string) => void;
   updateDraftItem: (itemId: number, batchId: number, quantity: number) => void;
@@ -52,7 +54,7 @@ interface TransferState {
     productId: number,
     warehouseId: number
   ) => Promise<number>;
-  createTransfer: (payload: any) => Promise<boolean>;
+  createTransfer: (payload: unknown) => Promise<boolean>;
   confirmTransferInbound: (overrideWarehouseId?: number) => Promise<boolean>;
 }
 
@@ -71,9 +73,11 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     try {
       const { data, total } = await transferService.fetchTransfers(params);
       set({ transfers: data, totalCount: total });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching transfers:", error);
-      message.error(error.message || "Lỗi tải danh sách điều chuyển");
+      const errorMsg =
+        error instanceof Error ? error.message : "Lỗi không xác định";
+      message.error(errorMsg || "Lỗi tải danh sách điều chuyển");
     } finally {
       set({ loading: false });
     }
@@ -86,9 +90,11 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       message.success("Đã tạo phiếu yêu cầu điều chuyển thành công!");
       // Refresh list if needed (typically done by calling component)
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating transfer request:", error);
-      message.error(error.message || "Lỗi tạo phiếu điều chuyển");
+      const errorMsg =
+        error instanceof Error ? error.message : "Lỗi không xác định";
+      message.error(errorMsg || "Lỗi tạo phiếu điều chuyển");
       return false;
     } finally {
       set({ loading: false });
@@ -100,7 +106,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     try {
       const data = await transferService.getTransferDetail(id);
       set({ currentTransfer: data });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching transfer detail:", error);
       message.error(error.message || "Lỗi tải chi tiết phiếu điều chuyển");
     } finally {
@@ -112,7 +118,10 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     // Optimistic update or wait? Let's wait for safety logic
     set({ loading: true });
     try {
-      await transferService.updateTransferStatus(id, status as import("../types/transfer").TransferStatus);
+      await transferService.updateTransferStatus(
+        id,
+        status as import("../types/transfer").TransferStatus
+      );
       message.success("Cập nhật trạng thái thành công");
 
       // Reload detail if current
@@ -120,7 +129,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       if (current && current.id === id) {
         await get().getDetail(id);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating status:", error);
       message.error(error.message || "Lỗi cập nhật trạng thái");
     } finally {
@@ -136,7 +145,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       // Refresh detail
       await get().getDetail(id);
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error approving transfer:", error);
       message.error(error.message || "Lỗi duyệt phiếu");
       return false;
@@ -151,7 +160,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       await transferService.cancelTransfer(id, reason);
       message.success("Đã hủy phiếu điều chuyển.");
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error cancelling transfer:", error);
       message.error(error.message || "Lỗi hủy phiếu");
       return false;
@@ -166,7 +175,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       await transferService.deleteTransfer(id);
       message.success("Đã xóa phiếu điều chuyển.");
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error deleting transfer:", error);
       message.error(error.message || "Lỗi xóa phiếu");
       return false;
@@ -199,7 +208,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
 
       message.success("Đã xóa sản phẩm khỏi phiếu");
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error removing item:", error);
       message.error(error.message || "Lỗi xóa sản phẩm");
       return false;
@@ -248,7 +257,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       set({ availableBatchesMap: batchMap });
 
       // 3. Auto Allocate (FEFO)
-      const newDraft: Record<number, any[]> = {};
+      const newDraft: Record<number, Array<Record<string, unknown>>> = {};
 
       transferData.items.forEach((item) => {
         const availableBatches = batchMap[item.product_id] || [];
@@ -260,7 +269,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
         );
 
         let remainingNeeded = item.quantity_requested;
-        const pickedList: any[] = [];
+        const pickedList: unknown[] = [];
 
         for (const batch of availableBatches) {
           if (remainingNeeded <= 0) break;
@@ -275,7 +284,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       });
 
       set({ shippingDraft: newDraft, isAllocationDone: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error init operation:", error);
       message.error("Lỗi khởi tạo dữ liệu xuất kho");
     } finally {
@@ -386,7 +395,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
 
       // 4. Phân bổ số lượng (Allocation Logic)
       let remainingNeeded = totalQty;
-      const newDraftList: any[] = [];
+      const newDraftList: unknown[] = [];
 
       for (const batch of sortedBatches) {
         if (remainingNeeded <= 0) break; // Đã lấy đủ
@@ -447,7 +456,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       await get().initTransferOperation(currentTransfer.id);
 
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Submit Error:", err);
       // Hiển thị lỗi chi tiết từ Backend (VD: Kho không đủ hàng...)
       message.error(err.message || "Lỗi xuất kho không xác định");
@@ -530,7 +539,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       // Refresh lại dữ liệu phiếu để thấy trạng thái 'completed'
       await get().initTransferOperation(currentTransfer.id);
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Inbound Error:", err);
       message.error(err.message || "Lỗi nhập kho từ hệ thống.");
       return false;
@@ -544,7 +553,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       await transferService.createManualTransfer(payload);
       message.success("Tạo phiếu chuyển kho thành công!");
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating transfer:", error);
       message.error(error.message || "Lỗi tạo phiếu chuyển");
       return false;

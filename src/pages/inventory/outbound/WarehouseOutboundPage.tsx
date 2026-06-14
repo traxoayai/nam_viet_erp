@@ -106,7 +106,7 @@ const WarehouseOutboundPage = () => {
       message.success("Đã hủy nhiệm vụ");
       setCancelModalVisible(false);
       setCancelReason("");
-    } catch (error) {
+    } catch (_error) {
       message.error("Lỗi hủy đơn");
     }
   };
@@ -128,7 +128,7 @@ const WarehouseOutboundPage = () => {
     mode: "picking" | "label" | "b2b"
   ) => {
     setPrintingTaskId(taskId);
-    
+
     // Tìm task hiện tại để lấy số kiện mới nhất đã sửa trên UI
     const task = tasks.find((t) => t.task_id === taskId);
     setPrintPackageCount(task?.package_count || 1);
@@ -141,8 +141,8 @@ const WarehouseOutboundPage = () => {
         const orderData = {
           ...detail.order_info,
           items: detail.items,
-          customer_id: (detail.order_info as any).customer_id, // Ensure debt fetch works
-          final_amount: (detail.order_info as any).final_amount, // Ensure total calculation works
+          customer_id: (detail.order_info as unknown).customer_id, // Ensure debt fetch works
+          final_amount: (detail.order_info as unknown).final_amount, // Ensure total calculation works
         };
         await printOrder(orderData); // Use the Hook
         setPrintingTaskId(null);
@@ -157,7 +157,7 @@ const WarehouseOutboundPage = () => {
         setPrintingTaskId(null);
         setPrintMode(null);
       }, 500);
-    } catch (error) {
+    } catch (_error) {
       message.error("Lỗi chuẩn bị in");
       setPrintingTaskId(null);
       setPrintMode(null);
@@ -267,14 +267,14 @@ const WarehouseOutboundPage = () => {
         if (record.status === "DELIVERED") color = "success";
         if (record.status === "CANCELLED") color = "error";
 
-        return <Badge status={color as any} text={val} />;
+        return <Badge status={color as unknown} text={val} />;
       },
     },
     {
       title: "Thao tác",
       align: "right" as const,
       width: 140,
-      render: (_: any, record: OutboundTask) => (
+      render: (_: unknown, record: OutboundTask) => (
         <Space size={2}>
           <Tooltip title="In Phiếu nhặt hàng">
             <Button

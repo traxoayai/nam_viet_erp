@@ -42,8 +42,9 @@ const GuardianSelectModal: React.FC<GuardianSelectModalProps> = ({
     try {
       const data = await searchGuardians(query);
       setResults(data);
-    } catch (error: any) {
-      antMessage.error(`Lỗi tìm kiếm: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      antMessage.error(`Lỗi tìm kiếm: ${message}`);
     } finally {
       setLoading(false);
     }

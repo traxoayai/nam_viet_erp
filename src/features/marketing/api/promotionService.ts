@@ -45,7 +45,7 @@ export const promotionService = {
   },
 
   // 2. Tạo mã mới (Hỗ trợ tạo hàng loạt cho nhiều khách)
-  async createPromotion(data: any) {
+  async createPromotion(data: unknown) {
     // Nếu là loại Personal và có danh sách khách hàng (Mảng ID)
     if (
       data.type === "personal" &&
@@ -54,21 +54,23 @@ export const promotionService = {
     ) {
       const customers = data.customer_ids;
       // Tạo bản sao data cho từng khách
-      const batchData = customers.map((customerId: any, index: number) => ({
-        ...data,
-        customer_id: customerId, // Gán ID từng khách
-        // Nếu mã code là 'VIP' -> Tự sinh thành 'VIP-1', 'VIP-2'... hoặc random suffix để tránh trùng
-        code: customers.length > 1 ? `${data.code}-${index + 1}` : data.code,
-        // Xóa trường customer_ids thừa
-        customer_ids: undefined,
-      }));
+      const batchData = customers.map(
+        (customerId: unknown, _index: number) => ({
+          ...data,
+          customer_id: customerId, // Gán ID từng khách
+          // Nếu mã code là 'VIP' -> Tự sinh thành 'VIP-1', 'VIP-2'... hoặc random suffix để tránh trùng
+          code: customers.length > 1 ? `${data.code}-${_index + 1}` : data.code,
+          // Xóa trường customer_ids thừa
+          customer_ids: undefined,
+        })
+      );
 
       const { error } = await supabase.from("promotions").insert(batchData);
       if (error) throw error;
     } else {
       // Tạo đơn lẻ (Public hoặc 1 khách)
       // Xóa customer_ids nếu có để tránh lỗi DB không có cột này
-      const { customer_ids, ...singleData } = data;
+      const { customer_ids: _unused, ...singleData } = data;
       const { error } = await supabase.from("promotions").insert([singleData]);
       if (error) throw error;
     }
@@ -76,7 +78,7 @@ export const promotionService = {
   },
 
   // [NEW] Tạo hàng loạt (Dùng cho logic B2B/B2C)
-  async createBatchPromotions(batchData: any[]) {
+  async createBatchPromotions(batchData: unknown[]) {
     const { error } = await supabase.from("promotions").insert(batchData);
     if (error) throw error;
     return true;

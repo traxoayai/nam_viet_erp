@@ -46,7 +46,7 @@ export const ConnectDetailDrawer = () => {
     try {
       await submitCommentAction(selectedPost!.id, commentText);
       setCommentText("");
-    } catch (e) {
+    } catch (_e) {
       message.error("Gửi thất bại");
     } finally {
       setSending(false);
@@ -178,7 +178,7 @@ export const ConnectDetailDrawer = () => {
                     {post.attachments.length})
                   </h4>
                   <div className="grid grid-cols-1 gap-2">
-                    {post.attachments.map((file: any, idx: number) => (
+                    {post.attachments.map((file: Record<string, unknown>, idx: number) => (
                       <div
                         key={idx}
                         className="flex items-center justify-between p-2 bg-gray-50 rounded border hover:bg-gray-100 transition-colors"
@@ -189,14 +189,14 @@ export const ConnectDetailDrawer = () => {
                             className="text-blue-500 shrink-0"
                           />
                           <span className="text-sm text-gray-700 truncate">
-                            {file.name}
+                            {file.name as string}
                           </span>
                         </div>
                         <Button
                           type="link"
                           size="small"
                           className="text-blue-600"
-                          href={file.url}
+                          href={file.url as string}
                           target="_blank"
                         >
                           Tải về
@@ -261,26 +261,31 @@ export const ConnectDetailDrawer = () => {
                 </h3>
 
                 <div className="space-y-4">
-                  {comments.map((cmt: any) => (
-                    <div key={cmt.id} className="flex gap-3">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs shrink-0">
-                        {cmt.users?.full_name?.[0] || "U"}
-                      </div>
-                      <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex-1">
-                        <div className="flex justify-between items-baseline">
-                          <span className="font-bold text-xs text-slate-800">
-                            {cmt.users?.full_name || "Người dùng"}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            {dayjs(cmt.created_at).format("HH:mm DD/MM")}
-                          </span>
+                  {comments.map((cmt: unknown) => {
+                    const c = cmt as Record<string, unknown>;
+                    const user = c.users as Record<string, unknown> | undefined;
+                    const fullName = (user?.full_name as string) || "Người dùng";
+                    return (
+                      <div key={c.id as string | number} className="flex gap-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs shrink-0">
+                          {fullName[0] || "U"}
                         </div>
-                        <p className="text-sm text-slate-700 mt-1">
-                          {cmt.content}
-                        </p>
+                        <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex-1">
+                          <div className="flex justify-between items-baseline">
+                            <span className="font-bold text-xs text-slate-800">
+                              {fullName}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {dayjs(c.created_at as string).format("HH:mm DD/MM")}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-700 mt-1">
+                            {c.content as string}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>

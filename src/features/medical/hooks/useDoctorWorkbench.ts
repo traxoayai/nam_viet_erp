@@ -9,8 +9,8 @@ import {
 } from "../types/medical.types";
 
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 import { printMedicalVisit } from "@/shared/utils/printTemplates";
 
 export const useDoctorWorkbench = () => {
@@ -23,7 +23,7 @@ export const useDoctorWorkbench = () => {
   const [visit, setVisit] = useState<Partial<MedicalVisitRow>>({});
 
   // Khám lâm sàng
-  const [vitals, setVitals] = useState<any>({
+  const [vitals, setVitals] = useState<unknown>({
     pulse: null,
     temperature: null,
     sp02: null,
@@ -33,7 +33,7 @@ export const useDoctorWorkbench = () => {
     height: null,
   });
 
-  const [clinical, setClinical] = useState<any>({
+  const [clinical, setClinical] = useState<unknown>({
     symptoms: "",
     diagnosis: "",
     icd_code: "",
@@ -59,21 +59,25 @@ export const useDoctorWorkbench = () => {
   const [prescriptionItems, setPrescriptionItems] = useState<
     ClinicalPrescriptionItem[]
   >([]);
-  const [serviceOrders, setServiceOrders] = useState<any[]>([]);
-  const [patientInfo, setPatientInfo] = useState<any>(null);
+  const [serviceOrders, setServiceOrders] = useState<unknown[]>([]);
+  const [patientInfo, setPatientInfo] = useState<unknown>(null);
   const [isPrescriptionSent, setIsPrescriptionSent] = useState(false);
-  const [prePurchasedVaccines, setPrePurchasedVaccines] = useState<any[]>([]);
-  const [pharmacyWarehouses, setPharmacyWarehouses] = useState<{id: number, name: string}[]>([]);
+  const [prePurchasedVaccines, setPrePurchasedVaccines] = useState<unknown[]>(
+    []
+  );
+  const [pharmacyWarehouses, setPharmacyWarehouses] = useState<
+    { id: number; name: string }[]
+  >([]);
   const [selectedPharmacy, setSelectedPharmacy] = useState<number>(1);
 
   // --- FETCH PHARMACY WAREHOUSES ---
   useEffect(() => {
     const fetchPharmacies = async () => {
       const { data } = await supabase
-        .from('warehouses')
-        .select('id, name')
-        .eq('type', 'pharmacy')
-        .order('name');
+        .from("warehouses")
+        .select("id, name")
+        .eq("type", "pharmacy")
+        .order("name");
       if (data && data.length > 0) {
         setPharmacyWarehouses(data);
         setSelectedPharmacy(data[0].id);
@@ -106,7 +110,7 @@ export const useDoctorWorkbench = () => {
         .maybeSingle();
 
       // Fetch Chỉ định Cận Lâm Sàng hiện có
-      let currentRequests: any[] = [];
+      let currentRequests: unknown[] = [];
       if (visitData?.id) {
         const { data: requests } = await supabase
           .from("clinical_service_requests")
@@ -123,24 +127,24 @@ export const useDoctorWorkbench = () => {
         .from("customer_vaccination_records")
         .select("id, dose_number, products(name)")
         .eq("appointment_id", apptId);
-        
+
       if (vaccines) {
         setPrePurchasedVaccines(vaccines);
         // [FIX BLOCK 3]: Gộp vắc-xin vào mảng Service Orders để hiển thị trên Table
-        const mappedVaccines = vaccines.map((v: any) => ({
-          id: `vac_${v.id}`, 
-          request_id: v.id, 
+        const mappedVaccines = vaccines.map((v: unknown) => ({
+          id: `vac_${v.id}`,
+          request_id: v.id,
           service_name_snapshot: `${v.products?.name} (Mũi ${v.dose_number})`,
-          category: 'vaccination',
-          price: 0, 
-          payment_order_id: 'PAID' // Đánh dấu đã thanh toán để không bị xóa
+          category: "vaccination",
+          price: 0,
+          payment_order_id: "PAID", // Đánh dấu đã thanh toán để không bị xóa
         }));
-        
+
         // Nối vào mảng existing requests
         if (currentRequests.length > 0) {
-           setServiceOrders([...currentRequests, ...mappedVaccines]);
+          setServiceOrders([...currentRequests, ...mappedVaccines]);
         } else {
-           setServiceOrders(mappedVaccines);
+          setServiceOrders(mappedVaccines);
         }
       }
 
@@ -178,7 +182,7 @@ export const useDoctorWorkbench = () => {
           vac_screening: visitData.vac_screening || {},
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       message.error("Không thể tải dữ liệu khám!");
     } finally {
@@ -189,7 +193,9 @@ export const useDoctorWorkbench = () => {
   // --- ACTIONS ---
   const isReadOnly = visit.status === "finished";
 
-  const handleSave = async (status: "in_progress" | "finished" | "ready_for_vaccine") => {
+  const handleSave = async (
+    status: "in_progress" | "finished" | "ready_for_vaccine"
+  ) => {
     if (!user || !user.id) {
       message.error("Lỗi phiên đăng nhập!");
       return;
@@ -208,19 +214,20 @@ export const useDoctorWorkbench = () => {
       };
 
       // Cleanup các field không tồn tại trong bảng medical_visits
-      delete (flatPayload as any).id;
-      delete (flatPayload as any).created_at;
-      delete (flatPayload as any).doctor;
-      delete (flatPayload as any).patient;
-      delete (flatPayload as any).prescriptions;
+      delete (flatPayload as unknown).id;
+      delete (flatPayload as unknown).created_at;
+      delete (flatPayload as unknown).doctor;
+      delete (flatPayload as unknown).patient;
+      delete (flatPayload as unknown).prescriptions;
 
       // [FIX 2]: Lệnh duy nhất - Upsert thông qua RPC
       const { data } = await safeRpc("create_medical_visit", {
         p_appointment_id: appointmentId ?? "",
         p_customer_id: patientInfo?.id,
-        p_data: flatPayload as unknown as import("@/shared/lib/database.types").Json,
+        p_data:
+          flatPayload as unknown as import("@/shared/lib/database.types").Json,
       });
-      
+
       const currentVisitId = data;
 
       // [FIX 3]: CẬP NHẬT STATE NGAY LẬP TỨC
@@ -235,13 +242,15 @@ export const useDoctorWorkbench = () => {
       if (status === "finished") {
         message.success("Đã hoàn thành & Chuyển Dược!");
       } else if (status === "ready_for_vaccine") {
-        message.success("Bệnh nhân Đủ điều kiện. Đã chuyển sang Trạm Tiêm Chủng!");
+        message.success(
+          "Bệnh nhân Đủ điều kiện. Đã chuyển sang Trạm Tiêm Chủng!"
+        );
         navigate("/medical/examination"); // Đá bác sĩ về màn hình danh sách chờ
-        return; 
+        return;
       } else {
         message.success("Đã lưu nháp!");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save Error:", err);
       message.error("Lỗi lưu: " + (err.message || "Unknown error"));
     } finally {
@@ -268,7 +277,7 @@ export const useDoctorWorkbench = () => {
 
   // --- API THU TIỀN VÀ KÊ ĐƠN ---
   const handleCheckoutClinicalServices = async (
-    selectedServicesJson: any[]
+    selectedServicesJson: unknown[]
   ) => {
     if (!appointmentId || !patientInfo)
       return message.error("Chưa có thông tin khám bệnh/bệnh nhân");
@@ -279,7 +288,8 @@ export const useDoctorWorkbench = () => {
       await safeRpc("checkout_clinical_services", {
         p_appointment_id: appointmentId ?? "",
         p_customer_id: patientInfo.id,
-        p_services: selectedServicesJson as unknown as import("@/shared/lib/database.types").Json,
+        p_services:
+          selectedServicesJson as unknown as import("@/shared/lib/database.types").Json,
       });
       message.success("Đã tạo phiếu thu tiền thành công!");
 
@@ -289,7 +299,7 @@ export const useDoctorWorkbench = () => {
         .select("*")
         .eq("medical_visit_id", visit.id ?? "");
       if (requests) setServiceOrders(requests);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi thu tiền: " + err.message);
     } finally {
       setLoading(false);
@@ -305,12 +315,13 @@ export const useDoctorWorkbench = () => {
       await safeRpc("send_prescription_to_pos", {
         p_appointment_id: appointmentId ?? "",
         p_customer_id: patientInfo.id,
-        p_items: prescriptionItems as unknown as import("@/shared/lib/database.types").Json,
+        p_items:
+          prescriptionItems as unknown as import("@/shared/lib/database.types").Json,
         p_pharmacy_warehouse_id: warehouseId,
       });
       message.success("Đã chuyển Đơn tới Quầy Thuốc thành công!");
       setIsPrescriptionSent(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi gửi toa: " + err.message);
     } finally {
       setLoading(false);

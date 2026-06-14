@@ -57,7 +57,7 @@ const InvoiceUploadModal: React.FC<Props> = ({ open, onCancel }) => {
       setTimeout(() => {
         navigate(`/finance/invoices/verify/${result.invoice_id}`);
       }, 500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       message.error(
         "Lỗi xử lý: " + (error.message || "Không xác định. Vui lòng thử lại.")

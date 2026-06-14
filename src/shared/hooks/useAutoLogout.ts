@@ -1,6 +1,7 @@
 // src/shared/hooks/useAutoLogout.ts
 import { Modal } from "antd";
 import { useEffect, useRef, useCallback } from "react";
+
 import { useAuthStore } from "@/features/auth/stores/useAuthStore";
 
 // Thời gian chờ: 30 phút = 1,800,000 ms (Theo yêu cầu của Sếp)
@@ -11,18 +12,23 @@ export const useAutoLogout = () => {
   const { logout, user } = useAuthStore();
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const forceOutRef = useRef<NodeJS.Timeout | null>(null);
-  const warningRef = useRef<any>(null);
+  const warningRef = useRef<unknown>(null);
 
   const handleLogout = useCallback(() => {
-    if (warningRef.current) warningRef.current.destroy();
+    if (warningRef.current) {
+      const notification = warningRef.current as Record<string, unknown>;
+      const destroy = notification.destroy as (() => void) | undefined;
+      if (destroy) destroy();
+    }
     logout();
-    window.location.href = "/login"; 
+    window.location.href = "/login";
   }, [logout]);
 
   const showWarning = useCallback(() => {
     warningRef.current = Modal.warning({
       title: "Hết phiên làm việc",
-      content: "Hệ thống sẽ tự động đăng xuất sau 10 giây để bảo mật. Hãy di chuyển chuột hoặc bấm phím bất kỳ để hủy!",
+      content:
+        "Hệ thống sẽ tự động đăng xuất sau 10 giây để bảo mật. Hãy di chuyển chuột hoặc bấm phím bất kỳ để hủy!",
       okText: "Đăng xuất ngay",
       onOk: handleLogout,
       keyboard: false,
@@ -41,7 +47,9 @@ export const useAutoLogout = () => {
       clearTimeout(forceOutRef.current);
       forceOutRef.current = null;
       if (warningRef.current) {
-        warningRef.current.destroy();
+        const notification = warningRef.current as Record<string, unknown>;
+        const destroy = notification.destroy as (() => void) | undefined;
+        if (destroy) destroy();
         warningRef.current = null;
       }
     }
@@ -63,14 +71,18 @@ export const useAutoLogout = () => {
       if (throttleTimer) return;
       throttleTimer = true;
       resetTimer();
-      setTimeout(() => { throttleTimer = false; }, 2000); 
+      setTimeout(() => {
+        throttleTimer = false;
+      }, 2000);
     };
 
     events.forEach((event) => window.addEventListener(event, handleActivity));
     resetTimer(); // Kích hoạt lần đầu
 
     return () => {
-      events.forEach((event) => window.removeEventListener(event, handleActivity));
+      events.forEach((event) =>
+        window.removeEventListener(event, handleActivity)
+      );
       if (timerRef.current) clearTimeout(timerRef.current);
       if (forceOutRef.current) clearTimeout(forceOutRef.current);
     };

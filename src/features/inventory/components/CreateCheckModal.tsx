@@ -6,10 +6,9 @@ import { useNavigate } from "react-router-dom";
 import { inventoryService } from "../api/inventoryService";
 
 import { useAuth } from "@/app/contexts/AuthProvider";
-
 import { useActiveWarehouses } from "@/shared/hooks/useMasterData";
 
-export const CreateCheckModal = ({ open, onCancel }: any) => {
+export const CreateCheckModal = ({ open, onCancel }: unknown) => {
   const [form] = Form.useForm();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -49,7 +48,7 @@ export const CreateCheckModal = ({ open, onCancel }: any) => {
           // [FIX] Nếu data là mảng object, map lấy location/name. Nếu là string[] thì giữ nguyên.
           // Giả sử API trả về [{ shelf_location: 'Kệ A' }, ...]
           const cabinetNames = Array.isArray(data)
-            ? data.map((item: any) =>
+            ? data.map((item: unknown) =>
                 typeof item === "string"
                   ? item
                   : item.shelf_location || item.name
@@ -150,20 +149,56 @@ export const CreateCheckModal = ({ open, onCancel }: any) => {
 
         {/* 2. PHẠM VI */}
         <Form.Item name="scope" label="2. Phạm vi kiểm kê" initialValue="BLANK">
-          <Radio.Group buttonStyle="solid" size="middle" style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <Radio.Button value="BLANK" style={{ flex: "1 1 30%", textAlign: "center" }}>Đơn lẻ (Trống)</Radio.Button>
-            <Radio.Button value="CABINET" style={{ flex: "1 1 30%", textAlign: "center" }}>Tủ / Kệ</Radio.Button>
-            <Radio.Button value="CATEGORY" style={{ flex: "1 1 30%", textAlign: "center" }}>Nhóm hàng</Radio.Button>
-            <Radio.Button value="MANUFACTURER" style={{ flex: "1 1 30%", textAlign: "center" }}>Hãng SX</Radio.Button>
-            <Radio.Button value="ALL" style={{ flex: "1 1 30%", textAlign: "center", color: "#ff4d4f" }}>Toàn bộ</Radio.Button>
+          <Radio.Group
+            buttonStyle="solid"
+            size="middle"
+            style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 8 }}
+          >
+            <Radio.Button
+              value="BLANK"
+              style={{ flex: "1 1 30%", textAlign: "center" }}
+            >
+              Đơn lẻ (Trống)
+            </Radio.Button>
+            <Radio.Button
+              value="CABINET"
+              style={{ flex: "1 1 30%", textAlign: "center" }}
+            >
+              Tủ / Kệ
+            </Radio.Button>
+            <Radio.Button
+              value="CATEGORY"
+              style={{ flex: "1 1 30%", textAlign: "center" }}
+            >
+              Nhóm hàng
+            </Radio.Button>
+            <Radio.Button
+              value="MANUFACTURER"
+              style={{ flex: "1 1 30%", textAlign: "center" }}
+            >
+              Hãng SX
+            </Radio.Button>
+            <Radio.Button
+              value="ALL"
+              style={{ flex: "1 1 30%", textAlign: "center", color: "#ff4d4f" }}
+            >
+              Toàn bộ
+            </Radio.Button>
           </Radio.Group>
         </Form.Item>
 
         {/* 3. INPUT ĐỘNG */}
         <div style={{ minHeight: 80 }}>
           {scope === "BLANK" && (
-            <div style={{ padding: "10px 0", color: "#1890ff", fontStyle: "italic" }}>
-              * Hệ thống sẽ tạo một phiếu trống. Bạn có thể sử dụng máy quét mã vạch để thêm từng sản phẩm vào phiếu.
+            <div
+              style={{
+                padding: "10px 0",
+                color: "#1890ff",
+                fontStyle: "italic",
+              }}
+            >
+              * Hệ thống sẽ tạo một phiếu trống. Bạn có thể sử dụng máy quét mã
+              vạch để thêm từng sản phẩm vào phiếu.
             </div>
           )}
           {scope === "CATEGORY" && (

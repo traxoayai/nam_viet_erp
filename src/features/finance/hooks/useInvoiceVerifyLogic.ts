@@ -520,7 +520,6 @@ export const useInvoiceVerifyLogic = () => {
     // Deps cố ý chỉ phụ thuộc id/routerState + độ dài data: thêm form/
     // handleRecalculate/loadInvoiceFromDB/suppliers sẽ tạo lại effect mỗi render
     // → reset form & gọi setFieldsValue lặp (mất dữ liệu user đang nhập).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, routerState, suppliers.length, products.length]);
 
   return {

@@ -2,8 +2,6 @@ import { message } from "antd";
 
 import { supabase } from "@/shared/lib/supabaseClient";
 
-import { Database } from "@/shared/lib/database.types";
-
 interface SafeRpcOptions {
   /** Show toast on error. Default: false (opt-in to prevent double-toast) */
   toast?: boolean;
@@ -13,7 +11,7 @@ interface SafeRpcOptions {
 
 interface SafeRpcResult<T> {
   data: T | null;
-  error: any;
+  error: unknown;
 }
 
 /**
@@ -25,19 +23,18 @@ interface SafeRpcResult<T> {
  * - Always throws on error for caller control flow
  */
 export async function safeRpc<
-  FunctionName extends (string & keyof Database["public"]["Functions"]) | (string & {}),
-  Args extends FunctionName extends keyof Database["public"]["Functions"]
-    ? Database["public"]["Functions"][FunctionName]["Args"]
-    : any,
-  Returns extends FunctionName extends keyof Database["public"]["Functions"]
-    ? Database["public"]["Functions"][FunctionName]["Returns"]
-    : any
+  FunctionName extends string,
+  Args = unknown,
+  Returns = unknown,
 >(
   fnName: FunctionName,
   params?: Args,
   options?: SafeRpcOptions
 ): Promise<SafeRpcResult<Returns>> {
-  const { data, error } = await supabase.rpc(fnName as any, params as any);
+  const { data, error } = await (supabase.rpc as any)(
+    fnName,
+    params as unknown
+  );
 
   if (error) {
     console.error(`[RPC] ${fnName}:`, error);
@@ -48,10 +45,7 @@ export async function safeRpc<
     }
 
     // JWT expired → redirect to login
-    if (
-      error.code === "PGRST301" ||
-      error.message?.includes("JWT")
-    ) {
+    if (error.code === "PGRST301" || error.message?.includes("JWT")) {
       message.error("Phiên hết hạn. Vui lòng đăng nhập lại.");
       window.location.href = "/auth/login";
       throw error;
@@ -68,12 +62,11 @@ export async function safeRpc<
   return { data: data as unknown as Returns, error: null };
 }
 
-function translatePgError(error: any): string {
-  if (error.code === "P0001") return error.message; // DB message already Vietnamese
-  if (error.code === "23505") return "Dữ liệu bị trùng lặp";
-  if (error.code === "23503")
-    return "Dữ liệu đang được sử dụng, không thể xóa";
-  if (error.code === "42501")
-    return "Không có quyền thực hiện thao tác này";
-  return "Lỗi hệ thống: " + (error.message || "Không xác định");
+function translatePgError(error: unknown): string {
+  const err = error as Record<string, unknown>;
+  if (err.code === "P0001") return String(err.message); // DB message already Vietnamese
+  if (err.code === "23505") return "Dữ liệu bị trùng lặp";
+  if (err.code === "23503") return "Dữ liệu đang được sử dụng, không thể xóa";
+  if (err.code === "42501") return "Không có quyền thực hiện thao tác này";
+  return "Lỗi hệ thống: " + (String(err.message) || "Không xác định");
 }

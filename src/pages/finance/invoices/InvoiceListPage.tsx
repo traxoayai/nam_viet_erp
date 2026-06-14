@@ -117,7 +117,6 @@ const InvoiceListPage = () => {
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.current, filtersKey]);
 
   const fetchData = async () => {

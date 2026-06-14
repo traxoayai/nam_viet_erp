@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { DownloadOutlined } from "@ant-design/icons";
 import {
   Card,
   Tabs,
@@ -10,14 +10,19 @@ import {
   Empty,
   Spin,
 } from "antd";
-import { DownloadOutlined } from "@ant-design/icons";
-import type { TableColumnsType } from "antd";
 import dayjs from "dayjs";
-import { useBctcReport, exportBctcBalanceSheetPdf } from "../hooks/useBctcReport";
+import { useState } from "react";
+
+import {
+  useBctcReport,
+  exportBctcBalanceSheetPdf,
+} from "../hooks/useBctcReport";
+
 import type {
   BalanceSheetRow,
   VatDeclarationRow,
 } from "../api/financialReportsService";
+import type { TableColumnsType } from "antd";
 
 interface BctcReportTabProps {
   year?: number;
@@ -177,7 +182,11 @@ export default function BctcReportTab({
               </span>
             </div>
             <div
-              style={{ display: "flex", justifyContent: "space-between", marginTop: "8px" }}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: "8px",
+              }}
             >
               <span>Tiền ra:</span>
               <span>
@@ -189,7 +198,11 @@ export default function BctcReportTab({
               </span>
             </div>
             <div
-              style={{ display: "flex", justifyContent: "space-between", marginTop: "8px" }}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: "8px",
+              }}
             >
               <strong>Lưu chuyển thuần:</strong>
               <strong>

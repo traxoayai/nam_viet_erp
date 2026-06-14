@@ -1,8 +1,4 @@
 // src/pages/purchasing/hooks/usePurchaseOrderLogic.ts
-/* eslint-disable @typescript-eslint/no-explicit-any --
- * Legacy: ~30 any tồn tại từ PM commit (ba0dbcb). Refactor type-safe riêng PR
- * sau khi gen lại Database types + đụng toàn module purchasing → để task này
- * không bị scope creep. KHÔNG ADD any mới trong file này. */
 import { Form, App } from "antd";
 import dayjs from "dayjs";
 import { useState, useEffect, useCallback } from "react";
@@ -56,7 +52,7 @@ export const usePurchaseOrderLogic = () => {
   const [shippingPartners, setShippingPartners] = useState<ShippingPartner[]>(
     []
   );
-  const [supplierInfo, setSupplierInfo] = useState<any>(null);
+  const [supplierInfo, setSupplierInfo] = useState<unknown>(null);
   // Công nợ NCC lấy thẳng từ supplier_debt_view — single source. Tách khỏi
   // supplierInfo để mọi UI consume cùng 1 con số (đồng nhất với SupplierDetailPage
   // + supplier list), tránh lệch khi RPC get_supplier_quick_info trả số cached.
@@ -64,7 +60,8 @@ export const usePurchaseOrderLogic = () => {
 
   // Modal State
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [paymentInitialValues, setPaymentInitialValues] = useState<any>(null);
+  const [paymentInitialValues, setPaymentInitialValues] =
+    useState<unknown>(null);
 
   // --- 1. KHỞI TẠO DỮ LIỆU ---
   useEffect(() => {
@@ -80,7 +77,6 @@ export const usePurchaseOrderLogic = () => {
       }
     };
     initData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy lại khi id thay đổi; các function ref ổn định
   }, [id]);
 
   const fetchShippingPartners = async () => {
@@ -130,7 +126,7 @@ export const usePurchaseOrderLogic = () => {
       }
 
       // [FIX] Lấy thông tin Lô/Hạn sử dụng từ receipt_draft để hiển thị lại
-      let receiptDraft: any[] = [];
+      let receiptDraft: unknown[] = [];
       try {
         const { data: poExtra, error: fetchErr } = await supabase
           .from("purchase_orders")
@@ -154,15 +150,15 @@ export const usePurchaseOrderLogic = () => {
           } else if (
             parsed &&
             typeof parsed === "object" &&
-            Array.isArray((parsed as any).items)
+            Array.isArray((parsed as unknown).items)
           ) {
-            receiptDraft = (parsed as any).items;
+            receiptDraft = (parsed as unknown).items;
           } else if (
             parsed &&
             typeof parsed === "object" &&
-            Array.isArray((parsed as any).draft_data)
+            Array.isArray((parsed as unknown).draft_data)
           ) {
-            receiptDraft = (parsed as any).draft_data;
+            receiptDraft = (parsed as unknown).draft_data;
           }
         }
       } catch (err) {
@@ -241,7 +237,7 @@ export const usePurchaseOrderLogic = () => {
       });
 
       calculateTotals(mappedItems);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("DEBUG PO DETAIL ERROR:", error);
       message.error(error.message || "Lỗi tải đơn hàng");
       navigate("/purchase-orders");
@@ -329,7 +325,7 @@ export const usePurchaseOrderLogic = () => {
   };
 
   // [FIX CRITICAL] Xử lý chọn sản phẩm
-  const handleSelectProduct = async (_: any, option: any) => {
+  const handleSelectProduct = async (_: unknown, option: unknown) => {
     setSearchKey((prev) => prev + 1);
     const p = option.product;
 
@@ -343,17 +339,17 @@ export const usePurchaseOrderLogic = () => {
       .from("product_units")
       .select("*")
       .eq("product_id", p.id);
-    const unitsData = (unitsDataRaw || []).map((u: any) => ({
+    const unitsData = (unitsDataRaw || []).map((u: unknown) => ({
       ...u,
       conversion_rate: u.conversion_rate || 1,
       is_base: u.is_base || false,
     }));
 
     const wholesaleUnitObj = unitsData.find(
-      (u: any) => u.unit_type === "wholesale"
+      (u: unknown) => u.unit_type === "wholesale"
     );
     const retailUnitObj = unitsData.find(
-      (u: any) => u.unit_type === "retail" || u.is_base
+      (u: unknown) => u.unit_type === "retail" || u.is_base
     );
 
     let wholesaleUnit: string = wholesaleUnitObj?.unit_name || "";
@@ -422,7 +418,11 @@ export const usePurchaseOrderLogic = () => {
     message.success(`Đã thêm: ${p.name}`);
   };
 
-  const handleItemChange = (index: number, field: keyof POItem, value: any) => {
+  const handleItemChange = (
+    index: number,
+    field: keyof POItem,
+    value: unknown
+  ) => {
     const newItems = [...itemsList];
     const item = { ...newItems[index], [field]: value };
 
@@ -507,7 +507,7 @@ export const usePurchaseOrderLogic = () => {
         let matchCount = 0;
         newItems.forEach((item) => {
           const match = extractedItems.find(
-            (e: any) => e.product_id === item.product_id
+            (e: unknown) => e.product_id === item.product_id
           );
           if (match) {
             if (match.lot_number) item.input_lot = match.lot_number;
@@ -527,7 +527,7 @@ export const usePurchaseOrderLogic = () => {
         }
         return newItems;
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       message.error("Lỗi xử lý file: " + err.message);
     } finally {
@@ -587,7 +587,7 @@ export const usePurchaseOrderLogic = () => {
       // 3. Đưa vào State
       const newPOItems: POItem[] = [];
 
-      for (const item of mappedItems as any[]) {
+      for (const item of mappedItems as unknown[]) {
         if (!item.internal_product_id) continue;
 
         // Fetch detail product to get unit rules & base price
@@ -598,18 +598,18 @@ export const usePurchaseOrderLogic = () => {
           .single();
         if (!pData) continue;
 
-        const p = pData as any;
-        const unitsData = (p.product_units || []).map((u: any) => ({
+        const p = pData as unknown;
+        const unitsData = (p.product_units || []).map((u: unknown) => ({
           ...u,
           conversion_rate: u.conversion_rate || 1,
           is_base: u.is_base || false,
         }));
 
         const wholesaleUnitObj = unitsData.find(
-          (u: any) => u.unit_type === "wholesale"
+          (u: unknown) => u.unit_type === "wholesale"
         );
         const retailUnitObj = unitsData.find(
-          (u: any) => u.unit_type === "retail" || u.is_base
+          (u: unknown) => u.unit_type === "retail" || u.is_base
         );
 
         let wholesaleUnit: string = wholesaleUnitObj?.unit_name || "";
@@ -689,7 +689,7 @@ export const usePurchaseOrderLogic = () => {
       message.success(
         `Đã tự động tạo ${newPOItems.length} sản phẩm từ hóa đơn!`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       message.error("Lỗi xử lý tự động tạo SP: " + err.message);
     } finally {
@@ -700,7 +700,7 @@ export const usePurchaseOrderLogic = () => {
   // --- 3. CORE LOGIC: SAVE & CONFIRM ---
 
   // [NEW] Hàm dùng chung để lưu dữ liệu (Gọi RPC Update)
-  const handleSaveOrder = async (values: any) => {
+  const handleSaveOrder = async (values: unknown) => {
     // 1. Lấy Items từ State (Giá mới nhất)
     if (itemsList.length === 0)
       throw new Error("Vui lòng chọn ít nhất 1 sản phẩm");
@@ -710,7 +710,7 @@ export const usePurchaseOrderLogic = () => {
       quantity: Number(item.quantity),
       unit_price: Number(item.unit_price), // Giá mới nhất từ Table
       uom: item.uom,
-      is_bonus: (item as any).is_bonus || false,
+      is_bonus: (item as unknown).is_bonus || false,
       bonus_quantity: Number(item.bonus_quantity) || 0,
     }));
 
@@ -774,7 +774,7 @@ export const usePurchaseOrderLogic = () => {
 
       await safeRpc("save_inbound_draft", {
         p_po_id: savedId,
-        p_draft_data: constructedDraftData as any,
+        p_draft_data: constructedDraftData as unknown,
       });
     } catch (e) {
       console.error("Lỗi khi lưu receipt_draft:", e);
@@ -784,7 +784,7 @@ export const usePurchaseOrderLogic = () => {
   };
 
   // Nút Lưu Nháp (UI Trigger)
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: unknown) => {
     setLoading(true);
     try {
       const savedId = await handleSaveOrder(values);
@@ -798,7 +798,7 @@ export const usePurchaseOrderLogic = () => {
         // [CRITICAL] Reload lại để hiển thị dữ liệu đã lưu
         loadOrderDetail(savedId);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       message.error(err.message || "Có lỗi xảy ra");
     } finally {
@@ -831,7 +831,7 @@ export const usePurchaseOrderLogic = () => {
 
             message.success("Đã đặt hàng thành công!");
             navigate("/purchase-orders"); // Quay về list
-          } catch (err: any) {
+          } catch (err: unknown) {
             message.error(err.message || "Lỗi khi đặt hàng");
           } finally {
             setLoading(false);
@@ -884,7 +884,7 @@ export const usePurchaseOrderLogic = () => {
     setPaymentModalOpen(true);
   };
 
-  const handleConfirmFinancials = async (processedItems: any[]) => {
+  const handleConfirmFinancials = async (processedItems: unknown[]) => {
     setLoading(true);
     try {
       await purchaseOrderService.confirmPOFinancials(
@@ -893,7 +893,7 @@ export const usePurchaseOrderLogic = () => {
       );
       message.success("Nhập kho & Chốt giá vốn thành công!");
       loadOrderDetail(Number(id));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       message.error(error.message || "Lỗi nhập kho");
     } finally {
@@ -915,7 +915,7 @@ export const usePurchaseOrderLogic = () => {
           await purchaseOrderService.cancelPO(Number(id));
           message.success("Đã hủy đơn hàng!");
           loadOrderDetail(Number(id));
-        } catch (error: any) {
+        } catch (error: unknown) {
           message.error("Lỗi hủy đơn: " + error.message);
         }
       },

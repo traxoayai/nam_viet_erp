@@ -7,9 +7,9 @@ import { salesService } from "@/features/sales/api/salesService"; // Dùng servi
 import { useDebounce } from "@/shared/hooks/useDebounce";
 
 interface DebounceCustomerSelectProps {
-  value?: any;
+  value?: unknown;
   // AURA FIX: Sửa type onChange để chấp nhận 2 tham số
-  onChange?: (value: any, option?: any) => void;
+  onChange?: (value: unknown, option?: unknown) => void;
   placeholder?: string;
   style?: React.CSSProperties;
 }
@@ -21,7 +21,7 @@ const DebounceCustomerSelect: React.FC<DebounceCustomerSelectProps> = ({
   style,
 }) => {
   const [fetching, setFetching] = useState(false);
-  const [options, setOptions] = useState<any[]>([]);
+  const [options, setOptions] = useState<unknown[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 500);
 
@@ -31,32 +31,35 @@ const DebounceCustomerSelect: React.FC<DebounceCustomerSelectProps> = ({
       // Gọi API B2B Search mới
       const data = await salesService.searchCustomers(keyword);
 
-      const formattedOptions = data.map((c: any) => ({
-        label: (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "4px 0",
-            }}
-          >
-            <Avatar
-              size="small"
-              icon={<UserOutlined />}
-              style={{ backgroundColor: "#87d068" }}
-            />
-            <div style={{ lineHeight: 1.2 }}>
-              <Typography.Text strong>{c.name}</Typography.Text>
-              <div style={{ fontSize: 11, color: "#666" }}>
-                MST: {c.tax_code} | {c.phone}
+      const formattedOptions = data.map((c: unknown) => {
+        const customer = c as Record<string, unknown>;
+        return {
+          label: (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "4px 0",
+              }}
+            >
+              <Avatar
+                size="small"
+                icon={<UserOutlined />}
+                style={{ backgroundColor: "#87d068" }}
+              />
+              <div style={{ lineHeight: 1.2 }}>
+                <Typography.Text strong>{String(customer.name)}</Typography.Text>
+                <div style={{ fontSize: 11, color: "#666" }}>
+                  MST: {String(customer.tax_code)} | {String(customer.phone)}
+                </div>
               </div>
             </div>
-          </div>
-        ),
-        value: c.id,
-        customer: c, // Đính kèm full object để dùng ở ngoài
-      }));
+          ) as React.ReactNode,
+          value: customer.id,
+          customer: customer, // Đính kèm full object để dùng ở ngoài
+        } as unknown;
+      });
       setOptions(formattedOptions);
     } catch (err) {
       console.error(err);
@@ -84,7 +87,7 @@ const DebounceCustomerSelect: React.FC<DebounceCustomerSelectProps> = ({
           />
         )
       }
-      options={options}
+      options={options as any}
       value={value}
       onChange={onChange} // Giờ đã khớp Type
       placeholder={placeholder}

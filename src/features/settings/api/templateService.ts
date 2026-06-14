@@ -14,7 +14,7 @@ export const fetchTemplates = async (): Promise<DocumentTemplate[]> => {
 };
 
 // 2. Thêm Mẫu mới
-export const addTemplate = async (values: any) => {
+export const addTemplate = async (values: unknown) => {
   const { error } = await supabase.from("document_templates").insert({
     name: values.name,
     module: values.module,
@@ -27,7 +27,7 @@ export const addTemplate = async (values: any) => {
 };
 
 // 3. Cập nhật Mẫu
-export const updateTemplate = async (id: number, values: any) => {
+export const updateTemplate = async (id: number, values: unknown) => {
   const { error } = await supabase
     .from("document_templates")
     .update({

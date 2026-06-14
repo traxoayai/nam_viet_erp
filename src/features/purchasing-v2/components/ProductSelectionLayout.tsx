@@ -26,12 +26,12 @@ interface ProductSelectionLayoutProps {
 export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
   onTotalChange,
 }) => {
-  const [mainProducts, setMainProducts] = useState<any[]>([]);
-  const [giftProducts, setGiftProducts] = useState<any[]>([]);
+  const [mainProducts, setMainProducts] = useState<unknown[]>([]);
+  const [giftProducts, setGiftProducts] = useState<unknown[]>([]);
 
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const timeoutRef = useRef<any>(null);
+  const [searchResults, setSearchResults] = useState<unknown[]>([]);
+  const timeoutRef = useRef<unknown>(null);
 
   const fetchProducts = async (value: string) => {
     if (!value) {
@@ -48,7 +48,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
       );
       if (error) throw error;
       setSearchResults(data?.data || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi tìm kiếm sản phẩm: " + err.message);
     } finally {
       setSearchLoading(false);
@@ -108,7 +108,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
     setGiftProducts([...giftProducts, newProduct]);
   };
 
-  const calculateTotal = (products: any[]) => {
+  const calculateTotal = (products: unknown[]) => {
     const total = products.reduce((sum, item) => sum + (item.total || 0), 0);
     onTotalChange(total);
   };
@@ -151,7 +151,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
       title: "Sản phẩm",
       key: "product",
       width: "40%",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Space>
           {record.image_url ? (
             <Image
@@ -173,7 +173,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
     {
       title: "Tồn / Bán TB",
       key: "stock",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <div>
           <div>
             Tồn:{" "}
@@ -188,7 +188,11 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
             / {record.max_stock}
           </div>
           <div style={{ fontSize: "12px", color: "#666" }}>
-            Bán TB: {record.formatted_monthly_sales_qty ? record.formatted_monthly_sales_qty : record.monthly_sales_qty}/tháng
+            Bán TB:{" "}
+            {record.formatted_monthly_sales_qty
+              ? record.formatted_monthly_sales_qty
+              : record.monthly_sales_qty}
+            /tháng
           </div>
         </div>
       ),
@@ -196,7 +200,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
     {
       title: "SL Cần Mua",
       key: "quantity",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Space direction="vertical" size={2}>
           <InputNumber
             min={1}
@@ -215,7 +219,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
     {
       title: "Đơn giá",
       key: "price",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <InputNumber
           min={0}
           value={record.price}
@@ -230,7 +234,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
     {
       title: "Thành Tiền",
       key: "total",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Text strong style={{ color: "#1890ff" }}>
           {new Intl.NumberFormat("vi-VN").format(record.total)} đ
         </Text>
@@ -239,7 +243,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
     {
       title: "",
       key: "action",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Button
           type="text"
           danger
@@ -255,7 +259,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
       title: "Sản phẩm",
       key: "product",
       width: "60%",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <div>
           <Text strong>{record.name}</Text>
           <div style={{ fontSize: "12px", color: "#888" }}>
@@ -267,7 +271,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
     {
       title: "SL",
       key: "quantity",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <InputNumber
           min={1}
           value={record.quantity}
@@ -284,7 +288,7 @@ export const ProductSelectionLayout: React.FC<ProductSelectionLayoutProps> = ({
     {
       title: "",
       key: "action",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Button
           type="text"
           danger

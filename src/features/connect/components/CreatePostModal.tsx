@@ -56,29 +56,29 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     }
   }, [open, activeTab, form, editingPost]);
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: Record<string, unknown>) => {
     setSubmitting(true);
     try {
       if (editingPost) {
         // GỌI API UPDATE
         await connectService.updatePost(editingPost.id, {
-          p_category: values.category,
-          p_title: values.title,
-          p_content: values.content || "",
-          p_is_anonymous: values.is_anonymous,
-          p_must_confirm: values.must_confirm,
-          p_reward_points: values.reward_points,
+          p_category: values.category as string,
+          p_title: values.title as string,
+          p_content: (values.content as string) || "",
+          p_is_anonymous: values.is_anonymous as boolean,
+          p_must_confirm: values.must_confirm as boolean,
+          p_reward_points: values.reward_points as number,
         });
         message.success("Cập nhật thành công!");
       } else {
         // Gọi API tạo bài
         await connectService.createPost({
-          p_category: values.category,
-          p_title: values.title,
-          p_content: values.content || "",
-          p_is_anonymous: values.is_anonymous || false,
-          p_must_confirm: values.must_confirm || false,
-          p_reward_points: values.reward_points || 0,
+          p_category: values.category as string,
+          p_title: values.title as string,
+          p_content: (values.content as string) || "",
+          p_is_anonymous: (values.is_anonymous as boolean) || false,
+          p_must_confirm: (values.must_confirm as boolean) || false,
+          p_reward_points: (values.reward_points as number) || 0,
           // p_attachments: Handle upload logic here if needed
         });
         message.success("Đăng bài thành công!");
@@ -86,9 +86,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
       onClose();
       fetchPosts(activeTab); // Reload list
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      message.error("Lỗi: " + error.message);
+      message.error("Lỗi: " + (error instanceof Error ? error.message : "Lỗi không xác định"));
     } finally {
       setSubmitting(false);
     }

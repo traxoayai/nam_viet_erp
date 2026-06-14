@@ -1,4 +1,8 @@
-import { DeleteOutlined, PictureOutlined, WarningOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  PictureOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
 import {
   Table,
   Card,
@@ -27,7 +31,7 @@ const { Option } = Select;
 interface Props {
   items: POItem[];
   // FIX: Định nghĩa field là 'keyof POItem' thay vì string
-  onItemChange: (index: number, field: keyof POItem, value: any) => void;
+  onItemChange: (index: number, field: keyof POItem, value: unknown) => void;
   onRemove: (index: number) => void;
 }
 
@@ -101,13 +105,15 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
   // Helper: Render Stock in Wholesale Unit
   const renderStock = (item: POItem) => {
     if (item.total_stock == null) return "Tồn: 0";
-    
-    const wholesaleUnit = item.available_units?.find(u => u.unit_name === item._wholesale_unit);
+
+    const wholesaleUnit = item.available_units?.find(
+      (u) => u.unit_name === item._wholesale_unit
+    );
     if (wholesaleUnit && wholesaleUnit.conversion_rate > 0) {
       const stockInWholesale = item.total_stock / wholesaleUnit.conversion_rate;
       return `Tồn: ${stockInWholesale.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${wholesaleUnit.unit_name}`;
     }
-    
+
     return `Tồn: ${item.total_stock.toLocaleString()}`;
   };
 
@@ -156,8 +162,17 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
                   >
                     {renderStock(item)}
                   </Text>
-                  <span style={{ color: "#8c8c8c", fontSize: "12px", marginLeft: 8 }}>
-                    TB: {item.formatted_monthly_sales_qty ? `${item.formatted_monthly_sales_qty}/th` : `${(item.avg_monthly_sold ?? 0).toLocaleString()}/th`}
+                  <span
+                    style={{
+                      color: "#8c8c8c",
+                      fontSize: "12px",
+                      marginLeft: 8,
+                    }}
+                  >
+                    TB:{" "}
+                    {item.formatted_monthly_sales_qty
+                      ? `${item.formatted_monthly_sales_qty}/th`
+                      : `${(item.avg_monthly_sold ?? 0).toLocaleString()}/th`}
                   </span>
                 </div>
               </div>
@@ -233,23 +248,45 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
                 alignItems: "center",
               }}
             >
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                }}
+              >
                 <InputNumber
                   value={item.unit_price}
                   style={{ width: 120 }}
-                  formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                  formatter={(v) =>
+                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                  }
                   parser={(v) =>
                     v!.replace(/\$\s?|(,*)/g, "") as unknown as number
                   }
                   onChange={(val) => onItemChange(idx, "unit_price", val)}
                   addonAfter="₫"
-                  status={item.expected_pre_vat_price !== undefined && item.unit_price !== item.expected_pre_vat_price && item.expected_pre_vat_price > 0 ? "warning" : undefined}
+                  status={
+                    item.expected_pre_vat_price !== undefined &&
+                    item.unit_price !== item.expected_pre_vat_price &&
+                    item.expected_pre_vat_price > 0
+                      ? "warning"
+                      : undefined
+                  }
                 />
-                {item.expected_pre_vat_price !== undefined && item.unit_price !== item.expected_pre_vat_price && item.expected_pre_vat_price > 0 && (
-                  <div style={{ fontSize: 11, color: "#faad14", marginTop: 4 }}>
-                    <WarningOutlined /> Lệch: {new Intl.NumberFormat("vi-VN").format(item.expected_pre_vat_price)}đ
-                  </div>
-                )}
+                {item.expected_pre_vat_price !== undefined &&
+                  item.unit_price !== item.expected_pre_vat_price &&
+                  item.expected_pre_vat_price > 0 && (
+                    <div
+                      style={{ fontSize: 11, color: "#faad14", marginTop: 4 }}
+                    >
+                      <WarningOutlined /> Lệch:{" "}
+                      {new Intl.NumberFormat("vi-VN").format(
+                        item.expected_pre_vat_price
+                      )}
+                      đ
+                    </div>
+                  )}
               </div>
               <Text strong style={{ fontSize: 16, color: "#1677ff" }}>
                 {(item.quantity * item.unit_price).toLocaleString()} ₫
@@ -272,7 +309,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
       title: "Sản phẩm",
       dataIndex: "name",
       width: 300,
-      render: (_: any, r: POItem) => (
+      render: (_: unknown, r: POItem) => (
         <Space>
           <Avatar
             shape="square"
@@ -295,7 +332,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
       title: "Tồn kho",
       width: 80,
       align: "center" as const,
-      render: (_: any, r: POItem) => (
+      render: (_: unknown, r: POItem) => (
         <Text type={r.total_stock && r.total_stock > 0 ? undefined : "danger"}>
           {renderStock(r).replace("Tồn: ", "")}
         </Text>
@@ -305,21 +342,23 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
       title: "TB bán/tháng",
       width: 100,
       align: "center" as const,
-      render: (_: any, r: POItem) => (
+      render: (_: unknown, r: POItem) => (
         <div style={{ fontSize: "12px", color: "#8c8c8c" }}>
-          {r.formatted_monthly_sales_qty ? r.formatted_monthly_sales_qty : (r.avg_monthly_sold ?? 0).toLocaleString()}
+          {r.formatted_monthly_sales_qty
+            ? r.formatted_monthly_sales_qty
+            : (r.avg_monthly_sold ?? 0).toLocaleString()}
         </div>
       ),
     },
     {
       title: "ĐVT",
       width: 130,
-      render: (_: any, r: POItem, idx: number) => renderUnitSelect(r, idx),
+      render: (_: unknown, r: POItem, idx: number) => renderUnitSelect(r, idx),
     },
     {
       title: "Số lượng",
       width: 100,
-      render: (_: any, r: POItem, idx: number) => (
+      render: (_: unknown, r: POItem, idx: number) => (
         <InputNumber
           value={r.quantity}
           min={1}
@@ -332,8 +371,11 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
     {
       title: "Đơn giá",
       width: 150,
-      render: (_: any, r: POItem, idx: number) => {
-        const isPriceVariance = r.expected_pre_vat_price !== undefined && r.unit_price !== r.expected_pre_vat_price && r.expected_pre_vat_price > 0;
+      render: (_: unknown, r: POItem, idx: number) => {
+        const isPriceVariance =
+          r.expected_pre_vat_price !== undefined &&
+          r.unit_price !== r.expected_pre_vat_price &&
+          r.expected_pre_vat_price > 0;
         return (
           <Space direction="vertical" size={2} style={{ width: "100%" }}>
             <InputNumber
@@ -346,14 +388,24 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
               disabled={r.is_bonus}
               status={isPriceVariance ? "warning" : undefined}
             />
-            {isPriceVariance && (
-              <div style={{ fontSize: 11, color: "#faad14", display: "flex", alignItems: "center", gap: 4 }}>
+            {isPriceVariance ? (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#faad14",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
                 <WarningOutlined />
-                <Tooltip title={`Giá trên Master Data: ${new Intl.NumberFormat("vi-VN").format(r.expected_pre_vat_price!)}đ`}>
+                <Tooltip
+                  title={`Giá trên Master Data: ${new Intl.NumberFormat("vi-VN").format(r.expected_pre_vat_price!)}đ`}
+                >
                   <span style={{ cursor: "help" }}>Giá lệch Ánh xạ</span>
                 </Tooltip>
               </div>
-            )}
+            ) : null}
           </Space>
         );
       },
@@ -362,7 +414,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
     //   title: "Hàng tặng", // [NEW] Bonus Column
     //   width: 90,
     //   align: "center" as const,
-    //   render: (_: any, r: POItem, idx: number) => (
+    //   render: (_: unknown, r: POItem, idx: number) => (
     //     <Checkbox
     //       checked={r.is_bonus}
     //       onChange={(e) => {
@@ -378,13 +430,13 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
       title: "Thành tiền",
       align: "right" as const,
       width: 150,
-      render: (_: any, r: POItem) => (
+      render: (_: unknown, r: POItem) => (
         <Text strong>{(r.quantity * r.unit_price).toLocaleString()} ₫</Text>
       ),
     },
     {
       width: 50,
-      render: (_: any, __: any, idx: number) => (
+      render: (_: unknown, __: unknown, idx: number) => (
         <Button
           type="text"
           danger
@@ -396,7 +448,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
     {
       title: "Số Lô",
       width: 100,
-      render: (_: any, r: POItem, idx: number) => (
+      render: (_: unknown, r: POItem, idx: number) => (
         <Input
           placeholder="Số Lô"
           value={r.input_lot}
@@ -407,7 +459,7 @@ const POProductTable: React.FC<Props> = ({ items, onItemChange, onRemove }) => {
     {
       title: "Hạn sử dụng",
       width: 130,
-      render: (_: any, r: POItem, idx: number) => {
+      render: (_: unknown, r: POItem, idx: number) => {
         const parsedDate =
           r.input_expiry && dayjs(r.input_expiry, DATE_FORMATS[0]).isValid()
             ? dayjs(r.input_expiry, DATE_FORMATS[0])

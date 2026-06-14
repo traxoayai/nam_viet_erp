@@ -4,9 +4,10 @@ import { useState, useEffect, useRef } from "react";
 
 import { PurchaseOrderMaster, PoLogisticsStat } from "../types/purchase";
 
-import { supabase } from "@/shared/lib/supabaseClient";
-import { safeRpc } from "@/shared/lib/safeRpc";
 import type { Database } from "@/shared/lib/database.types";
+
+import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const usePurchaseOrderMaster = () => {
   // --- STATE ---
@@ -62,7 +63,7 @@ export const usePurchaseOrderMaster = () => {
 
       const { data: rpcData } = await safeRpc(
         "get_purchase_orders_master",
-        rpcParams as Database["public"]["Functions"]["get_purchase_orders_master"]["Args"],
+        rpcParams as Database["public"]["Functions"]["get_purchase_orders_master"]["Args"]
       );
 
       // Map dữ liệu & Total count
@@ -72,7 +73,7 @@ export const usePurchaseOrderMaster = () => {
 
       setOrders(rpcData as PurchaseOrderMaster[]);
       setPagination((prev) => ({ ...prev, total: totalRows }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Fetch Orders Error:", err);
       message.error("Lỗi tải danh sách đơn hàng");
     } finally {
@@ -169,9 +170,7 @@ export const usePurchaseOrderMaster = () => {
         content: "Đang tính toán dự trù...",
         key: "auto_create",
       });
-      const { data } = await safeRpc(
-        "auto_create_purchase_orders_min_max"
-      );
+      const { data } = await safeRpc("auto_create_purchase_orders_min_max");
       message.success({
         content: `Đã tạo ${data} đơn hàng dự trù!`,
         key: "auto_create",

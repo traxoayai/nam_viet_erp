@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { adminClient, isProduction } from "../helpers/supabase";
+
+import { adminClient } from "../helpers/supabase";
 
 /**
  * Integration tests: Verify product_unit_id lookup logic
@@ -28,7 +29,9 @@ describe("medical module: product_unit_id lookup", () => {
       .in("product_id", productIds);
 
     const productsWithUnits = new Set((units || []).map((u) => u.product_id));
-    const missingUnits = productIds.filter((pid) => !productsWithUnits.has(pid));
+    const missingUnits = productIds.filter(
+      (pid) => !productsWithUnits.has(pid)
+    );
 
     // Warn about products without units (data quality issue)
     if (missingUnits.length > 0) {
@@ -38,7 +41,8 @@ describe("medical module: product_unit_id lookup", () => {
     }
 
     // At least 90% of active products should have units
-    const coveragePercent = ((productIds.length - missingUnits.length) / productIds.length) * 100;
+    const coveragePercent =
+      ((productIds.length - missingUnits.length) / productIds.length) * 100;
     expect(
       coveragePercent,
       `Only ${coveragePercent.toFixed(1)}% of products have units`

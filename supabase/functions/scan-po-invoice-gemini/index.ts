@@ -22,7 +22,7 @@ serve(async (req) => {
     try {
       body = JSON.parse(rawBody);
       if (typeof body === "string") body = JSON.parse(body);
-    } catch (e) {
+    } catch (_e) {
       throw new Error("Invalid JSON");
     }
 
@@ -114,7 +114,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Fatal:", error.message);
     return new Response(
       JSON.stringify({

@@ -1,10 +1,11 @@
-import { Card, Tabs } from 'antd'
-import { useState } from 'react'
-import { ComposeNotificationForm } from '@/features/notifications/components/ComposeNotificationForm'
-import { NotificationHistoryTable } from '@/features/notifications/components/NotificationHistoryTable'
+import { Card, Tabs } from "antd";
+import { useState } from "react";
+
+import { ComposeNotificationForm } from "@/features/notifications/components/ComposeNotificationForm";
+import { NotificationHistoryTable } from "@/features/notifications/components/NotificationHistoryTable";
 
 export default function NotificationManagementPage() {
-  const [refreshKey, setRefreshKey] = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div style={{ padding: 24 }}>
@@ -12,17 +13,19 @@ export default function NotificationManagementPage() {
       <Tabs
         items={[
           {
-            key: 'compose',
-            label: 'Gửi thông báo',
+            key: "compose",
+            label: "Gửi thông báo",
             children: (
               <Card>
-                <ComposeNotificationForm onSent={() => setRefreshKey((k) => k + 1)} />
+                <ComposeNotificationForm
+                  onSent={() => setRefreshKey((k) => k + 1)}
+                />
               </Card>
             ),
           },
           {
-            key: 'history',
-            label: 'Lịch sử gửi',
+            key: "history",
+            label: "Lịch sử gửi",
             children: (
               <Card>
                 <NotificationHistoryTable refreshKey={refreshKey} />
@@ -32,5 +35,5 @@ export default function NotificationManagementPage() {
         ]}
       />
     </div>
-  )
+  );
 }

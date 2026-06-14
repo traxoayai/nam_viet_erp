@@ -20,7 +20,9 @@ type OrderPayload = {
  * Hook lắng nghe sự thay đổi của bảng Orders
  * @param onOrderChange - Callback function để xử lý dữ liệu mới tại UI (ví dụ: cập nhật state danh sách)
  */
-export const useRealtimeOrders = (onOrderChange?: (payload: any) => void) => {
+export const useRealtimeOrders = (
+  onOrderChange?: (payload: unknown) => void
+) => {
   useEffect(() => {
     // 1. Khởi tạo kênh lắng nghe
     const channel = supabase

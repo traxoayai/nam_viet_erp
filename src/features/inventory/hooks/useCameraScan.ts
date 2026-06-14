@@ -14,7 +14,7 @@ export const useCameraScan = () => {
       const result = await inventoryService.scanProductLabel(file);
       message.success("AI đã đọc xong vỏ hộp!");
       return result; // { lot_number, expiry_date, file_url }
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error("Lỗi đọc ảnh: " + error.message);
       return null;
     } finally {

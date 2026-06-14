@@ -5,11 +5,11 @@ const mockRpc = vi.fn();
 const mockMessageError = vi.fn();
 
 vi.mock("@/shared/lib/supabaseClient", () => ({
-  supabase: { rpc: (...args: any[]) => mockRpc(...args) },
+  supabase: { rpc: (...args: unknown[]) => mockRpc(...args) },
 }));
 
 vi.mock("antd", () => ({
-  message: { error: (...args: any[]) => mockMessageError(...args) },
+  message: { error: (...args: unknown[]) => mockMessageError(...args) },
 }));
 
 import { safeRpc } from "@/shared/lib/safeRpc";
@@ -19,13 +19,16 @@ describe("safeRpc", () => {
     mockRpc.mockReset();
     mockMessageError.mockReset();
     // Reset location
-    delete (window as any).location;
-    (window as any).location = { href: "http://localhost:5173" };
+    delete (window as unknown).location;
+    (window as unknown).location = { href: "http://localhost:5173" };
   });
 
   // --- HAPPY PATH ---
   it("returns data on success", async () => {
-    mockRpc.mockResolvedValue({ data: [{ id: 1, name: "Kho A" }], error: null });
+    mockRpc.mockResolvedValue({
+      data: [{ id: 1, name: "Kho A" }],
+      error: null,
+    });
     const result = await safeRpc("get_active_warehouses");
     expect(result.data).toEqual([{ id: 1, name: "Kho A" }]);
     expect(result.error).toBeNull();
@@ -107,7 +110,9 @@ describe("safeRpc", () => {
       data: null,
       error: { code: "P0001", message: "err" },
     });
-    await expect(safeRpc("fn", {}, { silent: true, toast: true })).rejects.toThrow();
+    await expect(
+      safeRpc("fn", {}, { silent: true, toast: true })
+    ).rejects.toThrow();
     expect(mockMessageError).not.toHaveBeenCalled();
   });
 

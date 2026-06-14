@@ -1,15 +1,26 @@
 // src/hooks/useVoiceInput.ts
 import { useState, useEffect } from "react";
 
+interface SpeechRecognitionResult {
+  stop: () => void;
+  start: () => void;
+  onresult: (event: Event) => void;
+  onerror: (event: Event) => void;
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+}
+
 export const useVoiceInput = (onResult: (text: string) => void) => {
   const [isListening, setIsListening] = useState(false);
-  let recognition: any = null;
+  let recognition: SpeechRecognitionResult | null = null;
 
   if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
+    const w = window as unknown as Record<string, unknown>;
     const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
+      w.SpeechRecognition ||
+      w.webkitSpeechRecognition;
+    recognition = new (SpeechRecognition as unknown as new () => SpeechRecognitionResult)();
     recognition.lang = "vi-VN";
     recognition.continuous = false;
     recognition.interimResults = false;
@@ -29,15 +40,17 @@ export const useVoiceInput = (onResult: (text: string) => void) => {
   useEffect(() => {
     if (!recognition) return;
 
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
+    recognition.onresult = (event: Event) => {
+      const evt = event as unknown as { results: Array<Array<{ transcript: string }>> };
+      const transcript = evt.results[0][0].transcript;
       console.log("Voice Result:", transcript);
       onResult(transcript);
       setIsListening(false);
     };
 
-    recognition.onerror = (event: any) => {
-      console.error("Voice Error:", event.error);
+    recognition.onerror = (event: Event) => {
+      const evt = event as unknown as { error: string };
+      console.error("Voice Error:", evt.error);
       setIsListening(false);
     };
   }, []);

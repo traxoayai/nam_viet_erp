@@ -31,10 +31,10 @@ import { ExcelPreviewModal } from "./ExcelPreviewModal";
 import { safeRpc } from "@/shared/lib/safeRpc";
 
 interface Props {
-  field: any; // Form List Field
+  field: unknown; // Form List Field
   remove: (index: number) => void;
   openProductModal: (fieldKey: number) => void;
-  form: any;
+  form: unknown;
 }
 
 export const PolicyGroupCard: React.FC<Props> = ({
@@ -48,10 +48,10 @@ export const PolicyGroupCard: React.FC<Props> = ({
 
   // Excel Modal State
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [previewData, setPreviewData] = useState<unknown[]>([]);
 
   // Fix: Extract key to avoid spreading it into Form.Item
-  const { key, ...restField } = field;
+  const { key: _key, ...restField } = field;
 
   // --- HANDLER: DOWNLOAD TEMPLATE ---
   const handleDownloadTemplate = () => {
@@ -76,11 +76,11 @@ export const PolicyGroupCard: React.FC<Props> = ({
 
       // Map keys (Header mapping)
       const formattedData = data
-        .map((row: any) => ({
+        .map((row: unknown) => ({
           name: row["Product Name"] || row["Tên sản phẩm"] || row["name"] || "",
           sku: row["SKU"] || row["Mã SKU"] || row["sku"] || "",
         }))
-        .filter((i: any) => i.name || i.sku);
+        .filter((i: unknown) => i.name || i.sku);
 
       if (formattedData.length === 0) {
         message.error("Không tìm thấy cột 'Product Name' hoặc 'SKU' hợp lệ.");
@@ -105,7 +105,7 @@ export const PolicyGroupCard: React.FC<Props> = ({
       // Store data and OPEN MODAL
       setPreviewData(matchedResults || []);
       setPreviewOpen(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error({
         content: "Lỗi import: " + error.message,
         key: "import_excel",
@@ -116,18 +116,18 @@ export const PolicyGroupCard: React.FC<Props> = ({
     }
   };
 
-  const handleConfirmImport = (items: any[]) => {
+  const handleConfirmImport = (items: unknown[]) => {
     // Merge into Form
     const groups = form.getFieldValue("groups");
     const currentGroup = groups[field.name];
 
     const existingIds = new Set(currentGroup.product_ids || []);
-    const newItems = items.filter((p: any) => !existingIds.has(p.id));
+    const newItems = items.filter((p: unknown) => !existingIds.has(p.id));
 
     if (newItems.length > 0) {
       groups[field.name].product_ids = [
         ...(currentGroup.product_ids || []),
-        ...newItems.map((p: any) => p.id),
+        ...newItems.map((p: unknown) => p.id),
       ];
       groups[field.name]._product_display = [
         ...(currentGroup._product_display || []),
@@ -140,7 +140,7 @@ export const PolicyGroupCard: React.FC<Props> = ({
     }
   };
 
-  const readExcel = (file: File): Promise<any[]> => {
+  const readExcel = (file: File): Promise<Array<Record<string, unknown>>> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -401,7 +401,7 @@ export const PolicyGroupCard: React.FC<Props> = ({
                   marginBottom: 8,
                 }}
               >
-                {displayItems.map((p: any) => (
+                {displayItems.map((p: unknown) => (
                   <Tag
                     key={p.id}
                     closable
@@ -422,7 +422,7 @@ export const PolicyGroupCard: React.FC<Props> = ({
                         (id: number) => id !== p.id
                       );
                       const newDisplay = currentDisplay.filter(
-                        (item: any) => item.id !== p.id
+                        (item: unknown) => item.id !== p.id
                       );
 
                       const groups = form.getFieldValue("groups");

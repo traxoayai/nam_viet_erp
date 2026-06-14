@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 const FAKE_UUID = "00000000-0000-0000-0000-000000000000";
@@ -173,7 +174,7 @@ describe("Portal Users Management", () => {
   // ─── D. registration_requests.auth_user_id column ───────────────────────────
   describe("registration_requests.auth_user_id column", () => {
     it("column exists", async () => {
-      const { data, error } = await adminClient
+      const { data: _data, error } = await adminClient
         .from("registration_requests")
         .select("auth_user_id")
         .limit(1);

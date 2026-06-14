@@ -51,9 +51,9 @@ import type { TableProps, TabsProps } from "antd";
 // import { supabase } from "@/lib/supabaseClient";
 import { useRoleStore } from "@/features/auth/stores/useRoleStore";
 import { useUserStore } from "@/features/auth/stores/useUserStore";
-import { useWarehouseStore } from "@/features/inventory/stores/warehouseStore";
 import { Role } from "@/features/auth/types/role";
 import { UserRoleInfo, UserAssignment } from "@/features/auth/types/user";
+import { useWarehouseStore } from "@/features/inventory/stores/warehouseStore";
 
 const { Text } = Typography;
 
@@ -114,7 +114,7 @@ const TabRoleManagement: React.FC = () => {
     fetchPermissions();
   }, [fetchRoles, fetchPermissions]);
 
-  const onTreeCheck = (checkedKeysValue: any) => {
+  const onTreeCheck = (checkedKeysValue: unknown) => {
     setCheckedKeysForRole(checkedKeysValue as string[]);
   };
 
@@ -153,9 +153,10 @@ const TabRoleManagement: React.FC = () => {
         if (success) antMessage.success(`Đã thêm vai trò mới "${values.name}"`);
       }
       if (success) setIsRoleModalVisible(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi lưu vai trò:", error);
-      antMessage.error(`Thao tác thất bại: ${error.message}`);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      antMessage.error(`Thao tác thất bại: ${errMsg}`);
     }
   };
 
@@ -165,9 +166,10 @@ const TabRoleManagement: React.FC = () => {
       if (success) {
         antMessage.success(`Đã xóa vai trò "${role.name}"`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi xóa vai trò:", error);
-      antMessage.error(`Lỗi khi xóa vai trò: ${error.message}`);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      antMessage.error(`Lỗi khi xóa vai trò: ${errMsg}`);
     }
   };
 
@@ -394,9 +396,10 @@ const TabUserManagement: React.FC = () => {
         closeModals();
         addUserForm.resetFields();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi tạo user:", error);
-      antMessage.error(`Thêm người dùng thất bại: ${error.message}`);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      antMessage.error(`Thêm người dùng thất bại: ${errMsg}`);
     }
   };
 
@@ -412,9 +415,10 @@ const TabUserManagement: React.FC = () => {
         antMessage.success(`Đã cập nhật phân quyền cho ${editingUser!.name}`);
         closeModals();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi cập nhật phân quyền:", error);
-      antMessage.error(`Cập nhật thất bại: ${error.message}`);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      antMessage.error(`Cập nhật thất bại: ${errMsg}`);
     }
   };
 
@@ -452,10 +456,11 @@ const TabUserManagement: React.FC = () => {
         content: `Đã duyệt thành công user ${user.name}`,
         key: msgKey,
       }); // (Store đã tự tải lại danh sách)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi khi duyệt user:", error);
+      const errMsg = error instanceof Error ? error.message : String(error);
       antMessage.error({
-        content: `Duyệt thất bại: ${error.message}`,
+        content: `Duyệt thất bại: ${errMsg}`,
         key: msgKey,
       });
     }
@@ -517,7 +522,7 @@ const TabUserManagement: React.FC = () => {
         { text: "Chờ duyệt", value: "pending_approval" },
         { text: "Tạm dừng", value: "inactive" },
       ],
-      onFilter: (value: any, record) => record.status === value,
+      onFilter: (value: unknown, record) => record.status === value,
     },
     {
       title: "Hành động",
@@ -818,7 +823,7 @@ const TabUserManagement: React.FC = () => {
                     </Form.Item>
                     <Text type="secondary">
                       (SENKO: Chức năng sửa thông tin user Sếp sẽ làm ở module
-                      "Quản lý Hồ sơ Nhân viên".)
+                      &quot;Quản lý Hồ sơ Nhân viên&quot;.)
                     </Text>
                   </>
                 ),

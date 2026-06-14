@@ -232,7 +232,10 @@ const CreateB2BOrderPage = () => {
               total_quantity: number;
               wholesale_quantity?: number;
             }>) {
-              stockMap.set(s.product_id, s.wholesale_quantity ?? s.total_quantity);
+              stockMap.set(
+                s.product_id,
+                s.wholesale_quantity ?? s.total_quantity
+              );
             }
           } catch (stockErr: unknown) {
             const msg =
@@ -304,7 +307,6 @@ const CreateB2BOrderPage = () => {
     };
 
     fetchOrderForEdit();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleSubmit = (status: "DRAFT" | "QUOTE" | "CONFIRMED") =>
@@ -405,9 +407,9 @@ const CreateB2BOrderPage = () => {
           reset();
           navigate("/b2b/orders");
         }
-      } catch (e: any) {
-        const msg = e?.message || "Lỗi tạo đơn";
-        message.error(msg);
+      } catch (e: unknown) {
+        const msg = (e as Record<string, unknown>)?.message || "Lỗi tạo đơn";
+        message.error(msg as string);
       }
     });
 

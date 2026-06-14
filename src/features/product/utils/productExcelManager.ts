@@ -101,17 +101,17 @@ export const importProductsFromExcel = async (file: File): Promise<number> => {
       const worksheet = workbook.Sheets[sheetName];
 
       // Read as JSON with headers
-      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as unknown[];
 
       if (!jsonData || jsonData.length === 0) {
         resolve(0);
         return;
       }
 
-      const processedItems = jsonData.map((row: any) => {
+      const processedItems = jsonData.map((row: unknown) => {
         const safeRow = row as ExcelProductRow;
         // 1. Map Basic Fields
-        const formValues: any = {
+        const formValues: unknown = {
           productName: safeRow["Tên sản phẩm"],
           sku: safeRow["SKU"] || null,
           barcode: safeRow["Barcode sản phẩm"] || null,
@@ -213,9 +213,9 @@ export const importProductsFromExcel = async (file: File): Promise<number> => {
       // We'll limit concurrency to 5.
       const CONCURRENCY_LIMIT = 5;
       let completed = 0;
-      const errors: any[] = [];
+      const errors: unknown[] = [];
 
-      const chunkArray = (arr: any[], size: number) =>
+      const chunkArray = (arr: unknown[], size: number) =>
         Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
           arr.slice(i * size, i * size + size)
         );
@@ -224,7 +224,7 @@ export const importProductsFromExcel = async (file: File): Promise<number> => {
 
       for (const chunk of chunks) {
         await Promise.all(
-          chunk.map(async (item: any) => {
+          chunk.map(async (item: unknown) => {
             try {
               await productService.addProduct(item, []);
               completed++;

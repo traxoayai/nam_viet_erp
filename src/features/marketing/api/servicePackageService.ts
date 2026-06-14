@@ -5,9 +5,9 @@ import type {
   PackageFilter,
   ServicePackageRecord,
 } from "@/features/marketing/types/servicePackage";
+import type { Json } from "@/shared/lib/database.types";
 
 import { safeRpc } from "@/shared/lib/safeRpc";
-import type { Json } from "@/shared/lib/database.types";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 export const servicePackageService = {

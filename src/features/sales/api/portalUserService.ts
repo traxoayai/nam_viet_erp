@@ -1,5 +1,5 @@
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export type PortalUserRow = {
   id: string;
@@ -19,7 +19,7 @@ export type PortalUserRow = {
 
 export const fetchPortalUsers = async (
   search?: string,
-  status?: string,
+  status?: string
 ): Promise<PortalUserRow[]> => {
   const { data, error } = await safeRpc("get_portal_users_list", {
     p_search: search || undefined,
@@ -38,7 +38,7 @@ type CreatePortalUserParams = {
 };
 
 export const createPortalUserFromERP = async (
-  params: CreatePortalUserParams,
+  params: CreatePortalUserParams
 ): Promise<{ portalUserId: string }> => {
   const { customerB2bId, email, displayName, phone, role } = params;
 
@@ -56,7 +56,7 @@ export const createPortalUserFromERP = async (
         email,
         display_name: displayName || null,
       }),
-    },
+    }
   );
   const edgeData = await edgeRes.json();
   if (!edgeRes.ok)
@@ -79,7 +79,7 @@ export const createPortalUserFromERP = async (
 
 export const togglePortalUserStatus = async (
   portalUserId: string,
-  newStatus: "active" | "inactive",
+  newStatus: "active" | "inactive"
 ): Promise<void> => {
   const { error } = await safeRpc("toggle_portal_user_status", {
     p_portal_user_id: portalUserId,
@@ -89,7 +89,7 @@ export const togglePortalUserStatus = async (
 };
 
 export const resendPortalInviteOrResetPassword = async (
-  email: string,
+  email: string
 ): Promise<{ action: "invite" | "recovery"; message: string }> => {
   const { data: session } = await supabase.auth.getSession();
   const edgeRes = await fetch(
@@ -101,7 +101,7 @@ export const resendPortalInviteOrResetPassword = async (
         Authorization: `Bearer ${session.session?.access_token}`,
       },
       body: JSON.stringify({ email }),
-    },
+    }
   );
 
   const edgeData = await edgeRes.json();
@@ -127,7 +127,7 @@ type CreateCustomerB2BParams = {
 };
 
 export const createCustomerB2BInline = async (
-  params: CreateCustomerB2BParams,
+  params: CreateCustomerB2BParams
 ): Promise<number> => {
   const {
     name,

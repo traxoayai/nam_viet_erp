@@ -17,7 +17,7 @@ export const nurseService = {
     warehouseId: number,
     nurseId?: string
   ) => {
-    const payload: any = {
+    const payload: unknown = {
       p_appointment_id: appointmentId,
       p_customer_id: customerId,
       p_scanned_product_ids: scannedProductIds,

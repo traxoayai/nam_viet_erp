@@ -26,7 +26,7 @@ export const useInboundList = () => {
     setFilters({ status });
   };
 
-  const handleDateChange = (dates: any) => {
+  const handleDateChange = (dates: unknown) => {
     setFilters({
       date_from: dates ? dates[0]?.toISOString() : undefined,
       date_to: dates ? dates[1]?.toISOString() : undefined,

@@ -20,7 +20,7 @@ const { mockSafeRpc, mockMessage, mockSupabaseFrom } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 vi.mock("antd", () => ({
@@ -28,13 +28,17 @@ vi.mock("antd", () => ({
 }));
 
 vi.mock("xlsx", () => ({
-  utils: { json_to_sheet: vi.fn(), book_new: vi.fn(), book_append_sheet: vi.fn() },
+  utils: {
+    json_to_sheet: vi.fn(),
+    book_new: vi.fn(),
+    book_append_sheet: vi.fn(),
+  },
   writeFile: vi.fn(),
 }));
 
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {
-    from: (...args: any[]) => mockSupabaseFrom(...args),
+    from: (...args: unknown[]) => mockSupabaseFrom(...args),
   },
 }));
 
@@ -76,7 +80,7 @@ describe("useFinanceStore", () => {
         p_description: "Tam ung",
       };
 
-      await useFinanceStore.getState().createTransaction(payload as any);
+      await useFinanceStore.getState().createTransaction(payload as unknown);
 
       expect(mockSafeRpc).toHaveBeenCalledWith(
         "create_finance_transaction",
@@ -87,7 +91,7 @@ describe("useFinanceStore", () => {
     it("shows success message on success", async () => {
       mockSafeRpc.mockResolvedValue({ data: { id: 1 } });
 
-      await useFinanceStore.getState().createTransaction({} as any);
+      await useFinanceStore.getState().createTransaction({} as unknown);
 
       expect(mockMessage.success).toHaveBeenCalledWith("Lập phiếu thành công!");
     });
@@ -95,7 +99,9 @@ describe("useFinanceStore", () => {
     it("shows error message on failure", async () => {
       mockSafeRpc.mockRejectedValue(new Error("DB error"));
 
-      const result = await useFinanceStore.getState().createTransaction({} as any);
+      const result = await useFinanceStore
+        .getState()
+        .createTransaction({} as unknown);
 
       expect(result).toBe(false);
       expect(mockMessage.error).toHaveBeenCalledWith("Lỗi: DB error");
@@ -111,7 +117,7 @@ describe("useFinanceStore", () => {
         p_ref_advance_id: 10,
       };
 
-      await useFinanceStore.getState().createTransaction(payload as any);
+      await useFinanceStore.getState().createTransaction(payload as unknown);
 
       // Verify supabase.from was called to update the old advance
       expect(mockSupabaseFrom).toHaveBeenCalledWith("finance_transactions");
@@ -123,7 +129,7 @@ describe("useFinanceStore", () => {
       mockSafeRpc.mockResolvedValue({ data: null });
 
       useFinanceStore.setState({
-        transactions: [{ id: 7, status: "pending" } as any],
+        transactions: [{ id: 7, status: "pending" } as unknown],
       });
 
       await useFinanceStore.getState().confirmTransaction(7, "approved");
@@ -138,7 +144,7 @@ describe("useFinanceStore", () => {
       mockSafeRpc.mockResolvedValue({ data: null });
 
       useFinanceStore.setState({
-        transactions: [{ id: 15, status: "approved" } as any],
+        transactions: [{ id: 15, status: "approved" } as unknown],
       });
 
       await useFinanceStore.getState().confirmTransaction(15, "completed");
@@ -154,8 +160,8 @@ describe("useFinanceStore", () => {
 
       useFinanceStore.setState({
         transactions: [
-          { id: 7, status: "pending", flow: "out" } as any,
-          { id: 8, status: "pending", flow: "in" } as any,
+          { id: 7, status: "pending", flow: "out" } as unknown,
+          { id: 8, status: "pending", flow: "in" } as unknown,
         ],
       });
 
@@ -168,7 +174,9 @@ describe("useFinanceStore", () => {
 
     it("shows success message for approved", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
-      useFinanceStore.setState({ transactions: [{ id: 1, status: "pending" } as any] });
+      useFinanceStore.setState({
+        transactions: [{ id: 1, status: "pending" } as unknown],
+      });
 
       await useFinanceStore.getState().confirmTransaction(1, "approved");
 
@@ -177,7 +185,9 @@ describe("useFinanceStore", () => {
 
     it("shows success message for completed", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
-      useFinanceStore.setState({ transactions: [{ id: 1, status: "approved" } as any] });
+      useFinanceStore.setState({
+        transactions: [{ id: 1, status: "approved" } as unknown],
+      });
 
       await useFinanceStore.getState().confirmTransaction(1, "completed");
 
@@ -187,7 +197,9 @@ describe("useFinanceStore", () => {
     it("shows error message on failure", async () => {
       mockSafeRpc.mockRejectedValue(new Error("Permission denied"));
 
-      const result = await useFinanceStore.getState().confirmTransaction(1, "approved");
+      const result = await useFinanceStore
+        .getState()
+        .confirmTransaction(1, "approved");
 
       expect(result).toBe(false);
       expect(mockMessage.error).toHaveBeenCalledWith("Lỗi: Permission denied");

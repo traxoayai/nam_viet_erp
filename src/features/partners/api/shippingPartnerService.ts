@@ -14,7 +14,7 @@ import { safeRpc } from "@/shared/lib/safeRpc";
  * 1. Tải danh sách Đối tác Vận chuyển (Không phân trang)
  */
 export const fetchPartners = async (
-  filters: any
+  filters: unknown
 ): Promise<{ data: ShippingPartnerListRecord[]; totalCount: number }> => {
   const { data, error } = await safeRpc("get_shipping_partners_list", {
     p_search_query: filters.search_query || null,
@@ -24,14 +24,17 @@ export const fetchPartners = async (
   if (error) throw error;
 
   const records = (data ?? []) as unknown as ShippingPartnerListRecord[];
-  const totalCount = records.length > 0 ? (records[0] as unknown as { total_count: number }).total_count : 0;
+  const totalCount =
+    records.length > 0
+      ? (records[0] as unknown as { total_count: number }).total_count
+      : 0;
   return { data: records, totalCount: totalCount || 0 };
 };
 
 /**
  * 2. Tải chi tiết 1 Đối tác (Form Sửa)
  */
-export const fetchPartnerDetails = async (id: number): Promise<any> => {
+export const fetchPartnerDetails = async (id: number): Promise<unknown> => {
   const { data, error } = await safeRpc("get_shipping_partner_details", {
     p_id: id,
   });

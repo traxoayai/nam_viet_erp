@@ -19,7 +19,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-
 import { useRef } from "react";
 
 import { receptionService } from "@/features/medical/api/receptionService";
@@ -72,7 +71,7 @@ const ServiceTag = ({ type }: { type: string }) => {
 
 // [POLISH] Status Badge Component
 const StatusBadge = ({ status }: { status: string }) => {
-  const map: any = {
+  const map: unknown = {
     pending: { color: "bg-gray-100 text-gray-600", text: "Mới đặt" },
     confirmed: {
       color: "bg-blue-50 text-blue-600 border border-blue-100",
@@ -170,15 +169,15 @@ export default function ReceptionPage() {
   const [filterStaff, setFilterStaff] = useState<string | null>(null);
 
   // Modal Data
-  const [rooms, setRooms] = useState<any[]>([]);
-  const [services, setServices] = useState<any[]>([]);
-  const [staffs, setStaffs] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<unknown[]>([]);
+  const [services, setServices] = useState<unknown[]>([]);
+  const [staffs, setStaffs] = useState<unknown[]>([]);
 
   // Form State
   const [selectedServices, setSelectedServices] = useState<number[]>([]);
   const [formData, setFormData] = useState({
     customerId: null as number | null,
-    customerData: null as any, // Lưu full info khách để hiển thị Card
+    customerData: null as unknown, // Lưu full info khách để hiển thị Card
     appointmentTime: dayjs().format("YYYY-MM-DDTHH:mm"),
     roomId: "",
     note: "",
@@ -268,7 +267,7 @@ export default function ReceptionPage() {
           item.id === id ? { ...item, status: "waiting" } : item
         )
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
       message.error("Lỗi: " + e.message);
     }
   };
@@ -305,7 +304,7 @@ export default function ReceptionPage() {
 
       // [POLISH] REMOVED timeout re-fetch to prevent flickering
       // setTimeout(() => fetchData(), 500);
-    } catch (e: any) {
+    } catch (e: unknown) {
       message.error(e.message);
     }
   };
@@ -324,7 +323,10 @@ export default function ReceptionPage() {
 
       // Xác định loại dịch vụ (Vaccination hoặc Examination)
       const isVaccination = serviceNames.some(
-        (n) => n.toLowerCase().includes("tiêm") || n.toLowerCase().includes("vaccine") || n.toLowerCase().includes("vắc")
+        (n) =>
+          n.toLowerCase().includes("tiêm") ||
+          n.toLowerCase().includes("vaccine") ||
+          n.toLowerCase().includes("vắc")
       );
       const serviceTypeToSave = isVaccination ? "vaccination" : "examination";
 
@@ -359,7 +361,7 @@ export default function ReceptionPage() {
       if (print) {
         printAppointmentSlip(tempApptForPrint);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi: " + err.message);
     }
   };
@@ -553,22 +555,32 @@ export default function ReceptionPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1.5">
-                      {row.service_type && (
+                      {row.service_type ? (
                         <div className="mb-1">
-                          {row.service_type.toLowerCase() === 'tiêm chủng' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase border bg-purple-100 text-purple-700 border-purple-200 whitespace-nowrap"><Syringe size={12} /> Tiêm Chủng</span>
-                          ) : row.service_type.toLowerCase() === 'khám bệnh' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase border bg-blue-100 text-blue-700 border-blue-200 whitespace-nowrap"><Stethoscope size={12} /> Khám Bệnh</span>
+                          {row.service_type.toLowerCase() === "tiêm chủng" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase border bg-purple-100 text-purple-700 border-purple-200 whitespace-nowrap">
+                              <Syringe size={12} /> Tiêm Chủng
+                            </span>
+                          ) : row.service_type.toLowerCase() === "khám bệnh" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase border bg-blue-100 text-blue-700 border-blue-200 whitespace-nowrap">
+                              <Stethoscope size={12} /> Khám Bệnh
+                            </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase border bg-gray-100 text-gray-700 border-gray-200 whitespace-nowrap">{row.service_type}</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase border bg-gray-100 text-gray-700 border-gray-200 whitespace-nowrap">
+                              {row.service_type}
+                            </span>
                           )}
                         </div>
-                      )}
+                      ) : null}
                       <div className="flex flex-wrap gap-1.5">
-                        {row.service_names && row.service_names.length > 0 ? row.service_names.map((s, idx) => (
-                          <ServiceTag key={idx} type={s} />
-                        )) : (
-                          <span className="text-gray-400 text-xs italic">Không có dịch vụ</span>
+                        {row.service_names && row.service_names.length > 0 ? (
+                          row.service_names.map((s, idx) => (
+                            <ServiceTag key={idx} type={s} />
+                          ))
+                        ) : (
+                          <span className="text-gray-400 text-xs italic">
+                            Không có dịch vụ
+                          </span>
                         )}
                       </div>
                     </div>
@@ -639,7 +651,7 @@ export default function ReceptionPage() {
                               ).format("YYYY-MM-DDTHH:mm"),
                               roomId: row.room_id ? String(row.room_id) : "",
                               note: "",
-                              priority: row.priority as any,
+                              priority: row.priority as unknown,
                             });
                             setSelectedServices(row.service_ids || []);
                             setDrawers({ ...drawers, booking: true });

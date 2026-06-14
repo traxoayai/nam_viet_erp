@@ -38,7 +38,6 @@ export const useInboundDetail = (id?: string) => {
       }
     }
     return () => resetDetail();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleSubmit = async () => {
@@ -98,8 +97,18 @@ export const useInboundDetail = (id?: string) => {
                 unit_price: i.unit_price || i.final_unit_cost || 0,
                 lot_number: i.input_lot || "DEFAULT",
                 expiry_date: i.input_expiry
-                  ? dayjs(i.input_expiry, ["DD/MM/YYYY", "YYYY-MM-DDTHH:mm:ss.SSSZ", "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ssZ"]).isValid()
-                    ? dayjs(i.input_expiry, ["DD/MM/YYYY", "YYYY-MM-DDTHH:mm:ss.SSSZ", "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ssZ"]).format("YYYY-MM-DD")
+                  ? dayjs(i.input_expiry, [
+                      "DD/MM/YYYY",
+                      "YYYY-MM-DDTHH:mm:ss.SSSZ",
+                      "YYYY-MM-DD",
+                      "YYYY-MM-DDTHH:mm:ssZ",
+                    ]).isValid()
+                    ? dayjs(i.input_expiry, [
+                        "DD/MM/YYYY",
+                        "YYYY-MM-DDTHH:mm:ss.SSSZ",
+                        "YYYY-MM-DD",
+                        "YYYY-MM-DDTHH:mm:ssZ",
+                      ]).format("YYYY-MM-DD")
                     : dayjs(i.input_expiry).format("YYYY-MM-DD") // fallback
                   : "2099-12-31",
               };
@@ -129,7 +138,7 @@ export const useInboundDetail = (id?: string) => {
     try {
       await safeRpc("save_inbound_draft", {
         p_po_id: Number(id),
-        p_draft_data: workingItems as any,
+        p_draft_data: workingItems as unknown,
       });
       message.success("Đã lưu nháp.");
     } catch (error: unknown) {

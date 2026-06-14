@@ -89,7 +89,7 @@ const PrescriptionTemplatePage: React.FC = () => {
   );
 
   // State để clear ô tìm thuốc trong Form
-  const [selectValue, setSelectValue] = useState<any>(null);
+  const [selectValue, setSelectValue] = useState<unknown>(null);
 
   // 1. Load dữ liệu
   useEffect(() => {
@@ -102,7 +102,7 @@ const PrescriptionTemplatePage: React.FC = () => {
       if (editingTemplate) {
         form.setFieldsValue({
           ...editingTemplate.data,
-          medicines: editingTemplate.items.map((i: any) => ({
+          medicines: editingTemplate.items.map((i: unknown) => ({
             key: i.id,
             product_id: i.product_id,
             name: i.product_name,
@@ -141,7 +141,7 @@ const PrescriptionTemplatePage: React.FC = () => {
         status: values.status,
       };
 
-      const items = (values.medicines || []).map((m: any) => ({
+      const items = (values.medicines || []).map((m: unknown) => ({
         product_id: m.product_id,
         quantity: m.qty,
         usage_instruction: m.usage_instruction,
@@ -165,7 +165,7 @@ const PrescriptionTemplatePage: React.FC = () => {
     }
   };
 
-  const handleSelectProduct = (_: any, option: any) => {
+  const handleSelectProduct = (_: unknown, option: unknown) => {
     if (!option?.product) return;
 
     const product = option.product;
@@ -236,7 +236,7 @@ const PrescriptionTemplatePage: React.FC = () => {
         title: "",
         key: "action",
         width: 120,
-        render: (_: any, record: PrescriptionTemplate) => (
+        render: (_: unknown, record: PrescriptionTemplate) => (
           <Space>
             <Button
               size="small"

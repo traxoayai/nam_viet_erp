@@ -10,6 +10,11 @@ import React, { useEffect, useState } from "react";
 
 const { Text, Paragraph } = Typography;
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
 export const SystemSetupModal: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -19,7 +24,7 @@ export const SystemSetupModal: React.FC = () => {
   // Ta dùng dấu phẩy "," để bỏ qua biến đầu tiên, chỉ lấy hàm setPermissionStatus
   const [, setPermissionStatus] = useState<string>("default");
 
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<unknown>(null);
 
   useEffect(() => {
     // 1. Kiểm tra quyền Thông báo
@@ -42,8 +47,9 @@ export const SystemSetupModal: React.FC = () => {
     checkPermission();
 
     // 2. Lắng nghe sự kiện cài đặt PWA
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault();
+    const handleBeforeInstallPrompt = (e: unknown) => {
+      const event = e as BeforeInstallPromptEvent;
+      event.preventDefault();
       setDeferredPrompt(e);
       // Nếu quyền thông báo ok rồi, mà chưa cài app -> Mở modal nhảy sang bước cài app
       if (
@@ -103,8 +109,9 @@ export const SystemSetupModal: React.FC = () => {
       setCurrentStep(2);
       return;
     }
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    const event = deferredPrompt as BeforeInstallPromptEvent;
+    event.prompt();
+    const { outcome } = await event.userChoice;
     if (outcome === "accepted") {
       setDeferredPrompt(null);
       setCurrentStep(2);
@@ -156,8 +163,8 @@ export const SystemSetupModal: React.FC = () => {
             </Button>
           ) : (
             <Text type="secondary">
-              (Máy Bạn đã cài rồi hoặc không hỗ trợ tự động. Hãy nhấn "Tiếp
-              tục")
+              (Máy Bạn đã cài rồi hoặc không hỗ trợ tự động. Hãy nhấn &quot;Tiếp
+              tục&quot;)
             </Text>
           )}
         </div>

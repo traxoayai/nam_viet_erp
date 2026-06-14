@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { App } from "antd";
+
 import { purchaseOrderV2Service } from "../services/purchaseOrderV2Service";
 import { PurchaseOrderV2 } from "../types";
-import { App } from "antd";
 
 export const usePurchaseOrdersV2 = (searchTerm?: string) => {
   const queryClient = useQueryClient();
@@ -19,7 +20,7 @@ export const usePurchaseOrdersV2 = (searchTerm?: string) => {
       queryClient.invalidateQueries({ queryKey: ["purchase_orders_v2"] });
       message.success("Cập nhật trạng thái thành công!");
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       message.error("Lỗi: " + error.message);
     },
   });
@@ -30,10 +31,12 @@ export const usePurchaseOrdersV2 = (searchTerm?: string) => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["purchase_orders_v2"] });
       message.success(
-        variables.hardDelete ? "Đã xóa cứng thành công!" : "Đã hủy đơn thành công!"
+        variables.hardDelete
+          ? "Đã xóa cứng thành công!"
+          : "Đã hủy đơn thành công!"
       );
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       message.error("Lỗi: " + error.message);
     },
   });

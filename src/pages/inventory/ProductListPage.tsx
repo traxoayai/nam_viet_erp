@@ -113,12 +113,10 @@ const ProductListPage = () => {
 
   useEffect(() => {
     fetchCommonData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi mount
   }, []);
 
   useEffect(() => {
     fetchProducts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- store action stable, chỉ rerun khi page/pageSize đổi
   }, [page, pageSize]);
 
   useEffect(() => {

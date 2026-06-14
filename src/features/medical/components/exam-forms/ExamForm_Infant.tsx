@@ -15,11 +15,11 @@ import {
 } from "recharts";
 
 interface Props {
-  data: any;
+  data: unknown;
   onChange: (key: string, val: string) => void;
   // Dữ liệu lịch sử cho biểu đồ (Optional if we calculate from birth)
-  historyData?: any[];
-  vitals?: any; // Để lấy weight hiện tại
+  historyData?: unknown[];
+  vitals?: unknown; // Để lấy weight hiện tại
   patientDOB?: string; // Cần DOB để tính tháng tuổi
   readOnly?: boolean;
 }

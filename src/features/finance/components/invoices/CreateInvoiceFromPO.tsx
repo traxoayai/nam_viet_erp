@@ -32,9 +32,62 @@ import { useProductStore } from "@/features/product/stores/productStore";
 import { supabase } from "@/shared/lib/supabaseClient";
 import { calcInvoiceTotals } from "@/shared/utils/money";
 
+interface POItem {
+  product_name?: string;
+  name?: string;
+  quantity_ordered?: number;
+  quantity?: number;
+  unit_price?: number;
+  price?: number;
+  vat_rate?: number;
+  product_id?: number;
+}
+
+interface InvoiceItem {
+  key: number;
+  name: string;
+  quantity: number;
+  xml_quantity: number;
+  unit_price: number;
+  xml_unit_price: number;
+  vat_rate: number;
+  product_id?: number | null;
+  internal_unit?: number | null;
+  expiry_date?: string | null;
+}
+
+interface InvoiceFormValues {
+  supplier_id?: number;
+  invoice_number?: string;
+  invoice_symbol?: string;
+  invoice_date?: string;
+  items: InvoiceItem[];
+  total_amount_post_tax?: number;
+}
+
+interface Product {
+  id: number;
+  sku: string;
+  name: string;
+  product_units?: ProductUnit[];
+  units?: ProductUnit[];
+}
+
+interface ProductUnit {
+  id: number;
+  unit_name: string;
+  conversion_rate: number;
+}
+
+interface Supplier {
+  id: number;
+  name: string;
+  tax_code: string;
+}
+
 interface CreateInvoiceFromPOProps {
   poId: number | string;
-  poItems: any[];
+  poItems: POItem[];
   supplierId?: number;
   onComplete?: () => void;
 }
@@ -55,7 +108,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
     null
   );
   const [selectedProductsMap, setSelectedProductsMap] = useState<
-    Record<number, any>
+    Record<number, Product>
   >({});
   // [C11] Track rows with unit conversion total deviation - blocks saving
   const [conversionErrors, setConversionErrors] = useState<Set<number>>(
@@ -79,7 +132,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
 
       // Pre-fill items from PO
       if (poItems && poItems.length > 0) {
-        const items = poItems.map((item: any, idx: number) => ({
+        const items = poItems.map((item: POItem, idx: number) => ({
           key: idx,
           name: item.product_name || item.name || "",
           quantity: item.quantity_ordered || item.quantity || 0,
@@ -100,7 +153,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
             if (found) {
               setSelectedProductsMap((prev) => ({
                 ...prev,
-                [found.id]: found,
+                [found.id]: found as Product,
               }));
             }
           }
@@ -113,7 +166,8 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
   }, [supplierId, poItems, suppliers.length, products.length]);
 
   // Calculate total
-  const calculateTotal = (items: any[] = []) => calcInvoiceTotals(items);
+  const calculateTotal = (items: InvoiceItem[] = []) =>
+    calcInvoiceTotals(items);
 
   const handleRecalculate = () => {
     const items = form.getFieldValue("items");
@@ -127,13 +181,13 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
     setIsVerifyModalOpen(true);
   };
 
-  const handleSelectProduct = async (product: any) => {
+  const handleSelectProduct = async (product: Product) => {
     if (selectingRowIndex === null) return;
-    let fullProduct = product;
+    let fullProduct: Product = product as Product;
     if (!product.product_units || product.product_units.length === 0) {
       try {
-        fullProduct = await getProductDetails(product.id);
-      } catch (e) {
+        fullProduct = (await getProductDetails(product.id)) as Product;
+      } catch (e: unknown) {
         console.error(e);
       }
     }
@@ -159,7 +213,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
       form.setFieldsValue({ items: newItems });
     }
     // Clear any conversion error for this row since product is removed
-    setConversionErrors(prev => {
+    setConversionErrors((prev) => {
       const next = new Set(prev);
       next.delete(index);
       return next;
@@ -167,7 +221,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
   };
 
   // Submit: create invoice + link to PO
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: InvoiceFormValues) => {
     setLoading(true);
     try {
       let safeSupplierId = values.supplier_id
@@ -192,7 +246,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
         total_amount_pre_tax: totals.totalPreTax,
         tax_amount: totals.totalTax,
         total_amount_post_tax: totals.final,
-        items_json: values.items.map((item: any) => ({
+        items_json: values.items.map((item: InvoiceItem) => ({
           ...item,
           product_id: item.product_id ? Number(item.product_id) : null,
           internal_unit: item.internal_unit || null,
@@ -220,9 +274,11 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
 
       message.success("Đã tạo hóa đơn thành công!");
       onComplete?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      message.error("Lỗi: " + error.message);
+      const errorMsg =
+        error instanceof Error ? error.message : "Lỗi không xác định";
+      message.error("Lỗi: " + errorMsg);
     } finally {
       setLoading(false);
     }
@@ -250,7 +306,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
         total_amount_pre_tax: totals.totalPreTax,
         tax_amount: totals.totalTax,
         total_amount_post_tax: totals.final,
-        items_json: values.items.map((item: any) => ({
+        items_json: values.items.map((item: InvoiceItem) => ({
           ...item,
           product_id: item.product_id ? Number(item.product_id) : null,
           expiry_date: item.expiry_date
@@ -274,21 +330,27 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
 
       message.success("Đã lưu nháp hóa đơn!");
       onComplete?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      message.error("Lỗi lưu nháp: " + error.message);
+      const errorMsg =
+        error instanceof Error ? error.message : "Lỗi không xác định";
+      message.error("Lỗi lưu nháp: " + errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   // Supplier options
-  const supplierOptions = suppliers.map((s: any) => ({
-    label: `${s.name} - ${s.tax_code}`,
-    value: s.id,
+  const supplierOptions = suppliers.map((s) => ({
+    label: `${(s as Supplier).name} - ${(s as Supplier).tax_code}`,
+    value: (s as Supplier).id,
   }));
 
-  const filterOptionSafe = (input: string, option: any) => {
+  interface OptionType {
+    label?: string;
+  }
+
+  const filterOptionSafe = (input: string, option: OptionType | null) => {
     if (!option?.label) return false;
     const tokens = input
       .toLowerCase()
@@ -304,7 +366,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
       title: "Tên hàng",
       dataIndex: "name",
       width: 220,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <Form.Item name={[index, "name"]} style={{ marginBottom: 0 }}>
           <Input
             readOnly
@@ -324,9 +386,13 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
       dataIndex: "quantity",
       width: 90,
       align: "center" as const,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <Form.Item name={[index, "quantity"]} style={{ marginBottom: 0 }}>
-          <InputNumber style={{ width: "100%" }} min={0} onChange={() => setTimeout(handleRecalculate, 0)} />
+          <InputNumber
+            style={{ width: "100%" }}
+            min={0}
+            onChange={() => setTimeout(handleRecalculate, 0)}
+          />
         </Form.Item>
       ),
     },
@@ -334,18 +400,25 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
       title: "Mã Nội Bộ (Chọn)",
       dataIndex: "product_id",
       width: 280,
-      render: (_: any, _record: any, index: number) => (
+      render: (_: unknown, _record: unknown, index: number) => (
         <Form.Item
-          shouldUpdate={(prev: any, curr: any) =>
+          shouldUpdate={(
+            prev: Record<string, InvoiceItem[]>,
+            curr: Record<string, InvoiceItem[]>
+          ) =>
             prev.items?.[index]?.product_id !== curr.items?.[index]?.product_id
           }
           style={{ marginBottom: 0 }}
         >
-          {({ getFieldValue }: any) => {
-            const productId = getFieldValue(["items", index, "product_id"]);
+          {({
+            getFieldValue,
+          }: {
+            getFieldValue: (path: string[] | string) => unknown;
+          }) => {
+            const productId = getFieldValue(["items", index, "product_id"]) as number | null;
             const selectedProduct =
-              selectedProductsMap[productId] ||
-              products.find((p) => p.id === productId);
+              (productId && selectedProductsMap[productId]) ||
+              (productId && products.find((p) => p.id === productId));
             return (
               <div>
                 <Form.Item
@@ -437,9 +510,12 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
       title: "ĐVT Nhập (Quy đổi)",
       dataIndex: "internal_unit",
       width: 180,
-      render: (_: any, _record: any, index: number) => (
+      render: (_: unknown, _record: unknown, index: number) => (
         <Form.Item
-          shouldUpdate={(prev: any, curr: any) =>
+          shouldUpdate={(
+            prev: Record<string, InvoiceItem[]>,
+            curr: Record<string, InvoiceItem[]>
+          ) =>
             prev.items?.[index]?.product_id !==
               curr.items?.[index]?.product_id ||
             prev.items?.[index]?.internal_unit !==
@@ -447,11 +523,15 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
           }
           style={{ marginBottom: 0 }}
         >
-          {({ getFieldValue }: any) => {
-            const productId = getFieldValue(["items", index, "product_id"]);
+          {({
+            getFieldValue,
+          }: {
+            getFieldValue: (path: string[] | string) => unknown;
+          }) => {
+            const productId = getFieldValue(["items", index, "product_id"]) as number | null;
             const selectedProduct =
-              selectedProductsMap[productId] ||
-              products.find((p) => p.id === productId);
+              (productId && selectedProductsMap[productId]) ||
+              (productId && products.find((p) => p.id === productId));
             if (!selectedProduct)
               return (
                 <span
@@ -466,9 +546,12 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
               );
 
             const baseXmlQty =
-              getFieldValue(["items", index, "xml_quantity"]) || 0;
-            const units =
-              selectedProduct.product_units || selectedProduct.units || [];
+              (getFieldValue(["items", index, "xml_quantity"]) as number) || 0;
+            const units = (
+              (selectedProduct as Product).product_units ||
+              (selectedProduct as Product).units ||
+              []
+            );
 
             return (
               <Form.Item
@@ -478,7 +561,10 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
                 <Select
                   placeholder="Chọn ĐVT"
                   style={{ width: "100%" }}
-                  onChange={(_value, option: any) => {
+                  onChange={(
+                    _value,
+                    option: { data_rate?: number } | null
+                  ) => {
                     const newRate = option?.data_rate || 1;
                     const fields = form.getFieldsValue();
                     const newItems = [...fields.items];
@@ -488,9 +574,9 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
                       const originalPrice = newItems[index].unit_price || 0;
                       const originalTotal = originalQty * originalPrice;
 
-                      if (baseXmlQty > 0)
+                      if (baseXmlQty && baseXmlQty > 0)
                         newItems[index].quantity = baseXmlQty / newRate;
-                      const basePrice = newItems[index].xml_unit_price || 0;
+                      const basePrice = (newItems[index].xml_unit_price || 0) as number;
                       if (basePrice > 0)
                         newItems[index].unit_price = basePrice * newRate;
 
@@ -498,9 +584,12 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
                       const convertedQty = newItems[index].quantity || 0;
                       const convertedPrice = newItems[index].unit_price || 0;
                       const convertedTotal = convertedQty * convertedPrice;
-                      const deviationPct = originalTotal > 0
-                        ? (Math.abs(originalTotal - convertedTotal) / originalTotal) * 100
-                        : 0;
+                      const deviationPct =
+                        originalTotal > 0
+                          ? (Math.abs(originalTotal - convertedTotal) /
+                              originalTotal) *
+                            100
+                          : 0;
                       if (originalTotal > 0 && deviationPct > 1) {
                         message.error(
                           `Dòng ${index + 1}: Tổng tiền sau quy đổi lệch ${deviationPct.toFixed(2)}% (>${1}%). Không thể lưu cho đến khi sửa.`
@@ -516,7 +605,9 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
 
                       // [C11] Fractional quantity warning
                       if (convertedQty % 1 !== 0) {
-                        message.warning(`Số lượng quy đổi không phải số nguyên (${convertedQty.toFixed(2)}). Kiểm tra quy cách đóng gói.`);
+                        message.warning(
+                          `Số lượng quy đổi không phải số nguyên (${convertedQty.toFixed(2)}). Kiểm tra quy cách đóng gói.`
+                        );
                       }
 
                       form.setFieldsValue({ items: newItems });
@@ -524,7 +615,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
                     }
                   }}
                 >
-                  {units.map((u: any) => (
+                  {units.map((u: ProductUnit) => (
                     <Select.Option
                       key={u.id}
                       value={u.id}
@@ -545,7 +636,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
       dataIndex: "unit_price",
       width: 130,
       align: "right" as const,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <Form.Item name={[index, "unit_price"]} style={{ marginBottom: 0 }}>
           <InputNumber
             style={{ width: "100%" }}
@@ -561,7 +652,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
       dataIndex: "vat_rate",
       width: 70,
       align: "center" as const,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <Form.Item name={[index, "vat_rate"]} style={{ marginBottom: 0 }}>
           <InputNumber
             min={0}
@@ -576,7 +667,7 @@ const CreateInvoiceFromPO: React.FC<CreateInvoiceFromPOProps> = ({
       title: "Hạn Dùng",
       dataIndex: "expiry_date",
       width: 130,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <Form.Item name={[index, "expiry_date"]} style={{ marginBottom: 0 }}>
           <DatePicker
             format="DD/MM/YYYY"

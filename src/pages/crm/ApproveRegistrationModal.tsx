@@ -1,4 +1,3 @@
-import React, { useState, useEffect, useCallback } from "react";
 import {
   Modal,
   Radio,
@@ -8,6 +7,8 @@ import {
   Typography,
   Divider,
 } from "antd";
+import React, { useState, useEffect, useCallback } from "react";
+
 import {
   searchCustomersB2B,
   type CustomerB2BOption,
@@ -23,7 +24,7 @@ type Props = {
   onConfirm: (
     existingCustomerId: number | null,
     debtLimit: number,
-    paymentTerm: number,
+    paymentTerm: number
   ) => void;
   onCancel: () => void;
 };
@@ -37,7 +38,7 @@ const ApproveRegistrationModal: React.FC<Props> = ({
 }) => {
   const [linkMode, setLinkMode] = useState<"new" | "existing">("new");
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
-    null,
+    null
   );
   const [debtLimit, setDebtLimit] = useState(0);
   const [paymentTerm, setPaymentTerm] = useState(30);
@@ -79,7 +80,7 @@ const ApproveRegistrationModal: React.FC<Props> = ({
         onConfirm(
           linkMode === "existing" ? selectedCustomerId : null,
           debtLimit,
-          paymentTerm,
+          paymentTerm
         )
       }
       onCancel={onCancel}
@@ -142,9 +143,7 @@ const ApproveRegistrationModal: React.FC<Props> = ({
             onChange={(v) => setDebtLimit(v ?? 0)}
             min={0}
             step={5_000_000}
-            formatter={(v) =>
-              `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-            }
+            formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
             parser={(v) => Number(v?.replace(/,/g, "") ?? 0)}
             style={{ width: 200 }}
           />

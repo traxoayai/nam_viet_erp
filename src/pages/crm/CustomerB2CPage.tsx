@@ -52,14 +52,13 @@ import { v4 as uuidv4 } from "uuid";
 import * as XLSX from "xlsx";
 
 import type { TableProps, UploadProps } from "antd";
-// import type { UploadRequestOption } from "antd/es/upload/interface";
 
-// IMPORT CÁC "BỘ NÃO" VÀ "KHUÔN MẪU"
+// import type { UploadRequestOption } from "antd/es/upload/interface";
 import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
 import { uploadAvatar } from "@/features/sales/api/customerService"; // Chỉ import service upload
+import { useCustomerB2CStore } from "@/features/sales/stores/useCustomerB2CStore";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import GuardianSelectModal from "@/shared/ui/common/GuardianSelectModal";
-import { useCustomerB2CStore } from "@/features/sales/stores/useCustomerB2CStore";
 // import { useUserStore } from "@/stores/useUserStore"; // Dùng cho Tab Giám hộ
 // import { useWarehouseStore } from "@/stores/warehouseStore"; // Dùng cho Tab Tổ chức (sau)
 import {
@@ -110,7 +109,7 @@ const maritalStatusOptions = [
   { value: "Khác", label: "Khác" },
 ];
 
-const calculateDetailedAge = (birthday: any) => {
+const calculateDetailedAge = (birthday: unknown) => {
   if (!birthday) return "N/A";
   let birthDate = dayjs(birthday);
   if (!birthDate.isValid()) return "N/A";
@@ -160,8 +159,11 @@ const CustomerB2CPage: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 500);
-  const [fileList, setFileList] = useState<any[]>([]);
-  const [cccdFiles, setCccdFiles] = useState<{ truoc: any[]; sau: any[] }>({
+  const [fileList, setFileList] = useState<unknown[]>([]);
+  const [cccdFiles, setCccdFiles] = useState<{
+    truoc: unknown[];
+    sau: unknown[];
+  }>({
     truoc: [],
     sau: [],
   });
@@ -283,7 +285,7 @@ const CustomerB2CPage: React.FC = () => {
         loyalty_points: values.loyalty_points || 0,
         status: values.status || "active", // Đảm bảo status không bị null
       }; // Lọc ra chỉ ID và Quan hệ
-      const guardiansData = (values.guardians || []).map((g: any) => ({
+      const guardiansData = (values.guardians || []).map((g: unknown) => ({
         guardian_id: g.guardian_id,
         relationship: g.relationship,
       }));
@@ -297,7 +299,7 @@ const CustomerB2CPage: React.FC = () => {
           guardiansData
         );
       } // Tự động quay về list (đã tích hợp trong store)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi Save:", error); // Store đã tự hiển thị message lỗi (nếu có ném lỗi)
       antMessage.error({
         content: `Lưu thất bại: ${error.message}`,
@@ -322,7 +324,7 @@ const CustomerB2CPage: React.FC = () => {
     try {
       await reactivateCustomer(record.id);
       antMessage.success(`Đã cho phép KH "${record.name}" giao dịch trở lại.`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       antMessage.error(error.message);
     }
   };
@@ -345,7 +347,7 @@ const CustomerB2CPage: React.FC = () => {
       } // Tạo Bảng tính
 
       // [UPDATE] Format dữ liệu cho Template (Thêm cột Nợ đầu kỳ)
-      const formattedData = dataToExport.map((item: any) => ({
+      const formattedData = dataToExport.map((item: unknown) => ({
         ...item,
         "Nợ Hiện Tại": item.current_debt || 0, // Cột mẫu để Import
       }));
@@ -362,7 +364,7 @@ const CustomerB2CPage: React.FC = () => {
         content: `Đã xuất ${dataToExport.length} khách hàng.`,
         key: "export",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       antMessage.error({
         content: `Xuất file thất bại: ${error.message}`,
         key: "export",
@@ -374,7 +376,7 @@ const CustomerB2CPage: React.FC = () => {
   const uploadProps: UploadProps = {
     name: "file",
     showUploadList: false,
-    customRequest: async ({ file, onSuccess, onError }: any) => {
+    customRequest: async ({ file, onSuccess, onError }: unknown) => {
       setIsImporting(true);
       antMessage.loading({
         content: "Đang xử lý file Excel...",
@@ -387,7 +389,7 @@ const CustomerB2CPage: React.FC = () => {
           content: `Import thành công! Đã thêm/cập nhật ${count} khách hàng.`,
           key: "import",
         }); // Store đã tự tải lại
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (onError) onError(error);
         antMessage.error({
           content: `Import thất bại: ${error.message}`,
@@ -404,17 +406,19 @@ const CustomerB2CPage: React.FC = () => {
     if (currentGuardianField === null) return;
 
     const currentGuardians = form.getFieldValue("guardians") || [];
-    const updatedGuardians = currentGuardians.map((g: any, index: number) => {
-      if (index === currentGuardianField) {
-        return {
-          ...g,
-          guardian_id: guardian.id,
-          name: guardian.name,
-          phone: phoneFormatter(guardian.phone || undefined),
-        };
+    const updatedGuardians = currentGuardians.map(
+      (g: unknown, index: number) => {
+        if (index === currentGuardianField) {
+          return {
+            ...g,
+            guardian_id: guardian.id,
+            name: guardian.name,
+            phone: phoneFormatter(guardian.phone || undefined),
+          };
+        }
+        return g; // SỬA LỖI LOGIC QUAN TRỌNG: (Không phải 'return;')
       }
-      return g; // SỬA LỖI LOGIC QUAN TRỌNG: (Không phải 'return;')
-    });
+    );
     form.setFieldsValue({ guardians: updatedGuardians });
     antMessage.success(`Đã chọn: ${guardian.name}`);
     setIsGuardianModalOpen(false);
@@ -426,9 +430,9 @@ const CustomerB2CPage: React.FC = () => {
   const renderListView = () => {
     // [NEW] XỬ LÝ KHI BẤM HEADER TABLE
     const handleTableChange = (
-      _pagination: any,
-      _filters: any,
-      sorter: any
+      _pagination: unknown,
+      _filters: unknown,
+      sorter: unknown
     ) => {
       // Reset sort debt nếu click cột khác, hoặc set giá trị nếu click cột nợ
       if (sorter.field === "current_debt") {
@@ -532,7 +536,7 @@ const CustomerB2CPage: React.FC = () => {
         width: 100,
         align: "center",
         fixed: "right",
-        render: (_: any, record: CustomerListRecord) => (
+        render: (_: unknown, record: CustomerListRecord) => (
           <Space size="small">
             <Tooltip
               title={
@@ -698,7 +702,7 @@ const CustomerB2CPage: React.FC = () => {
     ]; // Xử lý upload (Giả lập)
     const handleUploadChange = (
       type: "avatar" | "cccd_truoc" | "cccd_sau",
-      { fileList: newFileList }: any
+      { fileList: newFileList }: unknown
     ) => {
       if (type === "avatar") {
         setFileList(newFileList);

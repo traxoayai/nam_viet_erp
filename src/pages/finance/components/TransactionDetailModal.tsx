@@ -180,7 +180,7 @@ export const TransactionDetailModal: React.FC<Props> = ({
   // [FIX] Logic lấy thông tin ngân hàng chuẩn xác từ Metadata của Core
   // Core trả về: account_number, account_name
   // Frontend cần: acc, holder
-  const rawData = (data as any).metadata || data.target_bank_info || {};
+  const rawData = (data as unknown).metadata || data.target_bank_info || {};
 
   const bankInfo = {
     bin: rawData.bin,

@@ -9,7 +9,7 @@ import { useDebounce } from "@/shared/hooks/useDebounce";
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSelect: (product: any) => void;
+  onSelect: (product: unknown) => void;
 }
 
 export const VerifyProductModal: React.FC<Props> = ({
@@ -18,7 +18,7 @@ export const VerifyProductModal: React.FC<Props> = ({
   onSelect,
 }) => {
   const [keyword, setKeyword] = useState("");
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
   const debouncedKeyword = useDebounce(keyword, 500);
 
@@ -49,17 +49,20 @@ export const VerifyProductModal: React.FC<Props> = ({
     {
       title: "Sản phẩm",
       key: "name",
-      render: (_: any, record: any) => (
-        <Space>
-          <Avatar shape="square" src={record.image_url} />
-          <div>
-            <div style={{ fontWeight: "bold" }}>{record.name}</div>
-            <div style={{ fontSize: 12, color: "#888" }}>
-              {record.sku} | {record.manufacturer_name}
+      render: (_: unknown, record: unknown) => {
+        const r = record as Record<string, unknown>;
+        return (
+          <Space>
+            <Avatar shape="square" src={r.image_url as string} />
+            <div>
+              <div style={{ fontWeight: "bold" }}>{r.name}</div>
+              <div style={{ fontSize: 12, color: "#888" }}>
+                {r.sku} | {r.manufacturer_name}
+              </div>
             </div>
-          </div>
-        </Space>
-      ),
+          </Space>
+        );
+      },
     },
     {
       title: "Hoạt chất",
@@ -69,7 +72,7 @@ export const VerifyProductModal: React.FC<Props> = ({
     {
       title: "",
       key: "action",
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <Button type="primary" size="small" onClick={() => onSelect(record)}>
           Chọn
         </Button>

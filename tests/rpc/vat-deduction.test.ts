@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 describe("VAT Deduction RPCs", () => {
@@ -66,7 +67,9 @@ describe("VAT Deduction RPCs", () => {
       // adminClient (service_role) may be blocked by check_rpc_access() → "Unauthorized"
       // or pass through to business logic → "không tồn tại"
       const msg = error!.message;
-      expect(msg.includes("không tồn tại") || msg.includes("Unauthorized")).toBe(true);
+      expect(
+        msg.includes("không tồn tại") || msg.includes("Unauthorized")
+      ).toBe(true);
     });
   });
 });

@@ -23,12 +23,14 @@ export const ShippingLabelTemplate = ({
   if (!orderInfo) return null;
 
   const packages = Array.from({ length: packageCount || 1 }, (_, i) => i + 1);
-  
+
   // Tính tiền COD (Tiền cần thu)
   const finalAmount = orderInfo.final_amount || 0;
   const paidAmount = orderInfo.paid_amount || 0;
   const codAmount = finalAmount - paidAmount;
-  const displayPhone = formatPhone(orderInfo.shipping_phone || orderInfo.customer_phone);
+  const displayPhone = formatPhone(
+    orderInfo.shipping_phone || orderInfo.customer_phone
+  );
 
   return (
     <div className="shipping-label-source">
@@ -97,24 +99,46 @@ export const ShippingLabelTemplate = ({
       {packages.map((pkgNum) => (
         <div key={pkgNum} className="label-page">
           <div className="label-header">
-            <div style={{ fontSize: 16, fontWeight: "bold" }}>PHIẾU GIAO HÀNG</div>
+            <div style={{ fontSize: 16, fontWeight: "bold" }}>
+              PHIẾU GIAO HÀNG
+            </div>
             <div className="big-code">{orderInfo.code}</div>
-            <div style={{ fontSize: 12 }}>Ngày in: {new Date().toLocaleDateString("vi-VN")}</div>
+            <div style={{ fontSize: 12 }}>
+              Ngày in: {new Date().toLocaleDateString("vi-VN")}
+            </div>
           </div>
 
           <div className="row">
             <div className="label">ĐVVC:</div>
-            <div className="value" style={{ fontWeight: "bold", fontSize: 16, textTransform: "uppercase" }}>
+            <div
+              className="value"
+              style={{
+                fontWeight: "bold",
+                fontSize: 16,
+                textTransform: "uppercase",
+              }}
+            >
               {orderInfo.shipping_partner || "Tự vận chuyển"}
             </div>
           </div>
 
-          <div className="row" style={{ marginTop: 15, borderTop: "1px solid #ccc", paddingTop: 15 }}>
+          <div
+            className="row"
+            style={{
+              marginTop: 15,
+              borderTop: "1px solid #ccc",
+              paddingTop: 15,
+            }}
+          >
             <div className="label">Người nhận: </div>
             <div className="value">
               <b style={{ fontSize: 16 }}>{orderInfo.customer_name}</b>
-              <div style={{ fontSize: 14, fontWeight: "bold", marginTop: 4 }}>SĐT: {displayPhone}</div>
-              <div style={{ fontSize: 13, marginTop: 4 }}>{orderInfo.delivery_address}</div>
+              <div style={{ fontSize: 14, fontWeight: "bold", marginTop: 4 }}>
+                SĐT: {displayPhone}
+              </div>
+              <div style={{ fontSize: 13, marginTop: 4 }}>
+                {orderInfo.delivery_address}
+              </div>
             </div>
           </div>
 
@@ -126,17 +150,27 @@ export const ShippingLabelTemplate = ({
           </div>
 
           <div className="cod-box">
-             <div className="cod-title">TIỀN THU HỘ (COD)</div>
-             <div className="cod-amount">
-                {codAmount > 0 ? codAmount.toLocaleString("vi-VN") + " ₫" : "0 ₫ (Đã thanh toán)"}
-             </div>
+            <div className="cod-title">TIỀN THU HỘ (COD)</div>
+            <div className="cod-amount">
+              {codAmount > 0
+                ? codAmount.toLocaleString("vi-VN") + " ₫"
+                : "0 ₫ (Đã thanh toán)"}
+            </div>
           </div>
 
           <div className="package-badge">
             Kiện {pkgNum}/{packageCount || 1}
           </div>
 
-          <div style={{ position: "absolute", bottom: 15, left: 15, fontSize: 11, color: "#666" }}>
+          <div
+            style={{
+              position: "absolute",
+              bottom: 15,
+              left: 15,
+              fontSize: 11,
+              color: "#666",
+            }}
+          >
             Powered by Nam Viet ERP
           </div>
         </div>

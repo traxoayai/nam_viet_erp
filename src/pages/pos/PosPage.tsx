@@ -22,8 +22,8 @@ import { PosLeftSection } from "../../features/pos/components/layout/PosLeftSect
 import { PosPaymentSection } from "../../features/pos/components/layout/PosPaymentSection";
 import { usePosCartStore } from "../../features/pos/stores/usePosCartStore";
 
-import { useActiveWarehouses } from "@/shared/hooks/useMasterData";
 import { BarcodeAssignModal } from "@/features/product/components/BarcodeAssignModal"; // [NEW]
+import { useActiveWarehouses } from "@/shared/hooks/useMasterData";
 import { ScannerListener } from "@/shared/ui/warehouse-tools/ScannerListener";
 
 // Import Layout Components
@@ -63,7 +63,7 @@ const PosPage = () => {
     addToCart,
     clearCart,
   } = usePosCartStore();
-  // const searchRef = useRef<any>(null); // Không cần ref nữa vì dùng ScannerListener
+  // const searchRef = useRef<unknown>(null); // Không cần ref nữa vì dùng ScannerListener
   const navigate = useNavigate(); // [NEW] Hook điều hướng
 
   const { data: activeWarehouses = [] } = useActiveWarehouses();
@@ -205,7 +205,7 @@ const PosPage = () => {
   };
 
   // [NEW] Callback sau khi gán mã thành công
-  const handleAssignSuccess = (product: any) => {
+  const handleAssignSuccess = (product: unknown) => {
     setAssignModalVisible(false);
     // Data product từ RPC returns: { id, name, sku, unit, barcode, price }
     addToCart({
@@ -215,7 +215,7 @@ const PosPage = () => {
       image_url: product.image_url,
       price: product.price,
       unit: product.unit,
-    } as any);
+    } as unknown);
     message.success(`Đã thêm ${product.name} vào đơn!`);
   };
 
@@ -259,7 +259,10 @@ const PosPage = () => {
             onChange={handleChangeWarehouse}
             style={{ width: 160 }}
             size="small"
-            options={activeWarehouses.map((w: any) => ({ label: w.name, value: w.id }))}
+            options={activeWarehouses.map((w: unknown) => ({
+              label: w.name,
+              value: w.id,
+            }))}
           />
         </Space>
 

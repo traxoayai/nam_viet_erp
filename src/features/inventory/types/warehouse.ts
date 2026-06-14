@@ -33,7 +33,7 @@ export interface WarehouseStoreState {
   setFilters: (filters: Partial<WarehouseFilters>) => void;
   setPage: (page: number, pageSize: number) => void;
 
-  addWarehouse: (values: any) => Promise<boolean>;
-  updateWarehouse: (id: number, values: any) => Promise<boolean>;
+  addWarehouse: (values: unknown) => Promise<boolean>;
+  updateWarehouse: (id: number, values: unknown) => Promise<boolean>;
   deleteWarehouse: (id: number) => Promise<boolean>;
 }

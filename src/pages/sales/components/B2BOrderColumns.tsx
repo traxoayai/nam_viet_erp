@@ -49,13 +49,24 @@ export const B2BOrderColumns = [
     title: "Thanh toán",
     dataIndex: "payment_status",
     width: 160,
-    render: (stt: keyof typeof PAYMENT_STATUS_COLOR) => (
+    render: (stt: keyof typeof PAYMENT_STATUS_COLOR) => {
       // Yêu cầu của Core: Hiển thị Badge chấm tròn
-      <Badge
-        status={(PAYMENT_STATUS_COLOR[stt] as any) || "default"}
-        text={stt?.toUpperCase()}
-      />
-    ),
+      const statusValue = PAYMENT_STATUS_COLOR[stt];
+      const badgeStatus =
+        statusValue === "success" ||
+        statusValue === "error" ||
+        statusValue === "default" ||
+        statusValue === "processing" ||
+        statusValue === "warning"
+          ? statusValue
+          : "default";
+      return (
+        <Badge
+          status={badgeStatus}
+          text={stt?.toUpperCase()}
+        />
+      );
+    },
   },
   {
     title: "Tổng tiền",

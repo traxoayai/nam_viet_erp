@@ -19,7 +19,7 @@ export const ProductSearchB2B = ({
   onSelect,
   warehouseId = 1,
 }: ProductSearchB2BProps) => {
-  const [options, setOptions] = useState<any[]>([]);
+  const [options, setOptions] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
@@ -125,10 +125,11 @@ export const ProductSearchB2B = ({
       defaultActiveFirstOption={true}
       filterOption={false}
       onSearch={setSearch}
-      onSelect={(_, opt: any) => {
+      onSelect={(_, opt: unknown) => {
         // Vô hiệu hoá in-flight requests sau khi user chọn
         latestReqIdRef.current += 1;
-        onSelect(opt.product); // Gọi prop từ cha
+        const option = opt as Record<string, unknown>;
+        onSelect(option.product as ProductB2B); // Gọi prop từ cha
         setSearch("");
       }}
       loading={loading}

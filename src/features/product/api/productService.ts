@@ -24,7 +24,10 @@ export const getProducts = async ({ filters, page, pageSize }: FetchParams) => {
   });
 
   // search_products_v2 trả về { data: [...], total_count: number }
-  const result = data as unknown as { data: unknown[]; total_count: number } | null;
+  const result = data as unknown as {
+    data: unknown[];
+    total_count: number;
+  } | null;
   return {
     data: result?.data || [],
     totalCount: result?.total_count || 0,
@@ -75,8 +78,10 @@ export const getProductDetails = async (id: number) => {
   // [FIX] Lấy dữ liệu Marketing (Tìm bản ghi channel='website')
   const marketingData =
     data.product_contents && data.product_contents.length > 0
-      ? (data.product_contents.find((c: any) => c.channel === "website") as Record<string, unknown> | undefined) ?? {}
-      : {} as Record<string, unknown>;
+      ? ((data.product_contents.find(
+          (c: unknown) => c.channel === "website"
+        ) as Record<string, unknown> | undefined) ?? {})
+      : ({} as Record<string, unknown>);
 
   // D. MAP DỮ LIỆU DB (Snake_case) -> FORM (CamelCase)
   return {
@@ -129,17 +134,21 @@ export const getProductDetails = async (id: number) => {
 
     // [FIX] Map Marketing Content vào object content
     content: {
-      description_html: (marketingData as Record<string, unknown>).description_html || "",
-      short_description: (marketingData as Record<string, unknown>).short_description || "",
+      description_html:
+        (marketingData as Record<string, unknown>).description_html || "",
+      short_description:
+        (marketingData as Record<string, unknown>).short_description || "",
       seo_title: (marketingData as Record<string, unknown>).seo_title || "",
-      seo_description: (marketingData as Record<string, unknown>).seo_description || "",
-      seo_keywords: (marketingData as Record<string, unknown>).seo_keywords || [],
+      seo_description:
+        (marketingData as Record<string, unknown>).seo_description || "",
+      seo_keywords:
+        (marketingData as Record<string, unknown>).seo_keywords || [],
     },
   };
 };
 
 // 3. HÀM TẠO MỚI & CẬP NHẬT (Unified Upsert RPC V7)
-export const upsertProduct = async (formValues: any) => {
+export const upsertProduct = async (formValues: unknown) => {
   console.log("🚀 Starting upsertProduct (V7) with payload:", formValues);
 
   // 1. CHUẨN BỊ PAYLOAD PRODUCT (Tham số 1)
@@ -183,7 +192,7 @@ export const upsertProduct = async (formValues: any) => {
   };
 
   // 2. CHUẨN BỊ PAYLOAD UNITS (Tham số 2)
-  const unitsJson = (formValues.units || []).map((u: any) => ({
+  const unitsJson = (formValues.units || []).map((u: unknown) => ({
     id: u.id,
     unit_name: u.unit_name,
     unit_type: u.unit_type,
@@ -195,7 +204,7 @@ export const upsertProduct = async (formValues: any) => {
   }));
 
   // Handle Legacy implicit unit logic (Optional - Keep for safety)
-  if (formValues.retailUnit && !unitsJson.some((u: any) => u.is_base)) {
+  if (formValues.retailUnit && !unitsJson.some((u: unknown) => u.is_base)) {
     unitsJson.push({
       unit_name: formValues.retailUnit,
       conversion_rate: 1,
@@ -222,7 +231,7 @@ export const upsertProduct = async (formValues: any) => {
   // Transformation Logic: Object -> Array (nếu client gửi dạng Map)
   if (!Array.isArray(inventoryJson) && typeof inventoryJson === "object") {
     inventoryJson = Object.values(inventoryJson)
-      .map((item: any) => {
+      .map((item: unknown) => {
         if (!item.warehouse_id) return null;
         return {
           warehouse_id: item.warehouse_id,
@@ -250,8 +259,8 @@ export const upsertProduct = async (formValues: any) => {
 
 // Wrapper backward compatibility
 export const addProduct = async (
-  formValues: any,
-  inventoryPayload: any[] = []
+  formValues: unknown,
+  inventoryPayload: unknown[] = []
 ) => {
   if (inventoryPayload && inventoryPayload.length > 0) {
     formValues.inventorySettings = inventoryPayload;
@@ -261,8 +270,8 @@ export const addProduct = async (
 
 export const updateProduct = async (
   id: number,
-  formValues: any,
-  inventoryPayload: any[] = []
+  formValues: unknown,
+  inventoryPayload: unknown[] = []
 ) => {
   formValues.id = id;
   if (inventoryPayload && inventoryPayload.length > 0) {
@@ -350,7 +359,7 @@ export const importProducts = async (file: File) => {
       const workbook = XLSX.read(data);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const jsonArray: any[] = XLSX.utils.sheet_to_json(worksheet, {
+      const jsonArray: unknown[] = XLSX.utils.sheet_to_json(worksheet, {
         header: 1,
         raw: false,
       });
@@ -369,7 +378,8 @@ export const importProducts = async (file: File) => {
         row.forEach((value, index) => {
           const header = headers[index];
           if (warehouseKeys.includes(header)) {
-            (product.inventory_settings as Record<string, unknown>)[header] = value;
+            (product.inventory_settings as Record<string, unknown>)[header] =
+              value;
           } else {
             product[header] = value;
           }
@@ -378,7 +388,8 @@ export const importProducts = async (file: File) => {
       });
 
       await safeRpc("bulk_upsert_products", {
-        p_products_array: productsToUpsert as unknown as import("@/shared/lib/database.types").Json,
+        p_products_array:
+          productsToUpsert as unknown as import("@/shared/lib/database.types").Json,
       });
       resolve(productsToUpsert.length);
     } catch (error) {
@@ -439,7 +450,7 @@ export const searchProductsForDropdown = async (
   const prodRes = results.find((r) => r.type === "product")?.res;
   const svcRes = results.find((r) => r.type === "service")?.res;
 
-  const products = (prodRes?.data || []).map((p: any) => ({
+  const products = (prodRes?.data || []).map((p: unknown) => ({
     id: p.id,
     name: p.name,
     sku: p.sku,
@@ -450,7 +461,7 @@ export const searchProductsForDropdown = async (
     type: "product",
   }));
 
-  const services = (svcRes?.data || []).map((s: any) => ({
+  const services = (svcRes?.data || []).map((s: unknown) => ({
     id: s.id,
     name: s.name,
     sku: s.sku,

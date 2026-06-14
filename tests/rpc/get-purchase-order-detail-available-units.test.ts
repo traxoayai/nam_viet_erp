@@ -7,6 +7,7 @@
  * Bug gốc: dropdown chỉ thấy Hộp/Vỉ từ cột cũ products → user chọn Tub bị overwrite về Hộp.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 describe("RPC get_purchase_order_detail — available_units", () => {
@@ -101,8 +102,7 @@ describe("RPC get_purchase_order_detail — available_units", () => {
       })
       .select("id")
       .single();
-    if (poErr || !po)
-      throw new Error(`Seed PO failed: ${poErr?.message}`);
+    if (poErr || !po) throw new Error(`Seed PO failed: ${poErr?.message}`);
     testPoId = po.id;
     cleanup.poId = testPoId;
 
@@ -115,8 +115,7 @@ describe("RPC get_purchase_order_detail — available_units", () => {
         uom_ordered: "Tub",
         unit_price: 500000,
       });
-    if (poiErr)
-      throw new Error(`Seed PO item failed: ${poiErr.message}`);
+    if (poiErr) throw new Error(`Seed PO item failed: ${poiErr.message}`);
   });
 
   afterAll(async () => {
@@ -125,27 +124,18 @@ describe("RPC get_purchase_order_detail — available_units", () => {
         .from("purchase_order_items")
         .delete()
         .eq("po_id", cleanup.poId);
-      await adminClient
-        .from("purchase_orders")
-        .delete()
-        .eq("id", cleanup.poId);
+      await adminClient.from("purchase_orders").delete().eq("id", cleanup.poId);
     }
     if (cleanup.productId) {
       await adminClient
         .from("product_units")
         .delete()
         .eq("product_id", cleanup.productId);
-      await adminClient
-        .from("products")
-        .delete()
-        .eq("id", cleanup.productId);
+      await adminClient.from("products").delete().eq("id", cleanup.productId);
     }
     // Chỉ xóa supplier nếu test này tạo ra
     if (cleanup.supplierIdCreated) {
-      await adminClient
-        .from("suppliers")
-        .delete()
-        .eq("id", testSupplierId);
+      await adminClient.from("suppliers").delete().eq("id", testSupplierId);
     }
   });
 

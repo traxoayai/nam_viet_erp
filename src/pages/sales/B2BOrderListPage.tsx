@@ -98,7 +98,7 @@ const B2BOrderListPage = ({
 
   const [financeModalOpen, setFinanceModalOpen] = useState(false);
   const [selectedOrderForPayment, setSelectedOrderForPayment] =
-    useState<any>(null);
+    useState<unknown>(null);
   const [initialPaymentMethod, setInitialPaymentMethod] = useState<
     "cash" | "bank_transfer"
   >("cash"); // [NEW]
@@ -109,12 +109,13 @@ const B2BOrderListPage = ({
   // State Hủy Đơn Hàng
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [selectedOrderToCancel, setSelectedOrderToCancel] = useState<any>(null);
+  const [selectedOrderToCancel, setSelectedOrderToCancel] =
+    useState<unknown>(null);
 
   // --- STATE TRẢ HÀNG (SALES RETURN) ---
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
-  const [orderToReturn, setOrderToReturn] = useState<any>(null);
+  const [orderToReturn, setOrderToReturn] = useState<unknown>(null);
   const [returnItemsState, setReturnItemsState] = useState<any[]>([]);
   const [returnNote, setReturnNote] = useState("");
   const [returnFundId, setReturnFundId] = useState<number | null>(null);
@@ -188,10 +189,10 @@ const B2BOrderListPage = ({
       // Chỉ tìm những đơn chưa thanh toán (unpaid)
       const matchedIds = ordersList
         .filter(
-          (o: any) =>
+          (o: unknown) =>
             uniqueCodes.includes(o.code) && o.payment_status !== "paid"
         )
-        .map((o: any) => o.id);
+        .map((o: unknown) => o.id);
 
       if (matchedIds.length > 0) {
         setSelectedRowKeys(matchedIds);
@@ -207,7 +208,7 @@ const B2BOrderListPage = ({
           key: "upload",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error({ content: err.message, key: "upload" });
     }
     return false;
@@ -227,7 +228,7 @@ const B2BOrderListPage = ({
       generateInvoiceExcel(ordersData);
       message.success(`Đã xuất file cho ${ordersData.length} đơn hàng.`);
       setSelectedRowKeys([]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Xuất file thất bại: " + err.message);
     } finally {
       setExportInvoiceLoading(false);
@@ -235,7 +236,7 @@ const B2BOrderListPage = ({
   };
 
   // [NEW] Handler: Khi bấm nút $
-  const handlePaymentClick = (order: any) => {
+  const handlePaymentClick = (order: unknown) => {
     Modal.confirm({
       title: `Thanh toán đơn ${order.code}`,
       content: "Chọn hình thức thanh toán:",
@@ -291,7 +292,7 @@ const B2BOrderListPage = ({
 
   // [NEW] Xóa đơn (ĐÃ ẨN THEO YÊU CẦU)
   /*
-  const handleDelete = (order: any) => {
+  const handleDelete = (order: unknown) => {
     Modal.confirm({
       title: "Xác nhận xóa đơn hàng",
       content: `Bạn có chắc muốn xóa đơn ${order.code}? Hành động này không thể hoàn tác.`,
@@ -301,7 +302,7 @@ const B2BOrderListPage = ({
           await salesService.deleteOrder(order.id);
           message.success("Đã xóa đơn hàng");
           refresh();
-        } catch (e: any) {
+        } catch (e: unknown) {
           message.error("Lỗi xóa: " + e.message);
         }
       },
@@ -329,14 +330,14 @@ const B2BOrderListPage = ({
       setCancelReason("");
       setSelectedOrderToCancel(null);
       refresh(); // Load lại bảng
-    } catch (e: any) {
+    } catch (e: unknown) {
       message.error("Lỗi hủy đơn: " + e.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleCloneOrder = (order: any) => {
+  const handleCloneOrder = (order: unknown) => {
     Modal.confirm({
       title: "Xác nhận Nhân bản Đơn hàng",
       content: `Hệ thống sẽ tạo một bản sao mới từ đơn ${order.code}. Đơn mới sẽ ở trạng thái NHÁP và reset toàn bộ thanh toán. Bạn có muốn tiếp tục?`,
@@ -363,7 +364,7 @@ const B2BOrderListPage = ({
             // Chuyển hướng thẳng vào trang Sửa Đơn của đơn mới tạo
             navigate(`/b2b/orders/edit/${cloneRes.new_order_id}`);
           }
-        } catch (e: any) {
+        } catch (e: unknown) {
           message.error({
             content: "Lỗi nhân bản: " + e.message,
             key: "cloneOrder",
@@ -373,11 +374,11 @@ const B2BOrderListPage = ({
     });
   };
 
-  const handleOpenReturnModal = (order: any) => {
+  const handleOpenReturnModal = (order: unknown) => {
     setOrderToReturn(order);
     // Khởi tạo state cho các mặt hàng (Tính số lượng có thể trả)
     const initialItems = (order.order_items || [])
-      .map((item: any) => {
+      .map((item: unknown) => {
         const maxReturnable = item.quantity - (item.quantity_returned || 0);
         return {
           ...item,
@@ -390,7 +391,7 @@ const B2BOrderListPage = ({
             (warehouses.length > 0 ? warehouses[0].id : null),
         };
       })
-      .filter((i: any) => i.maxReturnable > 0); // Chỉ lấy món nào còn có thể trả
+      .filter((i: unknown) => i.maxReturnable > 0); // Chỉ lấy món nào còn có thể trả
 
     if (initialItems.length === 0) {
       message.warning("Đơn hàng này không còn sản phẩm nào để trả!");
@@ -447,7 +448,7 @@ const B2BOrderListPage = ({
       message.success(res.message);
       setIsReturnModalOpen(false);
       refresh();
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error("Lỗi trả hàng: " + error.message);
     } finally {
       setIsReturning(false);
@@ -469,7 +470,7 @@ const B2BOrderListPage = ({
         key: "action",
         width: 100,
         align: "center" as const,
-        render: (_: any, record: any) => (
+        render: (_: unknown, record: unknown) => (
           <Space>
             <Button
               type="text"
@@ -603,7 +604,7 @@ const B2BOrderListPage = ({
         title: "Khách hàng",
         dataIndex: "customer_name",
         width: 200,
-        render: (name: string, record: any) => (
+        render: (name: string, record: unknown) => (
           <div>
             <Text strong>{name}</Text>
             <div style={{ fontSize: 11, color: "#666" }}>
@@ -648,8 +649,8 @@ const B2BOrderListPage = ({
         title: "TT Đơn",
         dataIndex: "status",
         width: 140,
-        render: (status: string, record: any) => {
-          const map: any = {
+        render: (status: string, record: unknown) => {
+          const map: unknown = {
             DRAFT: { color: "default", text: "Nháp" },
             QUOTE: { color: "purple", text: "Báo giá" },
             CONFIRMED: { color: "blue", text: "Đã xác nhận" },
@@ -661,7 +662,7 @@ const B2BOrderListPage = ({
 
           // Kiểm tra xem đơn này có mặt hàng nào bị trả lại không
           const hasReturns = record.order_items?.some(
-            (item: any) => (item.quantity_returned || 0) > 0
+            (item: unknown) => (item.quantity_returned || 0) > 0
           );
 
           return (
@@ -681,7 +682,7 @@ const B2BOrderListPage = ({
         title: "Vận chuyển",
         key: "shipping_status",
         width: 130,
-        render: (_: any, record: any) => {
+        render: (_: unknown, record: unknown) => {
           if (
             record.delivery_method === "self_shipping" ||
             record.order_type === "POS"
@@ -710,7 +711,7 @@ const B2BOrderListPage = ({
         title: "Thanh toán",
         key: "payment_status",
         width: 130,
-        render: (_: any, record: any) => {
+        render: (_: unknown, record: unknown) => {
           const isPaid = isOrderPaid(record);
           if (isPaid)
             return (
@@ -729,11 +730,11 @@ const B2BOrderListPage = ({
         key: "invoice_action",
         width: 120,
         align: "center" as const,
-        render: (_: any, record: any) => (
+        render: (_: unknown, record: unknown) => (
           <VatActionButton
             invoice={record.sales_invoice || { id: null, status: "pending" }}
             // Map items từ JSON Array "order_items" của RPC
-            orderItems={(record.order_items || []).map((i: any) => ({
+            orderItems={(record.order_items || []).map((i: unknown) => ({
               ...i,
               // [FIX CRITICAL] Map id = product_id (BigInt) cho Modal kho
               id: i.product_id,
@@ -761,23 +762,22 @@ const B2BOrderListPage = ({
         ),
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
   // --- 5. DATA PREP (STATS) ---
   const selectedOrders = useMemo(() => {
-    return (tableProps.dataSource || []).filter((o: any) =>
+    return (tableProps.dataSource || []).filter((o: unknown) =>
       selectedRowKeys.includes(o.id)
     );
   }, [tableProps.dataSource, selectedRowKeys]);
 
   const hasPaidOrder = useMemo(() => {
-    return selectedOrders.some((o: any) => o.payment_status === "paid");
+    return selectedOrders.some((o: unknown) => o.payment_status === "paid");
   }, [selectedOrders]);
 
   const totalAmountToCollect = useMemo(() => {
-    return selectedOrders.reduce((sum: number, order: any) => {
+    return selectedOrders.reduce((sum: number, order: unknown) => {
       const amount =
         parseNumericOrZero(order.final_amount) -
         parseNumericOrZero(order.paid_amount);
@@ -984,7 +984,7 @@ const B2BOrderListPage = ({
             setIsPaymentModalOpen(false);
             setSelectedRowKeys([]); // Clear selection
             setNote(""); // Clear ghi chú
-          } catch (e: any) {
+          } catch (e: unknown) {
             message.error({ content: "Lỗi: " + e.message, key: "bulkPay" });
           } finally {
             setIsSubmitting(false);
@@ -1172,7 +1172,7 @@ const B2BOrderListPage = ({
               {
                 title: "Sản phẩm",
                 dataIndex: "product_name",
-                render: (val, record: any) => (
+                render: (val, record: unknown) => (
                   <Text strong>{record.product?.name || val}</Text>
                 ),
               },
@@ -1181,7 +1181,7 @@ const B2BOrderListPage = ({
                 dataIndex: "maxReturnable",
                 align: "center",
                 width: 150,
-                render: (val, record: any) => (
+                render: (val, record: unknown) => (
                   <Tag color="blue">
                     {val} {record.uom || record.product?.unit || "ĐV"}
                   </Tag>
@@ -1190,7 +1190,7 @@ const B2BOrderListPage = ({
               {
                 title: "Số lượng trả",
                 width: 120,
-                render: (_, record: any, index) => (
+                render: (_, record: unknown, index) => (
                   <InputNumber
                     min={0}
                     max={record.maxReturnable}
@@ -1206,14 +1206,16 @@ const B2BOrderListPage = ({
               {
                 title: "Đơn giá hoàn lại",
                 width: 150,
-                render: (_, record: any, index) => (
+                render: (_, record: unknown, index) => (
                   <InputNumber
                     min={0}
                     style={{ width: "100%" }}
                     formatter={(value) =>
                       `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                     }
-                    parser={(value) => value!.replace(/\$\s?|(,*)/g, "") as any}
+                    parser={(value) =>
+                      value!.replace(/\$\s?|(,*)/g, "") as unknown
+                    }
                     value={record.refundPrice}
                     onChange={(val) => {
                       const newItems = [...returnItemsState];
@@ -1226,7 +1228,7 @@ const B2BOrderListPage = ({
               {
                 title: "Nhập về Kho",
                 width: 200,
-                render: (_, record: any, index) => (
+                render: (_, record: unknown, index) => (
                   <Select
                     style={{ width: "100%" }}
                     value={record.returnWarehouseId}

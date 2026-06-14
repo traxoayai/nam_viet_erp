@@ -78,7 +78,6 @@ export const InventoryCheckDetail = () => {
   useEffect(() => {
     if (id) fetchSessionDetails(Number(id));
     // fetchSessionDetails là stable Zustand action, không cần thêm deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // 2. Logic Auto-Scroll: Khi activeItemId đổi -> Cuộn tới đó
@@ -182,7 +181,6 @@ export const InventoryCheckDetail = () => {
 
     return () => clearTimeout(timer);
     // confirmItemMatching/moveToNextItem/resetTranscript/updateItemQuantity là stable Zustand actions
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript, activeItemId, items]);
   // --- VOICE LOGIC END ---
 

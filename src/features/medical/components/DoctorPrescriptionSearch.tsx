@@ -43,7 +43,7 @@ export const DoctorPrescriptionSearch: React.FC<Props> = ({
         p_warehouse_id: warehouseId,
       });
       setResults((data || []) as unknown as PosProductSearchResult[]);
-    } catch (err) {
+    } catch (_err) {
       // safeRpc handles logging
     } finally {
       setLoading(false);
@@ -82,7 +82,7 @@ export const DoctorPrescriptionSearch: React.FC<Props> = ({
       searchValue={internalKeyword} // Controlled search input
       onSearch={setInternalKeyword}
       onSelect={(_val, option) => {
-        const product = (option as any).item as PosProductSearchResult;
+        const product = (option as unknown).item as PosProductSearchResult;
         onSelectProduct(product);
         setInternalKeyword("");
       }}

@@ -13,7 +13,7 @@ const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: unknown) => {
     setLoading(true);
     try {
       // Gọi Supabase để đăng ký
@@ -40,7 +40,7 @@ const RegisterPage = () => {
       } else {
         throw new Error("Đăng ký không thành công, vui lòng thử lại.");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error(error.message || "Đăng ký thất bại. Vui lòng thử lại.");
     } finally {
       setLoading(false);

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // --- Mocks ---
 const mockSafeRpc = vi.fn();
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 vi.mock("@/features/inventory/api/warehouseService", () => ({
@@ -70,7 +70,7 @@ describe("useProductStore", () => {
       await useProductStore.getState().fetchClassifications();
 
       // Both should be called (order may vary due to Promise.all)
-      const rpcNames = mockSafeRpc.mock.calls.map((call: any[]) => call[0]);
+      const rpcNames = mockSafeRpc.mock.calls.map((call: unknown[]) => call[0]);
       expect(rpcNames).toContain("get_distinct_categories");
       expect(rpcNames).toContain("get_distinct_manufacturers");
       expect(mockSafeRpc).toHaveBeenCalledTimes(2);

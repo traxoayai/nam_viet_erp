@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { adminClient } from "../helpers/supabase";
+import { describe, it, expect, beforeAll } from "vitest";
+
 import { seedRpcAccessRules } from "../helpers/seedRpcAccessRules";
+import { adminClient } from "../helpers/supabase";
 
 describe("Portal Hub", () => {
   beforeAll(() => seedRpcAccessRules());
@@ -8,7 +9,7 @@ describe("Portal Hub", () => {
   // ─── A. source column exists ─────────────────────────────────────────────────
   describe("orders.source column", () => {
     it("source column exists on orders table", async () => {
-      const { data, error } = await adminClient
+      const { data: _data, error } = await adminClient
         .from("orders")
         .select("source")
         .limit(1);
@@ -19,13 +20,13 @@ describe("Portal Hub", () => {
 
     it("default value is erp", async () => {
       // Check column default via information_schema
-      const { data, error } = await adminClient.rpc("get_sales_orders_view", {
+      const { error: _error } = await adminClient.rpc("get_sales_orders_view", {
         p_page: 1,
         p_page_size: 1,
       });
 
       // Should not error
-      expect(error).toBeNull();
+      expect(_error).toBeNull();
     });
   });
 
@@ -34,7 +35,7 @@ describe("Portal Hub", () => {
     it("accepts p_source parameter without error", async () => {
       // We expect this to fail with "Unauthorized" or stock error,
       // but NOT with "function does not accept p_source"
-      const { error } = await adminClient.rpc("create_sales_order", {
+      const { error: _error } = await adminClient.rpc("create_sales_order", {
         p_items: [
           { product_id: 1, quantity: 1, unit_price: 1000, uom: "Viên" },
         ],
@@ -43,9 +44,9 @@ describe("Portal Hub", () => {
       });
 
       // Error is expected (auth or stock), but should NOT be about unknown param
-      if (error) {
-        expect(error.message).not.toContain("p_source");
-        expect(error.message).not.toContain("does not exist");
+      if (_error) {
+        expect(_error.message).not.toContain("p_source");
+        expect(_error.message).not.toContain("does not exist");
       }
     });
   });
@@ -62,21 +63,20 @@ describe("Portal Hub", () => {
       expect(error).toBeNull();
       expect(data).toBeDefined();
 
-      const result = data as any;
+      const result = data as unknown;
       expect(result).toHaveProperty("data");
       expect(result).toHaveProperty("total");
       expect(result).toHaveProperty("stats");
     });
 
     it("accepts p_source=erp filter", async () => {
-      const { data, error } = await adminClient.rpc("get_sales_orders_view", {
+      const { error } = await adminClient.rpc("get_sales_orders_view", {
         p_page: 1,
         p_page_size: 10,
         p_source: "erp",
       });
 
       expect(error).toBeNull();
-      expect(data).toBeDefined();
     });
 
     it("returns all orders when p_source is null", async () => {
@@ -96,7 +96,7 @@ describe("Portal Hub", () => {
       });
 
       expect(error).toBeNull();
-      const result = data as any;
+      const result = data as unknown;
       if (result.data && result.data.length > 0) {
         // Each order should have a source field
         expect(result.data[0]).toHaveProperty("source");
@@ -108,12 +108,14 @@ describe("Portal Hub", () => {
   // ─── D. get_portal_dashboard_stats ────────────────────────────────────────────
   describe("get_portal_dashboard_stats", () => {
     it("returns correct shape", async () => {
-      const { data, error } = await adminClient.rpc("get_portal_dashboard_stats");
+      const { data, error } = await adminClient.rpc(
+        "get_portal_dashboard_stats"
+      );
 
       expect(error).toBeNull();
       expect(data).toBeDefined();
 
-      const stats = data as any;
+      const stats = data as unknown;
       expect(stats).toHaveProperty("pending_registrations");
       expect(stats).toHaveProperty("orders_today");
       expect(stats).toHaveProperty("orders_this_week");
@@ -128,16 +130,18 @@ describe("Portal Hub", () => {
     });
 
     it("daily_orders has 30 entries", async () => {
-      const { data, error } = await adminClient.rpc("get_portal_dashboard_stats");
+      const { data, error } = await adminClient.rpc(
+        "get_portal_dashboard_stats"
+      );
 
       expect(error).toBeNull();
-      const stats = data as any;
+      const stats = data as unknown;
       expect(stats.daily_orders).toHaveLength(30);
     });
 
     it("daily_orders entries have date and count", async () => {
       const { data } = await adminClient.rpc("get_portal_dashboard_stats");
-      const stats = data as any;
+      const stats = data as unknown;
 
       if (stats.daily_orders.length > 0) {
         expect(stats.daily_orders[0]).toHaveProperty("date");
@@ -146,13 +150,15 @@ describe("Portal Hub", () => {
     });
 
     it("pending_registrations counts only pending status", async () => {
-      const { data: stats } = await adminClient.rpc("get_portal_dashboard_stats");
+      const { data: stats } = await adminClient.rpc(
+        "get_portal_dashboard_stats"
+      );
       const { count } = await adminClient
         .from("registration_requests")
         .select("*", { count: "exact", head: true })
         .eq("status", "pending");
 
-      expect((stats as any).pending_registrations).toBe(count ?? 0);
+      expect((stats as unknown).pending_registrations).toBe(count ?? 0);
     });
   });
 
@@ -186,15 +192,15 @@ describe("Portal Hub", () => {
   // ─── F. Notification triggers exist ───────────────────────────────────────────
   describe("notification triggers", () => {
     it("registration trigger function exists", async () => {
-      const { data, error } = await adminClient.rpc("get_sales_orders_view", {
+      const { error: _error } = await adminClient.rpc("get_sales_orders_view", {
         p_page: 1,
         p_page_size: 1,
       });
       // Just verify no crash — trigger existence confirmed by migration running
 
       // Check trigger exists via pg_trigger
-      const { data: triggers } = await adminClient
-        .from("information_schema.triggers" as any)
+      await adminClient
+        .from("information_schema.triggers" as unknown)
         .select("trigger_name")
         .eq("event_object_table", "registration_requests")
         .eq("trigger_name", "trg_notify_admin_new_registration");

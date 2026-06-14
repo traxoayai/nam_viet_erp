@@ -1,14 +1,21 @@
 import { describe, it, expect } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 // Local PostgREST thỉnh thoảng trả 502/503 "upstream response" khi test suite
 // chạy song song nhiều RPC nặng. Wrap các "happy-path" call với retry nhẹ để
 // không bị flaky vì infra, giữ nguyên assertion về type-cast errors.
 async function rpcWithRetry<T>(
-  fn: () => PromiseLike<{ data: T; error: { code?: string; message?: string } | null }>,
+  fn: () => PromiseLike<{
+    data: T;
+    error: { code?: string; message?: string } | null;
+  }>,
   retries = 3
 ): Promise<{ data: T; error: { code?: string; message?: string } | null }> {
-  let last: { data: T; error: { code?: string; message?: string } | null } | null = null;
+  let last: {
+    data: T;
+    error: { code?: string; message?: string } | null;
+  } | null = null;
   for (let i = 0; i < retries; i++) {
     last = await fn();
     const msg = last.error?.message ?? "";
@@ -27,9 +34,10 @@ function expectTypeError(error: { code?: string; message?: string } | null) {
   const code = error?.code;
   const msg = error?.message ?? "";
   const okCode = code === "22P02" || code === "22007";
-  const okMsg = /invalid input syntax|invalid text representation|type (bigint|timestamp|uuid)/i.test(
-    msg
-  );
+  const okMsg =
+    /invalid input syntax|invalid text representation|type (bigint|timestamp|uuid)/i.test(
+      msg
+    );
   expect(okCode || okMsg).toBe(true);
 }
 

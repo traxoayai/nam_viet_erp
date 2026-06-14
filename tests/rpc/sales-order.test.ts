@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { adminClient } from "../helpers/supabase";
+
 import { seedRpcAccessRules } from "../helpers/seedRpcAccessRules";
+import { adminClient } from "../helpers/supabase";
 
 /**
  * Tests for create_sales_order RPC.
@@ -15,9 +16,7 @@ describe("create_sales_order", () => {
 
   it("rejects null warehouse_id", async () => {
     const { error } = await adminClient.rpc("create_sales_order", {
-      p_items: [
-        { product_id: 1, quantity: 1, unit_price: 1000, uom: "Viên" },
-      ],
+      p_items: [{ product_id: 1, quantity: 1, unit_price: 1000, uom: "Viên" }],
       p_warehouse_id: null,
     });
 
@@ -50,7 +49,9 @@ describe("create_sales_order", () => {
   it("verifies rpc_access_rules registration", async () => {
     const { data, error } = await adminClient
       .from("rpc_access_rules")
-      .select("function_name, required_permission, max_calls_per_minute, is_write")
+      .select(
+        "function_name, required_permission, max_calls_per_minute, is_write"
+      )
       .eq("function_name", "create_sales_order")
       .single();
 
@@ -63,11 +64,14 @@ describe("create_sales_order", () => {
   });
 
   it("sub-functions exist in database", async () => {
-    const { data, error } = await adminClient.rpc("_resolve_conversion_factor", {
-      p_product_id: 1,
-      p_uom: "Viên",
-      p_explicit_factor: 0,
-    });
+    const { data, error } = await adminClient.rpc(
+      "_resolve_conversion_factor",
+      {
+        p_product_id: 1,
+        p_uom: "Viên",
+        p_explicit_factor: 0,
+      }
+    );
 
     // Should return a number (1 or actual conversion rate)
     // May error with "Unauthorized" from check_rpc_access if guarded

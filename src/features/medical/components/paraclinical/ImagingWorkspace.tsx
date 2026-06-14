@@ -15,12 +15,12 @@ const { Text } = Typography;
 const { Option } = Select;
 
 interface Props {
-  request: any;
+  request: unknown;
   onComplete: () => void;
 }
 
 export const ImagingWorkspace = ({ request, onComplete }: Props) => {
-  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<unknown>(null);
   const [description, setDescription] = useState<string>("");
   const [conclusion, setConclusion] = useState<string>("");
   const [recommendation, setRecommendation] = useState<string>("");
@@ -37,7 +37,7 @@ export const ImagingWorkspace = ({ request, onComplete }: Props) => {
   });
 
   const handleApplyTemplate = (id: number) => {
-    const tpl = templates.find((t: any) => t.id === id);
+    const tpl = templates.find((t: unknown) => t.id === id);
     if (tpl) {
       setSelectedTemplate(tpl);
       setDescription(tpl.description_html || "");
@@ -269,7 +269,7 @@ export const ImagingWorkspace = ({ request, onComplete }: Props) => {
       if (status === "completed") {
         onComplete();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error(error.message || "Lỗi lưu kết quả");
     } finally {
       setIsSubmitting(false);
@@ -295,7 +295,7 @@ export const ImagingWorkspace = ({ request, onComplete }: Props) => {
             onChange={handleApplyTemplate}
             value={selectedTemplate?.id}
           >
-            {templates.map((t: any) => (
+            {templates.map((t: unknown) => (
               <Option key={t.id} value={t.id}>
                 {t.name}
               </Option>
@@ -354,7 +354,7 @@ export const ImagingWorkspace = ({ request, onComplete }: Props) => {
               rows={3}
               className="font-mono text-base"
               value={recommendation}
-              onChange={(e: any) => setRecommendation(e.target.value)}
+              onChange={(e: unknown) => setRecommendation(e.target.value)}
               placeholder="Đề nghị khám chuyên khoa..."
             />
           </div>

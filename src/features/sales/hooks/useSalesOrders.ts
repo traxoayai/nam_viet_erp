@@ -10,15 +10,18 @@ interface UseSalesOrdersProps {
   source?: string;
 }
 
-export const useSalesOrders = ({ orderType, source }: UseSalesOrdersProps = {}) => {
-  const [stats, setStats] = useState<any>({
+export const useSalesOrders = ({
+  orderType,
+  source,
+}: UseSalesOrdersProps = {}) => {
+  const [stats, setStats] = useState<unknown>({
     total_sales: 0,
     count_pending_remittance: 0,
     total_cash_pending: 0,
   });
 
   const fetcherAdapter = useCallback(
-    async (params: any) => {
+    async (params: unknown) => {
       const response = await salesService.getOrders({
         page: params.page,
         pageSize: params.pageSize,
@@ -49,7 +52,7 @@ export const useSalesOrders = ({ orderType, source }: UseSalesOrdersProps = {}) 
   );
 
   const { tableProps, filterProps, filters, refresh, setFilters } =
-    useListingLogic<any>({
+    useListingLogic<unknown>({
       fetcher: fetcherAdapter,
       defaultFilters: {
         status: "",

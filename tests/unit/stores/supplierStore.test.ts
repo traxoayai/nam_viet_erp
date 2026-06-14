@@ -11,12 +11,12 @@ const { mockSafeRpc, mockSupabaseFrom } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {
-    from: (...args: any[]) => mockSupabaseFrom(...args),
+    from: (...args: unknown[]) => mockSupabaseFrom(...args),
   },
 }));
 

@@ -57,5 +57,11 @@ export function resolveProductUnits(input: ResolveInput): ResolveResult {
     !!retailUnitObj &&
     wholesaleUnitObj.id !== retailUnitObj.id;
 
-  return { wholesaleUnitObj, retailUnitObj, hasWholesale, wholesaleRate, retailRate };
+  return {
+    wholesaleUnitObj,
+    retailUnitObj,
+    hasWholesale,
+    wholesaleRate,
+    retailRate,
+  };
 }

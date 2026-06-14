@@ -24,7 +24,7 @@ const UpdatePasswordPage: React.FC = () => {
   const { updatePassword, user } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
-  const handleFinish = async (values: any) => {
+  const handleFinish = async (values: unknown) => {
     setLoading(true);
     const msgKey = "update_pass";
     antMessage.loading({ content: "Đang cập nhật...", key: msgKey });
@@ -38,7 +38,7 @@ const UpdatePasswordPage: React.FC = () => {
 
       // BƯỚC 4: Chuyển sang Cập nhật Profile
       navigate("/onboarding/update-profile", { replace: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi đổi mật khẩu:", error);
       antMessage.error({ content: `Lỗi: ${error.message}`, key: msgKey });
       setLoading(false);

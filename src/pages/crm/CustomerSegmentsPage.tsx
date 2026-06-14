@@ -89,6 +89,7 @@ const CustomerSegmentsPage = () => {
                 loading={loading}
                 renderItem={(item) => (
                   <List.Item
+                    key={item.id}
                     style={{
                       cursor: "pointer",
                       background:
@@ -102,6 +103,7 @@ const CustomerSegmentsPage = () => {
                     onClick={() => setSelectedSegmentId(item.id)}
                     actions={[
                       <Button
+                        key="edit"
                         type="text"
                         size="small"
                         icon={<EditOutlined />}
@@ -111,6 +113,7 @@ const CustomerSegmentsPage = () => {
                         }}
                       />,
                       <Button
+                        key="delete"
                         danger
                         type="text"
                         size="small"

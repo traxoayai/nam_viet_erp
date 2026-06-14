@@ -26,19 +26,19 @@ const { Option } = Select;
 export default function PurchaseV2CreateEstimatePage() {
   const navigate = useNavigate();
 
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [shippingPartners, setShippingPartners] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<unknown[]>([]);
+  const [shippingPartners, setShippingPartners] = useState<unknown[]>([]);
 
-  const [supplierInfo, setSupplierInfo] = useState<any>(null);
+  const [supplierInfo, setSupplierInfo] = useState<unknown>(null);
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [supplierDebt, setSupplierDebt] = useState<number | null>(null);
 
-  const [shippingPartnerInfo, setShippingPartnerInfo] = useState<any>(null);
+  const [shippingPartnerInfo, setShippingPartnerInfo] = useState<unknown>(null);
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shippingType, setShippingType] = useState<string>("app");
   const [shippingNote, setShippingNote] = useState<string>("");
 
-  const [promotions, setPromotions] = useState<any[]>([]);
+  const [promotions, setPromotions] = useState<unknown[]>([]);
   const [promotionsLoading, setPromotionsLoading] = useState(false);
 
   const [totalAmount, setTotalAmount] = useState<number>(0);
@@ -92,7 +92,7 @@ export default function PurchaseV2CreateEstimatePage() {
       if (promoRes.data) {
         setPromotions(promoRes.data.data || []);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi lấy thông tin NCC: " + err.message);
     } finally {
       setSupplierLoading(false);
@@ -112,7 +112,7 @@ export default function PurchaseV2CreateEstimatePage() {
       if (error) throw error;
       setShippingPartnerInfo(data?.data);
       if (data?.data?.type) setShippingType(data.data.type);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi lấy thông tin ĐVVC: " + err.message);
     } finally {
       setShippingLoading(false);

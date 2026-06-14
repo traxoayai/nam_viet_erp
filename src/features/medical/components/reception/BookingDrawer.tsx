@@ -15,7 +15,7 @@ export const BookingDrawer = ({
   selectedServices,
   setSelectedServices,
   handleCreate,
-}: any) => {
+}: unknown) => {
   // Paste logic modal from ReceptionPage later
   return (
     <Drawer
@@ -51,7 +51,7 @@ export const BookingDrawer = ({
             {formData.customerId ? (
               <button
                 onClick={() =>
-                  setFormData((p: any) => ({
+                  setFormData((p: unknown) => ({
                     ...p,
                     customerId: null,
                     customerData: null,
@@ -138,7 +138,7 @@ export const BookingDrawer = ({
             value={selectedServices}
             onChange={setSelectedServices}
             options={
-              services?.map((s: any) => ({
+              services?.map((s: unknown) => ({
                 label: `${s.name} - ${parseInt(s.price).toLocaleString()}đ`,
                 value: s.id,
               })) || []
@@ -173,7 +173,7 @@ export const BookingDrawer = ({
               }
             >
               <option value="">-- Tự động xếp --</option>
-              {rooms?.map((r: any) => (
+              {rooms?.map((r: unknown) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
                 </option>
@@ -193,7 +193,7 @@ export const BookingDrawer = ({
                 <button
                   key={p}
                   onClick={() =>
-                    setFormData({ ...formData, priority: p as any })
+                    setFormData({ ...formData, priority: p as unknown })
                   }
                   className={`flex-1 py-1.5 text-xs font-bold rounded transition capitalize ${
                     formData.priority === p

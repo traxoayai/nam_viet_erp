@@ -1,8 +1,9 @@
 import { Form, message, Modal } from "antd";
-import { useState, useCallback, useEffect } from "react";
-import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
-import { useProductStore } from "@/features/product/stores/productStore";
 import dayjs from "dayjs";
+import { useState, useCallback, useEffect } from "react";
+
+import { useProductStore } from "@/features/product/stores/productStore";
+import { purchaseOrderService } from "@/features/purchasing/api/purchaseOrderService";
 
 export interface WorkbenchItem {
   id?: string;
@@ -12,17 +13,17 @@ export interface WorkbenchItem {
   product_image?: string;
   unit_name?: string;
   quantity: number;
-  unit_price: number; 
+  unit_price: number;
   vat_rate: number;
   discount_rate: number;
   allocated_shipping: number;
   bonus_quantity: number; // [SENKO FIX]: Thêm trường Số lượng tặng
-  final_base_cost?: number; 
+  final_base_cost?: number;
 }
 
 export interface WorkbenchFormValues {
   supplier_id?: string;
-  expected_delivery_date?: any;
+  expected_delivery_date?: unknown;
   shipping_method?: string;
   shipping_company?: string;
   shipper_name?: string;
@@ -35,8 +36,10 @@ export interface WorkbenchFormValues {
 
 export const usePurchaseWorkbenchLogic = (poId?: string) => {
   const [form] = Form.useForm<WorkbenchFormValues>();
-  const [poStatus, setPoStatus] = useState<"DRAFT" | "PENDING" | "CONFIRMED" | "COMPLETED">("DRAFT");
-  
+  const [poStatus, setPoStatus] = useState<
+    "DRAFT" | "PENDING" | "CONFIRMED" | "COMPLETED"
+  >("DRAFT");
+
   const [totals, setTotals] = useState({
     totalGoods: 0,
     totalVat: 0,
@@ -54,7 +57,7 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
     if (suppliers.length === 0) {
       fetchCommonData();
     }
-    if (poId && poId !== 'new') {
+    if (poId && poId !== "new") {
       loadOrder(poId);
     }
   }, [poId]);
@@ -65,11 +68,15 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
       const rawData = await purchaseOrderService.getPODetail(Number(id));
       if (!rawData) throw new Error("Không tìm thấy đơn hàng");
       const data = rawData as unknown as Record<string, unknown>;
-      setPoStatus(data.status as "DRAFT" | "PENDING" | "CONFIRMED" | "COMPLETED");
+      setPoStatus(
+        data.status as "DRAFT" | "PENDING" | "CONFIRMED" | "COMPLETED"
+      );
 
       form.setFieldsValue({
         supplier_id: data.supplier_id as string,
-        expected_delivery_date: data.expected_delivery_date ? dayjs(data.expected_delivery_date as string) : undefined,
+        expected_delivery_date: data.expected_delivery_date
+          ? dayjs(data.expected_delivery_date as string)
+          : undefined,
         shipping_method: data.shipping_method as string,
         shipping_company: data.shipping_company as string,
         shipper_name: data.shipper_name as string,
@@ -80,12 +87,13 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
           const i = item as WorkbenchItem & Record<string, unknown>;
           return {
             ...i,
-            is_bonus: (i.quantity as number) === 0 && (i.bonus_quantity as number) > 0,
+            is_bonus:
+              (i.quantity as number) === 0 && (i.bonus_quantity as number) > 0,
           };
         }) as WorkbenchItem[],
       });
       calculateTotals();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       message.error("Lỗi tải đơn mua: " + (error.message || ""));
     } finally {
@@ -95,8 +103,8 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
 
   // [SENKO FIX 1 & 2]: Tính toán an toàn & Phân bổ Ship theo Giá trị
   const calculateTotals = useCallback(() => {
-    const items = form.getFieldValue('items') || [];
-    const shippingFee = form.getFieldValue('shipping_fee') || 0;
+    const items = form.getFieldValue("items") || [];
+    const shippingFee = form.getFieldValue("shipping_fee") || 0;
 
     let totalGoods = 0;
     let totalVat = 0;
@@ -107,7 +115,7 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
     items.forEach((item: WorkbenchItem) => {
       const qty = item.quantity || 0;
       const price = item.unit_price || 0;
-      totalLineValue += (qty * price); 
+      totalLineValue += qty * price;
     });
 
     // Bước 2: Tính chi tiết từng dòng
@@ -128,19 +136,21 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
       totalVat += lineVat;
 
       // Phân bổ Ship theo Giá Trị (Value-based Allocation)
-      const allocated_shipping = totalLineValue > 0 ? (lineTotal / totalLineValue) * shippingFee : 0;
-      
+      const allocated_shipping =
+        totalLineValue > 0 ? (lineTotal / totalLineValue) * shippingFee : 0;
+
       // Tính Giá Vốn cuối cùng
       let final_base_cost = 0;
       const totalQtyReceived = qty + bonusQty;
       if (totalQtyReceived > 0) {
-        final_base_cost = (lineAfterDiscount + lineVat + allocated_shipping) / totalQtyReceived;
+        final_base_cost =
+          (lineAfterDiscount + lineVat + allocated_shipping) / totalQtyReceived;
       }
 
       return {
         ...item,
         allocated_shipping,
-        final_base_cost
+        final_base_cost,
       };
     });
 
@@ -157,31 +167,33 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
     return newItems;
   }, [form]);
 
-  const handleValuesChange = (changedValues: any, allValues: any) => {
+  const handleValuesChange = (changedValues: unknown, allValues: unknown) => {
     // Nếu người dùng đang gõ vào final_base_cost, KHÔNG tính toán lại tổng
     if (changedValues.items) {
-      const isEditingBaseCost = changedValues.items.some((item: any) => item && item.final_base_cost !== undefined);
+      const isEditingBaseCost = changedValues.items.some(
+        (item: unknown) => item && item.final_base_cost !== undefined
+      );
       if (isEditingBaseCost) {
         // Chỉ tính tổng giá, ko chạy thuật toán allocate để ghi đè base_cost
         updateFinalTotalOnly(allValues);
         return;
       }
     }
-    
+
     if (changedValues.items || changedValues.shipping_fee !== undefined) {
-       calculateTotals();
+      calculateTotals();
     }
   };
 
-  const updateFinalTotalOnly = (allValues: any) => {
+  const updateFinalTotalOnly = (allValues: unknown) => {
     const items = allValues.items || [];
     const shippingFee = allValues.shipping_fee || 0;
-    
+
     let totalGoods = 0;
     let totalVat = 0;
     let totalDiscount = 0;
 
-    items.forEach((item: any) => {
+    items.forEach((item: unknown) => {
       const qty = item.quantity || 0;
       const price = item.unit_price || 0;
       const vat = item.vat_rate || 0;
@@ -206,13 +218,13 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
     });
   };
 
-  const handleSelectProduct = (_: any, option: any) => {
+  const handleSelectProduct = (_: unknown, option: unknown) => {
     if (!option) return;
     const product = option.product;
     if (!product) return;
 
     const currentItems = form.getFieldValue("items") || [];
-    
+
     const newItem: WorkbenchItem = {
       product_id: product.id,
       product_name: product.name,
@@ -243,21 +255,21 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
     setTimeout(() => {
       const mockDataFromXml: WorkbenchItem[] = [];
       Modal.confirm({
-        title: 'Phát hiện dữ liệu Hóa đơn XML',
-        content: 'Ghi đè hay Cộng dồn?',
-        okText: 'Ghi đè',
-        cancelText: 'Cộng dồn',
+        title: "Phát hiện dữ liệu Hóa đơn XML",
+        content: "Ghi đè hay Cộng dồn?",
+        okText: "Ghi đè",
+        cancelText: "Cộng dồn",
         onOk() {
           form.setFieldsValue({ items: mockDataFromXml });
           calculateTotals();
-          message.success('Đã ghi đè dữ liệu từ XML');
+          message.success("Đã ghi đè dữ liệu từ XML");
         },
         onCancel() {
-          const currentItems = form.getFieldValue('items') || [];
+          const currentItems = form.getFieldValue("items") || [];
           form.setFieldsValue({ items: [...currentItems, ...mockDataFromXml] });
           calculateTotals();
-          message.success('Đã cộng dồn dữ liệu từ XML');
-        }
+          message.success("Đã cộng dồn dữ liệu từ XML");
+        },
       });
     }, 500);
     return false;
@@ -269,8 +281,12 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
       const values = await form.validateFields();
       const payload = { ...values };
 
-      if (poId && poId !== 'new') {
-        await purchaseOrderService.updatePO(Number(poId), payload, values.items);
+      if (poId && poId !== "new") {
+        await purchaseOrderService.updatePO(
+          Number(poId),
+          payload,
+          values.items
+        );
         message.success("Cập nhật nháp thành công");
       } else {
         const createPayload = {
@@ -281,7 +297,7 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
         await purchaseOrderService.createPO(createPayload);
         message.success("Tạo đơn mua hàng thành công");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!error.errorFields) {
         message.error("Lỗi: " + (error.message || ""));
       }
@@ -291,7 +307,7 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
   };
 
   const handleOrder = async () => {
-    if (!poId || poId === 'new') {
+    if (!poId || poId === "new") {
       message.error("Vui lòng lưu nháp trước khi đặt hàng");
       return;
     }
@@ -300,7 +316,7 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
       await purchaseOrderService.confirmPO(Number(poId));
       message.success("Đặt hàng thành công");
       loadOrder(poId); // reload status
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       message.error("Lỗi: " + (error.message || ""));
     } finally {
@@ -308,11 +324,11 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
     }
   };
 
-  const showSaveDraft = poStatus === 'DRAFT';
-  const showPrint = true; 
-  const showOrder = poStatus === 'DRAFT';
-  const showPayment = poStatus === 'PENDING' || poStatus === 'CONFIRMED';
-  const showUpdateCost = poStatus === 'PENDING' || poStatus === 'CONFIRMED';
+  const showSaveDraft = poStatus === "DRAFT";
+  const showPrint = true;
+  const showOrder = poStatus === "DRAFT";
+  const showPayment = poStatus === "PENDING" || poStatus === "CONFIRMED";
+  const showUpdateCost = poStatus === "PENDING" || poStatus === "CONFIRMED";
 
   return {
     form,
@@ -334,7 +350,7 @@ export const usePurchaseWorkbenchLogic = (poId?: string) => {
       showPrint,
       showOrder,
       showPayment,
-      showUpdateCost
-    }
+      showUpdateCost,
+    },
   };
 };

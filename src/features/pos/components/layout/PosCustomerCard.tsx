@@ -58,7 +58,6 @@ export const PosCustomerCard = () => {
     } else {
       setAvailableVouchers([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer?.id, debouncedTotal]);
 
   // Hàm hiển thị cảnh báo Y tế (Hoặc nút nhắc cập nhật)

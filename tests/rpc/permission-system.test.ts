@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { adminClient } from "../helpers/supabase";
+
 import { seedRpcAccessRules } from "../helpers/seedRpcAccessRules";
+import { adminClient } from "../helpers/supabase";
 
 describe("Permission & Rate Limit System", () => {
   beforeAll(() => seedRpcAccessRules());

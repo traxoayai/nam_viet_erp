@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { adminClient } from "../helpers/supabase";
+
 import { seedRpcAccessRules } from "../helpers/seedRpcAccessRules";
+import { adminClient } from "../helpers/supabase";
 
 /**
  * Tests for finance RPCs.
@@ -120,7 +121,9 @@ describe("finance RPCs", () => {
   it("rpc_access_rules contains finance RPC entries with correct permissions", async () => {
     const { data, error } = await adminClient
       .from("rpc_access_rules")
-      .select("function_name, required_permission, is_write, max_calls_per_minute")
+      .select(
+        "function_name, required_permission, is_write, max_calls_per_minute"
+      )
       .in("function_name", [
         "create_finance_transaction",
         "delete_invoice_atomic",

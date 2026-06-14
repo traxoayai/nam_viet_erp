@@ -51,7 +51,11 @@ export const InvoiceXmlUpload: React.FC<Props> = ({
 
   return (
     <Modal
-      title={direction === "outbound" ? "Nhập XML HĐ VAT đã xuất (Trừ kho)" : "Nhập Hóa Đơn Điện Tử (XML)"}
+      title={
+        direction === "outbound"
+          ? "Nhập XML HĐ VAT đã xuất (Trừ kho)"
+          : "Nhập Hóa Đơn Điện Tử (XML)"
+      }
       open={open}
       onCancel={onCancel}
       footer={null}

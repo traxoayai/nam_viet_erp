@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { financialReportsService } from "@/features/finance/api/financialReportsService";
-import { downloadBctcPdf } from "@/features/finance/utils/bctcPdfGenerator";
+
 import type {
   BalanceSheetRow,
   VatDeclarationRow,
   CashFlow,
 } from "@/features/finance/api/financialReportsService";
+
+import { financialReportsService } from "@/features/finance/api/financialReportsService";
+import { downloadBctcPdf } from "@/features/finance/utils/bctcPdfGenerator";
 
 export interface UseBctcReportParams {
   year: number;
@@ -25,7 +27,9 @@ export interface UseBctcReportResult {
  * - Cache với staleTime=1 hour
  * - Trả [] khi null error
  */
-export function useBctcReport(params: UseBctcReportParams): UseBctcReportResult {
+export function useBctcReport(
+  params: UseBctcReportParams
+): UseBctcReportResult {
   const { data: balanceSheet = [], isLoading: bsLoading } = useQuery({
     queryKey: ["bctc", "balance_sheet", params.year, params.month],
     queryFn: async () => {
@@ -95,11 +99,14 @@ export async function exportBctcBalanceSheetPdf(
   const period = `${year}${String(month).padStart(2, "0")}`;
   const filename = `BCTC-${period}.pdf`;
 
-  await downloadBctcPdf({
-    period,
-    year,
-    month,
-    companyName,
-    lines: balanceSheet,
-  }, filename);
+  await downloadBctcPdf(
+    {
+      period,
+      year,
+      month,
+      companyName,
+      lines: balanceSheet,
+    },
+    filename
+  );
 }

@@ -20,7 +20,7 @@ import { receptionService } from "@/features/medical/api/receptionService";
 const DoctorQueuePage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<unknown[]>([]);
   const [date, setDate] = useState(dayjs());
   const [search, setSearch] = useState("");
 
@@ -37,7 +37,7 @@ const DoctorQueuePage = () => {
         search
       );
       // Filter only waiting or examining
-      const filtered = res.filter((item: any) =>
+      const filtered = res.filter((item: unknown) =>
         ["waiting", "examining"].includes(item.status)
       );
       setData(filtered);
@@ -53,14 +53,14 @@ const DoctorQueuePage = () => {
       title: "STT",
       dataIndex: "priority", // or calculate index
       width: 60,
-      render: (_: any, __: any, index: number) => (
+      render: (_: unknown, __: unknown, index: number) => (
         <Tag color="blue">#{index + 1}</Tag>
       ),
     },
     {
       title: "Khách hàng",
       dataIndex: "customer_name",
-      render: (name: string, row: any) => (
+      render: (name: string, row: unknown) => (
         <Space>
           <Avatar
             icon={<UserOutlined />}
@@ -103,7 +103,7 @@ const DoctorQueuePage = () => {
       title: "Hành động",
       key: "action",
       width: 100,
-      render: (_: any, row: any) => (
+      render: (_: unknown, row: unknown) => (
         <Button
           type="primary"
           icon={<Stethoscope />}

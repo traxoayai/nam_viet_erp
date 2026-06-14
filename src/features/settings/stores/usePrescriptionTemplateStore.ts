@@ -22,12 +22,12 @@ interface StoreState {
   getTemplateDetails: (id: number) => Promise<void>;
   createTemplate: (
     data: PrescriptionTemplateInput,
-    items: any[]
+    items: unknown[]
   ) => Promise<boolean>;
   updateTemplate: (
     id: number,
     data: PrescriptionTemplateInput,
-    items: any[]
+    items: unknown[]
   ) => Promise<boolean>;
   deleteTemplate: (id: number) => Promise<void>;
 
@@ -49,8 +49,8 @@ export const usePrescriptionTemplateStore = create<StoreState>((set, get) => ({
         status || undefined
       );
       set({ templates: data, loading: false });
-    } catch (error) {
-      console.error(error);
+    } catch (_error) {
+      console.error(_error);
       set({ loading: false });
     }
   },
@@ -61,7 +61,7 @@ export const usePrescriptionTemplateStore = create<StoreState>((set, get) => ({
       const { template, items } =
         await prescriptionTemplateService.getTemplateDetails(id);
       set({ editingTemplate: { data: template, items }, loading: false });
-    } catch (error) {
+    } catch (_error) {
       message.error("Lỗi tải chi tiết đơn mẫu");
       set({ loading: false });
     }
@@ -74,7 +74,7 @@ export const usePrescriptionTemplateStore = create<StoreState>((set, get) => ({
       message.success("Tạo đơn mẫu thành công");
       get().fetchTemplates();
       return true;
-    } catch (error) {
+    } catch (_error) {
       message.error("Tạo thất bại");
       return false;
     } finally {
@@ -89,7 +89,7 @@ export const usePrescriptionTemplateStore = create<StoreState>((set, get) => ({
       message.success("Cập nhật thành công");
       get().fetchTemplates();
       return true;
-    } catch (error) {
+    } catch (_error) {
       message.error("Cập nhật thất bại");
       return false;
     } finally {
@@ -102,7 +102,7 @@ export const usePrescriptionTemplateStore = create<StoreState>((set, get) => ({
       await prescriptionTemplateService.deleteTemplate(id);
       message.success("Đã xóa đơn mẫu");
       get().fetchTemplates();
-    } catch (error) {
+    } catch (_error) {
       message.error("Xóa thất bại");
     }
   },

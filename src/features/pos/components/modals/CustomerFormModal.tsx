@@ -31,8 +31,8 @@ const { Text } = Typography;
 interface Props {
   visible: boolean;
   onCancel: () => void;
-  customerToEdit?: any; // Nếu null -> Chế độ Thêm mới
-  onSuccess: (customer: any) => void;
+  customerToEdit?: unknown; // Nếu null -> Chế độ Thêm mới
+  onSuccess: (customer: unknown) => void;
 }
 
 export const CustomerFormModal: React.FC<Props> = ({
@@ -102,7 +102,11 @@ export const CustomerFormModal: React.FC<Props> = ({
         email: (values.email as string) ?? null,
         gender: (values.gender as "Nam" | "Nữ" | "Khác") ?? null,
         cccd: (values.cccd as string) ?? null,
-        dob: values.dob ? (values.dob as { format: (f: string) => string }).format("YYYY-MM-DD") : null,
+        dob: values.dob
+          ? (values.dob as { format: (f: string) => string }).format(
+              "YYYY-MM-DD"
+            )
+          : null,
         allergies: (values.allergies as string) ?? null,
         medical_history: (values.medical_history as string) ?? null,
         type: "CaNhan" as const,
@@ -140,7 +144,7 @@ export const CustomerFormModal: React.FC<Props> = ({
       );
       onSuccess(data); // Callback ra ngoài để cập nhật UI
       onCancel();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       if (err.code === "23505") {
         // Lỗi trùng unique (SĐT)

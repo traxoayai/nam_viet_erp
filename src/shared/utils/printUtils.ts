@@ -20,7 +20,7 @@ export const openPrintWindow = (): Window | null => {
     return null;
   }
   printWindow.document.write(
-    "<p style=\"font-family: sans-serif; padding: 24px\">Đang chuẩn bị phiếu in...</p>"
+    '<p style="font-family: sans-serif; padding: 24px">Đang chuẩn bị phiếu in...</p>'
   );
   return printWindow;
 };

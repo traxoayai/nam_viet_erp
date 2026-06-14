@@ -60,7 +60,7 @@ export const ProductAiScannerModal: React.FC<Props> = ({
         setCurrentStep(2); // Chuyển sang bước Review
         setLoading(false);
         if (onSuccess) onSuccess("ok");
-      } catch (error: any) {
+      } catch (error: unknown) {
         setLoading(false);
         setCurrentStep(0);
         message.error(error.message || "Lỗi phân tích file");

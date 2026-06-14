@@ -2,9 +2,9 @@
 import { message } from "antd";
 import { useState } from "react";
 
-import type { Json } from "@/shared/types/database.types";
-
 import { bookingService } from "../api/bookingService";
+
+import type { Json } from "@/shared/types/database.types";
 
 export interface SelectedSymptom {
   partId: string;
@@ -81,7 +81,9 @@ export const useSmartBooking = () => {
       return true;
     } catch (error: unknown) {
       console.error(error);
-      message.error(error instanceof Error ? error.message : "Lỗi tạo lịch hẹn");
+      message.error(
+        error instanceof Error ? error.message : "Lỗi tạo lịch hẹn"
+      );
       return false;
     } finally {
       setIsSubmitting(false);
@@ -106,7 +108,9 @@ export const useSmartBooking = () => {
         notes: notes,
       });
 
-      const result = rawResult as unknown as { queue_number?: string | number } | null;
+      const result = rawResult as unknown as {
+        queue_number?: string | number;
+      } | null;
       message.success(
         `Đã check-in thành công! Số thứ tự: ${result?.queue_number || "N/A"}`
       );

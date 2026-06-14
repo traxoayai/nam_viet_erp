@@ -58,9 +58,9 @@ export const getProductDetails = async (id: number) => {
     .eq("product_id", id);
 
   // C. Chuyển đổi cấu trúc Tồn kho DB -> Form
-  const inventorySettings: Record<string, any> = {};
+  const inventorySettings: Record<string, unknown> = {};
   if (inventoryData) {
-    inventoryData.forEach((inv: any) => {
+    inventoryData.forEach((inv: unknown) => {
       if (inv.warehouses && inv.warehouses.key) {
         inventorySettings[inv.warehouses.key] = {
           min: inv.min_stock,
@@ -107,38 +107,41 @@ export const getProductDetails = async (id: number) => {
     // Tồn kho
     // Tồn kho
     inventorySettings: inventorySettings,
-    
+
     // Units
-    units: data.product_units || []
+    units: data.product_units || [],
   };
 };
 
 // 3. HÀM TẠO MỚI SẢN PHẨM (ĐÃ BỔ SUNG THAM SỐ THIẾU)
-export const addProduct = async (formValues: any, inventoryPayload: any[] = []) => {
+export const addProduct = async (
+  formValues: unknown,
+  inventoryPayload: unknown[] = []
+) => {
   // 1. Construct Units Payload (Consolidate Base + Additional)
   const unitsPayload = [];
-  
+
   // A. Handle Legacy/Implicit Base Unit (if passed from form via hidden field or migration)
   if (formValues.retailUnit) {
-      unitsPayload.push({
-          unit_name: formValues.retailUnit,
-          conversion_rate: 1,
-          unit_type: 'base',
-          price: formValues.actualCost, // Base unit price = Cost (or retail price if defined)
-          is_base: true,
-          is_direct_sale: true
-      });
+    unitsPayload.push({
+      unit_name: formValues.retailUnit,
+      conversion_rate: 1,
+      unit_type: "base",
+      price: formValues.actualCost, // Base unit price = Cost (or retail price if defined)
+      is_base: true,
+      is_direct_sale: true,
+    });
   }
-  
+
   // B. Handle Units from List
-  const listUnits = (formValues.units || []).map((u: any) => ({
-      unit_name: u.unit_name,
-      conversion_rate: u.conversion_rate,
-      barcode: u.barcode || null,
-      unit_type: u.unit_type || 'wholesale',
-      price: u.price || 0,
-      is_base: u.unit_type === 'base',
-      is_direct_sale: true
+  const listUnits = (formValues.units || []).map((u: unknown) => ({
+    unit_name: u.unit_name,
+    conversion_rate: u.conversion_rate,
+    barcode: u.barcode || null,
+    unit_type: u.unit_type || "wholesale",
+    price: u.price || 0,
+    is_base: u.unit_type === "base",
+    is_direct_sale: true,
   }));
   unitsPayload.push(...listUnits);
 
@@ -158,11 +161,11 @@ export const addProduct = async (formValues: any, inventoryPayload: any[] = []) 
     // Financials
     // invoice_price removed from header (Prices are in units now)
     actual_cost: formValues.actualCost || 0,
-    wholesale_margin_value: formValues.wholesaleMarginValue || 0, 
-    wholesale_margin_type: formValues.wholesaleMarginType || 'amount',
-    retail_margin_value: formValues.retailMarginValue || 0,       
-    retail_margin_type: formValues.retailMarginType || 'amount',
-    
+    wholesale_margin_value: formValues.wholesaleMarginValue || 0,
+    wholesale_margin_type: formValues.wholesaleMarginType || "amount",
+    retail_margin_value: formValues.retailMarginValue || 0,
+    retail_margin_type: formValues.retailMarginType || "amount",
+
     // Legacy fields removed: wholesale_unit, retail_unit, conversion_factor, etc.
 
     // Logistics
@@ -181,7 +184,7 @@ export const addProduct = async (formValues: any, inventoryPayload: any[] = []) 
   const { data, error } = await supabase.rpc("upsert_product_with_units", {
     p_product_json: productPayload,
     p_units_json: unitsPayload,
-    p_inventory_json: inventoryPayload
+    p_inventory_json: inventoryPayload,
   });
 
   if (error) {
@@ -192,30 +195,34 @@ export const addProduct = async (formValues: any, inventoryPayload: any[] = []) 
 };
 
 // 4. HÀM CẬP NHẬT SẢN PHẨM (ĐÃ BỔ SUNG THAM SỐ THIẾU)
-export const updateProduct = async (id: number, formValues: any, inventoryPayload: any[] = []) => {
+export const updateProduct = async (
+  id: number,
+  formValues: unknown,
+  inventoryPayload: unknown[] = []
+) => {
   // 1. Construct Units Payload
   const unitsPayload = [];
-  
+
   if (formValues.retailUnit) {
-      unitsPayload.push({
-          unit_name: formValues.retailUnit,
-          conversion_rate: 1,
-          unit_type: 'base',
-          price: formValues.actualCost,
-          is_base: true,
-          is_direct_sale: true
-      });
+    unitsPayload.push({
+      unit_name: formValues.retailUnit,
+      conversion_rate: 1,
+      unit_type: "base",
+      price: formValues.actualCost,
+      is_base: true,
+      is_direct_sale: true,
+    });
   }
 
-  const listUnits = (formValues.units || []).map((u: any) => ({
-      id: u.id,
-      unit_name: u.unit_name,
-      conversion_rate: u.conversion_rate,
-      barcode: u.barcode || null,
-      unit_type: u.unit_type || 'wholesale',
-      price: u.price || 0,
-      is_base: u.unit_type === 'base',
-      is_direct_sale: true
+  const listUnits = (formValues.units || []).map((u: unknown) => ({
+    id: u.id,
+    unit_name: u.unit_name,
+    conversion_rate: u.conversion_rate,
+    barcode: u.barcode || null,
+    unit_type: u.unit_type || "wholesale",
+    price: u.price || 0,
+    is_base: u.unit_type === "base",
+    is_direct_sale: true,
   }));
   unitsPayload.push(...listUnits);
 
@@ -234,11 +241,11 @@ export const updateProduct = async (id: number, formValues: any, inventoryPayloa
 
     // invoice_price removed
     actual_cost: formValues.actualCost,
-    wholesale_margin_value: formValues.wholesaleMarginValue, 
+    wholesale_margin_value: formValues.wholesaleMarginValue,
     wholesale_margin_type: formValues.wholesaleMarginType,
-    retail_margin_value: formValues.retailMarginValue,       
+    retail_margin_value: formValues.retailMarginValue,
     retail_margin_type: formValues.retailMarginType,
-    
+
     // Logistics
     items_per_carton: formValues.items_per_carton,
     carton_weight: formValues.carton_weight,
@@ -254,7 +261,7 @@ export const updateProduct = async (id: number, formValues: any, inventoryPayloa
   const { error } = await supabase.rpc("upsert_product_with_units", {
     p_product_json: productPayload,
     p_units_json: unitsPayload,
-    p_inventory_json: inventoryPayload
+    p_inventory_json: inventoryPayload,
   });
 
   if (error) {
@@ -336,7 +343,7 @@ export const importProducts = async (file: File) => {
       const workbook = XLSX.read(data);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const jsonArray: any[] = XLSX.utils.sheet_to_json(worksheet, {
+      const jsonArray: unknown[] = XLSX.utils.sheet_to_json(worksheet, {
         header: 1,
         raw: false,
       });
@@ -350,8 +357,8 @@ export const importProducts = async (file: File) => {
       const safeWarehouses = warehouses || [];
       const warehouseKeys = safeWarehouses.map((w) => w.key);
 
-      const productsToUpsert = rawProducts.map((row: any[]) => {
-        const product: any = { inventory_settings: {} };
+      const productsToUpsert = rawProducts.map((row: unknown[]) => {
+        const product: unknown = { inventory_settings: {} };
         row.forEach((value, index) => {
           const header = headers[index];
           if (warehouseKeys.includes(header)) {
@@ -427,7 +434,7 @@ export const searchProductsForDropdown = async (
   const prodRes = results.find((r) => r.type === "product")?.res;
   const svcRes = results.find((r) => r.type === "service")?.res;
 
-  const products = (prodRes?.data || []).map((p: any) => ({
+  const products = (prodRes?.data || []).map((p: unknown) => ({
     id: p.id,
     name: p.name,
     sku: p.sku,
@@ -438,7 +445,7 @@ export const searchProductsForDropdown = async (
     type: "product",
   }));
 
-  const services = (svcRes?.data || []).map((s: any) => ({
+  const services = (svcRes?.data || []).map((s: unknown) => ({
     id: s.id,
     name: s.name,
     sku: s.sku,
@@ -465,7 +472,7 @@ export const searchProductsForPurchase = async (keyword: string) => {
   }
 
   // Map dữ liệu trả về chuẩn format cho Dropdown
-  return data.map((p: any) => ({
+  return data.map((p: unknown) => ({
     id: p.id,
     name: p.name,
     sku: p.sku,
@@ -489,10 +496,12 @@ export const getAllProductsLite = async () => {
   // Lấy tối đa 5000 sản phẩm active, chỉ lấy các trường cần thiết để nhẹ payload
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, sku, barcode, wholesale_unit, retail_unit, actual_cost, items_per_carton")
+    .select(
+      "id, name, sku, barcode, wholesale_unit, retail_unit, actual_cost, items_per_carton"
+    )
     .eq("status", "active")
     .order("created_at", { ascending: false })
-    .limit(5000); 
+    .limit(5000);
 
   if (error) {
     console.error("Lỗi getAllProductsLite:", error);

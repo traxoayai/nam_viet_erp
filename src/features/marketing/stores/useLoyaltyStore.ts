@@ -1,11 +1,12 @@
 // src/feature/marketing/stores/useLoyaltyStore.ts
 import { create } from "zustand";
 
+import type { Json } from "@/shared/lib/database.types";
+
 import {
   LoyaltyPolicy,
   DEFAULT_LOYALTY_POLICY,
 } from "@/features/marketing/types/loyalty";
-import type { Json } from "@/shared/lib/database.types";
 import { supabase } from "@/shared/lib/supabaseClient";
 
 interface LoyaltyStoreState {

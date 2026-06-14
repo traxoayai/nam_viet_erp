@@ -99,8 +99,8 @@ export const useRoleStore = create<RoleStoreState>((set, get) => ({
     try {
       const roles = await roleService.fetchRoles();
       set({ roles, loadingRoles: false });
-    } catch (error) {
-      console.error(error);
+    } catch (_error) {
+      console.error(_error);
       set({ loadingRoles: false });
     }
   },
@@ -111,8 +111,8 @@ export const useRoleStore = create<RoleStoreState>((set, get) => ({
       const flatPermissions = await roleService.fetchPermissions();
       const tree = buildPermissionTree(flatPermissions);
       set({ permissionsTree: tree, loadingPermissions: false });
-    } catch (error) {
-      console.error(error);
+    } catch (_error) {
+      console.error(_error);
       set({ loadingPermissions: false });
     }
   },
@@ -128,8 +128,8 @@ export const useRoleStore = create<RoleStoreState>((set, get) => ({
         },
         loadingPermissions: false,
       }));
-    } catch (error) {
-      console.error(error);
+    } catch (_error) {
+      console.error(_error);
       set({ loadingPermissions: false });
     }
   },
@@ -176,7 +176,7 @@ export const useRoleStore = create<RoleStoreState>((set, get) => ({
       await get().fetchRoles();
       set({ loadingSaving: false });
       return true;
-    } catch (error) {
+    } catch (_error) {
       set({ loadingSaving: false });
       return false;
     }
@@ -194,7 +194,7 @@ export const useRoleStore = create<RoleStoreState>((set, get) => ({
       }
       set({ loadingSaving: false });
       return true;
-    } catch (error) {
+    } catch (_error) {
       set({ loadingSaving: false });
       return false;
     }
@@ -210,7 +210,7 @@ export const useRoleStore = create<RoleStoreState>((set, get) => ({
       }
       set({ loadingSaving: false });
       return true;
-    } catch (error) {
+    } catch (_error) {
       set({ loadingSaving: false });
       return false;
     }

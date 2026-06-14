@@ -8,13 +8,13 @@ const MAX_ACCOUNTS = 10;
  * Dung EnvReader de test de (inject mock thay vi doc Deno.env).
  */ export function loadGmailAccounts(getEnv) {
   const accounts = [];
-  for(let i = 1; i <= MAX_ACCOUNTS; i++){
+  for (let i = 1; i <= MAX_ACCOUNTS; i++) {
     const email = getEnv(`GMAIL_ACCOUNT_${i}_EMAIL`);
     const refreshToken = getEnv(`GMAIL_ACCOUNT_${i}_REFRESH_TOKEN`);
     if (!email || !refreshToken) break;
     accounts.push({
       email,
-      refreshToken
+      refreshToken,
     });
   }
   if (accounts.length > 0) return accounts;
@@ -25,8 +25,8 @@ const MAX_ACCOUNTS = 10;
     return [
       {
         email: legacyEmail,
-        refreshToken: legacyToken
-      }
+        refreshToken: legacyToken,
+      },
     ];
   }
   return [];

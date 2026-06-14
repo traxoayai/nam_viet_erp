@@ -7,7 +7,7 @@ interface LogisticsRecord {
     items_per_carton?: number;
   };
   // Cho phép các trường khác
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**

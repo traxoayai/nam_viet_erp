@@ -6,8 +6,8 @@ import {
   SupplierFilters,
   Supplier,
 } from "@/features/purchasing/types/supplier";
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
   suppliers: [],
@@ -34,7 +34,7 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
 
       // Map dữ liệu từ RPC vào State
       // Lưu ý: data trả về từ RPC đã khớp với interface Supplier mở rộng (có thêm cột debt)
-      const mappedSuppliers = (data || []).map((item: any) => ({
+      const mappedSuppliers = (data || []).map((item: unknown) => ({
         ...item,
         // Đảm bảo debt luôn là số
         debt: item.debt ? Number(item.debt) : 0,
@@ -58,7 +58,10 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
         .single();
 
       if (error) throw error;
-      set({ currentSupplier: data as unknown as Supplier, loadingDetails: false });
+      set({
+        currentSupplier: data as unknown as Supplier,
+        loadingDetails: false,
+      });
     } catch (error) {
       console.error("Lỗi khi tải chi tiết NCC:", error);
       set({ loadingDetails: false });
@@ -75,7 +78,7 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
     get().fetchSuppliers();
   },
 
-  addSupplier: async (values: any) => {
+  addSupplier: async (values: unknown) => {
     set({ loading: true });
     try {
       const { data } = await safeRpc("create_supplier", {
@@ -105,7 +108,7 @@ export const useSupplierStore = create<SupplierStoreState>((set, get) => ({
     }
   },
 
-  updateSupplier: async (id: number, values: any) => {
+  updateSupplier: async (id: number, values: unknown) => {
     set({ loadingDetails: true });
     try {
       await safeRpc("update_supplier", {

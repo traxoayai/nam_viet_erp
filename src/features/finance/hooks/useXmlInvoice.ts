@@ -39,8 +39,8 @@ export const useXmlInvoice = () => {
       });
       if (prod.sku && xmlName.includes(prod.sku)) matches += 10;
       // Ép kiểu an toàn để tránh lỗi TS nếu barcode chưa định nghĩa
-      const pAny = prod as any;
-      if (pAny.barcode && xmlName.includes(pAny.barcode)) matches += 10;
+      const pAny = prod as Record<string, unknown>;
+      if (pAny.barcode && xmlName.includes(pAny.barcode as string)) matches += 10;
 
       if (matches > maxScore) {
         maxScore = matches;
@@ -129,7 +129,7 @@ export const useXmlInvoice = () => {
         fileUrl, // <-- Trả về URL để form lưu vào DB
         fileRaw: file,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       message.error("Lỗi xử lý XML: " + error.message);
       return null;

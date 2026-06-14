@@ -2,6 +2,7 @@
  * Integration test: search_products_for_purchase — trả về total_stock + avg_monthly_sold
  */
 import { describe, it, expect } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 describe("search_products_for_purchase", () => {

@@ -30,7 +30,7 @@ export const AutoReplenishModal: React.FC<AutoReplenishModalProps> = ({
       const values = await form.validateFields();
       onConfirm(values.warehouseId);
       form.resetFields();
-    } catch (error) {
+    } catch (_error) {
       // Validation error
     }
   };

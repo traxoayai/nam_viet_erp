@@ -1,5 +1,5 @@
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 export type PortalRegistrationRequest = {
   id: string;
@@ -36,7 +36,7 @@ const PORTAL_URL =
 
 async function callEdgeFunction<T = unknown>(
   name: string,
-  body: Record<string, unknown>,
+  body: Record<string, unknown>
 ): Promise<T> {
   const { data: session } = await supabase.auth.getSession();
   const res = await fetch(
@@ -48,7 +48,7 @@ async function callEdgeFunction<T = unknown>(
         Authorization: `Bearer ${session.session?.access_token ?? ""}`,
       },
       body: JSON.stringify(body),
-    },
+    }
   );
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
@@ -58,7 +58,7 @@ async function callEdgeFunction<T = unknown>(
 }
 
 export const fetchPortalRegistrations = async (
-  status: string = "pending",
+  status: string = "pending"
 ): Promise<PortalRegistrationRequest[]> => {
   const { data, error } = await supabase
     .from("registration_requests")
@@ -71,7 +71,7 @@ export const fetchPortalRegistrations = async (
 };
 
 export const searchCustomersB2B = async (
-  search: string,
+  search: string
 ): Promise<CustomerB2BOption[]> => {
   const query = supabase
     .from("customers_b2b")
@@ -81,7 +81,7 @@ export const searchCustomersB2B = async (
 
   if (search.trim()) {
     query.or(
-      `name.ilike.%${search}%,customer_code.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%`,
+      `name.ilike.%${search}%,customer_code.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%`
     );
   }
 
@@ -94,7 +94,7 @@ export const approvePortalRegistration = async (
   requestId: string,
   existingCustomerId: number | null,
   debtLimit: number = 50000000,
-  paymentTerm: number = 30,
+  paymentTerm: number = 30
 ): Promise<Record<string, unknown>> => {
   // Step 1: Lấy auth_user_id từ registration_requests (đã được tạo lúc khách đăng ký)
   const { data: requestRaw, error: fetchError } = await supabase
@@ -114,7 +114,9 @@ export const approvePortalRegistration = async (
   };
 
   if (request.status !== "pending") {
-    throw new Error(`Yêu cầu đã ở trạng thái "${request.status}", không thể duyệt.`);
+    throw new Error(
+      `Yêu cầu đã ở trạng thái "${request.status}", không thể duyệt.`
+    );
   }
 
   let authUserId = request.auth_user_id;
@@ -123,7 +125,7 @@ export const approvePortalRegistration = async (
   if (!authUserId) {
     const edgeData = await callEdgeFunction<{ auth_user_id: string }>(
       "approve-registration",
-      { request_id: requestId, skip_email: true },
+      { request_id: requestId, skip_email: true }
     );
     authUserId = edgeData.auth_user_id;
   }
@@ -157,7 +159,7 @@ export const approvePortalRegistration = async (
 
 export const rejectPortalRegistration = async (
   requestId: string,
-  reason: string = "",
+  reason: string = ""
 ): Promise<void> => {
   await callEdgeFunction("reject-registration", {
     request_id: requestId,

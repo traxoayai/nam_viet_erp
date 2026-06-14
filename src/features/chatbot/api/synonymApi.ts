@@ -3,6 +3,7 @@
 // Types khai báo thủ công vì lib/database.types.ts không tự update — cùng pattern
 // inbox/compliance.
 
+import type { Json } from "@/shared/lib/database.types";
 import { safeRpc } from "@/shared/lib/safeRpc";
 
 export interface ProductSynonym {
@@ -83,7 +84,7 @@ export async function bulkImportSynonyms(
   rows: BulkImportRow[]
 ): Promise<BulkImportResult> {
   const { data, error } = await safeRpc("bulk_import_synonyms", {
-    p_rows: rows as any,
+    p_rows: rows as unknown as Json,
   });
   if (error) throw error;
   return data as unknown as BulkImportResult;

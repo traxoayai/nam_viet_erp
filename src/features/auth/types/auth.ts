@@ -24,11 +24,11 @@ export interface AuthStoreState {
   permissions: string[]; // [NEW] Danh sách quyền hạn
   // Hàm cơ bản
 
-  login: (values: any) => Promise<any>;
+  login: (values: unknown) => Promise<unknown>;
   logout: () => Promise<void>;
   checkUserSession: () => Promise<void>;
   fetchProfile: () => Promise<UserProfile | null>; // Hàm mới
   // Hàm nghiệp vụ Onboarding (Sếp yêu cầu)
   updatePassword: (newPassword: string) => Promise<void>;
-  updateProfile: (data: any) => Promise<void>;
+  updateProfile: (data: unknown) => Promise<void>;
 }

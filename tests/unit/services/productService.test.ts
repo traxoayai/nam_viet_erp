@@ -3,10 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSafeRpc = vi.fn();
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/api/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {
@@ -15,7 +15,9 @@ vi.mock("@/shared/lib/supabaseClient", () => ({
         eq: vi.fn().mockReturnValue({
           single: vi.fn().mockResolvedValue({ data: {}, error: null }),
           order: vi.fn().mockReturnValue({
-            range: vi.fn().mockResolvedValue({ data: [], error: null, count: 0 }),
+            range: vi
+              .fn()
+              .mockResolvedValue({ data: [], error: null, count: 0 }),
           }),
         }),
         in: vi.fn().mockResolvedValue({ data: [], error: null }),
@@ -30,7 +32,9 @@ vi.mock("@/shared/lib/supabaseClient", () => ({
     storage: {
       from: () => ({
         upload: vi.fn().mockResolvedValue({ error: null }),
-        getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: "http://img.jpg" } }),
+        getPublicUrl: vi
+          .fn()
+          .mockReturnValue({ data: { publicUrl: "http://img.jpg" } }),
       }),
     },
   },
@@ -58,9 +62,16 @@ describe("productService", () => {
   // --- getProducts ---
   describe("getProducts", () => {
     it("calls search_products_v2 with mapped filters", async () => {
-      mockSafeRpc.mockResolvedValue({ data: { data: [{ id: 1 }], total_count: 15 } });
+      mockSafeRpc.mockResolvedValue({
+        data: { data: [{ id: 1 }], total_count: 15 },
+      });
       const result = await getProducts({
-        filters: { search_query: "Panadol", category_filter: "Thuoc", manufacturer_filter: "GSK", status_filter: "active" },
+        filters: {
+          search_query: "Panadol",
+          category_filter: "Thuoc",
+          manufacturer_filter: "GSK",
+          status_filter: "active",
+        },
         page: 2,
         pageSize: 10,
       });
@@ -107,14 +118,33 @@ describe("productService", () => {
         category: "Cat",
         status: "active",
         actualCost: 10000,
-        units: [{ id: 1, unit_name: "Vien", unit_type: "base", conversion_rate: 1, price: 10000, barcode: null, is_base: true, is_direct_sale: true }],
+        units: [
+          {
+            id: 1,
+            unit_name: "Vien",
+            unit_type: "base",
+            conversion_rate: 1,
+            price: 10000,
+            barcode: null,
+            is_base: true,
+            is_direct_sale: true,
+          },
+        ],
         content: { description_html: "<p>Test</p>" },
         inventorySettings: [],
       });
       expect(mockSafeRpc).toHaveBeenCalledWith("upsert_product_with_units", {
-        p_product_json: expect.objectContaining({ id: 55, sku: "SKU-001", name: "Test Product" }),
-        p_units_json: expect.arrayContaining([expect.objectContaining({ unit_name: "Vien", is_base: true })]),
-        p_contents_json: expect.objectContaining({ description_html: "<p>Test</p>" }),
+        p_product_json: expect.objectContaining({
+          id: 55,
+          sku: "SKU-001",
+          name: "Test Product",
+        }),
+        p_units_json: expect.arrayContaining([
+          expect.objectContaining({ unit_name: "Vien", is_base: true }),
+        ]),
+        p_contents_json: expect.objectContaining({
+          description_html: "<p>Test</p>",
+        }),
         p_inventory_json: [],
       });
       expect(result).toEqual({ id: 55 });
@@ -124,7 +154,9 @@ describe("productService", () => {
   // --- checkDependencies ---
   describe("checkDependencies", () => {
     it("calls check_product_dependencies with product ids", async () => {
-      mockSafeRpc.mockResolvedValue({ data: [{ product_id: 1, has_orders: true }] });
+      mockSafeRpc.mockResolvedValue({
+        data: [{ product_id: 1, has_orders: true }],
+      });
       const result = await checkDependencies([1, 2, 3]);
       expect(mockSafeRpc).toHaveBeenCalledWith("check_product_dependencies", {
         p_product_ids: [1, 2, 3],
@@ -169,18 +201,32 @@ describe("productService", () => {
   describe("searchProductsForPurchase", () => {
     it("calls search_products_for_purchase and maps response", async () => {
       mockSafeRpc.mockResolvedValue({
-        data: [{
-          id: 1, name: "Panadol", sku: "PAN-01", actual_cost: 5000,
-          image_url: "img.jpg", items_per_carton: 100,
-          wholesale_unit: "Hop", retail_unit: "Vien",
-          latest_purchase_price: 4500,
-        }],
+        data: [
+          {
+            id: 1,
+            name: "Panadol",
+            sku: "PAN-01",
+            actual_cost: 5000,
+            image_url: "img.jpg",
+            items_per_carton: 100,
+            wholesale_unit: "Hop",
+            retail_unit: "Vien",
+            latest_purchase_price: 4500,
+          },
+        ],
       });
       const result = await searchProductsForPurchase("Pan");
-      expect(mockSafeRpc).toHaveBeenCalledWith("search_products_for_purchase", { p_keyword: "Pan" });
+      expect(mockSafeRpc).toHaveBeenCalledWith("search_products_for_purchase", {
+        p_keyword: "Pan",
+      });
       expect(result[0]).toMatchObject({
-        id: 1, name: "Panadol", sku: "PAN-01", type: "product",
-        unit: "Hop", price: 5000, last_price: 4500,
+        id: 1,
+        name: "Panadol",
+        sku: "PAN-01",
+        type: "product",
+        unit: "Hop",
+        price: 5000,
+        last_price: 4500,
       });
     });
   });

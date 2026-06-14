@@ -11,7 +11,7 @@ interface ConnectState {
   activeTab: PostCategory;
   editingPost: ConnectPost | null; // [NEW] - Fixed missing type
   // [NEW] Interactive State
-  comments: any[];
+  comments: unknown[];
   commentsLoading: boolean;
 
   // Actions

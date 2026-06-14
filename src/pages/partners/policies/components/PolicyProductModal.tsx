@@ -9,7 +9,7 @@ import { safeRpc } from "@/shared/lib/safeRpc";
 interface Props {
   open: boolean;
   onCancel: () => void;
-  onSelect: (selectedProducts: any[]) => void;
+  onSelect: (selectedProducts: unknown[]) => void;
   supplierId?: number | null;
 }
 
@@ -19,9 +19,9 @@ export const PolicyProductModal: React.FC<Props> = ({
   onSelect,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<unknown[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [selectedItems, setSelectedItems] = useState<any[]>([]);
+  const [selectedItems, setSelectedItems] = useState<unknown[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -42,7 +42,7 @@ export const PolicyProductModal: React.FC<Props> = ({
 
       // RPC này trả về mảng trực tiếp, không cần .data wrapper
       setProducts((data ?? []) as unknown as Record<string, unknown>[]);
-    } catch (err) {
+    } catch (_err) {
       setProducts([]);
     } finally {
       setLoading(false);
@@ -67,7 +67,7 @@ export const PolicyProductModal: React.FC<Props> = ({
     {
       title: "Đơn vị",
       dataIndex: "unit", // RPC trả về 'unit' (đơn vị bán buôn) hoặc check cột wholesale_unit
-      render: (_: any, r: any) => (
+      render: (_: unknown, r: unknown) => (
         <Space direction="vertical" size={0}>
           {/* RPC trả về wholesale_unit nếu có */}
           {r.wholesale_unit ? (

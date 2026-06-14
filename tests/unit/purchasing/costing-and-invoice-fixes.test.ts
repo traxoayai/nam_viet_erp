@@ -117,9 +117,9 @@ describe("Shipping allocation logic", () => {
 
   it("allocates shipping proportionally by item value", () => {
     const items = [
-      { quantity_ordered: 40, unit_price: 99000 },  // 3,960,000
-      { quantity_ordered: 30, unit_price: 96000 },  // 2,880,000
-      { quantity_ordered: 30, unit_price: 35000 },  // 1,050,000
+      { quantity_ordered: 40, unit_price: 99000 }, // 3,960,000
+      { quantity_ordered: 30, unit_price: 96000 }, // 2,880,000
+      { quantity_ordered: 30, unit_price: 35000 }, // 1,050,000
     ];
     const allocated = allocateShipping(items, 30000);
     // Total = 7,890,000
@@ -189,16 +189,24 @@ describe("PO status after costing", () => {
     };
 
     // Case 1: Chỉ chốt giá vốn, chưa nhập kho, chưa thanh toán
-    expect(checkCanComplete({ inventory_received: false, payment_percentage: 0 })).toBe(false);
+    expect(
+      checkCanComplete({ inventory_received: false, payment_percentage: 0 })
+    ).toBe(false);
 
     // Case 2: Đã nhập kho nhưng chưa thanh toán
-    expect(checkCanComplete({ inventory_received: true, payment_percentage: 50 })).toBe(false);
+    expect(
+      checkCanComplete({ inventory_received: true, payment_percentage: 50 })
+    ).toBe(false);
 
     // Case 3: Đã thanh toán nhưng chưa nhập kho
-    expect(checkCanComplete({ inventory_received: false, payment_percentage: 100 })).toBe(false);
+    expect(
+      checkCanComplete({ inventory_received: false, payment_percentage: 100 })
+    ).toBe(false);
 
     // Case 4: Đã nhập kho VÀ thanh toán 100% -> COMPLETED
-    expect(checkCanComplete({ inventory_received: true, payment_percentage: 100 })).toBe(true);
+    expect(
+      checkCanComplete({ inventory_received: true, payment_percentage: 100 })
+    ).toBe(true);
   });
 
   it("costing button should be disabled when costing_confirmed_at is set", () => {
@@ -207,7 +215,7 @@ describe("PO status after costing", () => {
     const costingConfirmedAt2 = "2026-04-02T10:00:00Z";
 
     expect(!!costingConfirmedAt1).toBe(false); // button enabled
-    expect(!!costingConfirmedAt2).toBe(true);  // button disabled
+    expect(!!costingConfirmedAt2).toBe(true); // button disabled
   });
 
   it("payment buttons should remain visible after costing (status still PENDING)", () => {

@@ -3,10 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSafeRpc = vi.fn();
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/api/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/lib/supabaseClient", () => ({
   supabase: {
@@ -37,7 +37,9 @@ describe("assetService", () => {
   // --- fetchAssets (getList) ---
   describe("fetchAssets", () => {
     it("calls get_assets_list with mapped filters", async () => {
-      mockSafeRpc.mockResolvedValue({ data: [{ id: 1, name: "May in", total_count: 10 }] });
+      mockSafeRpc.mockResolvedValue({
+        data: [{ id: 1, name: "May in", total_count: 10 }],
+      });
       const result = await fetchAssets({
         search_query: "May",
         asset_type_id: 2,
@@ -81,19 +83,34 @@ describe("assetService", () => {
   // --- fetchAssetDetails (getDetails) ---
   describe("fetchAssetDetails", () => {
     it("calls get_asset_details with p_id", async () => {
-      mockSafeRpc.mockResolvedValue({ data: { id: 5, name: "May Tinh", purchase_price: 15000000 } });
+      mockSafeRpc.mockResolvedValue({
+        data: { id: 5, name: "May Tinh", purchase_price: 15000000 },
+      });
       const result = await fetchAssetDetails(5);
-      expect(mockSafeRpc).toHaveBeenCalledWith("get_asset_details", { p_id: 5 });
-      expect(result).toEqual({ id: 5, name: "May Tinh", purchase_price: 15000000 });
+      expect(mockSafeRpc).toHaveBeenCalledWith("get_asset_details", {
+        p_id: 5,
+      });
+      expect(result).toEqual({
+        id: 5,
+        name: "May Tinh",
+        purchase_price: 15000000,
+      });
     });
   });
 
   // --- createAsset (create) ---
   describe("createAsset", () => {
     it("calls create_asset with data, plans, and history", async () => {
-      const assetData = { name: "May in HP", purchase_price: 5000000 } as any;
-      const plans = [{ schedule: "monthly", description: "Clean" }] as any[];
-      const history = [{ date: "2026-01-15", description: "Initial check" }] as any[];
+      const assetData = {
+        name: "May in HP",
+        purchase_price: 5000000,
+      } as unknown;
+      const plans = [
+        { schedule: "monthly", description: "Clean" },
+      ] as unknown[];
+      const history = [
+        { date: "2026-01-15", description: "Initial check" },
+      ] as unknown[];
       mockSafeRpc.mockResolvedValue({ data: 99 });
       const result = await createAsset(assetData, plans, history);
       expect(mockSafeRpc).toHaveBeenCalledWith("create_asset", {
@@ -108,9 +125,9 @@ describe("assetService", () => {
   // --- updateAsset (update) ---
   describe("updateAsset", () => {
     it("calls update_asset with id, data, plans, and history", async () => {
-      const assetData = { name: "Updated Asset" } as any;
-      const plans: any[] = [];
-      const history: any[] = [];
+      const assetData = { name: "Updated Asset" } as unknown;
+      const plans: unknown[] = [];
+      const history: unknown[] = [];
       mockSafeRpc.mockResolvedValue({ data: null });
       const result = await updateAsset(5, assetData, plans, history);
       expect(mockSafeRpc).toHaveBeenCalledWith("update_asset", {

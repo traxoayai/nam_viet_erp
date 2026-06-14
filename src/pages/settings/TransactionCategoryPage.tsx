@@ -82,11 +82,15 @@ const TransactionCategoryPage: React.FC = () => {
       const values = await form.validateFields();
 
       // Lấy tên TK Kế toán (để cập nhật UI ngay)
-      const findAccountName = (nodes: any[], value: string): string | null => {
+      const findAccountName = (
+        nodes: unknown[],
+        value: string
+      ): string | null => {
         for (const node of nodes) {
-          if (node.value === value) return node.title;
-          if (node.children) {
-            const found = findAccountName(node.children, value);
+          const n = node as Record<string, unknown>;
+          if (n.value === value) return String(n.title);
+          if (n.children) {
+            const found = findAccountName(n.children as unknown[], value);
             if (found) return found;
           }
         }

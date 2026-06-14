@@ -102,7 +102,6 @@ const JournalLedgerPage: React.FC = () => {
 
   useEffect(() => {
     fetchData(page, filters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, JSON.stringify(filters)]);
 
   const handleFilterChange = (patch: Partial<Filters>) => {

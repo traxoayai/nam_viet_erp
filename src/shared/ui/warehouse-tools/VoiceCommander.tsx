@@ -9,8 +9,8 @@ interface VoiceCommanderProps {
 
 // Định nghĩa Type cho Web Speech API (vì TS mặc định chưa có đủ)
 interface IWindow extends Window {
-  webkitSpeechRecognition: any;
-  SpeechRecognition: any;
+  webkitSpeechRecognition: unknown;
+  SpeechRecognition: unknown;
 }
 
 export const VoiceCommander = ({
@@ -19,33 +19,40 @@ export const VoiceCommander = ({
 }: VoiceCommanderProps) => {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(true);
-  const [recognition, setRecognition] = useState<any>(null);
+  const [recognition, setRecognition] = useState<
+    Record<string, unknown> | null
+  >(null);
 
   useEffect(() => {
     // 1. Init Web Speech API (Chỉ chạy trên Chrome/Edge/Safari mới)
     const { webkitSpeechRecognition, SpeechRecognition } =
       window as unknown as IWindow;
-    const SpeechApi = SpeechRecognition || webkitSpeechRecognition;
+    const SpeechApi = (SpeechRecognition || webkitSpeechRecognition) as
+      | (new () => Record<string, unknown>)
+      | undefined;
 
     if (!SpeechApi) {
       setIsSupported(false);
       return;
     }
 
-    const rec = new SpeechApi();
+    const rec = new SpeechApi() as Record<string, unknown>;
     rec.continuous = false; // Nghe 1 câu rồi dừng
     rec.lang = "vi-VN"; // Ưu tiên tiếng Việt
     rec.interimResults = false;
 
     rec.onstart = () => setIsListening(true);
     rec.onend = () => setIsListening(false);
-    rec.onerror = (event: any) => {
-      console.error("Voice Error:", event.error);
+    rec.onerror = (event: unknown) => {
+      const err = event as Record<string, unknown>;
+      console.error("Voice Error:", err.error);
       setIsListening(false);
     };
-    rec.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      onCommand(transcript);
+    rec.onresult = (event: unknown) => {
+      const speechEvent = event as Record<string, unknown>;
+      const results = speechEvent.results as Array<Array<{ transcript: string }>>;
+      const transcript = results?.[0]?.[0]?.transcript;
+      if (transcript) onCommand(transcript);
     };
 
     setRecognition(rec);
@@ -57,9 +64,9 @@ export const VoiceCommander = ({
       return;
     }
     if (isListening) {
-      recognition.stop();
+      (recognition?.stop as () => void)?.();
     } else {
-      recognition.start();
+      (recognition?.start as () => void)?.();
     }
   };
 

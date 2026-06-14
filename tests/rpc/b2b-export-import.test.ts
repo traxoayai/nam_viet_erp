@@ -5,6 +5,7 @@
  * Fix 2: bulk_upsert_customers_b2b — vat_address/shipping_address luôn NULL
  */
 import { describe, it, expect } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 // ─── 1. export_customers_b2b_list — Không còn ambiguous overload ────────────
@@ -51,28 +52,22 @@ describe("export_customers_b2b_list", () => {
 
     if (!count || count === 0) return; // skip nếu bảng trống
 
-    const { data, error } = await adminClient.rpc(
-      "export_customers_b2b_list",
-      {
-        search_query: null,
-        sales_staff_filter: null,
-        status_filter: null,
-      }
-    );
+    const { data, error } = await adminClient.rpc("export_customers_b2b_list", {
+      search_query: null,
+      sales_staff_filter: null,
+      status_filter: null,
+    });
     expect(error).toBeNull();
     expect(data).not.toBeNull();
     expect((data as unknown[]).length).toBeGreaterThan(0);
   });
 
   it("trả về đúng cấu trúc cột cho Excel export", async () => {
-    const { data, error } = await adminClient.rpc(
-      "export_customers_b2b_list",
-      {
-        search_query: null,
-        sales_staff_filter: null,
-        status_filter: null,
-      }
-    );
+    const { data, error } = await adminClient.rpc("export_customers_b2b_list", {
+      search_query: null,
+      sales_staff_filter: null,
+      status_filter: null,
+    });
 
     if (error || !data || (data as unknown[]).length === 0) return;
 
@@ -97,14 +92,11 @@ describe("export_customers_b2b_list", () => {
   });
 
   it("lọc theo status_filter hoạt động", async () => {
-    const { data, error } = await adminClient.rpc(
-      "export_customers_b2b_list",
-      {
-        search_query: null,
-        sales_staff_filter: null,
-        status_filter: "active",
-      }
-    );
+    const { data, error } = await adminClient.rpc("export_customers_b2b_list", {
+      search_query: null,
+      sales_staff_filter: null,
+      status_filter: "active",
+    });
     expect(error).toBeNull();
     if (data && (data as unknown[]).length > 0) {
       for (const row of data as Record<string, unknown>[]) {

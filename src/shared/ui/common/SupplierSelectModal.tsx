@@ -51,7 +51,7 @@ const SupplierSelectModal: React.FC<SupplierSelectModalProps> = ({
     {
       title: "Hành động",
       key: "action",
-      render: (_: any, record: Supplier) => (
+      render: (_: unknown, record: Supplier) => (
         <Button
           type="primary"
           size="small"

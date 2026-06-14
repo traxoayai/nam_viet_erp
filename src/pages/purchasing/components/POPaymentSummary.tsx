@@ -77,7 +77,7 @@ const POPaymentSummary = ({
           bold
           color="#d9363e"
         />
-        {showActions && onRequestPayment && (
+        {showActions && onRequestPayment ? (
           <Button
             type="primary"
             icon={<DollarOutlined />}
@@ -86,7 +86,7 @@ const POPaymentSummary = ({
           >
             Tạo Thanh Toán NCC
           </Button>
-        )}
+        ) : null}
       </Card>
 
       {/* Card 2: Vận chuyển */}
@@ -103,15 +103,15 @@ const POPaymentSummary = ({
           label="Phí vận chuyển:"
           value={`${financials.shippingFee.toLocaleString()} ₫`}
         />
-        {shippingPartnerName && (
+        {shippingPartnerName ? (
           <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>
             Đối tác: {shippingPartnerName}
           </div>
-        )}
+        ) : null}
         <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>
           Tổng kiện: {financials.totalCartons} thùng
         </div>
-        {showActions && onRequestShippingPayment && (
+        {showActions && onRequestShippingPayment ? (
           <Button
             icon={<TruckOutlined />}
             onClick={onRequestShippingPayment}
@@ -119,7 +119,7 @@ const POPaymentSummary = ({
           >
             Tạo Thanh Toán Phí Vận Chuyển
           </Button>
-        )}
+        ) : null}
       </Card>
     </div>
   );

@@ -17,7 +17,7 @@ interface PromotionStoreState {
   // Cập nhật hàm fetch để nhận tham số tìm kiếm
   fetchPromotions: (search?: string, status?: string) => Promise<void>;
 
-  createPromotion: (data: any) => Promise<boolean>;
+  createPromotion: (data: unknown) => Promise<boolean>;
   deletePromotion: (id: string) => Promise<void>;
 }
 
@@ -36,8 +36,8 @@ export const usePromotionStore = create<PromotionStoreState>((set, get) => ({
       );
       // Map key cho Antd Table (dùng id làm key)
       set({ promotions: data.map((p) => ({ ...p, key: p.id })) });
-    } catch (error) {
-      console.error("Lỗi tải danh sách mã:", error);
+    } catch (_error) {
+      console.error("Lỗi tải danh sách mã:", _error);
     } finally {
       set({ loading: false });
     }
@@ -50,7 +50,7 @@ export const usePromotionStore = create<PromotionStoreState>((set, get) => ({
       message.success("Tạo mã thành công");
       get().fetchPromotions(); // Tải lại danh sách mới nhất
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error(`Lỗi: ${error.message}`);
       return false;
     } finally {
@@ -64,7 +64,7 @@ export const usePromotionStore = create<PromotionStoreState>((set, get) => ({
       await promotionService.deletePromotion(id);
       message.success("Đã xóa mã");
       get().fetchPromotions();
-    } catch (error) {
+    } catch (_error) {
       message.error("Xóa thất bại");
     } finally {
       set({ loading: false });

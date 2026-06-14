@@ -1,29 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  Table,
-  Tag,
-  Button,
-  Select,
-  Typography,
-  Space,
-  Card,
-} from "antd";
 import {
   BellOutlined,
   CheckOutlined,
   ArrowRightOutlined,
 } from "@ant-design/icons";
+import { Table, Tag, Button, Select, Typography, Space, Card } from "antd";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "dayjs/locale/vi";
 
-import { safeRpc } from "@/shared/lib/safeRpc";
 import {
   AppNotification,
   NotificationCategory,
   useNotificationStore,
 } from "@/features/settings/stores/useNotificationStore";
+import { safeRpc } from "@/shared/lib/safeRpc";
 
 dayjs.extend(relativeTime);
 dayjs.locale("vi");
@@ -142,9 +134,7 @@ export default function NotificationsPage() {
       key: "title",
       ellipsis: true,
       render: (text: string, record: NotificationRow) => (
-        <Typography.Text strong={!record.is_read}>
-          {text}
-        </Typography.Text>
+        <Typography.Text strong={!record.is_read}>{text}</Typography.Text>
       ),
     },
     {
@@ -160,9 +150,7 @@ export default function NotificationsPage() {
       key: "created_at",
       width: 160,
       render: (d: string) => (
-        <Typography.Text type="secondary">
-          {dayjs(d).fromNow()}
-        </Typography.Text>
+        <Typography.Text type="secondary">{dayjs(d).fromNow()}</Typography.Text>
       ),
     },
     {

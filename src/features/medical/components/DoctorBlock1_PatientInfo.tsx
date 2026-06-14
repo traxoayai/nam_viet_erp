@@ -13,7 +13,7 @@ import { ClinicalPrescriptionItem } from "../types/medical.types";
 import { PatientHistoryDrawer } from "./PatientHistoryDrawer";
 
 interface Props {
-  patient: any;
+  patient: unknown;
   visitId?: string;
   onCopyPrescription: (items: ClinicalPrescriptionItem[]) => void;
 }

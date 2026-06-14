@@ -1,5 +1,6 @@
 // src/features/medical/components/reception/VaccineSalesDrawer.tsx
 import { Drawer, Button, Select, Divider, Collapse, message } from "antd";
+import dayjs from "dayjs"; // Bổ sung dayjs
 import { Syringe, ShoppingCart, User, Plus } from "lucide-react";
 import React, { useState, useEffect } from "react";
 
@@ -9,7 +10,6 @@ import {
   generateTimeline,
 } from "@/features/medical/api/vaccineService";
 import { CustomerSearchSelect } from "@/features/medical/components/CustomerSearchSelect";
-import dayjs from "dayjs"; // Bổ sung dayjs
 
 interface VaccineSalesDrawerProps {
   open: boolean;
@@ -31,11 +31,11 @@ export const VaccineSalesDrawer: React.FC<VaccineSalesDrawerProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Dữ liệu API
-  const [vaccines, setVaccines] = useState<any[]>([]);
-  const [packages, setPackages] = useState<any[]>([]);
+  const [vaccines, setVaccines] = useState<unknown[]>([]);
+  const [packages, setPackages] = useState<unknown[]>([]);
 
   // Giỏ hàng
-  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [cartItems, setCartItems] = useState<unknown[]>([]);
   const [totalPrice, setTotalPrice] = useState<number>(0);
 
   // Hàm gọi API
@@ -63,24 +63,24 @@ export const VaccineSalesDrawer: React.FC<VaccineSalesDrawerProps> = ({
 
   const handleCheckoutAndCreateTimeline = async () => {
     if (!localCustomerId || cartItems.length === 0) return;
-    
+
     setIsSubmitting(true);
     try {
       // 1. (Sau này) Gọi hàm tạo Đơn hàng/Hóa đơn bán hàng ở đây...
       // const order = await salesService.createOrder(...)
-      
+
       // 2. Chạy vòng lặp gọi RPC để TẠO SỔ TIÊM cho từng Item trong Giỏ hàng
       const startDate = dayjs().format("YYYY-MM-DD");
-      
+
       for (const item of cartItems) {
         await generateTimeline({
           p_customer_id: localCustomerId,
           p_start_date: startDate,
           p_order_id: undefined, // Sau này nhét order.id vào đây
-          
+
           // GỬI CHUẨN DỮ LIỆU:
           p_package_id: item.type === "package" ? item.id : undefined,
-          
+
           // Chú ý: Mũi lẻ phải gửi product_id (đã được bóc ra ở API trên)
           p_product_id: item.type === "single" ? item.product_id : undefined,
         });
@@ -91,13 +91,12 @@ export const VaccineSalesDrawer: React.FC<VaccineSalesDrawerProps> = ({
       setCartItems([]);
       setTotalPrice(0);
       onClose(); // Đóng drawer Bán hàng
-      
+
       // Truyền hàm openTimelineDrawer từ ngoài vào để chuyển màn
       if (openTimelineDrawer) {
-          openTimelineDrawer(localCustomerId);
+        openTimelineDrawer(localCustomerId);
       }
-
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi khởi tạo sổ tiêm: " + err.message);
     } finally {
       setIsSubmitting(false);
@@ -176,18 +175,27 @@ export const VaccineSalesDrawer: React.FC<VaccineSalesDrawerProps> = ({
                   key="1"
                 >
                   <div className="flex flex-col gap-2 pl-2 border-l-2 border-blue-200">
-                    {item.service_package_items.map((pi: any, i2: number) => {
-                      return (
-                        <div key={i2} className="text-sm flex justify-between">
-                          <span className="text-gray-700 font-medium">
-                            {pi.products?.name}
-                          </span>
-                          <span className="text-orange-600 text-xs pl-2 text-right">
-                            Mũi {i2 + 1}: {dayjs().add(pi.schedule_days || 0, 'day').format('DD/MM/YYYY')} (Sau {pi.schedule_days || 0} ngày)
-                          </span>
-                        </div>
-                      );
-                    })}
+                    {item.service_package_items.map(
+                      (pi: unknown, i2: number) => {
+                        return (
+                          <div
+                            key={i2}
+                            className="text-sm flex justify-between"
+                          >
+                            <span className="text-gray-700 font-medium">
+                              {pi.products?.name}
+                            </span>
+                            <span className="text-orange-600 text-xs pl-2 text-right">
+                              Mũi {i2 + 1}:{" "}
+                              {dayjs()
+                                .add(pi.schedule_days || 0, "day")
+                                .format("DD/MM/YYYY")}{" "}
+                              (Sau {pi.schedule_days || 0} ngày)
+                            </span>
+                          </div>
+                        );
+                      }
+                    )}
                   </div>
                 </Collapse.Panel>
               </Collapse>
@@ -225,12 +233,12 @@ export const VaccineSalesDrawer: React.FC<VaccineSalesDrawerProps> = ({
             <Button onClick={onClose}>Hủy</Button>
             <Button
               type="primary"
-              style={{ 
-                backgroundColor: "#722ed1", 
-                borderColor: "#722ed1", 
-                color: "white", 
-                fontWeight: "bold", 
-                boxShadow: "0 4px 6px -1px rgba(114, 46, 209, 0.3)" 
+              style={{
+                backgroundColor: "#722ed1",
+                borderColor: "#722ed1",
+                color: "white",
+                fontWeight: "bold",
+                boxShadow: "0 4px 6px -1px rgba(114, 46, 209, 0.3)",
               }}
               disabled={!localCustomerId || cartItems.length === 0}
               loading={isSubmitting}
@@ -278,7 +286,7 @@ export const VaccineSalesDrawer: React.FC<VaccineSalesDrawerProps> = ({
                   className="w-full"
                   showSearch
                   placeholder="Gõ tên Vắc-xin..."
-                  options={vaccines.map((v: any) => ({
+                  options={vaccines.map((v: unknown) => ({
                     value: v.id.toString(),
                     label: `${v.name} - ${v.price.toLocaleString()}đ`,
                   }))}
@@ -305,7 +313,7 @@ export const VaccineSalesDrawer: React.FC<VaccineSalesDrawerProps> = ({
                   showSearch
                   style={{ borderColor: "#722ed1" }}
                   placeholder="Gõ tên Gói tiêm..."
-                  options={packages.map((p: any) => ({
+                  options={packages.map((p: unknown) => ({
                     value: p.id.toString(),
                     label: `${p.name} - ${p.price.toLocaleString()}đ`,
                   }))}

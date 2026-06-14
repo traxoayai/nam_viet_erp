@@ -5,8 +5,8 @@ import { useEffect } from "react";
 interface InvoiceRequestModalProps {
   visible: boolean;
   onCancel: () => void;
-  onSave: (values: any) => Promise<void>;
-  initialData?: any; // Dữ liệu mặc định (Lấy từ khách hàng B2B nếu có)
+  onSave: (values: unknown) => Promise<void>;
+  initialData?: unknown; // Dữ liệu mặc định (Lấy từ khách hàng B2B nếu có)
   loading?: boolean;
 }
 
@@ -21,12 +21,13 @@ export const InvoiceRequestModal = ({
 
   useEffect(() => {
     if (visible && initialData) {
+      const data = initialData as Record<string, unknown>;
       form.setFieldsValue({
-        companyName: initialData.name || "",
-        taxCode: initialData.tax_code || "",
-        address: initialData.vat_address || initialData.address || "",
-        email: initialData.email || "",
-        buyerName: initialData.contact_person || "",
+        companyName: data.name || "",
+        taxCode: data.tax_code || "",
+        address: data.vat_address || data.address || "",
+        email: data.email || "",
+        buyerName: data.contact_person || "",
       });
     } else {
       form.resetFields();

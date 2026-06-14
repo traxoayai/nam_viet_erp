@@ -101,19 +101,26 @@ export interface CustomerB2BStoreState {
   totalCount: number;
   page: number;
   pageSize: number;
-  filters: any; // Hàm
+  filters: unknown; // Hàm
   sortDebt: "asc" | "desc" | null; // [NEW]
 
   fetchCustomers: (
-    filters: any,
+    filters: unknown,
     sortDebt?: "asc" | "desc" | null
   ) => Promise<void>;
   getCustomerDetails: (id: number) => Promise<void>;
-  createCustomer: (data: any, contacts: any[]) => Promise<number | null>;
-  updateCustomer: (id: number, data: any, contacts: any[]) => Promise<boolean>;
+  createCustomer: (
+    data: unknown,
+    contacts: unknown[]
+  ) => Promise<number | null>;
+  updateCustomer: (
+    id: number,
+    data: unknown,
+    contacts: unknown[]
+  ) => Promise<boolean>;
   deleteCustomer: (id: number) => Promise<boolean>;
   reactivateCustomer: (id: number) => Promise<boolean>; // Chuyển trạng thái khách hàng thành Đang Giao Dịch
-  exportToExcel: () => Promise<any[]>; // Xuất Excel
+  exportToExcel: () => Promise<Array<Record<string, unknown>>>; // Xuất Excel
   importCustomers: (file: File) => Promise<number>; // Nhập Excel
   setPage: (page: number, pageSize: number) => void;
   showListView: () => void;

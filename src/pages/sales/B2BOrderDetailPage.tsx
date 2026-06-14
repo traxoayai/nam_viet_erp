@@ -1,5 +1,4 @@
 // src/pages/sales/B2BOrderDetailPage.tsx
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   ArrowLeftOutlined,
   PrinterOutlined,
@@ -89,7 +88,7 @@ const B2BOrderDetailPage = () => {
       await b2bService.updateStatus(id, status);
       message.success("Cập nhật trạng thái thành công");
       fetchOrder(id); // Reload data
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       const errMsg = error.message || "Cập nhật thất bại";
       if (
@@ -124,7 +123,7 @@ const B2BOrderDetailPage = () => {
 
     // --- PHẦN 1: HEADER (Thông tin chung) ---
     // Sử dụng mảng 2 chiều (Array of Arrays) để tự do thiết kế layout
-    const excelData: any[][] = [];
+    const excelData: unknown[][] = [];
 
     excelData.push(["CHI TIẾT ĐƠN HÀNG", order.code]);
     excelData.push([
@@ -159,7 +158,7 @@ const B2BOrderDetailPage = () => {
     ]);
 
     // Đổ dữ liệu sản phẩm
-    order.items.forEach((item: any, index: number) => {
+    order.items.forEach((item: unknown, index: number) => {
       excelData.push([
         index + 1,
         item.product?.sku || item.sku || "", // Lấy SKU từ object product lồng bên trong
@@ -202,7 +201,7 @@ const B2BOrderDetailPage = () => {
       title: "Sản phẩm",
       dataIndex: "product_name",
       key: "product_name",
-      render: (text: string, record: any) => (
+      render: (text: string, record: unknown) => (
         <Space>
           {record.product_image ? (
             <img
@@ -230,7 +229,7 @@ const B2BOrderDetailPage = () => {
       title: "Lô / HSD",
       key: "batch_info",
       width: 140,
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: unknown) => (
         <div>
           {record.batch_no ? (
             <Tag color="blue" style={{ fontWeight: "bold", margin: 0 }}>
@@ -255,7 +254,7 @@ const B2BOrderDetailPage = () => {
       key: "quantity",
       align: "center" as const,
       width: 80,
-      render: (qty: number, record: any) => {
+      render: (qty: number, record: unknown) => {
         const returned = record.quantity_returned || 0;
         return (
           <div style={{ textAlign: "center" }}>
@@ -545,7 +544,7 @@ const B2BOrderDetailPage = () => {
                       }
                     : { id: -1, status: "pending", code: order.code }
                 }
-                orderItems={order.items.map((item: any) => ({
+                orderItems={order.items.map((item: unknown) => ({
                   ...item,
                   id: Number(item.product_id),
                   name: item.product_name,

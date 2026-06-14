@@ -14,12 +14,12 @@ export interface CustomerOption {
   value: number; // ID khách hàng
   type: "B2B" | "B2C";
   rawName: string; // Tên dạng text để hiển thị khi đã chọn
-  item: any; // Add item to interface
+  item: unknown; // Add item to interface
 }
 
 interface Props {
-  value?: any[];
-  onChange?: (value: any[]) => void;
+  value?: unknown[];
+  onChange?: (value: unknown[]) => void;
   placeholder?: string;
   style?: React.CSSProperties;
 }
@@ -52,76 +52,82 @@ const UniversalCustomerSelect: React.FC<Props> = ({
 
           // Map B2B (Nhà thuốc/Đại lý)
           const b2bOptions = b2bData.map(
-            (c: any): CustomerOption => ({
-              key: `B2B_${c.id}`, // Key unique để tránh trùng ID giữa 2 bảng
-              value: c.id,
-              type: "B2B",
-              rawName: c.name,
-              label: (
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
+            (c: unknown): CustomerOption => {
+              const customer = c as Record<string, unknown>;
+              return {
+                key: `B2B_${customer.id}`, // Key unique để tránh trùng ID giữa 2 bảng
+                value: customer.id as number,
+                type: "B2B",
+                rawName: customer.name as string,
+                label: (
                   <div
-                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
                   >
-                    <Avatar
-                      size="small"
-                      icon={<ShopOutlined />}
-                      style={{ backgroundColor: "#eb2f96" }}
-                    />
-                    <div>
-                      <Text strong>{c.name}</Text>
-                      <div style={{ fontSize: 10, color: "#888" }}>
-                        {c.phone} | MST: {c.tax_code}
+                    <div
+                      style={{ display: "flex", gap: 8, alignItems: "center" }}
+                    >
+                      <Avatar
+                        size="small"
+                        icon={<ShopOutlined />}
+                        style={{ backgroundColor: "#eb2f96" }}
+                      />
+                      <div>
+                        <Text strong>{String(customer.name)}</Text>
+                        <div style={{ fontSize: 10, color: "#888" }}>
+                          {String(customer.phone)} | MST: {String(customer.tax_code)}
+                        </div>
                       </div>
                     </div>
+                    <Tag color="magenta">Đại lý</Tag>
                   </div>
-                  <Tag color="magenta">Đại lý</Tag>
-                </div>
-              ),
-              item: { type: "B2B", ...c }, // Lưu data gốc để Form sử dụng
-            })
+                ) as React.ReactNode,
+                item: { type: "B2B", ...customer }, // Lưu data gốc để Form sử dụng
+              };
+            }
           );
 
           // Map B2C (Khách lẻ)
           const b2cOptions = b2cData.map(
-            (c: any): CustomerOption => ({
-              key: `B2C_${c.id}`,
-              value: c.id,
-              type: "B2C",
-              rawName: c.name,
-              label: (
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
+            (c: unknown): CustomerOption => {
+              const customer = c as Record<string, unknown>;
+              return {
+                key: `B2C_${customer.id}`,
+                value: customer.id as number,
+                type: "B2C",
+                rawName: customer.name as string,
+                label: (
                   <div
-                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
                   >
-                    <Avatar
-                      size="small"
-                      icon={<UserOutlined />}
-                      style={{ backgroundColor: "#1890ff" }}
-                    />
-                    <div>
-                      <Text strong>{c.name}</Text>
-                      <div style={{ fontSize: 10, color: "#888" }}>
-                        {c.phone}
+                    <div
+                      style={{ display: "flex", gap: 8, alignItems: "center" }}
+                    >
+                      <Avatar
+                        size="small"
+                        icon={<UserOutlined />}
+                        style={{ backgroundColor: "#1890ff" }}
+                      />
+                      <div>
+                        <Text strong>{String(customer.name)}</Text>
+                        <div style={{ fontSize: 10, color: "#888" }}>
+                          {String(customer.phone)}
+                        </div>
                       </div>
                     </div>
+                    <Tag color="blue">Khách lẻ</Tag>
                   </div>
-                  <Tag color="blue">Khách lẻ</Tag>
-                </div>
-              ),
-              item: { type: "B2C", ...c },
-            })
+                ) as React.ReactNode,
+                item: { type: "B2C", ...customer },
+              };
+            }
           );
 
           // Gộp lại (B2B trước, B2C sau hoặc tùy ý)

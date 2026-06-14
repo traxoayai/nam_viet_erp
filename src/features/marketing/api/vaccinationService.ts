@@ -1,4 +1,6 @@
 // src/services/vaccinationService.ts
+import type { Json } from "@/shared/lib/database.types";
+
 import {
   VaccinationTemplate,
   VaccinationDetailResponse,
@@ -6,7 +8,6 @@ import {
   VaccinationItemInput,
 } from "@/features/marketing/types/vaccination";
 import { safeRpc } from "@/shared/lib/safeRpc";
-import type { Json } from "@/shared/lib/database.types";
 
 export const vaccinationService = {
   // 1. Lấy danh sách

@@ -53,7 +53,7 @@ export interface OutboundOrderInfo {
   shipping_phone?: string;
   cutoff_time?: string;
   package_count?: number; // <--- FIX LỖI TS2339 TẠI ĐÂY (Thêm dấu ? để an toàn)
-  
+
   // Các trường mới cho Phiếu Giao Hàng
   final_amount?: number;
   paid_amount?: number;

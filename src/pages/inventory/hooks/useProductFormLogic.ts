@@ -36,13 +36,15 @@ export const useProductFormLogic = () => {
   const [selectedSupplierName, setSelectedSupplierName] = useState("");
 
   // --- ANCHOR UNIT LOGIC ---
-  const findAnchorUnit = useCallback((units: any[]) => {
+  const findAnchorUnit = useCallback((units: unknown[]) => {
     if (!units || units.length === 0) return { conversion_rate: 1 };
     const wholesale = units.find((u) => u.unit_type === "wholesale");
     if (wholesale) return wholesale;
     const logistics = units.find((u) => u.unit_type === "logistics");
     if (logistics) return logistics;
-    const sorted = [...units].sort((a, b) => (b.conversion_rate || 1) - (a.conversion_rate || 1));
+    const sorted = [...units].sort(
+      (a, b) => (b.conversion_rate || 1) - (a.conversion_rate || 1)
+    );
     return sorted[0];
   }, []);
 
@@ -54,19 +56,28 @@ export const useProductFormLogic = () => {
     const inputCost = parseFloat(allValues.actualCost) || 0;
     const units = allValues.units || [];
 
-    const wholesaleMarginValue = parseFloat(allValues.wholesaleMarginValue) || 0;
-    const wholesaleMarginType = (allValues.wholesaleMarginType === 'percent' || allValues.wholesaleMarginType === '%') ? 'percent' : 'amount';
+    const wholesaleMarginValue =
+      parseFloat(allValues.wholesaleMarginValue) || 0;
+    const wholesaleMarginType =
+      allValues.wholesaleMarginType === "percent" ||
+      allValues.wholesaleMarginType === "%"
+        ? "percent"
+        : "amount";
 
     const retailMarginValue = parseFloat(allValues.retailMarginValue) || 0;
-    const retailMarginType = (allValues.retailMarginType === 'percent' || allValues.retailMarginType === '%') ? 'percent' : 'amount';
+    const retailMarginType =
+      allValues.retailMarginType === "percent" ||
+      allValues.retailMarginType === "%"
+        ? "percent"
+        : "amount";
 
     const anchorUnit = findAnchorUnit(units);
     const anchorRate = parseFloat(anchorUnit.conversion_rate) || 1;
-    
+
     // Vốn cơ bản (1 Viên)
     const baseCost = inputCost / anchorRate;
 
-    const updatedUnits = units.map((u: any) => {
+    const updatedUnits = units.map((u: unknown) => {
       const uRate = parseFloat(u.conversion_rate) || 1;
       const uType = u.unit_type || "base";
       let finalPrice = 0;
@@ -74,24 +85,24 @@ export const useProductFormLogic = () => {
 
       if (uType === "wholesale" || uType === "logistics") {
         if (wholesaleMarginType === "amount") {
-           // Lãi tiền chia nhỏ ra cho từng viên, rồi nhân với số viên của đơn vị
-           const profitPerUnit = (wholesaleMarginValue / anchorRate) * uRate;
-           finalPrice = unitCost + profitPerUnit;
+          // Lãi tiền chia nhỏ ra cho từng viên, rồi nhân với số viên của đơn vị
+          const profitPerUnit = (wholesaleMarginValue / anchorRate) * uRate;
+          finalPrice = unitCost + profitPerUnit;
         } else {
-           finalPrice = unitCost * (1 + wholesaleMarginValue / 100);
+          finalPrice = unitCost * (1 + wholesaleMarginValue / 100);
         }
       } else {
         if (retailMarginType === "amount") {
-           const profitPerUnit = (retailMarginValue / anchorRate) * uRate;
-           finalPrice = unitCost + profitPerUnit;
+          const profitPerUnit = (retailMarginValue / anchorRate) * uRate;
+          finalPrice = unitCost + profitPerUnit;
         } else {
-           finalPrice = unitCost * (1 + retailMarginValue / 100);
+          finalPrice = unitCost * (1 + retailMarginValue / 100);
         }
       }
 
       return {
         ...u,
-        price: Math.round(finalPrice), 
+        price: Math.round(finalPrice),
       };
     });
 
@@ -112,8 +123,8 @@ export const useProductFormLogic = () => {
   // --- BIND DATA VÀO FORM (CHUẨN HÓA SNAKE_CASE) ---
   useEffect(() => {
     if (isEditing && currentProduct) {
-      const initData: any = { ...currentProduct };
-      
+      const initData: unknown = { ...currentProduct };
+
       const units = currentProduct.units || currentProduct.product_units || [];
       const anchor = findAnchorUnit(units);
       const anchorRate = Number(anchor.conversion_rate) || 1;
@@ -124,22 +135,33 @@ export const useProductFormLogic = () => {
 
       // Ép Type % hay Tiền để UI select đúng (camelCase cho form fields)
       const retailTypeDB = currentProduct.retail_margin_type;
-      initData.retailMarginType = (retailTypeDB === '%' || retailTypeDB === 'percent') ? 'percent' : 'amount';
+      initData.retailMarginType =
+        retailTypeDB === "%" || retailTypeDB === "percent"
+          ? "percent"
+          : "amount";
       initData.retailMarginValue = currentProduct.retail_margin_value ?? 0;
 
       const wholesaleTypeDB = currentProduct.wholesale_margin_type;
-      initData.wholesaleMarginType = (wholesaleTypeDB === '%' || wholesaleTypeDB === 'percent') ? 'percent' : 'amount';
-      initData.wholesaleMarginValue = currentProduct.wholesale_margin_value ?? 0;
+      initData.wholesaleMarginType =
+        wholesaleTypeDB === "%" || wholesaleTypeDB === "percent"
+          ? "percent"
+          : "amount";
+      initData.wholesaleMarginValue =
+        currentProduct.wholesale_margin_value ?? 0;
 
       // Xử lý Inventory
       if (currentProduct.inventorySettings) {
-        const newSettings: any = {};
+        const newSettings: unknown = {};
         Object.keys(currentProduct.inventorySettings).forEach((whKey) => {
           const setting = currentProduct.inventorySettings[whKey];
           if (setting) {
             newSettings[whKey] = {
-              min: setting.min ? Math.floor(Number(setting.min) / anchorRate) : 0,
-              max: setting.max ? Math.floor(Number(setting.max) / anchorRate) : 0,
+              min: setting.min
+                ? Math.floor(Number(setting.min) / anchorRate)
+                : 0,
+              max: setting.max
+                ? Math.floor(Number(setting.max) / anchorRate)
+                : 0,
             };
           }
         });
@@ -147,24 +169,25 @@ export const useProductFormLogic = () => {
       }
 
       if (currentProduct.product_units) {
-          initData.units = currentProduct.product_units;
+        initData.units = currentProduct.product_units;
       }
 
       form.resetFields();
-      
+
       setTimeout(() => {
-          form.setFieldsValue({
-              ...initData,
-              actualCost: displayCost,
-              name: currentProduct.name,
-              barcode: currentProduct.barcode,
-              sku: currentProduct.sku,
-              registration_number: currentProduct.registration_number,
-              packing_spec: currentProduct.packing_spec,
-          });
+        form.setFieldsValue({
+          ...initData,
+          actualCost: displayCost,
+          name: currentProduct.name,
+          barcode: currentProduct.barcode,
+          sku: currentProduct.sku,
+          registration_number: currentProduct.registration_number,
+          packing_spec: currentProduct.packing_spec,
+        });
       }, 100);
 
-      const distId = currentProduct.distributor ?? currentProduct.distributor_id;
+      const distId =
+        currentProduct.distributor ?? currentProduct.distributor_id;
       if (distId) {
         form.setFieldValue("distributor_id", distId);
         const supplier = suppliers.find((s) => s.id === distId);
@@ -174,7 +197,9 @@ export const useProductFormLogic = () => {
       const img = currentProduct.image_url;
       if (img) {
         setImageUrl(img);
-        setFileList([{ uid: "-1", name: "image.png", status: "done", url: img }]);
+        setFileList([
+          { uid: "-1", name: "image.png", status: "done", url: img },
+        ]);
       }
 
       const tags = currentProduct.active_ingredient;
@@ -192,7 +217,9 @@ export const useProductFormLogic = () => {
     if (onSuccess) onSuccess("ok");
   };
 
-  const onUploadChange: UploadProps["onChange"] = ({ fileList: newFileList }) => {
+  const onUploadChange: UploadProps["onChange"] = ({
+    fileList: newFileList,
+  }) => {
     setFileList(newFileList);
     if (newFileList.length === 0) setImageUrl("");
   };
@@ -207,7 +234,7 @@ export const useProductFormLogic = () => {
     window.open(`https://www.google.com/search?tbm=isch&q=${query}`, "_blank");
   };
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: unknown) => {
     setLoading(true);
     try {
       let finalImageUrl = imageUrl;
@@ -224,7 +251,7 @@ export const useProductFormLogic = () => {
       const anchorRate = anchor.conversion_rate || 1;
       const baseCost = inputCost / anchorRate;
 
-      const fixedUnits = units.map((u: any) => ({
+      const fixedUnits = units.map((u: unknown) => ({
         ...u,
         price: u.price || 0,
       }));
@@ -235,9 +262,11 @@ export const useProductFormLogic = () => {
         image_url: finalImageUrl,
         units: fixedUnits,
         // Convert camelCase form fields → snake_case DB fields
-        retail_margin_type: values.retailMarginType === 'percent' ? '%' : 'amount',
+        retail_margin_type:
+          values.retailMarginType === "percent" ? "%" : "amount",
         retail_margin_value: values.retailMarginValue,
-        wholesale_margin_type: values.wholesaleMarginType === 'percent' ? '%' : 'amount',
+        wholesale_margin_type:
+          values.wholesaleMarginType === "percent" ? "%" : "amount",
         wholesale_margin_value: values.wholesaleMarginValue,
       };
 
@@ -245,8 +274,8 @@ export const useProductFormLogic = () => {
         const settings = values.inventorySettings?.[wh.key] || {};
         return {
           warehouse_id: wh.id,
-          min_stock: (settings.min || 0) * anchorRate, 
-          max_stock: (settings.max || 0) * anchorRate, 
+          min_stock: (settings.min || 0) * anchorRate,
+          max_stock: (settings.max || 0) * anchorRate,
         };
       });
 
@@ -256,7 +285,7 @@ export const useProductFormLogic = () => {
         await updateProduct(savedId, finalValues, inventoryPayload);
         antMessage.success(`Cập nhật sản phẩm thành công!`);
       } else {
-        const res: any = await addProduct(finalValues, inventoryPayload);
+        const res: unknown = await addProduct(finalValues, inventoryPayload);
         if (res?.product_id) {
           savedId = Number(res.product_id);
         }
@@ -266,7 +295,7 @@ export const useProductFormLogic = () => {
       if (savedId) {
         await getProductDetails(savedId);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       const msg = error.message || error.details || "Không thể lưu sản phẩm";
       antMessage.error(`Lỗi: ${msg}`);

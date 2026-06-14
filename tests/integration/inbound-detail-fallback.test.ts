@@ -8,6 +8,7 @@
 // return NULL cho `unit` (do final fallback là literal 'Hộp').
 
 import { afterAll, beforeAll, describe as _describe, expect, it } from "vitest";
+
 import { adminClient, isProduction } from "../helpers/supabase";
 
 const describe = isProduction ? _describe.skip : _describe;
@@ -122,7 +123,10 @@ describe("get_inbound_detail — fallback uom_ordered → product_units (integra
       .like("sku", "INBOUND-FB-%");
     if (staleProducts && staleProducts.length > 0) {
       const ids = staleProducts.map((p) => p.id);
-      await adminClient.from("purchase_order_items").delete().in("product_id", ids);
+      await adminClient
+        .from("purchase_order_items")
+        .delete()
+        .in("product_id", ids);
       await adminClient.from("product_units").delete().in("product_id", ids);
       await adminClient.from("products").delete().in("id", ids);
     }
@@ -159,7 +163,8 @@ describe("get_inbound_detail — fallback uom_ordered → product_units (integra
         })
         .select("id")
         .single();
-      if (prodErr || !prod) throw prodErr || new Error(`seed product ${sc.key} failed`);
+      if (prodErr || !prod)
+        throw prodErr || new Error(`seed product ${sc.key} failed`);
       sc.productId = prod.id;
 
       if (sc.units.length > 0) {
@@ -170,7 +175,9 @@ describe("get_inbound_detail — fallback uom_ordered → product_units (integra
           is_base: u.is_base ?? false,
           conversion_rate: 1,
         }));
-        const { error: puErr } = await adminClient.from("product_units").insert(rows);
+        const { error: puErr } = await adminClient
+          .from("product_units")
+          .insert(rows);
         if (puErr) throw puErr;
       }
     }
@@ -213,7 +220,10 @@ describe("get_inbound_detail — fallback uom_ordered → product_units (integra
       .map((s) => s.productId)
       .filter((id): id is number => typeof id === "number");
     if (productIds.length > 0) {
-      await adminClient.from("product_units").delete().in("product_id", productIds);
+      await adminClient
+        .from("product_units")
+        .delete()
+        .in("product_id", productIds);
       await adminClient.from("products").delete().in("id", productIds);
     }
   });
@@ -224,7 +234,7 @@ describe("get_inbound_detail — fallback uom_ordered → product_units (integra
     });
     expect(error).toBeNull();
     expect(data).not.toBeNull();
-    const items = (data as any).items as Array<{ unit: string | null }>;
+    const items = (data as unknown).items as Array<{ unit: string | null }>;
     expect(items).toHaveLength(scenarios.length);
     for (const it of items) {
       expect(it.unit).not.toBeNull();
@@ -237,7 +247,7 @@ describe("get_inbound_detail — fallback uom_ordered → product_units (integra
       const { data } = await adminClient.rpc("get_inbound_detail", {
         p_po_id: poId,
       });
-      const items = (data as any).items as Array<{
+      const items = (data as unknown).items as Array<{
         product_id: number;
         unit: string;
         available_units: unknown[];
@@ -255,7 +265,7 @@ describe("get_inbound_detail — fallback uom_ordered → product_units (integra
     const { data } = await adminClient.rpc("get_inbound_detail", {
       p_po_id: poId,
     });
-    const items = (data as any).items as Array<{
+    const items = (data as unknown).items as Array<{
       product_id: number;
       available_units: Array<{ unit_name: string; is_base: boolean }>;
     }>;

@@ -31,8 +31,10 @@ export const SymptomTagList: React.FC<SymptomTagListProps> = ({
         dataSource={symptoms}
         renderItem={(item, index) => (
           <List.Item
+            key={index}
             actions={[
               <Checkbox
+                key="checkbox"
                 checked={item.isUrgent}
                 onChange={() => onToggleUrgent(index)}
               >
@@ -46,6 +48,7 @@ export const SymptomTagList: React.FC<SymptomTagListProps> = ({
                 </span>
               </Checkbox>,
               <Button
+                key="delete"
                 type="text"
                 danger
                 icon={<CloseOutlined />}

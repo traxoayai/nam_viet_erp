@@ -74,13 +74,23 @@ export const DoctorBlock5_Actions: React.FC<Props> = ({
 
       {/* RIGHT: Main Actions */}
       <div className="flex gap-2">
-        {hasVaccines && (
-          <Popconfirm title="Xác nhận đủ sức khỏe?" onConfirm={() => onSave("ready_for_vaccine")} okText="Đồng ý">
-            <Button size="large" type="primary" className="bg-purple-600 hover:bg-purple-700 border-purple-600" loading={loading} icon={<Syringe />}>
+        {hasVaccines ? (
+          <Popconfirm
+            title="Xác nhận đủ sức khỏe?"
+            onConfirm={() => onSave("ready_for_vaccine")}
+            okText="Đồng ý"
+          >
+            <Button
+              size="large"
+              type="primary"
+              className="bg-purple-600 hover:bg-purple-700 border-purple-600"
+              loading={loading}
+              icon={<Syringe />}
+            >
               Đủ điều kiện Tiêm chủng
             </Button>
           </Popconfirm>
-        )}
+        ) : null}
 
         <Button
           size="large"

@@ -53,11 +53,9 @@ import { v4 as uuidv4 } from "uuid";
 import * as XLSX from "xlsx"; // Import Excel
 
 import type { TableProps, TabsProps } from "antd"; // Fix Duplicate
+
 // import type { UploadRequestOption } from "antd/es/upload/interface";
-
 import { PERMISSIONS } from "@/features/auth/constants/permissions"; // [NEW]
-
-// IMPORT "BỘ NÃO" VÀ "KHUÔN MẪU"
 import { useUserStore } from "@/features/auth/stores/useUserStore"; // Store Users (cho NVKD)
 import { uploadLicense } from "@/features/sales/api/customerB2BService"; // Service B2B
 import { useCustomerB2BStore } from "@/features/sales/stores/useCustomerB2BStore"; // Store B2B
@@ -152,7 +150,7 @@ const CustomerB2BPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 500);
   //   const [isImporting, setIsImporting] = useState(false);
-  const [licenseFileList, setLicenseFileList] = useState<any[]>([]);
+  const [licenseFileList, setLicenseFileList] = useState<unknown[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [isImporting, setIsImporting] = useState(false);
 
@@ -258,7 +256,7 @@ const CustomerB2BPage: React.FC = () => {
         bank_account_name: values.bank_account_name,
         bank_account_number: values.bank_account_number,
       };
-      const contactsData = (values.contacts || []).map((c: any) => ({
+      const contactsData = (values.contacts || []).map((c: unknown) => ({
         name: c.name,
         position: c.position,
         phone: c.phone,
@@ -275,7 +273,7 @@ const CustomerB2BPage: React.FC = () => {
         );
       }
       antMessage.success({ content: "Lưu hồ sơ B2B thành công!", key: msgKey });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi Save B2B:", error);
       antMessage.error({
         content: `Lưu thất bại: ${error.message}`,
@@ -291,7 +289,7 @@ const CustomerB2BPage: React.FC = () => {
         try {
           await deleteCustomer(record.id);
           antMessage.success("Đã cập nhật trạng thái.");
-        } catch (error: any) {
+        } catch (error: unknown) {
           antMessage.error(error.message);
         }
       },
@@ -303,7 +301,7 @@ const CustomerB2BPage: React.FC = () => {
     try {
       reactivateCustomer(record.id);
       antMessage.success(`Đã cho phép KH "${record.name}" giao dịch lại.`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       antMessage.error(error.message);
     }
   };
@@ -326,7 +324,7 @@ const CustomerB2BPage: React.FC = () => {
       }
 
       // [UPDATE] Format dữ liệu cho Template (Thêm cột Nợ đầu kỳ)
-      const formattedData = dataToExport.map((item: any) => ({
+      const formattedData = dataToExport.map((item: unknown) => ({
         ...item,
         // Thêm cột này để làm mẫu cho người dùng nhập liệu (Import lại)
         "Nợ Hiện Tại": item.current_debt || 0,
@@ -344,7 +342,7 @@ const CustomerB2BPage: React.FC = () => {
         content: `Đã xuất ${dataToExport.length} khách hàng.`,
         key: "export",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       antMessage.error({
         content: `Xuất file thất bại: ${error.message}`,
         key: "export",
@@ -385,7 +383,7 @@ const CustomerB2BPage: React.FC = () => {
           });
           setSelectedRowKeys([]); // Xóa chọn
           loadCustomers(); // Tải lại
-        } catch (error: any) {
+        } catch (error: unknown) {
           antMessage.error({
             content: `Thất bại: ${error.message}`,
             key: msgKey,
@@ -399,7 +397,7 @@ const CustomerB2BPage: React.FC = () => {
   const uploadProps: UploadProps = {
     name: "file",
     showUploadList: false, // SỬA LỖI: Gán kiểu 'any' cho các tham số
-    customRequest: async ({ file, onSuccess, onError }: any) => {
+    customRequest: async ({ file, onSuccess, onError }: unknown) => {
       setIsImporting(true);
       antMessage.loading({
         content: "Đang xử lý file Excel...",
@@ -412,7 +410,7 @@ const CustomerB2BPage: React.FC = () => {
           content: `Import thành công! Đã thêm/cập nhật ${count} khách hàng.`,
           key: "import",
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (onError) onError(error);
         antMessage.error({
           content: `Import thất bại: ${error.message}`,
@@ -440,13 +438,13 @@ const CustomerB2BPage: React.FC = () => {
       message.success({ content: "Đã lấy tọa độ GPS thành công!", key: "gps" });
     }, 1000);
   }; // Copy địa chỉ (Từ Canvas)
-  const handleCopyAddress = (e: any) => {
+  const handleCopyAddress = (e: unknown) => {
     if (e.target.checked) {
       const diaChiVAT = form.getFieldValue("vat_address");
       form.setFieldsValue({ shipping_address: diaChiVAT });
     }
   };
-  const handleUploadChange = ({ fileList: newFileList }: any) => {
+  const handleUploadChange = ({ fileList: newFileList }: unknown) => {
     setLicenseFileList(newFileList);
   }; // --- GIAO DIỆN (Views) ---
   // 1. Giao diện Danh sách (List View)
@@ -454,9 +452,9 @@ const CustomerB2BPage: React.FC = () => {
   const renderListView = () => {
     // [NEW] Xử lý Sort Table
     const handleTableChange = (
-      _pagination: any,
-      _filters: any,
-      sorter: any
+      _pagination: unknown,
+      _filters: unknown,
+      sorter: unknown
     ) => {
       if (sorter.field === "current_debt") {
         const order =
@@ -540,7 +538,7 @@ const CustomerB2BPage: React.FC = () => {
         width: 100,
         align: "center",
         fixed: "right",
-        render: (_: any, record: CustomerB2BListRecord) => (
+        render: (_: unknown, record: CustomerB2BListRecord) => (
           <Space size="small">
             <Tooltip title="Xem/Sửa Hồ sơ B2B">
               <Button

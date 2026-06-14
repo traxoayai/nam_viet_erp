@@ -13,11 +13,11 @@ import { SmartScreeningChecklist } from "./SmartScreeningChecklist";
 import { VitalInput } from "./VitalInput";
 
 interface Props {
-  vitals: any;
-  setVitals: (v: any) => void;
-  clinical: any;
-  setClinical: (v: any) => void;
-  patient: any;
+  vitals: unknown;
+  setVitals: (v: unknown) => void;
+  clinical: unknown;
+  setClinical: (v: unknown) => void;
+  patient: unknown;
   readOnly?: boolean;
   isVaccinationFlow?: boolean;
 }
@@ -36,7 +36,7 @@ export const DoctorBlock2_ClinicalExam: React.FC<Props> = ({
   // [NEW]: GỌI HOOK ĐỂ LẤY DỮ LIỆU BIỂU ĐỒ
   const { vitalsHistory } = usePatientHistory(patient?.id);
 
-  const handleClinicalChange = (key: string, val: any) => {
+  const handleClinicalChange = (key: string, val: unknown) => {
     setClinical({ ...clinical, [key]: val });
   };
 

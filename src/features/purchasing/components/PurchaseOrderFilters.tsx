@@ -13,12 +13,16 @@ interface PurchaseOrderFiltersProps {
     status?: string;
     dateRange?: [string, string];
   };
-  setFilters: (filters: any) => void;
+  setFilters: (filters: unknown) => void;
   onAutoCreate: () => void;
 }
 
 export const PurchaseOrderFilters: React.FC<PurchaseOrderFiltersProps> =
-  React.memo(function PurchaseOrderFilters({ filters, setFilters, onAutoCreate }) {
+  React.memo(function PurchaseOrderFilters({
+    filters,
+    setFilters,
+    onAutoCreate,
+  }) {
     const navigate = useNavigate();
     const [localSearch, setLocalSearch] = useState(filters.search || "");
 
@@ -26,7 +30,10 @@ export const PurchaseOrderFilters: React.FC<PurchaseOrderFiltersProps> =
       setFilters({ ...filters, search: localSearch });
     };
 
-    const handleDateChange = (dates: any, dateStrings: [string, string]) => {
+    const handleDateChange = (
+      dates: unknown,
+      dateStrings: [string, string]
+    ) => {
       setFilters({ ...filters, dateRange: dates ? dateStrings : undefined });
     };
 
@@ -54,7 +61,8 @@ export const PurchaseOrderFilters: React.FC<PurchaseOrderFiltersProps> =
                 value={localSearch}
                 onChange={(e) => {
                   setLocalSearch(e.target.value);
-                  if (!e.target.value) setFilters({ ...filters, search: undefined });
+                  if (!e.target.value)
+                    setFilters({ ...filters, search: undefined });
                 }}
                 onPressEnter={handleSearch}
                 allowClear

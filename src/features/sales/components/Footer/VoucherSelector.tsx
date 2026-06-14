@@ -56,7 +56,7 @@ export const VoucherSelector = ({
         }
         allowClear
         value={selectedVoucher?.id}
-        onChange={(_, option: any) => onSelect(option?.voucher || null)}
+        onChange={(_, option: unknown) => onSelect(option?.voucher || null)}
         options={vouchers.map((v) => ({
           label: (
             <Space>

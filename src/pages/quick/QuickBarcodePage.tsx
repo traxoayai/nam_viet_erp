@@ -37,10 +37,20 @@ const { useBreakpoint } = Grid;
 
 // --- CAMERA COMPONENT (INLINE FOR CONVENIENCE) ---
 // Có thể tách ra file riêng: src/shared/ui/common/CameraScanModal.tsx
-const CameraScanModal = ({ open, onCancel, onScan }: any) => {
+interface CameraScanModalProps {
+  open: boolean;
+  onCancel: () => void;
+  onScan: (text: string) => void;
+}
+
+const CameraScanModal: React.FC<CameraScanModalProps> = ({
+  open,
+  onCancel,
+  onScan,
+}) => {
   useEffect(() => {
-    let scanner: any;
-    let timeout: any;
+    let scanner: Html5QrcodeScanner | null = null;
+    let timeout: NodeJS.Timeout | null = null;
 
     if (open) {
       // [FIX] Wait for Modal DOM to be ready
@@ -52,11 +62,11 @@ const CameraScanModal = ({ open, onCancel, onScan }: any) => {
             false
           );
           scanner.render(
-            (decodedText: any) => {
-              scanner.clear();
+            (decodedText: string) => {
+              if (scanner) scanner.clear();
               onScan(decodedText);
             },
-            (error: any) => console.warn(error)
+            (error: unknown) => console.warn(error)
           );
         }
       }, 300); // 300ms delay safely
@@ -66,7 +76,7 @@ const CameraScanModal = ({ open, onCancel, onScan }: any) => {
       clearTimeout(timeout);
       try {
         if (scanner) scanner.clear();
-      } catch (e) {}
+      } catch (_e) {}
     };
   }, [open]);
 
@@ -110,7 +120,9 @@ const QuickBarcodePage: React.FC = () => {
 
   // Excel State
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
-  const [matchedData, setMatchedData] = useState<any[]>([]);
+  const [matchedData, setMatchedData] = useState<
+    Array<Record<string, unknown>>
+  >([]);
 
   // Camera State
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -153,30 +165,43 @@ const QuickBarcodePage: React.FC = () => {
       );
       if (error) throw error;
 
-      const rows = (data || []).map((p: any) => {
-        const units = p.units || [];
-        const retailObj =
-          units.find((u: any) => u.is_base || u.unit_type === "retail") || {};
-        const wholesaleObj =
-          units.find((u: any) => u.unit_type === "wholesale") ||
-          units.find(
-            (u: any) => !u.is_base && u.unit_name === p.wholesale_unit
-          ) ||
-          {};
+      const rows = (data || []).map(
+        (p: {
+          id: number;
+          name: string;
+          sku: string;
+          image_url?: string;
+          retail_unit?: string;
+          wholesale_unit?: string;
+          units: Array<{
+            barcode?: string;
+            is_base?: boolean;
+            unit_type?: string;
+            unit_name?: string;
+          }>;
+        }) => {
+          const units = p.units || [];
+          const retailObj =
+            units.find((u) => u.is_base || u.unit_type === "retail") || {};
+          const wholesaleObj =
+            units.find((u) => u.unit_type === "wholesale") ||
+            units.find((u) => !u.is_base && u.unit_name === p.wholesale_unit) ||
+            {};
 
-        return {
-          key: p.id,
-          id: p.id,
-          name: p.name,
-          sku: p.sku,
-          imageUrl: p.image_url,
-          base_unit: p.retail_unit || "---",
-          wholesale_unit: p.wholesale_unit || "---",
-          base_barcode: retailObj.barcode || "",
-          wholesale_barcode: wholesaleObj.barcode || "",
-          is_dirty: false,
-        };
-      });
+          return {
+            key: p.id,
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            imageUrl: p.image_url,
+            base_unit: p.retail_unit || "---",
+            wholesale_unit: p.wholesale_unit || "---",
+            base_barcode: retailObj.barcode || "",
+            wholesale_barcode: wholesaleObj.barcode || "",
+            is_dirty: false,
+          };
+        }
+      );
 
       setProducts(rows);
       setPagination((prev) => ({
@@ -185,8 +210,10 @@ const QuickBarcodePage: React.FC = () => {
         pageSize,
         total: count || 0,
       }));
-    } catch (error: any) {
-      message.error("Lỗi tải: " + error.message);
+    } catch (error: unknown) {
+      const errorMsg =
+        error instanceof Error ? error.message : "Lỗi không xác định";
+      message.error("Lỗi tải: " + errorMsg);
     } finally {
       setLoading(false);
     }
@@ -248,7 +275,7 @@ const QuickBarcodePage: React.FC = () => {
       setProducts((prev) =>
         prev.map((p) => (p.id === row.id ? { ...p, is_dirty: false } : p))
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e.message?.includes("unique") || e.message?.includes("duplicate")) {
         message.error("Lỗi: Mã này đã thuộc về sản phẩm khác!");
       } else {
@@ -278,14 +305,14 @@ const QuickBarcodePage: React.FC = () => {
       const ab = e.target?.result;
       const wb = XLSX.read(ab, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const jsonData: any[] = XLSX.utils.sheet_to_json(ws);
+      const jsonData: unknown[] = XLSX.utils.sheet_to_json(ws);
       processExcelData(jsonData);
     };
     reader.readAsArrayBuffer(file);
     return false;
   };
 
-  const processExcelData = async (rows: any[]) => {
+  const processExcelData = async (rows: unknown[]) => {
     const itemsToMatch = rows
       .map((r) => ({
         name: r["Tên sản phẩm"],
@@ -307,7 +334,7 @@ const QuickBarcodePage: React.FC = () => {
 
       const result = itemsToMatch.map((excelItem, idx) => {
         const match = matches?.find(
-          (m: any) =>
+          (m: unknown) =>
             (excelItem.sku && m.excel_sku === excelItem.sku) ||
             m.excel_name === excelItem.name
         );
@@ -327,7 +354,7 @@ const QuickBarcodePage: React.FC = () => {
 
       setMatchedData(result);
       setReviewModalVisible(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi đối chiếu: " + err.message);
     } finally {
       hideLoading();
@@ -358,7 +385,7 @@ const QuickBarcodePage: React.FC = () => {
       message.success(`Đã cập nhật ${payload.length} mã vạch!`);
       setReviewModalVisible(false);
       loadProducts(pagination.current, pagination.pageSize);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi cập nhật: " + err.message);
     } finally {
       setLoading(false);
@@ -453,7 +480,7 @@ const QuickBarcodePage: React.FC = () => {
       title: "Sản phẩm",
       dataIndex: "name",
       width: 250,
-      render: (t: any, r: any) => (
+      render: (t: unknown, r: unknown) => (
         <div>
           <b>{t}</b>
           <br />
@@ -465,7 +492,7 @@ const QuickBarcodePage: React.FC = () => {
       title: `Mã Vạch - ĐV Cơ Sở (${products[0]?.base_unit || "Unit"})`,
       dataIndex: "base_barcode",
       width: 200,
-      render: (v: any, r: any) => (
+      render: (v: unknown, r: unknown) => (
         <Input
           value={v}
           onChange={(e) =>
@@ -482,7 +509,7 @@ const QuickBarcodePage: React.FC = () => {
       title: `Mã Vạch - ĐV Bán Buôn (${products[0]?.wholesale_unit || "Unit"})`,
       dataIndex: "wholesale_barcode",
       width: 200,
-      render: (v: any, r: any) => (
+      render: (v: unknown, r: unknown) => (
         <Input
           value={v}
           onChange={(e) =>
@@ -500,7 +527,7 @@ const QuickBarcodePage: React.FC = () => {
     {
       title: "",
       width: 60,
-      render: (_: any, r: any) =>
+      render: (_: unknown, r: unknown) =>
         r.is_dirty ? (
           <Button
             type="primary"
@@ -604,7 +631,7 @@ const QuickBarcodePage: React.FC = () => {
           columns={[
             {
               title: "Excel",
-              render: (r: any) => (
+              render: (r: unknown) => (
                 <div>
                   <b>{r.excel.name}</b>
                   <br />
@@ -614,7 +641,7 @@ const QuickBarcodePage: React.FC = () => {
             },
             {
               title: "Khớp Hệ thống",
-              render: (r: any) =>
+              render: (r: unknown) =>
                 r.match ? (
                   <Tag color="green">{r.match.name}</Tag>
                 ) : (

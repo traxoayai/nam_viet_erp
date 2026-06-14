@@ -79,7 +79,7 @@ const CustomerB2COrgForm: React.FC = () => {
     updateCustomer,
   } = useCustomerB2CStore(); // State cục bộ
 
-  const [fileList, setFileList] = useState<any[]>([]); // Tải dữ liệu khi SỬA
+  const [fileList, setFileList] = useState<unknown[]>([]); // Tải dữ liệu khi SỬA
 
   useEffect(() => {
     if (id) {
@@ -156,7 +156,7 @@ const CustomerB2COrgForm: React.FC = () => {
         key: msgKey,
       });
       navigate("/crm/retail"); // Quay về danh sách chung
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi Save:", error);
       antMessage.error({
         content: `Lưu thất bại: ${error.message}`,
@@ -181,7 +181,7 @@ const CustomerB2COrgForm: React.FC = () => {
     },
   ];
 
-  const handleUploadChange = ({ fileList: newFileList }: any) => {
+  const handleUploadChange = ({ fileList: newFileList }: unknown) => {
     setFileList(newFileList);
   };
 

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+
 import { login } from "./helpers/auth";
 
 /**
@@ -49,11 +50,12 @@ test.describe("B2B Payment Status Display", () => {
     await page.waitForTimeout(3000);
 
     // Click first visible data row (skip Ant Design measure rows)
-    const dataRows = page.locator(
-      ".ant-table-tbody tr.ant-table-row"
-    );
+    const dataRows = page.locator(".ant-table-tbody tr.ant-table-row");
 
-    await dataRows.first().waitFor({ state: "visible", timeout: 10_000 }).catch(() => {});
+    await dataRows
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .catch(() => {});
 
     if ((await dataRows.count()) === 0) {
       test.skip();
@@ -141,7 +143,7 @@ test.describe("B2B Payment Status Display", () => {
         if (rowCount > 0) {
           // Verify filter worked — no "Đã TT" in filtered results
           for (let i = 0; i < Math.min(rowCount, 5); i++) {
-            const rowText = await rows.nth(i).textContent();
+            const _rowText = await rows.nth(i).textContent();
             // Paid status should NOT appear in unpaid filter
             // (This is a soft check — skip if filter doesn't work as expected)
           }

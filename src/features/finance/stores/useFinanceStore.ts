@@ -10,8 +10,8 @@ import {
   TransactionFilter,
 } from "@/features/finance/types/finance";
 import { FundAccountRecord } from "@/features/finance/types/fundAccount";
-import { supabase } from "@/shared/lib/supabaseClient";
 import { safeRpc } from "@/shared/lib/safeRpc";
+import { supabase } from "@/shared/lib/supabaseClient";
 
 interface FinanceState {
   transactions: TransactionRecord[];
@@ -59,14 +59,17 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       });
 
       set({
-        transactions: (data as any[] || []).map(t => ({
-          ...t,
-          flow: t.flow as "in" | "out"
-        })),
+        transactions: ((data as unknown[]) || []).map((t: unknown) => {
+          const tx = t as Record<string, unknown>;
+          return {
+            ...tx,
+            flow: tx.flow as "in" | "out",
+          };
+        }),
         totalCount: totalCount,
-        loading: false
+        loading: false,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Lỗi tải lịch sử:", err);
       set({ loading: false });
     }
@@ -77,7 +80,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       .from("fund_accounts")
       .select("*")
       .order("name");
-    if (data) set({ funds: data.map((f: any) => ({ ...f, key: f.id })) });
+    if (data) {
+      set({
+        funds: data.map((f: unknown) => {
+          const fund = f as Record<string, unknown>;
+          return { ...fund, key: fund.id };
+        })
+      });
+    }
   },
 
   // --- AURA FIX: Sửa logic lấy phiếu tạm ứng ---
@@ -98,7 +108,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     }
 
     console.log(`Tìm tạm ứng cho ${employeeId}:`, data); // Debug log
-    set({ openAdvances: (data as any) || [] });
+    set({ openAdvances: ((data as unknown) as unknown[]) || [] });
   },
   // --------------------------------------------
 
@@ -137,7 +147,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
       set({ loading: false });
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi: " + err.message);
       set({ loading: false });
       return false;
@@ -172,7 +182,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       }
 
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi: " + err.message);
       return false;
     }
@@ -195,7 +205,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       }));
 
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi xóa: " + err.message);
       return false;
     }
@@ -230,7 +240,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         wb,
         `TaiChinh_${new Date().toISOString().slice(0, 10)}.xlsx`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Lỗi xuất Excel:", err);
     }
   },

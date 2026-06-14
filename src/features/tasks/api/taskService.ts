@@ -4,20 +4,20 @@ export interface Task {
   id: string; // UUID
   title: string;
   description: string | null;
-  status: 'todo' | 'doing' | 'done' | 'cancelled';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  
-  assigner_id: string | null; 
+  status: "todo" | "doing" | "done" | "cancelled";
+  priority: "low" | "medium" | "high" | "urgent";
+
+  assigner_id: string | null;
   assignee_id: string;
-  
-  entity_type: 'order' | 'customer' | 'product' | 'inventory_batch' | 'none';
-  entity_id: string | null; 
-  
-  due_date: string; 
+
+  entity_type: "order" | "customer" | "product" | "inventory_batch" | "none";
+  entity_id: string | null;
+
+  due_date: string;
   completed_at: string | null;
-  kpi_points: number; 
-  
-  ai_metadata: Record<string, any>;
+  kpi_points: number;
+
+  ai_metadata: Record<string, unknown>;
   created_at: string;
 
   // Polymorphic properties for vw_task_board
@@ -29,20 +29,23 @@ export interface Task {
 
 export const getTasks = async (): Promise<Task[]> => {
   const { data, error } = await supabase
-    .from('vw_task_board')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .from("vw_task_board")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
   return data as Task[];
 };
 
-export const updateTaskStatus = async (taskId: string, newStatus: Task['status']) => {
+export const updateTaskStatus = async (
+  taskId: string,
+  newStatus: Task["status"]
+) => {
   const { data, error } = await supabase
-    .from('tasks')
+    .from("tasks")
     .update({ status: newStatus })
-    .eq('id', taskId)
-    .select('kpi_points, completed_at')
+    .eq("id", taskId)
+    .select("kpi_points, completed_at")
     .single();
 
   if (error) throw error;
@@ -51,9 +54,9 @@ export const updateTaskStatus = async (taskId: string, newStatus: Task['status']
 
 export const updateTask = async (taskId: string, updates: Partial<Task>) => {
   const { data, error } = await supabase
-    .from('tasks')
+    .from("tasks")
     .update(updates)
-    .eq('id', taskId)
+    .eq("id", taskId)
     .select()
     .single();
 
@@ -63,11 +66,11 @@ export const updateTask = async (taskId: string, updates: Partial<Task>) => {
 
 export const createTask = async (taskData: Partial<Task>) => {
   const { data, error } = await supabase
-    .from('tasks')
+    .from("tasks")
     .insert([JSON.parse(JSON.stringify(taskData))])
     .select()
     .single();
-    
+
   if (error) throw error;
   return data;
 };

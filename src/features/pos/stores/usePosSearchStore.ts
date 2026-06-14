@@ -28,7 +28,7 @@ export const usePosSearchStore = create<PosSearchState>((set, get) => ({
     try {
       const data = await posService.searchProducts(keyword, warehouseId);
       set({ results: data });
-    } catch (error) {
+    } catch (_error) {
       set({ results: [] });
     } finally {
       set({ loading: false });

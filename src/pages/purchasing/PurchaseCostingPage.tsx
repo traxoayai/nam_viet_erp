@@ -69,11 +69,11 @@ const PurchaseCostingPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [poData, setPoData] = useState<any>(null);
+  const [poData, setPoData] = useState<unknown>(null);
 
   // --- STATE ---
   const [showPriceModal, setShowPriceModal] = useState(false); // [NEW] Mode Update Price
-  const [preUpdateCosts, setPreUpdateCosts] = useState<any[]>([]); // [NEW] Snapshot Old Costs
+  const [preUpdateCosts, setPreUpdateCosts] = useState<unknown[]>([]); // [NEW] Snapshot Old Costs
 
   const [costingItems, setCostingItems] = useState<CostingItem[]>([]);
   const [giftItems, setGiftItems] = useState<GiftItem[]>([]);
@@ -81,7 +81,7 @@ const PurchaseCostingPage: React.FC = () => {
   // Config Block
   const [totalShippingFee, setTotalShippingFee] = useState<number>(0);
   const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
-  const [programOptions, setProgramOptions] = useState<any[]>([]); // [NEW]
+  const [programOptions, setProgramOptions] = useState<unknown[]>([]); // [NEW]
 
   // --- EFFECT: LOAD DATA ---
   useEffect(() => {
@@ -92,7 +92,9 @@ const PurchaseCostingPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const response: any = await purchaseOrderService.getPODetail(Number(id));
+      const response: unknown = await purchaseOrderService.getPODetail(
+        Number(id)
+      );
       console.log("PO DATA:", response); // DEBUG
 
       // [FIX] Kiểm tra cấu trúc thật (Ví dụ: response là PO object luôn, hay response.data?)
@@ -105,7 +107,7 @@ const PurchaseCostingPage: React.FC = () => {
       setPoData(poInfo);
 
       // Init Costing Items
-      const items = poItemsRaw.map((i: any) => ({
+      const items = poItemsRaw.map((i: unknown) => ({
         id: i.id,
         product_id: i.product_id,
         sku: i.sku,
@@ -133,13 +135,13 @@ const PurchaseCostingPage: React.FC = () => {
         const programs =
           await purchaseOrderService.getActiveProgramsBySupplier(supplierId);
         setProgramOptions(
-          programs.map((p: any) => ({
+          programs.map((p: unknown) => ({
             label: p.name,
             value: p.id,
           }))
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       message.error("Lỗi tải dữ liệu: " + (err.message || err));
     } finally {
@@ -240,7 +242,7 @@ const PurchaseCostingPage: React.FC = () => {
     setGiftItems(giftItems.filter((g) => g.key !== key));
   };
 
-  const updateGift = (key: string, field: keyof GiftItem, value: any) => {
+  const updateGift = (key: string, field: keyof GiftItem, value: unknown) => {
     setGiftItems(
       giftItems.map((g) => (g.key === key ? { ...g, [field]: value } : g))
     );
@@ -276,14 +278,14 @@ const PurchaseCostingPage: React.FC = () => {
       let giftCount = 0;
 
       // Iterate Groups
-      groups.forEach((group: any) => {
+      groups.forEach((group: unknown) => {
         const rules = group.rules || {};
         const ruleType = group.type || "rebate_revenue"; // Default or explicit type
 
         // 1. Identify Products in this Group
         const groupProductIds = programItems
-          .filter((pi: any) => pi.group_id === group.id)
-          .map((pi: any) => pi.product_id);
+          .filter((pi: unknown) => pi.group_id === group.id)
+          .map((pi: unknown) => pi.product_id);
 
         if (groupProductIds.length === 0) return;
 
@@ -382,14 +384,14 @@ const PurchaseCostingPage: React.FC = () => {
     }
   };
 
-  
   // hàm handleSubmit và sửa lại payload gửi lên server để cập nhật Giá Bán như sau:
   const handleSubmit = async () => {
     if (!id) return;
     setLoading(true);
     try {
       const productIds = [...new Set(costingItems.map((i) => i.product_id))];
-      const oldData = await purchaseOrderService.getProductCostsSnapshot(productIds);
+      const oldData =
+        await purchaseOrderService.getProductCostsSnapshot(productIds);
       setPreUpdateCosts(oldData || []);
 
       const payload = {
@@ -399,7 +401,7 @@ const PurchaseCostingPage: React.FC = () => {
           id: item.id,
           product_id: item.product_id,
           // [CORE FIX]: Gửi đúng giá của giao diện (Giá Thùng/Hộp). Không tự chia nữa. Backend sẽ lo!
-          final_unit_cost: item.final_unit_cost, 
+          final_unit_cost: item.final_unit_cost,
           rebate_rate: item.rebate_rate,
           vat_rate: item.vat_rate,
           quantity_received: item.quantity_ordered + item.bonus_quantity,
@@ -418,7 +420,7 @@ const PurchaseCostingPage: React.FC = () => {
       await purchaseOrderService.confirmCosting(payload);
       message.success("Xác nhận giá vốn thành công!");
       setShowPriceModal(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error("Lỗi: " + err.message);
     } finally {
       setLoading(false);
@@ -452,7 +454,7 @@ const PurchaseCostingPage: React.FC = () => {
       title: "Đơn giá",
       width: 130,
       align: "right" as const,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <InputNumber
           style={{ width: "100%" }}
           min={0}
@@ -470,7 +472,7 @@ const PurchaseCostingPage: React.FC = () => {
     {
       title: "Rebate %",
       width: 100,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <InputNumber
           min={0}
           max={100}
@@ -482,7 +484,7 @@ const PurchaseCostingPage: React.FC = () => {
     {
       title: "VAT %",
       width: 100,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <InputNumber
           min={0}
           max={100}
@@ -494,7 +496,7 @@ const PurchaseCostingPage: React.FC = () => {
     {
       title: "SL Tặng (Bonus)",
       width: 110,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <InputNumber
           min={0}
           value={r.bonus_quantity}
@@ -506,7 +508,7 @@ const PurchaseCostingPage: React.FC = () => {
     {
       title: "Phí Ship PB",
       width: 130,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <InputNumber
           style={{ width: "100%" }}
           formatter={(value) =>
@@ -527,7 +529,7 @@ const PurchaseCostingPage: React.FC = () => {
       width: 150,
       fixed: "right" as const,
       align: "right" as const,
-      render: (_: any, r: CostingItem) => (
+      render: (_: unknown, r: CostingItem) => (
         <Tag color="green" style={{ fontSize: 14, padding: "4px 8px" }}>
           {formatCurrency(r.final_unit_cost)}
         </Tag>
@@ -538,7 +540,7 @@ const PurchaseCostingPage: React.FC = () => {
   const giftColumns = [
     {
       title: "Tên Quà Tặng",
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <Input
           value={r.name}
           onChange={(e) => updateGift(r.key, "name", e.target.value)}
@@ -549,7 +551,7 @@ const PurchaseCostingPage: React.FC = () => {
     {
       title: "Mã quản lý",
       width: 150,
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <Input
           value={r.code}
           onChange={(e) => updateGift(r.key, "code", e.target.value)}
@@ -560,7 +562,7 @@ const PurchaseCostingPage: React.FC = () => {
     {
       title: "SL",
       width: 100,
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <InputNumber
           min={1}
           value={r.quantity}
@@ -571,7 +573,7 @@ const PurchaseCostingPage: React.FC = () => {
     {
       title: "ĐVT",
       width: 100,
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <Input
           value={r.unit_name}
           onChange={(e) => updateGift(r.key, "unit_name", e.target.value)}
@@ -581,7 +583,7 @@ const PurchaseCostingPage: React.FC = () => {
     {
       title: "Giá trị (Ước tính)",
       width: 150,
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <InputNumber
           style={{ width: "100%" }}
           formatter={(value) =>
@@ -597,7 +599,7 @@ const PurchaseCostingPage: React.FC = () => {
     },
     {
       width: 50,
-      render: (_: any, r: GiftItem) => (
+      render: (_: unknown, r: GiftItem) => (
         <Button
           danger
           type="text"
@@ -757,7 +759,8 @@ const PurchaseCostingPage: React.FC = () => {
                   Chốt Giá Vốn & Công Nợ
                 </Button>
                 <div style={{ fontSize: 12, color: "#fa8c16", marginTop: 4 }}>
-                  * Lưu ý: Sau khi chốt, đơn hàng sẽ chuyển sang trạng thái Hoàn Thành và khóa sổ.
+                  * Lưu ý: Sau khi chốt, đơn hàng sẽ chuyển sang trạng thái Hoàn
+                  Thành và khóa sổ.
                 </div>
               </div>
             </Space>

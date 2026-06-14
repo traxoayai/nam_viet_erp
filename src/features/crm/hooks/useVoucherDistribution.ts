@@ -7,8 +7,8 @@ import { voucherService } from "../api/voucherService";
 export const useVoucherDistribution = () => {
   const { message, notification } = App.useApp();
 
-  const [promotions, setPromotions] = useState<any[]>([]);
-  const [segments, setSegments] = useState<any[]>([]);
+  const [promotions, setPromotions] = useState<unknown[]>([]);
+  const [segments, setSegments] = useState<unknown[]>([]);
 
   const [selectedPromoId, setSelectedPromoId] = useState<string | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<number | null>(
@@ -17,7 +17,7 @@ export const useVoucherDistribution = () => {
 
   const [loadingData, setLoadingData] = useState(false);
   const [distributing, setDistributing] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<unknown[]>([]);
 
   // Load data ban đầu
   useEffect(() => {
@@ -60,10 +60,18 @@ export const useVoucherDistribution = () => {
     setDistributing(true);
     try {
       // 1. Lấy thông tin hiển thị (UX)
-      const promoName = promotions.find((p) => p.id === selectedPromoId)?.name;
-      const segmentName = segments.find(
-        (s) => s.id === selectedSegmentId
-      )?.name;
+      const promo = promotions.find((p: unknown) => {
+        const pr = p as Record<string, unknown>;
+        return pr.id === selectedPromoId;
+      }) as Record<string, unknown>;
+      const promoName = promo?.name as string;
+      const segment = segments.find(
+        (s: unknown) => {
+          const seg = s as Record<string, unknown>;
+          return seg.id === selectedSegmentId;
+        }
+      ) as Record<string, unknown>;
+      const segmentName = segment?.name as string;
 
       // 2. Gọi API Phân phối
       const count = await voucherService.distributeToSegment(
@@ -88,10 +96,11 @@ export const useVoucherDistribution = () => {
             "Có thể nhóm khách hàng này trống, hoặc tất cả thành viên trong nhóm đã có voucher này rồi.",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as Record<string, unknown>;
       notification.error({
         message: "Lỗi phân phối",
-        description: err.message,
+        description: (error?.message as string) || "Lỗi không xác định",
       });
     } finally {
       setDistributing(false);

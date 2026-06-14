@@ -19,7 +19,7 @@ interface Props {
   visible: boolean;
   scannedBarcode: string;
   onCancel: () => void;
-  onSuccess: (product: any) => void;
+  onSuccess: (product: unknown) => void;
 }
 
 export const BarcodeAssignModal: React.FC<Props> = ({
@@ -31,7 +31,7 @@ export const BarcodeAssignModal: React.FC<Props> = ({
   const [form] = Form.useForm();
 
   // State lưu danh sách sản phẩm tìm được
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<unknown[]>([]);
 
   // [QUAN TRỌNG] State lưu Units phải là Array Object có ID và Name, loại đơn vị
   const [units, setUnits] = useState<
@@ -59,7 +59,7 @@ export const BarcodeAssignModal: React.FC<Props> = ({
       const { data } = await safeRpc("search_products_for_barcode_assign", {
         p_keyword: val,
       });
-      setProducts((data as any[]) || []);
+      setProducts((data as unknown[]) || []);
     } finally {
       setLoading(false);
     }
@@ -71,7 +71,7 @@ export const BarcodeAssignModal: React.FC<Props> = ({
     if (prod) {
       // Map sang mảng object có ID
       const unitOptions =
-        prod.product_units?.map((u: any) => ({
+        prod.product_units?.map((u: unknown) => ({
           id: u.id,
           name: u.unit_name,
           unit_type: u.unit_type,
@@ -112,7 +112,7 @@ export const BarcodeAssignModal: React.FC<Props> = ({
 
       // Trả về dữ liệu sản phẩm đầy đủ để POS/Receipt tự add vào giỏ
       onSuccess(result?.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err.message || "Lỗi gán mã vạch");
     } finally {
       setSubmitting(false);
@@ -209,7 +209,7 @@ export const BarcodeAssignModal: React.FC<Props> = ({
                           style={{ fontSize: 12 }}
                         >
                           {p.product_units
-                            ?.map((u: any) => u.unit_name)
+                            ?.map((u: unknown) => u.unit_name)
                             .join(", ")}
                         </Typography.Text>
                       </Space>

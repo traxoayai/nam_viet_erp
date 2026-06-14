@@ -25,7 +25,7 @@ export const CustomerSearchSelect = ({
   onChange,
   onCreateNew,
 }: Props) => {
-  const [options, setOptions] = useState<any[]>([]);
+  const [options, setOptions] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const latestReqIdRef = useRef(0);
@@ -47,7 +47,7 @@ export const CustomerSearchSelect = ({
         const data = await receptionService.searchCustomers(debouncedSearch);
         // Bỏ qua response stale
         if (reqId !== latestReqIdRef.current) return;
-        const newOptions = data.map((c: any) => ({
+        const newOptions = data.map((c: unknown) => ({
           label: c.name,
           value: c.id,
           customer: c,
@@ -69,7 +69,7 @@ export const CustomerSearchSelect = ({
     setSearch(val);
   };
 
-  const optionRender = (option: any) => {
+  const optionRender = (option: unknown) => {
     const { customer } = option.data;
     return (
       <div className="flex justify-between items-center py-1">
@@ -99,7 +99,7 @@ export const CustomerSearchSelect = ({
       filterOption={false}
       onSearch={handleSearch}
       loading={loading}
-      onChange={(val, opt: any) => {
+      onChange={(val, opt: unknown) => {
         // Vô hiệu hoá in-flight requests sau khi user chọn xong
         latestReqIdRef.current += 1;
         onChange?.(val, opt?.customer);
@@ -125,7 +125,7 @@ export const CustomerSearchSelect = ({
                 block
                 className="mt-2"
               >
-                Tạo mới "{search}"
+                Tạo mới &quot;{search}&quot;
               </Button>
             ) : null}
           </div>

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+
 import { login } from "./helpers/auth";
 
 /**
@@ -30,9 +31,7 @@ test.describe("B2B Payment Flow", () => {
     await paymentSelect.waitFor({ state: "visible", timeout: 10000 });
 
     // Verify default value is "Công nợ"
-    const selectedValue = paymentSelect.locator(
-      ".ant-select-selection-item"
-    );
+    const selectedValue = paymentSelect.locator(".ant-select-selection-item");
     await expect(selectedValue).toHaveText("Công nợ");
   });
 
@@ -142,7 +141,9 @@ test.describe("B2B Payment Flow", () => {
     }
 
     // Amount should be > 0
-    const amountField = modal.locator("input[type='number'], .ant-input-number input").first();
+    const amountField = modal
+      .locator("input[type='number'], .ant-input-number input")
+      .first();
     if ((await amountField.count()) > 0) {
       const amountValue = await amountField.inputValue();
       expect(Number(amountValue.replace(/[^0-9]/g, ""))).toBeGreaterThan(0);

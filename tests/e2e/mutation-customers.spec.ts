@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+
 import { login } from "./helpers/auth";
 
 test.describe("Customer CRUD", () => {
@@ -15,9 +16,11 @@ test.describe("Customer CRUD", () => {
     expect(await rows.count()).toBeGreaterThan(0);
 
     // Verify create button is visible ("Thêm" or similar)
-    const createBtn = page.locator(
-      "button:has-text('Thêm'), button:has-text('Tạo'), button:has-text('Thêm mới'), a:has-text('Thêm')"
-    ).first();
+    const createBtn = page
+      .locator(
+        "button:has-text('Thêm'), button:has-text('Tạo'), button:has-text('Thêm mới'), a:has-text('Thêm')"
+      )
+      .first();
     const btnVisible = await createBtn.isVisible().catch(() => false);
     expect(btnVisible).toBeTruthy();
 
@@ -44,16 +47,20 @@ test.describe("Customer CRUD", () => {
     await page.waitForTimeout(5000);
 
     // Click create button
-    const createBtn = page.locator(
-      "button:has-text('Thêm'), button:has-text('Tạo'), button:has-text('Thêm mới'), a:has-text('Thêm')"
-    ).first();
+    const createBtn = page
+      .locator(
+        "button:has-text('Thêm'), button:has-text('Tạo'), button:has-text('Thêm mới'), a:has-text('Thêm')"
+      )
+      .first();
     await createBtn.waitFor({ state: "visible", timeout: 10000 });
     await createBtn.click({ force: true });
     await page.waitForTimeout(3000);
 
     // Verify: either form/modal appears OR page navigated (e.g. /crm/b2b/new)
-    const formVisible = (await page.locator("form, .ant-modal, .ant-drawer").count()) > 0;
-    const modalBody = (await page.locator(".ant-modal-body, .ant-drawer-body").count()) > 0;
+    const formVisible =
+      (await page.locator("form, .ant-modal, .ant-drawer").count()) > 0;
+    const modalBody =
+      (await page.locator(".ant-modal-body, .ant-drawer-body").count()) > 0;
     const urlChanged = !page.url().endsWith("/crm/b2b");
     expect(formVisible || modalBody || urlChanged).toBeTruthy();
 

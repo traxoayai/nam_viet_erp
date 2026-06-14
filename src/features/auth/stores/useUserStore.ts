@@ -58,10 +58,10 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
   },
   // --- KẾT THÚC VÁ LỖI ---
 
-  updateAssignments: async (userId, assignments) => {
+  updateAssignments: async (userId: string, assignments: unknown) => {
     set({ loadingUsers: true });
     try {
-      await userService.updateUserAssignments(userId, assignments);
+      await userService.updateUserAssignments(userId, assignments as Partial<typeof assignments>[]);
       await get().fetchUsers(); // Tải lại
       set({ loadingUsers: false });
       return true;
@@ -93,7 +93,7 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
   //     await get().fetchUsers(); // Tải lại
   //     set({ loadingUsers: false });
   //     return true;
-  //   } catch (error: any) {
+  //   } catch (error: unknown) {
   //     console.error("Lỗi cập nhật trạng thái user:", error);
   //     set({ loadingUsers: false });
   //     throw error;

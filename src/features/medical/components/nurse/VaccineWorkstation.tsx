@@ -28,7 +28,7 @@ export const VaccineWorkstation: React.FC<VaccineWorkstationProps> = ({
   const [scannedProductIds, setScannedProductIds] = useState<number[]>([]);
   const [agreedMatch, setAgreedMatch] = useState(false);
   const [agreedRoute, setAgreedRoute] = useState(false);
-  
+
   const [scanErrorStr, setScanErrorStr] = useState<string | null>(null);
 
   // Clear state when receiving new vaccines array
@@ -52,9 +52,10 @@ export const VaccineWorkstation: React.FC<VaccineWorkstationProps> = ({
     if (matchedVaccine) {
       if (!scannedProductIds.includes(matchedVaccine.product_id)) {
         setScannedProductIds((prev) => [...prev, matchedVaccine.product_id]);
-        
+
         // Phát tiếng bíp thành công (beep âm thanh nhẹ)
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioCtx = new (window.AudioContext ||
+          (window as unknown).webkitAudioContext)();
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         oscillator.connect(gainNode);
@@ -66,9 +67,12 @@ export const VaccineWorkstation: React.FC<VaccineWorkstationProps> = ({
         oscillator.stop(audioCtx.currentTime + 0.1);
       }
     } else {
-      setScanErrorStr(`Mã vạch ${code} không khớp với bất kỳ thuốc nào trong chỉ định!`);
+      setScanErrorStr(
+        `Mã vạch ${code} không khớp với bất kỳ thuốc nào trong chỉ định!`
+      );
       // Phát tiếng bíp cảnh báo (sai thuốc)
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = new (window.AudioContext ||
+        (window as unknown).webkitAudioContext)();
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
       oscillator.connect(gainNode);
@@ -95,12 +99,18 @@ export const VaccineWorkstation: React.FC<VaccineWorkstationProps> = ({
 
       <div>
         <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-          DANH SÁCH THUỐC CẦN TIÊM 
+          DANH SÁCH THUỐC CẦN TIÊM
         </h3>
-        
-        {scanErrorStr && (
-          <Alert message="SAI THUỐC CRITICAL ALERT" description={scanErrorStr} type="error" showIcon className="mb-4 font-bold border-red-500 animate-pulse" />
-        )}
+
+        {scanErrorStr ? (
+          <Alert
+            message="SAI THUỐC CRITICAL ALERT"
+            description={scanErrorStr}
+            type="error"
+            showIcon
+            className="mb-4 font-bold border-red-500 animate-pulse"
+          />
+        ) : null}
 
         <div className="flex flex-col gap-3">
           {vaccines.map((v) => {
@@ -115,7 +125,9 @@ export const VaccineWorkstation: React.FC<VaccineWorkstationProps> = ({
                 }`}
               >
                 <div>
-                  <div className="font-bold text-gray-900">{v.product_name}</div>
+                  <div className="font-bold text-gray-900">
+                    {v.product_name}
+                  </div>
                   <div className="text-xs text-gray-500">
                     Mã: {v.sku} | Barcode: {v.barcode || "N/A"} | Mũi số:{" "}
                     {v.dose_number}
@@ -123,9 +135,19 @@ export const VaccineWorkstation: React.FC<VaccineWorkstationProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   {isScanned ? (
-                    <Tag color="success" icon={<CheckCircle size={14} className="mr-1 inline" />}>ĐÃ XÉT DUYỆT</Tag>
+                    <Tag
+                      color="success"
+                      icon={<CheckCircle size={14} className="mr-1 inline" />}
+                    >
+                      ĐÃ XÉT DUYỆT
+                    </Tag>
                   ) : (
-                    <Tag color="error" icon={<XCircle size={14} className="mr-1 inline" />}>CHƯA QUÉT MÃ</Tag>
+                    <Tag
+                      color="error"
+                      icon={<XCircle size={14} className="mr-1 inline" />}
+                    >
+                      CHƯA QUÉT MÃ
+                    </Tag>
                   )}
                 </div>
               </div>
@@ -143,7 +165,8 @@ export const VaccineWorkstation: React.FC<VaccineWorkstationProps> = ({
           onChange={(e) => setAgreedMatch(e.target.checked)}
           className="font-medium text-gray-800"
         >
-          Tôi đã đối chiếu Tên thuốc, Số Lô, Hạn Sử Dụng với Phụ huynh / Khách hàng.
+          Tôi đã đối chiếu Tên thuốc, Số Lô, Hạn Sử Dụng với Phụ huynh / Khách
+          hàng.
         </Checkbox>
         <Checkbox
           checked={agreedRoute}
@@ -163,13 +186,15 @@ export const VaccineWorkstation: React.FC<VaccineWorkstationProps> = ({
             backgroundColor: canConfirm ? "#52c41a" : undefined,
             width: "100%",
             height: "50px",
-            fontSize: "16px"
+            fontSize: "16px",
           }}
           disabled={!canConfirm}
           loading={isConfirming}
           onClick={() => onConfirm(scannedProductIds)}
         >
-          {canConfirm ? "XÁC NHẬN ĐÃ TIÊM & TRỪ KHO" : "HÃY QUÉT TẤT CẢ VẮC-XIN VÀ CHECK PHÁP LÝ"}
+          {canConfirm
+            ? "XÁC NHẬN ĐÃ TIÊM & TRỪ KHO"
+            : "HÃY QUÉT TẤT CẢ VẮC-XIN VÀ CHECK PHÁP LÝ"}
         </Button>
       </div>
     </div>

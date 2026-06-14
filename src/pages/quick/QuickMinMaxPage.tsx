@@ -24,9 +24,9 @@ import {
 import React, { useState, useEffect, useRef } from "react";
 
 import { getWarehouses } from "@/features/inventory/api/warehouseService";
-import { getSuppliers } from "@/features/purchasing/api/supplierService";
 import { upsertProduct } from "@/features/product/api/productService";
 import { getProductDetails } from "@/features/product/api/productService"; // Ensure this is imported for handleSaveRow
+import { getSuppliers } from "@/features/purchasing/api/supplierService";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { safeRpc } from "@/shared/lib/safeRpc";
 
@@ -36,14 +36,14 @@ const { Search } = Input;
 
 // Voice API Interface
 interface IWindow extends Window {
-  webkitSpeechRecognition: any;
-  SpeechRecognition: any;
+  webkitSpeechRecognition: unknown;
+  SpeechRecognition: unknown;
 }
 
 // Add timeout property to window for voice logic debounce
 declare global {
   interface Window {
-    voiceTimeout?: any;
+    voiceTimeout?: unknown;
   }
 }
 
@@ -54,14 +54,14 @@ const QuickMinMaxPage: React.FC = () => {
   const isMobile = screens.xs || (screens.sm && !screens.md);
 
   // State
-  const [products, setProducts] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [products, setProducts] = useState<unknown[]>([]);
+  const [suppliers, setSuppliers] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [listening, setListening] = useState(false);
 
   // New Feature State
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<unknown[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(
     null
   );
@@ -84,7 +84,7 @@ const QuickMinMaxPage: React.FC = () => {
   }>({});
 
   // Refs
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<unknown>(null);
 
   // Calculate Totals (Updated to handle NaN and conversion)
   const totalMinValue = products.reduce(
@@ -103,7 +103,7 @@ const QuickMinMaxPage: React.FC = () => {
   useEffect(() => {
     loadWarehouses();
     setupSpeechRecognition();
-    
+
     // [NEW] Load nhà cung cấp
     const fetchSuppliers = async () => {
       const data = await getSuppliers();
@@ -165,7 +165,7 @@ const QuickMinMaxPage: React.FC = () => {
       });
 
       // Map dữ liệu (Backend trả về đã chuẩn, chỉ cần tính lại giá trị hiển thị)
-      const rows = (data || []).map((p: any) => ({
+      const rows = (data || []).map((p: unknown) => ({
         key: p.product_id,
         id: p.product_id,
         sku: p.sku,
@@ -194,7 +194,7 @@ const QuickMinMaxPage: React.FC = () => {
 
       // UX: Tự động focus dòng đầu
       if (rows.length > 0 && activeRowKey === null) setActiveRowKey(rows[0].id);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Lỗi tải data:", error);
       message.error("Lỗi tải dữ liệu: " + error.message);
     } finally {
@@ -227,13 +227,13 @@ const QuickMinMaxPage: React.FC = () => {
       setListening(false);
     };
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: unknown) => {
       const result = event.results[event.results.length - 1];
       const transcript = result[0].transcript.toLowerCase();
       processRealtimeVoice(transcript, result.isFinal);
     };
 
-    recognition.onerror = (e: any) => {
+    recognition.onerror = (e: unknown) => {
       console.error("Voice Error:", e);
       if (e.error === "not-allowed") {
         message.error("Vui lòng cho phép truy cập Micro!");
@@ -331,7 +331,7 @@ const QuickMinMaxPage: React.FC = () => {
     }
   };
 
-  const moveToNextRow = (currentProducts: any[]) => {
+  const moveToNextRow = (currentProducts: unknown[]) => {
     const currentIndex = currentProducts.findIndex(
       (p) => p.id === activeRowKey
     );
@@ -343,7 +343,7 @@ const QuickMinMaxPage: React.FC = () => {
     }
   };
 
-  const handleSaveRow = async (row: any, autoMove = false) => {
+  const handleSaveRow = async (row: unknown, autoMove = false) => {
     if (!row.id || !selectedWarehouseId) {
       if (!selectedWarehouseId) message.warning("Vui lòng chọn Kho trước!");
       return;
@@ -356,7 +356,7 @@ const QuickMinMaxPage: React.FC = () => {
 
       const currentDetail = await getProductDetails(row.id);
 
-      let invList: any[] = [];
+      let invList: unknown[] = [];
       if (Array.isArray(currentDetail.inventorySettings)) {
         invList = [...currentDetail.inventorySettings];
       } else if (typeof currentDetail.inventorySettings === "object") {
@@ -364,7 +364,7 @@ const QuickMinMaxPage: React.FC = () => {
       }
 
       invList = invList.filter(
-        (i: any) => i.warehouse_id !== selectedWarehouseId
+        (i: unknown) => i.warehouse_id !== selectedWarehouseId
       );
 
       const newItem = {
@@ -400,7 +400,10 @@ const QuickMinMaxPage: React.FC = () => {
     }
   };
 
-  const handleUpdateDistributor = async (productId: number, supplierId: number) => {
+  const handleUpdateDistributor = async (
+    productId: number,
+    supplierId: number
+  ) => {
     setSavingId(productId);
     try {
       // 1. Lấy chi tiết sản phẩm cũ để không làm mất data
@@ -409,7 +412,7 @@ const QuickMinMaxPage: React.FC = () => {
       // 2. Chèn supplierId mới vào (upsertProduct đang dùng biến formValues.distributor)
       const payload = {
         ...currentDetail,
-        distributor: supplierId 
+        distributor: supplierId,
       };
 
       // 3. Đẩy lên server
@@ -417,7 +420,11 @@ const QuickMinMaxPage: React.FC = () => {
 
       // 4. Cập nhật UI ngay lập tức
       setProducts((prev) =>
-        prev.map((p) => (p.id === productId ? { ...p, distributor_id: supplierId, is_dirty: false } : p))
+        prev.map((p) =>
+          p.id === productId
+            ? { ...p, distributor_id: supplierId, is_dirty: false }
+            : p
+        )
       );
       message.success("Đã lưu Nhà cung cấp!");
     } catch (err) {
@@ -429,7 +436,7 @@ const QuickMinMaxPage: React.FC = () => {
   };
 
   // UI Helpers
-  const handleCellChange = (key: number, field: string, val: any) => {
+  const handleCellChange = (key: number, field: string, val: unknown) => {
     setProducts((prev) =>
       prev.map((item) =>
         item.key === key ? { ...item, [field]: val, is_dirty: true } : item
@@ -448,16 +455,20 @@ const QuickMinMaxPage: React.FC = () => {
       title: "Đơn vị",
       dataIndex: "wholesale_unit",
       width: 80,
-      render: (t: string) => <Tag color="geekblue" className="rounded-md font-medium">{t}</Tag>,
+      render: (t: string) => (
+        <Tag color="geekblue" className="rounded-md font-medium">
+          {t}
+        </Tag>
+      ),
     },
     {
       title: "Nhà Cung Cấp",
       dataIndex: "distributor_id",
       width: 550,
-      render: (val: any, record: any) => (
+      render: (val: unknown, record: unknown) => (
         <Select
           showSearch
-          className={`w-full transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
+          className={`w-full transition-all ${record.is_dirty ? "border-orange-400 bg-orange-50" : "border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]"}`}
           placeholder="Chọn NCC..."
           optionFilterProp="children"
           value={val}
@@ -470,19 +481,21 @@ const QuickMinMaxPage: React.FC = () => {
               .includes(input.toLowerCase())
           }
         >
-          {suppliers.map(s => (
-            <Option key={s.id} value={s.id}>{s.name}</Option>
+          {suppliers.map((s) => (
+            <Option key={s.id} value={s.id}>
+              {s.name}
+            </Option>
           ))}
         </Select>
-      )
+      ),
     },
     {
       title: "Min (Tồn dự trữ)",
       dataIndex: "min_stock",
       width: 120,
-      render: (val: number, record: any) => (
+      render: (val: number, record: unknown) => (
         <InputNumber
-          className={`w-full transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
+          className={`w-full transition-all ${record.is_dirty ? "border-orange-400 bg-orange-50" : "border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]"}`}
           value={val}
           onChange={(v) => handleCellChange(record.key, "min_stock", v)}
           onBlur={() => handleSaveRow(record)}
@@ -494,9 +507,9 @@ const QuickMinMaxPage: React.FC = () => {
       title: "Max (Tồn tối đa)",
       dataIndex: "max_stock",
       width: 120,
-      render: (val: number, record: any) => (
+      render: (val: number, record: unknown) => (
         <InputNumber
-          className={`w-full transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
+          className={`w-full transition-all ${record.is_dirty ? "border-orange-400 bg-orange-50" : "border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]"}`}
           value={val}
           onChange={(v) => handleCellChange(record.key, "max_stock", v)}
           onBlur={() => handleSaveRow(record)}
@@ -507,7 +520,7 @@ const QuickMinMaxPage: React.FC = () => {
     {
       title: "Vốn dự trữ (Min)",
       width: 150,
-      render: (_: any, r: any) => {
+      render: (_: unknown, r: unknown) => {
         // [FIX 4] Prevent NaN
         const cost = r.actual_cost || 0;
         const min = r.min_stock || 0;
@@ -528,7 +541,7 @@ const QuickMinMaxPage: React.FC = () => {
     {
       title: "",
       width: 50,
-      render: (_: any, record: any) => {
+      render: (_: unknown, record: unknown) => {
         if (savingId === record.id) return <SyncOutlined spin />;
         if (record.is_dirty === false)
           return <CheckCircleOutlined style={{ color: "green" }} />;
@@ -539,62 +552,89 @@ const QuickMinMaxPage: React.FC = () => {
 
   // Filter Logic
   const renderMobileCards = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
-      {displayedProducts.map((record: any) => (
-        <div key={record.id} className={`rounded-xl border ${record.is_dirty ? 'border-orange-400' : 'border-gray-200'} shadow-sm bg-white overflow-hidden`}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+        marginTop: "16px",
+      }}
+    >
+      {displayedProducts.map((record: unknown) => (
+        <div
+          key={record.id}
+          className={`rounded-xl border ${record.is_dirty ? "border-orange-400" : "border-gray-200"} shadow-sm bg-white overflow-hidden`}
+        >
           {/* Header */}
           <div className="bg-slate-50 p-3 border-b border-gray-100 flex justify-between items-start">
             <div>
-              <Text strong className="text-base">{record.name}</Text>
-              <div className="text-gray-400 text-xs mt-1">SKU: {record.sku} | <Tag color="geekblue" className="rounded-md font-medium ml-1">{record.wholesale_unit}</Tag></div>
+              <Text strong className="text-base">
+                {record.name}
+              </Text>
+              <div className="text-gray-400 text-xs mt-1">
+                SKU: {record.sku} |{" "}
+                <Tag color="geekblue" className="rounded-md font-medium ml-1">
+                  {record.wholesale_unit}
+                </Tag>
+              </div>
             </div>
-            {savingId === record.id ? <SyncOutlined spin className="text-blue-500 text-lg" /> : (record.is_dirty === false ? <CheckCircleOutlined className="text-green-500 text-lg" /> : null)}
+            {savingId === record.id ? (
+              <SyncOutlined spin className="text-blue-500 text-lg" />
+            ) : record.is_dirty === false ? (
+              <CheckCircleOutlined className="text-green-500 text-lg" />
+            ) : null}
           </div>
 
           {/* Body */}
           <div className="p-4">
-          <Select
-            showSearch
-            className={`w-full mb-4 transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
-            placeholder="Chọn nhà cung cấp..."
-            optionFilterProp="children"
-            value={record.distributor_id}
-            onChange={(newId) => handleUpdateDistributor(record.id, newId)}
-            disabled={savingId === record.id}
-            loading={savingId === record.id}
-            filterOption={(input, option) =>
-              (option?.children as unknown as string)
-                ?.toLowerCase()
-                .includes(input.toLowerCase())
-            }
-          >
-            {suppliers.map(s => (
-              <Option key={s.id} value={s.id}>{s.name}</Option>
-            ))}
-          </Select>
+            <Select
+              showSearch
+              className={`w-full mb-4 transition-all ${record.is_dirty ? "border-orange-400 bg-orange-50" : "border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]"}`}
+              placeholder="Chọn nhà cung cấp..."
+              optionFilterProp="children"
+              value={record.distributor_id}
+              onChange={(newId) => handleUpdateDistributor(record.id, newId)}
+              disabled={savingId === record.id}
+              loading={savingId === record.id}
+              filterOption={(input, option) =>
+                (option?.children as unknown as string)
+                  ?.toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+            >
+              {suppliers.map((s) => (
+                <Option key={s.id} value={s.id}>
+                  {s.name}
+                </Option>
+              ))}
+            </Select>
 
-          <Row gutter={12}>
-            <Col span={12}>
-              <Text type="secondary" className="text-xs">Min (Dự trữ)</Text>
-              <InputNumber 
-                className={`w-full mt-1 h-10 rounded-lg transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
-                value={record.min_stock} 
-                onChange={(v) => handleCellChange(record.key, "min_stock", v)}
-                onBlur={() => handleSaveRow(record)}
-                size="large"
-              />
-            </Col>
-            <Col span={12}>
-              <Text type="secondary" className="text-xs">Max (Tối đa)</Text>
-              <InputNumber 
-                className={`w-full mt-1 h-10 rounded-lg transition-all ${record.is_dirty ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]'}`}
-                value={record.max_stock} 
-                onChange={(v) => handleCellChange(record.key, "max_stock", v)}
-                onBlur={() => handleSaveRow(record)}
-                size="large"
-              />
-            </Col>
-          </Row>
+            <Row gutter={12}>
+              <Col span={12}>
+                <Text type="secondary" className="text-xs">
+                  Min (Dự trữ)
+                </Text>
+                <InputNumber
+                  className={`w-full mt-1 h-10 rounded-lg transition-all ${record.is_dirty ? "border-orange-400 bg-orange-50" : "border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]"}`}
+                  value={record.min_stock}
+                  onChange={(v) => handleCellChange(record.key, "min_stock", v)}
+                  onBlur={() => handleSaveRow(record)}
+                  size="large"
+                />
+              </Col>
+              <Col span={12}>
+                <Text type="secondary" className="text-xs">
+                  Max (Tối đa)
+                </Text>
+                <InputNumber
+                  className={`w-full mt-1 h-10 rounded-lg transition-all ${record.is_dirty ? "border-orange-400 bg-orange-50" : "border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]"}`}
+                  value={record.max_stock}
+                  onChange={(v) => handleCellChange(record.key, "max_stock", v)}
+                  onBlur={() => handleSaveRow(record)}
+                  size="large"
+                />
+              </Col>
+            </Row>
           </div>
         </div>
       ))}
@@ -605,7 +645,9 @@ const QuickMinMaxPage: React.FC = () => {
   const displayedProducts = products;
 
   return (
-    <div style={{ padding: isMobile ? 8 : 10, paddingBottom: isMobile ? 60 : 10 }}>
+    <div
+      style={{ padding: isMobile ? 8 : 10, paddingBottom: isMobile ? 60 : 10 }}
+    >
       {/* TOOLBAR & STATISTICS */}
       <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: 16 }}>
         <Row gutter={[16, 16]} align="middle">
@@ -616,7 +658,7 @@ const QuickMinMaxPage: React.FC = () => {
           </Col>
           <Col xs={24} md={12} lg={6}>
             <Search
-              className={`transition-all ${listening ? 'animate-pulse text-red-500 border-red-500' : 'border-blue-500 text-blue-600 hover:bg-blue-50'} ${isMobile ? 'w-full' : ''}`}
+              className={`transition-all ${listening ? "animate-pulse text-red-500 border-red-500" : "border-blue-500 text-blue-600 hover:bg-blue-50"} ${isMobile ? "w-full" : ""}`}
               placeholder="Tìm tên thuốc..."
               allowClear
               onSearch={(val) => setSearchText(val)}
@@ -625,7 +667,7 @@ const QuickMinMaxPage: React.FC = () => {
           </Col>
           <Col xs={24} sm={12} lg={4}>
             <Select
-              className={`transition-all ${listening ? 'animate-pulse text-red-500 border-red-500' : 'border-blue-500 text-blue-600 hover:bg-blue-50'} ${isMobile ? 'w-full' : ''}`}
+              className={`transition-all ${listening ? "animate-pulse text-red-500 border-red-500" : "border-blue-500 text-blue-600 hover:bg-blue-50"} ${isMobile ? "w-full" : ""}`}
               placeholder="Chọn kho..."
               value={selectedWarehouseId}
               onChange={(v) => setSelectedWarehouseId(v)}
@@ -645,9 +687,13 @@ const QuickMinMaxPage: React.FC = () => {
               Chỉ hiện SP đã cài Min/Max
             </Checkbox>
           </Col>
-          <Col xs={24} lg={4} style={{ textAlign: isMobile ? "left" : "right" }}>
+          <Col
+            xs={24}
+            lg={4}
+            style={{ textAlign: isMobile ? "left" : "right" }}
+          >
             <Button
-              className={`transition-all ${listening ? 'animate-pulse text-red-500 border-red-500' : 'border-blue-500 text-blue-600 hover:bg-blue-50'} ${isMobile ? 'w-full' : ''}`}
+              className={`transition-all ${listening ? "animate-pulse text-red-500 border-red-500" : "border-blue-500 text-blue-600 hover:bg-blue-50"} ${isMobile ? "w-full" : ""}`}
               icon={<AudioOutlined spin={listening} />}
               onClick={toggleListening}
             >
@@ -660,7 +706,7 @@ const QuickMinMaxPage: React.FC = () => {
             <Statistic
               title="Tổng Vốn Min"
               value={totalMinValue}
-              valueStyle={{ fontSize: isMobile ? 16 : 24, color: '#22c55e' }}
+              valueStyle={{ fontSize: isMobile ? 16 : 24, color: "#22c55e" }}
               prefix={<DollarCircleOutlined className="text-green-500" />}
             />
           </Col>
@@ -668,7 +714,7 @@ const QuickMinMaxPage: React.FC = () => {
             <Statistic
               title="Tổng Vốn Max"
               value={totalMaxValue}
-              valueStyle={{ fontSize: isMobile ? 16 : 24, color: '#22c55e' }}
+              valueStyle={{ fontSize: isMobile ? 16 : 24, color: "#22c55e" }}
               prefix={<DollarCircleOutlined className="text-green-500" />}
             />
           </Col>

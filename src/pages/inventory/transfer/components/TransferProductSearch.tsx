@@ -10,7 +10,7 @@ const { Option } = Select;
 
 interface TransferProductSearchProps {
   sourceWarehouseId: number | null;
-  onSelect: (product: any) => void;
+  onSelect: (product: unknown) => void;
   disabled?: boolean;
 }
 
@@ -19,7 +19,7 @@ const TransferProductSearch: React.FC<TransferProductSearchProps> = ({
   onSelect,
   disabled,
 }) => {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<unknown[]>([]);
   const [fetching, setFetching] = useState(false);
   const [value, setValue] = useState<string | undefined>(undefined);
   const [searchValue, setSearchValue] = useState<string>(""); // [FIX UX]: Thêm state quản lý text đang gõ
@@ -49,14 +49,14 @@ const TransferProductSearch: React.FC<TransferProductSearchProps> = ({
     setValue(newValue);
   };
 
-  const handleSelect = (val: string, _option: any) => {
+  const handleSelect = (val: string, _option: unknown) => {
     const selected = data.find((d) => d.id === val);
     if (selected) {
       onSelect(selected);
       // [FIX UX]: Reset toàn bộ trạng thái sau khi chọn
       setValue(undefined);
-      setSearchValue(""); 
-      setData([]); 
+      setSearchValue("");
+      setData([]);
     }
   };
 

@@ -3,10 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSafeRpc = vi.fn();
 
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/api/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 vi.mock("@/shared/api/storageService", () => ({
   uploadFile: vi.fn(),
@@ -35,10 +35,18 @@ describe("customerService", () => {
   // --- fetchCustomers ---
   describe("fetchCustomers", () => {
     it("calls get_customers_b2c_list with correct params", async () => {
-      mockSafeRpc.mockResolvedValue({ data: [{ id: 1, name: "KH1", total_count: 25 }] });
+      mockSafeRpc.mockResolvedValue({
+        data: [{ id: 1, name: "KH1", total_count: 25 }],
+      });
       const result = await fetchCustomers(
-        { search_query: "Nguyen", type_filter: "CaNhan", status_filter: "active" },
-        2, 10, "desc"
+        {
+          search_query: "Nguyen",
+          type_filter: "CaNhan",
+          status_filter: "active",
+        },
+        2,
+        10,
+        "desc"
       );
       expect(mockSafeRpc).toHaveBeenCalledWith("get_customers_b2c_list", {
         search_query: "Nguyen",
@@ -61,9 +69,12 @@ describe("customerService", () => {
     it("defaults sortByDebt to undefined", async () => {
       mockSafeRpc.mockResolvedValue({ data: [] });
       await fetchCustomers({}, 1, 20);
-      expect(mockSafeRpc).toHaveBeenCalledWith("get_customers_b2c_list", expect.objectContaining({
-        sort_by_debt: undefined,
-      }));
+      expect(mockSafeRpc).toHaveBeenCalledWith(
+        "get_customers_b2c_list",
+        expect.objectContaining({
+          sort_by_debt: undefined,
+        })
+      );
     });
   });
 
@@ -72,7 +83,9 @@ describe("customerService", () => {
     it("calls get_customer_b2c_details with p_id", async () => {
       mockSafeRpc.mockResolvedValue({ data: { id: 5, name: "Chi Lan" } });
       const result = await fetchCustomerDetails(5);
-      expect(mockSafeRpc).toHaveBeenCalledWith("get_customer_b2c_details", { p_id: 5 });
+      expect(mockSafeRpc).toHaveBeenCalledWith("get_customer_b2c_details", {
+        p_id: 5,
+      });
       expect(result).toEqual({ id: 5, name: "Chi Lan" });
     });
   });
@@ -111,7 +124,9 @@ describe("customerService", () => {
     it("calls delete_customer_b2c with p_id", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
       const result = await deleteCustomer(10);
-      expect(mockSafeRpc).toHaveBeenCalledWith("delete_customer_b2c", { p_id: 10 });
+      expect(mockSafeRpc).toHaveBeenCalledWith("delete_customer_b2c", {
+        p_id: 10,
+      });
       expect(result).toBe(true);
     });
   });
@@ -121,7 +136,9 @@ describe("customerService", () => {
     it("calls reactivate_customer_b2c with p_id", async () => {
       mockSafeRpc.mockResolvedValue({ data: null });
       const result = await reactivateCustomer(10);
-      expect(mockSafeRpc).toHaveBeenCalledWith("reactivate_customer_b2c", { p_id: 10 });
+      expect(mockSafeRpc).toHaveBeenCalledWith("reactivate_customer_b2c", {
+        p_id: 10,
+      });
       expect(result).toBe(true);
     });
   });
@@ -155,9 +172,12 @@ describe("customerService", () => {
     it("calls search_customers_by_phone_b2c with query", async () => {
       mockSafeRpc.mockResolvedValue({ data: [{ id: 1, phone: "0901234567" }] });
       const result = await searchGuardians("0901");
-      expect(mockSafeRpc).toHaveBeenCalledWith("search_customers_by_phone_b2c", {
-        p_search_query: "0901",
-      });
+      expect(mockSafeRpc).toHaveBeenCalledWith(
+        "search_customers_by_phone_b2c",
+        {
+          p_search_query: "0901",
+        }
+      );
       expect(result).toEqual([{ id: 1, phone: "0901234567" }]);
     });
 

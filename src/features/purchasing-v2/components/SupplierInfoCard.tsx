@@ -14,7 +14,7 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 interface SupplierInfoProps {
-  supplier: any;
+  supplier: unknown;
   loading: boolean;
   error?: string;
   note: string;

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+
 import { login } from "./helpers/auth";
 
 test.describe("Purchase Orders", () => {
@@ -17,7 +18,11 @@ test.describe("Purchase Orders", () => {
   test("search PO by keyword", async ({ page }) => {
     await page.goto("/purchase-orders");
     await page.waitForTimeout(5000);
-    const searchInput = page.locator("input[placeholder*='Tìm'], input[placeholder*='tìm'], .ant-input-search input").first();
+    const searchInput = page
+      .locator(
+        "input[placeholder*='Tìm'], input[placeholder*='tìm'], .ant-input-search input"
+      )
+      .first();
     if (await searchInput.isVisible()) {
       await searchInput.fill("PO-2603");
       await searchInput.press("Enter");

@@ -190,7 +190,7 @@ const WarehouseListPage: React.FC = () => {
         text: warehouseTypes[key as "b2b" | "retail"].text,
         value: key,
       })),
-      onFilter: (value: any, record) => record.type === value,
+      onFilter: (value: unknown, record) => record.type === value,
     },
     {
       title: "Địa chỉ",
@@ -215,7 +215,7 @@ const WarehouseListPage: React.FC = () => {
         text: statusMap[key as "active" | "inactive"].text,
         value: key,
       })),
-      onFilter: (value: any, record) => record.status === value,
+      onFilter: (value: unknown, record) => record.status === value,
     },
     {
       title: "Hành động",

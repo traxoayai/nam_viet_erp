@@ -38,7 +38,7 @@ const TransferShippingPage: React.FC = () => {
 
   const [activeItem, setActiveItem] = useState<TransferItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [availableBatches, setAvailableBatches] = useState<any[]>([]);
+  const [availableBatches, setAvailableBatches] = useState<unknown[]>([]);
   const [pickedQuantities, setPickedQuantities] = useState<
     Record<number, number>
   >({}); // batchId -> qty
@@ -132,7 +132,7 @@ const TransferShippingPage: React.FC = () => {
       title: "Đã nhặt",
       key: "picked",
       width: 200,
-      render: (_: any, record: TransferItem) => {
+      render: (_: unknown, record: TransferItem) => {
         const picked = getPickedQty(record.id);
         const percent = Math.min(
           100,
@@ -157,7 +157,7 @@ const TransferShippingPage: React.FC = () => {
     {
       title: "Thao tác",
       key: "action",
-      render: (_: any, record: TransferItem) => (
+      render: (_: unknown, record: TransferItem) => (
         <Button
           icon={<DeploymentUnitOutlined />}
           onClick={() => handleOpenPickModal(record)}

@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+
 import { adminClient } from "../helpers/supabase";
 
 // ─── Test constants ─────────────────────────────────────────────────────────
 const TEST_PREFIX = "__test_admin_notif__";
 
 /** IDs to clean up in afterAll */
-const createdNotificationIds: string[] = [];
+// const _createdNotificationIds: string[] = [];
 const createdRegistrationIds: string[] = [];
 const createdOrderIds: string[] = [];
 const createdTransactionIds: number[] = [];
@@ -69,10 +70,9 @@ beforeAll(async () => {
   const { data: adminUsers } = await adminClient
     .from("user_roles")
     .select("user_id, role_permissions!inner(permission_key)")
-    .or(
-      "permission_key.in.(portal.manage,admin-all)",
-      { referencedTable: "role_permissions" }
-    )
+    .or("permission_key.in.(portal.manage,admin-all)", {
+      referencedTable: "role_permissions",
+    })
     .limit(1)
     .single();
 
@@ -81,7 +81,9 @@ beforeAll(async () => {
   }
 
   if (!realFundAccountId) {
-    console.warn("No fund_accounts found — payment trigger tests will be skipped");
+    console.warn(
+      "No fund_accounts found — payment trigger tests will be skipped"
+    );
   }
   if (!adminUserId) {
     console.warn("No admin user found — notification verification may fail");

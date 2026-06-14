@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockSafeRpc = vi.fn();
 vi.mock("@/shared/lib/safeRpc", () => ({
-  safeRpc: (...args: any[]) => mockSafeRpc(...args),
+  safeRpc: (...args: unknown[]) => mockSafeRpc(...args),
 }));
 
 // Mock antd message to prevent side effects
@@ -26,8 +26,8 @@ import { useBookingResources } from "@/features/booking/hooks/useBookingResource
 // For hooks using useState, we use a lightweight render approach
 function renderHookSync<T>(hookFn: () => T): T {
   let result: T;
-  const { createElement } = require("react");
-  const { renderToStaticMarkup } = require("react-dom/server");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
 
   function TestComponent() {
     result = hookFn();
