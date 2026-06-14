@@ -40,6 +40,7 @@ dayjs.extend(customParseFormat);
 import { inboundService } from "@/features/inventory/api/inboundService"; // [NEW]
 import { PutawayListTemplate } from "@/features/inventory/components/print/PutawayListTemplate";
 import { useInboundDetail } from "@/features/inventory/hooks/useInboundDetail";
+import { useReceiptParsing } from "@/features/inventory/hooks/useReceiptParsing"; // [NEW] Receipt parsing
 import { InboundDetailItem } from "@/features/inventory/types/inbound";
 import { BarcodeAssignModal } from "@/features/product/components/BarcodeAssignModal"; // [NEW]
 import { useRowFlasher } from "@/shared/hooks/useRowFlasher"; // [NEW]
@@ -98,6 +99,21 @@ const WarehouseReceiptPage = () => {
   } = useInboundDetail(idStr);
 
   const [costLoading, setCostLoading] = useState(false);
+
+  // [NEW] Receipt parsing hook for auto-fill from document
+  const {
+    isLoading: isParsingLoading,
+    isError: isParsingError,
+    error: parsingError,
+    parsedData,
+    handleFileUpload: handleReceiptFileUpload,
+    reset: resetParsing,
+  } = useReceiptParsing();
+
+  const handleDocUploadWithParsing = async (file: File) => {
+    // First, try to parse the receipt document
+    await handleReceiptFileUpload(file);
+  };
 
   const handleAllocateCosts = async () => {
     if (!idStr) return;
@@ -582,14 +598,20 @@ const WarehouseReceiptPage = () => {
                 maxCount={1}
                 showUploadList={false}
                 beforeUpload={(file) => {
-                  handleDocUpload(file);
+                  // [NEW] Try to parse receipt/invoice document first
+                  if (file.type.startsWith("image/")) {
+                    handleDocUploadWithParsing(file);
+                  } else {
+                    // PDF or non-image: use original upload logic
+                    handleDocUpload(file);
+                  }
                   return false; // ngăn upload mặc định, hook tự upload qua storage
                 }}
               >
                 <Button
                   type="primary"
                   icon={<Upload size={16} />}
-                  loading={isDocScanning}
+                  loading={isDocScanning || isParsingLoading}
                   style={{
                     background: "linear-gradient(90deg, #1890ff, #722ed1)",
                     borderColor: "transparent",
@@ -603,6 +625,125 @@ const WarehouseReceiptPage = () => {
           </Col>
         </Row>
       </Card>
+
+      {/* [NEW] Parsing Error Display */}
+      {isParsingError && parsingError && (
+        <Card
+          style={{
+            marginBottom: 16,
+            borderLeft: "4px solid #ff4d4f",
+            background: "#fff2f0",
+          }}
+        >
+          <Typography.Text type="danger">
+            Lỗi phân tích: {parsingError}
+          </Typography.Text>
+        </Card>
+      )}
+
+      {/* [NEW] Parsed Data Preview & Auto-fill */}
+      {parsedData && !isParsingError && (
+        <Card
+          style={{
+            marginBottom: 16,
+            borderLeft: "4px solid #52c41a",
+            background: "#f6ffed",
+          }}
+          title={
+            <Space>
+              <CheckCircle size={18} style={{ color: "#52c41a" }} />
+              <Typography.Text strong>
+                Kết quả phân tích hóa đơn
+              </Typography.Text>
+            </Space>
+          }
+          extra={
+            <Button
+              type="text"
+              size="small"
+              onClick={resetParsing}
+            >
+              Đóng
+            </Button>
+          }
+        >
+          <Space direction="vertical" style={{ width: "100%" }}>
+            {parsedData.supplier_name && (
+              <div>
+                <Text type="secondary">Nhà cung cấp:</Text>{" "}
+                <Text strong>{parsedData.supplier_name}</Text>
+              </div>
+            )}
+            {parsedData.receipt_number && (
+              <div>
+                <Text type="secondary">Số hóa đơn:</Text>{" "}
+                <Text strong>{parsedData.receipt_number}</Text>
+              </div>
+            )}
+            {parsedData.receipt_date && (
+              <div>
+                <Text type="secondary">Ngày:</Text>{" "}
+                <Text strong>{parsedData.receipt_date}</Text>
+              </div>
+            )}
+            {parsedData.confidence_score && (
+              <div>
+                <Text type="secondary">Độ tin cậy:</Text>{" "}
+                <Tag
+                  color={
+                    parsedData.confidence_score >= 80
+                      ? "green"
+                      : parsedData.confidence_score >= 60
+                        ? "orange"
+                        : "red"
+                  }
+                >
+                  {parsedData.confidence_score}%
+                </Tag>
+              </div>
+            )}
+            {parsedData.items && parsedData.items.length > 0 && (
+              <div>
+                <Text type="secondary">Các mặt hàng được phát hiện:</Text>
+                <List
+                  size="small"
+                  style={{ marginTop: 8 }}
+                  dataSource={parsedData.items}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <div style={{ width: "100%" }}>
+                        <div>
+                          <Text strong>{item.product_name}</Text>
+                          {item.sku && (
+                            <Text type="secondary" style={{ marginLeft: 8 }}>
+                              (SKU: {item.sku})
+                            </Text>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>
+                          Số lượng: {item.quantity}
+                          {item.unit_price && ` × ${item.unit_price}`}
+                          {item.total_price && ` = ${item.total_price}`}
+                        </div>
+                      </div>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            )}
+            {parsedData.errors && parsedData.errors.length > 0 && (
+              <div>
+                <Text type="warning">Cảnh báo phân tích:</Text>
+                <ul style={{ marginTop: 4, marginBottom: 0 }}>
+                  {parsedData.errors.map((err, idx) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Space>
+        </Card>
+      )}
 
       {/* MAIN TABLE */}
       <Card
