@@ -26,6 +26,7 @@ BEGIN;
 -- ============================================================================
 DROP POLICY IF EXISTS "orders_authenticated" ON public.orders;
 DROP POLICY IF EXISTS "Staff can view all orders" ON public.orders;
+DROP POLICY IF EXISTS "orders_staff_all" ON public.orders;
 
 CREATE POLICY "orders_staff_all"
   ON public.orders
@@ -42,6 +43,7 @@ CREATE POLICY "orders_staff_all"
     )
   );
 
+DROP POLICY IF EXISTS "orders_portal_own_select" ON public.orders;
 CREATE POLICY "orders_portal_own_select"
   ON public.orders
   FOR SELECT
@@ -58,6 +60,7 @@ CREATE POLICY "orders_portal_own_select"
 -- 2. order_items — staff full, portal user SELECT (scope qua orders FK)
 -- ============================================================================
 DROP POLICY IF EXISTS "order_items_authenticated" ON public.order_items;
+DROP POLICY IF EXISTS "order_items_staff_all" ON public.order_items;
 
 CREATE POLICY "order_items_staff_all"
   ON public.order_items
@@ -74,6 +77,7 @@ CREATE POLICY "order_items_staff_all"
     )
   );
 
+DROP POLICY IF EXISTS "order_items_portal_own_select" ON public.order_items;
 CREATE POLICY "order_items_portal_own_select"
   ON public.order_items
   FOR SELECT
@@ -92,6 +96,7 @@ CREATE POLICY "order_items_portal_own_select"
 -- 3. finance_transactions — staff only SELECT
 -- ============================================================================
 DROP POLICY IF EXISTS "finance_transactions_select" ON public.finance_transactions;
+DROP POLICY IF EXISTS "finance_transactions_staff_select" ON public.finance_transactions;
 
 CREATE POLICY "finance_transactions_staff_select"
   ON public.finance_transactions
